@@ -9,5 +9,10 @@ ark-ff = {version = "0.4", features = ["parallel"]}
 ark-ec = "0.4"
 ark-poly = {version = "0.4", features = ["parallel"]}
 ark-bn254 = "0.4"
+ark-poly-commit = "0.4"
 rand = "0.8.5"
 rayon = "1"
+ark-linear-sumcheck = {git= "https://github.com/arkworks-rs/sumcheck", version="0.3.0"}
+ark-serialize = { version = "^0.4.0", default-features = false, features = [ "derive" ] }
+ark-crypto-primitives = {version = "^0.4.0", default-features = false, features = ["sponge", "merkle_tree"] }
+ndarray = "0.15.6"

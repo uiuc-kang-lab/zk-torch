@@ -8,14 +8,16 @@ use ark_std::{Zero, One, ops::{Mul,Div,Sub}, UniformRand};
 use std::collections::HashMap;
 use rand::Rng;
 use rayon::prelude::*;
-use super::{BasicBlock,Data,DataEnc};
+use super::{BasicBlock,Data,DataEnc,Tensor};
 use crate::util;
 
 pub struct CQBasicBlock;
 impl BasicBlock for CQBasicBlock{
-  fn run(_model: &Vec<Fr>,
-         _inputs: &Vec<Vec<Fr>>) ->
-         Vec<Fr>{
+  type Proof = (Vec<G1Affine>,Vec<G2Affine>,Vec<Fr>);
+  type Setup = (Vec<G1Affine>,Vec<G2Affine>);
+  fn run(_model: &Vec<Tensor<Fr>>,
+         _inputs: &Vec<Tensor<Fr>>) ->
+        Vec<Tensor<Fr>> {
     return Vec::new();
   }
   fn setup(srs: (&Vec<G1Affine>,&Vec<G2Affine>),
@@ -49,7 +51,7 @@ impl BasicBlock for CQBasicBlock{
     return (setup,vec![T_x_2]);
   }
   fn prove<R: Rng>(srs: (&Vec<G1Affine>,&Vec<G2Affine>),
-                   setup: (&Vec<G1Affine>,&Vec<G2Affine>),
+                   setup: &Self::Setup,
                    model: &Data,
                    inputs: &Vec<Data>,
                    _output: &Data,
@@ -115,7 +117,7 @@ impl BasicBlock for CQBasicBlock{
                     model: &DataEnc,
                     inputs: &Vec<DataEnc>,
                     _output: &DataEnc,
-                    proof: (&Vec<G1Affine>,&Vec<G2Affine>,&Vec<Fr>),
+                    proof: &Self::Proof,
                     rng: &mut R){
     let N = model.len;
     let n = inputs[0].len;
