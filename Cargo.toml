@@ -11,3 +11,4 @@ ark-poly = {version = "0.4", features = ["parallel"]}
 ark-bn254 = "0.4"
 rand = "0.8.5"
 rayon = "1"
+ndarray = "0.15.6"
