@@ -1,13 +1,16 @@
 use ark_poly::univariate::DensePolynomial;
 use ark_std::ops::Mul;
 use ark_ec::pairing::Pairing;
-use ark_poly::{GeneralEvaluationDomain, EvaluationDomain, DenseUVPolynomial, MultilinearExtension};
+use ark_poly::{GeneralEvaluationDomain, EvaluationDomain, DenseUVPolynomial, MultilinearExtension, DenseMultilinearExtension};
 use ark_bn254::{Fr, G1Projective, G1Affine, G2Projective, G2Affine, Bn254};
 use ark_ff::Field;
-use ark_std::{One, Zero, UniformRand};
+use ark_std::{One, Zero, UniformRand, rc::Rc};
 use ark_std::rand::RngCore;
 use ark_ec::{ScalarMul, VariableBaseMSM};
+use ndarray::{Array, IxDyn, s};
 use rayon::prelude::*;
+
+use crate::Tensor;
 
 pub const SCALE_FACTOR: f64 = (1<<9) as f64;
 pub const NV_MAX: usize = 7;
@@ -369,6 +372,8 @@ pub fn compute_c_batched(
 }
 
 pub struct ZM_proof {
+  pub point: Vec<Fr>,
+  pub value: Fr,
   pub c_pi: G1Affine,
   pub c_q_k: Vec<G1Affine>,
   pub c_q: G1Affine
@@ -426,6 +431,8 @@ pub fn zm_prove<R: RngCore>(
   let pi_com: G1Affine = G1Projective::msm(&srs.0[..pi_coeff.len()], pi_coeff).unwrap().into();
 
   ZM_proof {
+    point: point.to_vec(),
+    value: value,
     c_pi: pi_com,
     c_q_k: c_q_k,
     c_q: q_com
@@ -438,10 +445,10 @@ pub fn zm_verify<R: RngCore>(
   nv: usize,
   com: G1Affine,
   zm_proof: &ZM_proof,
-  value: Fr,
-  point: &[Fr], // u_challenge
   rng: &mut R,
 ) {
+  let point = &zm_proof.point;
+  let value = zm_proof.value;
   let y_challenge = Fr::rand(rng);
   let x_challenge = Fr::rand(rng);
   let z_challenge = Fr::rand(rng);
@@ -492,5 +499,73 @@ pub fn test_zm_polynomial<R: RngCore>(
   let zm_proof = zm_prove(srs, poly, point, value, rng, nv_max);
 
   // pairing
-  zm_verify(srs, nv_max, nv, com, &zm_proof, value, point, rng);
+  zm_verify(srs, nv_max, nv, com, &zm_proof, rng);
+}
+
+// Random polynomial
+pub fn random_polynomial<F: Field, R: RngCore>(
+  nv: usize,
+  rng: &mut R,
+) -> (Vec<Rc<DenseMultilinearExtension<F>>>, Vec<DenseMultilinearExtension<F>>, F) {
+  let mut multiplicands = Vec::new();
+  // only one multiplicand
+  multiplicands.push(Vec::with_capacity(1 << nv));
+  let mut sum = F::zero();
+
+  for _ in 0..(1 << nv) {
+      let mut product = F::one();
+      for multiplicand in &mut multiplicands {
+          let val = F::rand(rng);
+          multiplicand.push(val);
+          product *= val;
+      }
+      sum += product;
+  }
+
+  (
+      multiplicands.clone()
+          .into_iter()
+          .map(|x| Rc::new(DenseMultilinearExtension::from_evaluations_vec(nv, x)))
+          .collect(),
+      multiplicands
+          .into_iter()
+          .map(|x| DenseMultilinearExtension::from_evaluations_vec(nv, x))
+          .collect(),
+      sum,
+  )
+}
+
+// For rectangle matrix in MatMult
+pub fn mat_padding (
+  mat_a: &Tensor<Fr>,
+) -> Tensor<Fr> {
+  let mat_a_shape = mat_a.shape();
+
+  let a_num_row_log = (mat_a_shape[0] as f64).log2() as usize;
+  let a_num_col_log = (mat_a_shape[1] as f64).log2() as usize;
+  let mut new_mat_a = Array::from_shape_vec(IxDyn(&[1 << a_num_row_log, 1 << a_num_col_log]), vec![Fr::zero(); (1 << a_num_row_log) * (1 << a_num_col_log)]).unwrap();
+  new_mat_a.slice_mut(s![..mat_a_shape[0], ..mat_a_shape[1]]).assign(&mat_a);
+  //new_mat_a[[mat_a_shape[0], mat_a_shape[1]]] = Fr::rand(&mut ark_std::test_rng());
+  new_mat_a
+}
+
+// similar to fix_variables in ark-poly, but fix last variables
+pub fn fix_last_variables(
+  poly: &DenseMultilinearExtension<Fr>,
+  point: &[Fr]
+) -> DenseMultilinearExtension<Fr> {
+  let nv = poly.num_vars;
+  let dim = point.len();
+  let mut evals = poly.to_evaluations();
+  let mut evals_len = evals.len();
+  let mut point_len = point.len();
+  while point_len > 0 {
+    let half_eval_len = evals_len / 2;
+    for i in 0..half_eval_len {
+      evals[i] = evals[i] * (Fr::one()-point[point_len-1]) + evals[i+half_eval_len] * point[point_len-1];
+    }
+    evals_len = half_eval_len;
+    point_len -= 1;
+  }
+  DenseMultilinearExtension::from_evaluations_slice(nv - dim, &evals[..(1 << (nv - dim))])
 }

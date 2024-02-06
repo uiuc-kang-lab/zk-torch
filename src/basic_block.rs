@@ -11,6 +11,7 @@ pub use add::AddBasicBlock;
 pub use rope::RopeBasicBlock;
 pub use transpose::TransposeBasicBlock;
 pub use matmult::MatMultBasicBlock;
+pub use bridge::BridgeBasicBlock;
 pub mod cq;
 pub mod cqlin;
 pub mod mul;
@@ -18,6 +19,7 @@ pub mod add;
 pub mod rope;
 pub mod transpose;
 pub mod matmult;
+pub mod bridge;
 
 pub struct Data{
   pub raw : Tensor<Fr>,
