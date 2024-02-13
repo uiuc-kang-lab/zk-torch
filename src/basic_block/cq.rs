@@ -1,22 +1,30 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{BasicBlock, Data, DataEnc};
-use crate::util;
-use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
 use ark_ff::Field;
-use ark_poly::{evaluations::univariate::Evaluations, univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain, Polynomial};
-use ark_std::{
-  ops::{Div, Mul, Sub},
-  One, UniformRand, Zero,
-};
+use ark_poly::{evaluations::univariate::Evaluations, GeneralEvaluationDomain, EvaluationDomain,univariate::DensePolynomial, Polynomial};
+use ark_bn254::{Fr, G1Projective, G2Projective, G1Affine, G2Affine, Bn254};
+use ark_std::{Zero, One, ops::{Mul,Div,Sub}, UniformRand};
+use std::collections::HashMap;
 use rand::Rng;
 use rayon::prelude::*;
-use std::collections::HashMap;
+use super::{BasicBlock,Data,DataEnc,Tensor};
+use crate::util;
 
 pub struct CQBasicBlock;
 impl BasicBlock for CQBasicBlock {
-  fn setup(srs: (&Vec<G1Affine>, &Vec<G2Affine>), model: &Data) -> (Vec<G1Affine>, Vec<G2Affine>) {
+  type Proof = (Vec<G1Affine>, Vec<G2Affine>);
+  type Setup = (Vec<G1Affine>, Vec<G2Affine>);
+  fn run(
+    _model: &Vec<Tensor<Fr>>,
+    _inputs: &Vec<Tensor<Fr>>,
+  ) -> Vec<Tensor<Fr>> {
+    return Vec::new();
+  }
+  fn setup(
+    srs: (&Vec<G1Affine>, &Vec<G2Affine>),
+    model: &Data,
+  ) -> Self::Setup {
     let N = model.raw.len();
     let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
     let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
@@ -46,12 +54,12 @@ impl BasicBlock for CQBasicBlock {
   }
   fn prove<R: Rng>(
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
-    setup: (&Vec<G1Affine>, &Vec<G2Affine>),
+    setup: &Self::Setup,
     model: &Data,
     inputs: &Vec<Data>,
     _output: &Data,
     rng: &mut R,
-  ) -> (Vec<G1Affine>, Vec<G2Affine>) {
+  ) -> Self::Proof {
     let N = model.raw.len();
     let n = inputs[0].raw.len();
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
@@ -142,7 +150,7 @@ impl BasicBlock for CQBasicBlock {
     model: &DataEnc,
     inputs: &Vec<DataEnc>,
     _output: &DataEnc,
-    proof: (&Vec<G1Affine>, &Vec<G2Affine>),
+    proof: &Self::Proof,
     rng: &mut R,
   ) {
     let N = model.len;

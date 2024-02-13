@@ -1,23 +1,32 @@
-use super::{BasicBlock, Data, DataEnc};
-use crate::util;
-use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ec::pairing::Pairing;
-use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
+use ark_ec::{VariableBaseMSM, pairing::Pairing};
+use ark_poly::{GeneralEvaluationDomain, EvaluationDomain};
+use ark_bn254::{Fr, G1Projective, G1Affine, G2Projective, G2Affine, Bn254};
 use ark_std::{ops::Mul, ops::Sub};
+use ndarray::{Array, IxDyn};
 use rand::Rng;
+use crate::util;
+
+use super::{BasicBlock,Data,DataEnc,Tensor};
 
 pub struct MulBasicBlock;
 impl BasicBlock for MulBasicBlock {
-  fn run(_model: &Vec<Fr>, inputs: &Vec<Vec<Fr>>) -> Vec<Fr> {
+  type Proof = (Vec<G1Affine>, Vec<G2Affine>);
+  type Setup = (Vec<G1Affine>, Vec<G2Affine>);
+  fn run(_model: &Vec<Tensor<Fr>>, inputs: &Vec<Tensor<Fr>>) -> Vec<Tensor<Fr>> {
     let mut r = Vec::new();
     for i in 0..inputs[0].len() {
       r.push(inputs[0][i] * inputs[1][i]);
     }
-    return r;
+    vec![Array::from_shape_vec(IxDyn(inputs[0].shape()), r).unwrap()]
+  }
+  fn setup(_srs: (&Vec<G1Affine>, &Vec<G2Affine>),
+           _model: &Data) ->
+          (Vec<G1Affine>, Vec<G2Affine>){
+    return (Vec::new(), Vec::new());
   }
   fn prove<R: Rng>(
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
+    _setup: &Self::Setup,
     _model: &Data,
     inputs: &Vec<Data>,
     output: &Data,
@@ -35,7 +44,7 @@ impl BasicBlock for MulBasicBlock {
     _model: &DataEnc,
     inputs: &Vec<DataEnc>,
     output: &DataEnc,
-    proof: (&Vec<G1Affine>, &Vec<G2Affine>),
+    proof: &Self::Proof,
     _rng: &mut R,
   ) {
     // Verify f(x)*g(x)-h(x)=z(x)t(x)
