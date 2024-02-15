@@ -35,12 +35,10 @@ impl Data {
 
   pub fn new_with_dims(srs: (&Vec<G1Affine>, &Vec<G2Affine>), raw: &Vec<Fr>, dims: Vec<usize>) -> Data {
     let N = (*raw).len();
-    println!("N: {}", N);
     assert_eq!(dims.iter().fold(1, |acc, &num| acc * num), N);
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
     let f = DensePolynomial { coeffs: domain.ifft(raw) };
     let fx: G1Affine = util::msm::<G1Projective>(&srs.0[..N], &f.coeffs).into();
-    println!("dims {:?}", dims);
     return Data {
       raw: raw.to_vec(),
       dims,
@@ -50,7 +48,6 @@ impl Data {
   }
 }
 
-#[derive(Debug)]
 pub struct DataEnc {
   pub dims: Vec<usize>,
   pub g1: G1Affine,
