@@ -8,7 +8,7 @@ use rand::Rng;
 
 pub struct MulBasicBlock;
 impl BasicBlock for MulBasicBlock {
-  fn run(_model: &Vec<Fr>, inputs: &Vec<Vec<Fr>>) -> Vec<Fr> {
+  fn run(_model: &Data, inputs: &Vec<Vec<Fr>>) -> Vec<Fr> {
     let mut r = Vec::new();
     for i in 0..inputs[0].len() {
       r.push(inputs[0][i] * inputs[1][i]);
@@ -40,7 +40,7 @@ impl BasicBlock for MulBasicBlock {
   ) {
     // Verify f(x)*g(x)-h(x)=z(x)t(x)
     let lhs = Bn254::pairing(inputs[0].g1, proof.1[0]) - Bn254::pairing(output.g1, srs.1[0]);
-    let rhs = Bn254::pairing(proof.0[0], srs.1[inputs[0].len] - srs.1[0]);
+    let rhs = Bn254::pairing(proof.0[0], srs.1[inputs[0].dims[0]] - srs.1[0]);
     assert!(lhs == rhs);
     // Verify gx2
     let lhs = Bn254::pairing(inputs[1].g1, srs.1[0]);

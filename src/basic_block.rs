@@ -11,12 +11,15 @@ use rand::Rng;
 pub mod add;
 pub mod cq;
 pub mod cqlin;
+pub mod cqlin_rect;
 pub mod mul;
 
+#[derive(Debug)]
 pub struct Data {
   pub raw: Vec<Fr>,
+  pub dims: Vec<usize>,
   pub poly: DensePolynomial<Fr>,
-  pub g1: G1Affine,
+  pub g1: G1Affine
 }
 impl Data {
   pub fn new(srs: (&Vec<G1Affine>, &Vec<G2Affine>), raw: &Vec<Fr>) -> Data {
@@ -26,25 +29,44 @@ impl Data {
     let fx: G1Affine = util::msm::<G1Projective>(&srs.0[..N], &f.coeffs).into();
     return Data {
       raw: raw.to_vec(),
+      dims: vec![N],
+      poly: f,
+      g1: fx,
+    };
+  }
+
+  pub fn new_with_dims(srs: (&Vec<G1Affine>, &Vec<G2Affine>), raw: &Vec<Fr>, dims: Vec<usize>) -> Data {
+    let N = (*raw).len();
+    println!("N: {}", N);
+    assert_eq!(dims.iter().fold(1, |acc, &num| acc * num), N);
+    let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
+    let f = DensePolynomial { coeffs: domain.ifft(raw) };
+    let fx: G1Affine = util::msm::<G1Projective>(&srs.0[..N], &f.coeffs).into();
+    println!("dims {:?}", dims);
+    return Data {
+      raw: raw.to_vec(),
+      dims,
       poly: f,
       g1: fx,
     };
   }
 }
+
+#[derive(Debug)]
 pub struct DataEnc {
-  pub len: usize,
+  pub dims: Vec<usize>,
   pub g1: G1Affine,
 }
 impl DataEnc {
   pub fn new(data: &Data) -> DataEnc {
     return DataEnc {
-      len: data.raw.len(),
+      dims: data.dims.clone(),
       g1: data.g1,
     };
   }
 }
 pub trait BasicBlock {
-  fn run(model: &Vec<Fr>, inputs: &Vec<Vec<Fr>>) -> Vec<Fr> {
+  fn run(model: &Data, inputs: &Vec<Vec<Fr>>) -> Vec<Fr> {
     Vec::new()
   }
   fn setup(srs: (&Vec<G1Affine>, &Vec<G2Affine>), model: &Data) -> (Vec<G1Affine>, Vec<G2Affine>) {

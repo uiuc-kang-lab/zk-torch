@@ -1,10 +1,10 @@
-use super::{BasicBlock, DataEnc};
+use super::{BasicBlock, Data, DataEnc};
 use ark_bn254::{Fr, G1Affine, G2Affine};
 use rand::Rng;
 
 pub struct AddBasicBlock;
 impl BasicBlock for AddBasicBlock {
-  fn run(_model: &Vec<Fr>, inputs: &Vec<Vec<Fr>>) -> Vec<Fr> {
+  fn run(_model: &Data, inputs: &Vec<Vec<Fr>>) -> Vec<Fr> {
     let mut r = Vec::new();
     for i in 0..inputs[0].len() {
       r.push(inputs[0][i] + inputs[1][i]);

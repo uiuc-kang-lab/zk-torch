@@ -145,8 +145,8 @@ impl BasicBlock for CQBasicBlock {
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut R,
   ) {
-    let N = model.len;
-    let n = inputs[0].len;
+    let N = model.dims[0];
+    let n = inputs[0].dims[0];
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let [m_x_1, A_x_1, Q_A_x_1, B_0_x_1, Q_B_x_1, P_x_1, pi_gamma, A_0_x, B_0_gamma_1, b_gamma_1, f_gamma_1, A_0_1, b_gamma_f_gamma] = proof.0[..]
     else {
