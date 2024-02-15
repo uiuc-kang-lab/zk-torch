@@ -116,15 +116,17 @@ impl BasicBlock for CQLinBasicBlock {
     let domain_mn = GeneralEvaluationDomain::<Fr>::new(m * n).unwrap();
 
     let R = &setup.0[..m];
+    let Q = &setup.0[m..2 * m];
+    let S = &setup.0[2 * m..3 * m];
     let L_V_i_x_n = &setup.0[3 * m..4 * m];
     let L_V_i_x = &setup.0[4 * m..5 * m];
     let L_H_i_x = &setup.0[5 * m..];
 
     let R_x: G1Affine = util::msm::<G1Projective>(&R, &inputs[0].raw).into();
-    let Q_x = util::msm::<G1Projective>(&setup.0[m..2 * m], &inputs[0].raw).into();
+    let Q_x = util::msm::<G1Projective>(Q, &inputs[0].raw).into();
     let temp: Vec<_> = (0..m).into_par_iter().map(|i| srs.0[n * i]).collect();
     let A_x = util::msm::<G1Projective>(&temp, &inputs[0].poly.coeffs).into();
-    let S_x = util::msm::<G1Projective>(&setup.0[2 * m..3 * m], &inputs[0].raw).into();
+    let S_x = util::msm::<G1Projective>(S, &inputs[0].raw).into();
     let P_x = util::msm::<G1Projective>(&srs.0[N - n..N], &output.poly.coeffs).into();
 
     // N - m*n = 0 always
