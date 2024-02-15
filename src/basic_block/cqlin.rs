@@ -181,7 +181,6 @@ impl BasicBlock for CQLinBasicBlock {
     let rhs = Bn254::pairing(pi, srs.1[1]);
     assert!(lhs == rhs);
 
-    // println!("6");
     let lhs = Bn254::pairing(a - z + pi_1 * gamma_n, srs.1[0]);
     let rhs = Bn254::pairing(pi_1, srs.1[n]);
     assert!(lhs == rhs);

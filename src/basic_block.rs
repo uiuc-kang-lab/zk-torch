@@ -11,10 +11,8 @@ use rand::Rng;
 pub mod add;
 pub mod cq;
 pub mod cqlin;
-pub mod cqlin_rect;
 pub mod mul;
 
-#[derive(Debug)]
 pub struct Data {
   pub raw: Vec<Fr>,
   pub dims: Vec<usize>,
