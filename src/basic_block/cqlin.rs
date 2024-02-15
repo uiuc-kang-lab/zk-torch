@@ -120,18 +120,15 @@ impl BasicBlock for CQLinBasicBlock {
     let L_V_i_x = &setup.0[4 * m..5 * m];
     let L_H_i_x = &setup.0[5 * m..];
 
-    let r: G1Affine = util::msm::<G1Projective>(&R, &inputs[0].raw).into();
-    let q = util::msm::<G1Projective>(&setup.0[m..2 * m], &inputs[0].raw).into();
-
-    let mut temp: Vec<_> = (0..m).into_par_iter().map(|i| srs.0[n * i]).collect();
-
-    let a = util::msm::<G1Projective>(&temp, &inputs[0].poly.coeffs).into();
-
-    let s = util::msm::<G1Projective>(&setup.0[2 * m..3 * m], &inputs[0].raw).into();
-    let p = util::msm::<G1Projective>(&srs.0[N - n..N], &output.poly.coeffs).into();
+    let R_x: G1Affine = util::msm::<G1Projective>(&R, &inputs[0].raw).into();
+    let Q_x = util::msm::<G1Projective>(&setup.0[m..2 * m], &inputs[0].raw).into();
+    let temp: Vec<_> = (0..m).into_par_iter().map(|i| srs.0[n * i]).collect();
+    let A_x = util::msm::<G1Projective>(&temp, &inputs[0].poly.coeffs).into();
+    let S_x = util::msm::<G1Projective>(&setup.0[2 * m..3 * m], &inputs[0].raw).into();
+    let P_x = util::msm::<G1Projective>(&srs.0[N - n..N], &output.poly.coeffs).into();
 
     // N - m*n = 0 always
-    let p_R = r;
+    let p_R = R_x;
     let gamma = Fr::rand(rng);
     let gamma_n = gamma.pow(&[n as u64]);
     let z = inputs[0].poly.evaluate(&gamma_n);
@@ -140,7 +137,7 @@ impl BasicBlock for CQLinBasicBlock {
     let pi = util::msm::<G1Projective>(&L_V_i_x, &h_i).into();
     let pi_1 = util::msm::<G1Projective>(&L_V_i_x_n, &h_i).into();
 
-    (vec![r, q, a, s, p, z, p_R, pi, pi_1], vec![setup.1[0]])
+    (vec![R_x, Q_x, A_x, S_x, P_x, z, p_R, pi, pi_1], vec![setup.1[0]])
   }
   fn verify<R: Rng>(
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
@@ -154,25 +151,25 @@ impl BasicBlock for CQLinBasicBlock {
     let n = model.dims[1];
     let N = (m * n).next_power_of_two();
 
-    let [r, q, a, s, p, z, p_R, pi, pi_1] = proof.0[..] else {
+    let [R_x, Q_x, A_x, S_x, P_x, z, p_R, pi, pi_1] = proof.0[..] else {
       panic!("Wrong proof format")
     };
 
-    let lhs = Bn254::pairing(a, proof.1[0]);
-    let rhs = Bn254::pairing(q, srs.1[m * n] - srs.1[0]) + Bn254::pairing(r, srs.1[0]);
+    let lhs = Bn254::pairing(A_x, proof.1[0]);
+    let rhs = Bn254::pairing(Q_x, srs.1[m * n] - srs.1[0]) + Bn254::pairing(R_x, srs.1[0]);
     assert!(lhs == rhs);
 
     let lhs = Bn254::pairing(output.g1, srs.1[N - n]);
-    let rhs = Bn254::pairing(p, srs.1[0]);
+    let rhs = Bn254::pairing(P_x, srs.1[0]);
     assert!(lhs == rhs);
 
-    let lhs = Bn254::pairing(r, srs.1[N - m * n]);
+    let lhs = Bn254::pairing(R_x, srs.1[N - m * n]);
     let rhs = Bn254::pairing(p_R, srs.1[0]);
     assert!(lhs == rhs);
 
     let temp: G1Affine = (output.g1 * Fr::from(m as u64).inverse().unwrap()).into();
-    let lhs = Bn254::pairing(r - temp, srs.1[0]);
-    let rhs = Bn254::pairing(s, srs.1[n]);
+    let lhs = Bn254::pairing(R_x - temp, srs.1[0]);
+    let rhs = Bn254::pairing(S_x, srs.1[n]);
     assert!(lhs == rhs);
 
     let gamma = Fr::rand(rng);
@@ -181,7 +178,7 @@ impl BasicBlock for CQLinBasicBlock {
     let rhs = Bn254::pairing(pi, srs.1[1]);
     assert!(lhs == rhs);
 
-    let lhs = Bn254::pairing(a - z + pi_1 * gamma_n, srs.1[0]);
+    let lhs = Bn254::pairing(A_x - z + pi_1 * gamma_n, srs.1[0]);
     let rhs = Bn254::pairing(pi_1, srs.1[n]);
     assert!(lhs == rhs);
   }
