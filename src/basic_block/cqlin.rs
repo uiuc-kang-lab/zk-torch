@@ -1,13 +1,13 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
-use ark_ec::pairing::Pairing;
 use super::{BasicBlock, Data, DataEnc};
 use crate::util;
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_ec::pairing::Pairing;
 use ark_ff::Field;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain, Polynomial};
-use ark_std::{UniformRand, Zero};
+use ark_std::{iterable::Iterable, UniformRand, Zero};
 use rand::Rng;
 use rayon::prelude::*;
 
@@ -48,6 +48,11 @@ impl BasicBlock for CQLinBasicBlock {
     let mut U: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| temp[j][i]).collect()).collect();
     U.par_iter_mut().for_each(|x| util::ifft_in_place(domain_n, x));
 
+    let mut temp: Vec<Vec<_>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| srs_p[i + n * j + N - m * n]).collect()).collect();
+    temp.par_iter_mut().for_each(|x| util::ifft_in_place(domain_m, x));
+    let mut U_p_R: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| temp[j][i]).collect()).collect();
+    U_p_R.par_iter_mut().for_each(|x| util::ifft_in_place(domain_n, x));
+
     let mut temp: Vec<Vec<G2Projective>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| srs.1[i + n * j].into()).collect()).collect();
     temp.par_iter_mut().for_each(|x| util::ifft_in_place(domain_m, x));
     let mut U2: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| temp[j][i]).collect()).collect();
@@ -71,6 +76,9 @@ impl BasicBlock for CQLinBasicBlock {
     let R: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| U[i][j] * model.raw[i * n + j]).collect()).collect();
     let R: Vec<_> = R.par_iter().map(|x| x.iter().sum::<G1Projective>()).collect();
 
+    let p_R: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| U_p_R[i][j] * model.raw[i * n + j]).collect()).collect();
+    let p_R: Vec<_> = p_R.par_iter().map(|x| x.iter().sum::<G1Projective>()).collect();
+
     let mut C: Vec<Vec<_>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| model.raw[j * n + i]).collect()).collect();
     C.par_iter_mut().for_each(|x| domain_m.ifft_in_place(x));
 
@@ -88,6 +96,7 @@ impl BasicBlock for CQLinBasicBlock {
     let R: Vec<G1Affine> = R.par_iter().map(|x| (*x).into()).collect();
     let mut Q: Vec<G1Affine> = Q.par_iter().map(|x| (*x).into()).collect();
     let mut S: Vec<G1Affine> = S.par_iter().map(|x| (*x).into()).collect();
+    let mut p_R: Vec<G1Affine> = p_R.par_iter().map(|x| (*x).into()).collect();
     let mut L_H_i_x: Vec<G1Affine> = L_H_i_x.par_iter().map(|x| (*x).into()).collect();
     let mut L_V_i_x: Vec<G1Affine> = L_V_i_x.into_par_iter().map(|x| x.into()).collect();
     let mut L_V_i_x_n: Vec<G1Affine> = L_V_i_x_n.par_iter().map(|x| (*x).into()).collect();
@@ -95,6 +104,7 @@ impl BasicBlock for CQLinBasicBlock {
     let mut setup = R;
     setup.append(&mut Q);
     setup.append(&mut S);
+    setup.append(&mut p_R);
     setup.append(&mut L_V_i_x_n);
     setup.append(&mut L_V_i_x);
     setup.append(&mut L_H_i_x);
@@ -118,9 +128,10 @@ impl BasicBlock for CQLinBasicBlock {
     let R = &setup.0[..m];
     let Q = &setup.0[m..2 * m];
     let S = &setup.0[2 * m..3 * m];
-    let L_V_i_x_n = &setup.0[3 * m..4 * m];
-    let L_V_i_x = &setup.0[4 * m..5 * m];
-    let L_H_i_x = &setup.0[5 * m..];
+    let p_R =&setup.0[3 * m..4 * m];
+    let L_V_i_x_n = &setup.0[4 * m..5 * m];
+    let L_V_i_x = &setup.0[5 * m..6 * m];
+    let L_H_i_x = &setup.0[6 * m..];
 
     let R_x: G1Affine = util::msm::<G1Projective>(&R, &inputs[0].raw).into();
     let Q_x = util::msm::<G1Projective>(Q, &inputs[0].raw).into();
@@ -128,9 +139,8 @@ impl BasicBlock for CQLinBasicBlock {
     let A_x = util::msm::<G1Projective>(&temp, &inputs[0].poly.coeffs).into();
     let S_x = util::msm::<G1Projective>(S, &inputs[0].raw).into();
     let P_x = util::msm::<G1Projective>(&srs.0[N - n..N], &output.poly.coeffs).into();
+    let p_R_x: G1Affine = util::msm::<G1Projective>(&p_R, &inputs[0].raw).into();
 
-    // N - m*n = 0 always
-    let p_R = R_x;
     let gamma = Fr::rand(rng);
     let gamma_n = gamma.pow(&[n as u64]);
     let z = inputs[0].poly.evaluate(&gamma_n);
@@ -139,7 +149,7 @@ impl BasicBlock for CQLinBasicBlock {
     let pi = util::msm::<G1Projective>(&L_V_i_x, &h_i).into();
     let pi_1 = util::msm::<G1Projective>(&L_V_i_x_n, &h_i).into();
 
-    (vec![R_x, Q_x, A_x, S_x, P_x, z, p_R, pi, pi_1], vec![setup.1[0]])
+    (vec![R_x, Q_x, A_x, S_x, P_x, z, p_R_x, pi, pi_1], vec![setup.1[0]])
   }
   fn verify<R: Rng>(
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
@@ -153,7 +163,7 @@ impl BasicBlock for CQLinBasicBlock {
     let n = model.dims[1];
     let N = (m * n).next_power_of_two();
 
-    let [R_x, Q_x, A_x, S_x, P_x, z, p_R, pi, pi_1] = proof.0[..] else {
+    let [R_x, Q_x, A_x, S_x, P_x, z, p_R_x, pi, pi_1] = proof.0[..] else {
       panic!("Wrong proof format")
     };
 
@@ -166,7 +176,7 @@ impl BasicBlock for CQLinBasicBlock {
     assert!(lhs == rhs);
 
     let lhs = Bn254::pairing(R_x, srs.1[N - m * n]);
-    let rhs = Bn254::pairing(p_R, srs.1[0]);
+    let rhs = Bn254::pairing(p_R_x, srs.1[0]);
     assert!(lhs == rhs);
 
     let temp: G1Affine = (output.g1 * Fr::from(m as u64).inverse().unwrap()).into();
