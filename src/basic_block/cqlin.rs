@@ -8,12 +8,12 @@ use ark_ff::Field;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain, Polynomial};
 use ark_std::{UniformRand, Zero};
 use ndarray::ArrayD;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 
 pub struct CQLinBasicBlock;
 impl BasicBlock for CQLinBasicBlock {
-  fn run(model: &ArrayD<Fr>, inputs: &Vec<ArrayD<Fr>>) -> ArrayD<Fr> {
+  fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<ArrayD<Fr>>) -> ArrayD<Fr> {
     assert_eq!(model.shape()[0], inputs[0].len());
     let m = model.shape()[0];
     let n = model.shape()[1];
@@ -25,7 +25,7 @@ impl BasicBlock for CQLinBasicBlock {
     }
     return r;
   }
-  fn setup(srs: (&Vec<G1Affine>, &Vec<G2Affine>), model: &Data) -> (Vec<G1Affine>, Vec<G2Affine>) {
+  fn setup(&self, srs: (&Vec<G1Affine>, &Vec<G2Affine>), model: &Data) -> (Vec<G1Affine>, Vec<G2Affine>) {
     let m = model.raw.shape()[0];
     let n = model.raw.shape()[1];
     let N = srs.1.len() - 1;
@@ -114,13 +114,14 @@ impl BasicBlock for CQLinBasicBlock {
     setup.append(&mut L_H_i_x);
     (setup, vec![M_x.into()])
   }
-  fn prove<R: Rng>(
+  fn prove(
+    &self,
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     model: &Data,
     inputs: &Vec<Data>,
     output: &Data,
-    rng: &mut R,
+    rng: &mut StdRng,
   ) -> (Vec<G1Affine>, Vec<G2Affine>) {
     let m = model.raw.shape()[0];
     let n = model.raw.shape()[1];
@@ -181,13 +182,14 @@ impl BasicBlock for CQLinBasicBlock {
 
     return (proof, vec![M_x_2]);
   }
-  fn verify<R: Rng>(
+  fn verify(
+    &self,
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     model: &DataEnc,
     inputs: &Vec<DataEnc>,
     output: &DataEnc,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
-    rng: &mut R,
+    rng: &mut StdRng,
   ) {
     let m = model.shape[0];
     let n = model.shape[1];

@@ -5,22 +5,23 @@ use ark_ec::pairing::Pairing;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{ops::Mul, ops::Sub, UniformRand};
 use ndarray::{azip, ArrayD};
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{rngs::StdRng, SeedableRng};
 
 pub struct MulBasicBlock;
 impl BasicBlock for MulBasicBlock {
-  fn run(_model: &ArrayD<Fr>, inputs: &Vec<ArrayD<Fr>>) -> ArrayD<Fr> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<ArrayD<Fr>>) -> ArrayD<Fr> {
     let mut r = ArrayD::zeros(inputs[0].shape());
     azip!((&x in &inputs[0], &y in &inputs[1], z in &mut r) *z = x * y);
     r
   }
-  fn prove<R: Rng>(
+  fn prove(
+    &self,
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     _model: &Data,
     inputs: &Vec<Data>,
     output: &Data,
-    _rng: &mut R,
+    _rng: &mut StdRng,
   ) -> (Vec<G1Affine>, Vec<G2Affine>) {
     let N = inputs[0].raw.len();
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
@@ -39,13 +40,14 @@ impl BasicBlock for MulBasicBlock {
     let C = C.into();
     return (vec![tx, C], vec![gx2]);
   }
-  fn verify<R: Rng>(
+  fn verify(
+    &self,
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     _model: &DataEnc,
     inputs: &Vec<DataEnc>,
     output: &DataEnc,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
-    _rng: &mut R,
+    _rng: &mut StdRng,
   ) {
     // Verify f(x)*g(x)-h(x)=z(x)t(x)
     let lhs = Bn254::pairing(inputs[0].g1, proof.1[0]) - Bn254::pairing(output.g1, srs.1[0]);

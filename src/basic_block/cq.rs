@@ -10,7 +10,7 @@ use ark_std::{
   ops::{Mul, Sub},
   One, UniformRand, Zero,
 };
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
 
@@ -29,7 +29,7 @@ struct BProof {
 
 pub struct CQBasicBlock;
 impl BasicBlock for CQBasicBlock {
-  fn setup(srs: (&Vec<G1Affine>, &Vec<G2Affine>), model: &Data) -> (Vec<G1Affine>, Vec<G2Affine>) {
+  fn setup(&self, srs: (&Vec<G1Affine>, &Vec<G2Affine>), model: &Data) -> (Vec<G1Affine>, Vec<G2Affine>) {
     let N = model.raw.len();
     let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
     let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
@@ -58,13 +58,14 @@ impl BasicBlock for CQBasicBlock {
     setup.extend(L_i_0_x_1);
     return (setup, vec![T_x_2]);
   }
-  fn prove<R: Rng>(
+  fn prove(
+    &self,
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     model: &Data,
     inputs: &Vec<Data>,
     _output: &Data,
-    rng: &mut R,
+    rng: &mut StdRng,
   ) -> (Vec<G1Affine>, Vec<G2Affine>) {
     let N = model.raw.len();
     let n = inputs[0].raw.len();
@@ -141,13 +142,14 @@ impl BasicBlock for CQBasicBlock {
 
     return (proof, vec![setup.1[0], f_x_2]);
   }
-  fn verify<R: Rng>(
+  fn verify(
+    &self,
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     model: &DataEnc,
     inputs: &Vec<DataEnc>,
     _output: &DataEnc,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
-    rng: &mut R,
+    rng: &mut StdRng,
   ) {
     let N = model.len;
     let n = inputs[0].len;
