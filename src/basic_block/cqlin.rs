@@ -14,6 +14,7 @@ use rayon::prelude::*;
 pub struct CQLinBasicBlock;
 impl BasicBlock for CQLinBasicBlock {
   fn run(model: &ArrayD<Fr>, inputs: &Vec<ArrayD<Fr>>) -> ArrayD<Fr> {
+    assert_eq!(model.shape()[0], inputs[0].len());
     let m = model.shape()[0];
     let n = model.shape()[1];
     let mut r = ArrayD::zeros(vec![n]);
@@ -33,7 +34,7 @@ impl BasicBlock for CQLinBasicBlock {
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let domain_2m = GeneralEvaluationDomain::<Fr>::new(2 * m).unwrap();
 
-    let srs_p: Vec<G1Projective> = srs.0[..N].into_par_iter().map(|x| (*x).into()).collect();
+    let srs_p: Vec<G1Projective> = srs.0[..m * n].into_par_iter().map(|x| (*x).into()).collect();
     let mut L_H_i_x = srs_p[..n].to_vec();
     util::ifft_in_place(domain_n, &mut L_H_i_x);
     let mut L_V_i_x_n: Vec<_> = (0..m).into_par_iter().map(|i| srs_p[n * i]).collect();
@@ -41,16 +42,20 @@ impl BasicBlock for CQLinBasicBlock {
     let mut L_V_i_x: Vec<G1Projective> = srs_p[..m].into_par_iter().map(|x| (*x).into()).collect();
     util::ifft_in_place::<G1Projective>(domain_m, &mut L_V_i_x);
 
+    // Calculate G1 U for R and S
     let mut temp: Vec<Vec<_>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| srs_p[i + n * j]).collect()).collect();
     temp.par_iter_mut().for_each(|x| util::ifft_in_place(domain_m, x));
     let mut U: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| temp[j][i]).collect()).collect();
     U.par_iter_mut().for_each(|x| util::ifft_in_place(domain_n, x));
 
-    let mut temp: Vec<Vec<_>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| srs_p[i + n * j + N - m * n]).collect()).collect();
+    // Calculate U for mn-degree check
+    let srs_p_last_mn: Vec<G1Projective> = srs.0[N - m * n..N].into_par_iter().map(|x| (*x).into()).collect();
+    let mut temp: Vec<Vec<_>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| srs_p_last_mn[i + n * j]).collect()).collect();
     temp.par_iter_mut().for_each(|x| util::ifft_in_place(domain_m, x));
     let mut U_P_R: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| temp[j][i]).collect()).collect();
     U_P_R.par_iter_mut().for_each(|x| util::ifft_in_place(domain_n, x));
 
+    // Calculate G2 U for M
     let mut temp: Vec<Vec<G2Projective>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| srs.1[i + n * j].into()).collect()).collect();
     temp.par_iter_mut().for_each(|x| util::ifft_in_place(domain_m, x));
     let mut U2: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| temp[j][i]).collect()).collect();
@@ -77,13 +82,14 @@ impl BasicBlock for CQLinBasicBlock {
     let P_R: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| U_P_R[i][j] * model.raw[[i, j]]).collect()).collect();
     let P_R: Vec<_> = P_R.par_iter().map(|x| x.iter().sum::<G1Projective>()).collect();
 
+    // Calculate C for Q
     let mut C: Vec<Vec<_>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| model.raw[[j, i]]).collect()).collect();
     C.par_iter_mut().for_each(|x| domain_m.ifft_in_place(x));
 
-    let mut temp = C;
-    temp.par_iter_mut().for_each(|x| x.append(&mut vec![Fr::zero(); m]));
-    temp.par_iter_mut().for_each(|x| domain_2m.fft_in_place(x));
-    let temp: Vec<Vec<_>> = (0..2 * m).into_par_iter().map(|i| (0..n).map(|j| srs_star[j][i] * temp[j][i]).collect()).collect();
+    // Calculate Q. The C above corresponds to the C in the cqlin paper
+    C.par_iter_mut().for_each(|x| x.append(&mut vec![Fr::zero(); m]));
+    C.par_iter_mut().for_each(|x| domain_2m.fft_in_place(x));
+    let temp: Vec<Vec<_>> = (0..2 * m).into_par_iter().map(|i| (0..n).map(|j| srs_star[j][i] * C[j][i]).collect()).collect();
     let mut temp: Vec<_> = temp.par_iter().map(|x| x.iter().sum::<G1Projective>()).collect();
     util::ifft_in_place(domain_2m, &mut temp);
     let mut temp = temp[m..].to_vec();
@@ -171,22 +177,28 @@ impl BasicBlock for CQLinBasicBlock {
       panic!("Wrong proof format")
     };
 
+    // Check A(x) M(x) = Z(X) Q(X) + R(X)
     let lhs = Bn254::pairing(A_x, proof.1[0]);
     let rhs = Bn254::pairing(Q_x, srs.1[m * n] - srs.1[0]) + Bn254::pairing(R_x, srs.1[0]);
     assert!(lhs == rhs);
 
+    // Check R(X) - 1/m g(X) = S(X) X^n
     let temp: G1Affine = ((output.g1 - C1) * Fr::from(m as u64).inverse().unwrap()).into();
     let lhs = Bn254::pairing(R_x - temp, srs.1[0]);
     let rhs = Bn254::pairing(S_x, srs.1[n]);
     assert!(lhs == rhs);
 
+    // n degree-check for g
     let lhs = Bn254::pairing(output.g1 - C1, srs.1[N - n]);
     let rhs = Bn254::pairing(P_x, srs.1[0]);
+    assert!(lhs == rhs);
 
+    // mn degree-check for R
     let lhs = Bn254::pairing(R_x, srs.1[N - m * n]);
     let rhs = Bn254::pairing(P_R_x, srs.1[0]);
     assert!(lhs == rhs);
 
+    // Checks A(gamma) = f(gamma^n)
     let gamma = Fr::rand(rng);
     let gamma_n = gamma.pow(&[n as u64]);
     let lhs = Bn254::pairing(inputs[0].g1 - C0 - z + pi * gamma_n, srs.1[0]);
