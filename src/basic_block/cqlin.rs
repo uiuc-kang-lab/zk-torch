@@ -160,7 +160,6 @@ impl BasicBlock for CQLinBasicBlock {
 
     return (vec![R_x, Q_x, A_x, S_x, P_x, P_R_x, pi, pi_1, z, C0, C1], vec![setup.1[0]]);
   }
-
   fn verify<R: Rng>(
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     model: &DataEnc,
