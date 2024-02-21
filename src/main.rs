@@ -35,5 +35,5 @@ fn main() {
   test_basic_block::<AddBasicBlock>(srs, &arr1(&vec![]).into_dyn(), &vec![arr1(&a).into_dyn(), arr1(&b).into_dyn()]);
   test_basic_block::<MulBasicBlock>(srs, &arr1(&vec![]).into_dyn(), &vec![arr1(&a).into_dyn(), arr1(&b).into_dyn()]);
   test_basic_block::<CQBasicBlock>(srs, &arr1(&a).into_dyn(), &vec![arr1(&a[..n]).into_dyn()]);
-  test_basic_block::<CQLinBasicBlock>(srs, &ArrayD::from_shape_vec(vec![m, N/m], a).unwrap(), &vec![arr1(&b[..m]).into_dyn()]);
+  test_basic_block::<CQLinBasicBlock>(srs, &ArrayD::from_shape_vec(vec![m, N / m], a).unwrap(), &vec![arr1(&b[..m]).into_dyn()]);
 }
