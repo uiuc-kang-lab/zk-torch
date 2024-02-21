@@ -2,16 +2,16 @@ use crate::basic_block::BasicBlock;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 
-struct Node {
-  basic_block: usize,
-  input_nodes: Vec<usize>,
-  output_nodes: Vec<usize>,
+pub struct Node {
+  pub basic_block: usize,
+  pub input_nodes: Vec<usize>,
+  pub output_nodes: Vec<usize>,
 }
 
 pub struct Graph {
-  basic_blocks: Vec<Box<dyn BasicBlock>>,
-  nodes: Vec<Node>,
-  input_node: usize,
+  pub basic_blocks: Vec<Box<dyn BasicBlock>>,
+  pub nodes: Vec<Node>,
+  pub input_node: usize,
 }
 
 impl Graph {

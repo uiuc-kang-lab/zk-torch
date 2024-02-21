@@ -3,6 +3,7 @@
 use ark_bn254::{Fr, G1Affine, G2Affine};
 use ark_std::UniformRand;
 use basic_block::*;
+use graph::{Graph, Node};
 use ndarray::{arr1, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
@@ -28,36 +29,26 @@ fn test_basic_block<BB: BasicBlock>(basic_block: BB, srs: (&Vec<G1Affine>, &Vec<
 fn main() {
   let srs = ptau::load_file("challenge", 7);
   let srs = (&srs.0, &srs.1);
-  const N: usize = 1 << 6;
-  const n: usize = 1 << 3;
-  const m1: usize = 1 << 2;
-  const m2: usize = 1 << 4;
-  let a: Vec<_> = (0..N).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect();
-  let a1 = a.clone();
-  let b: Vec<_> = (0..N).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect();
-  test_basic_block(
-    AddBasicBlock {},
-    srs,
-    &arr1(&vec![]).into_dyn(),
-    &vec![arr1(&a).into_dyn(), arr1(&b).into_dyn()],
-  );
-  test_basic_block(
-    MulBasicBlock {},
-    srs,
-    &arr1(&vec![]).into_dyn(),
-    &vec![arr1(&a).into_dyn(), arr1(&b).into_dyn()],
-  );
-  test_basic_block(CQBasicBlock {}, srs, &arr1(&a).into_dyn(), &vec![arr1(&a[..n]).into_dyn()]);
-  test_basic_block(
-    CQLinBasicBlock {},
-    srs,
-    &ArrayD::from_shape_vec(vec![m1, N / m1], a).unwrap(),
-    &vec![arr1(&b[..m1]).into_dyn()],
-  );
-  test_basic_block(
-    CQLinBasicBlock {},
-    srs,
-    &ArrayD::from_shape_vec(vec![m2, N / m2], a1).unwrap(),
-    &vec![arr1(&b[..m2]).into_dyn()],
-  );
+  let a: Vec<_> = (0..1 << 6).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect();
+  let g = Graph {
+    basic_blocks: vec![Box::new(CQLinBasicBlock), Box::new(ReLUBasicBlock), Box::new(CQBasicBlock)],
+    nodes: vec![
+      Node {
+        basic_block: 0,
+        input_nodes: vec![],
+        output_nodes: vec![1, 2],
+      },
+      Node {
+        basic_block: 1,
+        input_nodes: vec![0],
+        output_nodes: vec![2],
+      },
+      Node {
+        basic_block: 2,
+        input_nodes: vec![0, 1],
+        output_nodes: vec![],
+      },
+    ],
+    input_node: 0,
+  };
 }

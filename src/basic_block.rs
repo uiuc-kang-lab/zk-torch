@@ -10,10 +10,12 @@ pub use cqlin::CQLinBasicBlock;
 pub use mul::MulBasicBlock;
 use ndarray::ArrayD;
 use rand::{rngs::StdRng, SeedableRng};
+pub use relu::ReLUBasicBlock;
 pub mod add;
 pub mod cq;
 pub mod cqlin;
 pub mod mul;
+pub mod relu;
 
 pub struct Data {
   pub raw: ArrayD<Fr>,
