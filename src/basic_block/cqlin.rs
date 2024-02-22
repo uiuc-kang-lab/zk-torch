@@ -8,7 +8,7 @@ use ark_ff::Field;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain, Polynomial};
 use ark_std::{UniformRand, Zero};
 use ndarray::ArrayD;
-use rand::Rng;
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use rayon::prelude::*;
 
 pub struct CQLinBasicBlock;
@@ -140,7 +140,7 @@ impl BasicBlock for CQLinBasicBlock {
     let v = inputs[0].raw.clone().into_raw_vec();
     let R_x = util::msm::<G1Projective>(R, &v).into();
     let Q_x = util::msm::<G1Projective>(Q, &v).into();
-    let temp: Vec<_> = (0..n).into_par_iter().map(|i| srs.0[n * i]).collect();
+    let temp: Vec<_> = (0..m).into_par_iter().map(|i| srs.0[n * i]).collect();
     let A_x = util::msm::<G1Projective>(&temp, &inputs[0].poly.coeffs).into();
     let S_x = util::msm::<G1Projective>(S, &v).into();
     let P_x = util::msm::<G1Projective>(&srs.0[N - n..N], &output.poly.coeffs).into();
@@ -154,11 +154,35 @@ impl BasicBlock for CQLinBasicBlock {
     let pi = util::msm::<G1Projective>(&L_V_i_x, &h_i).into();
     let pi_1 = util::msm::<G1Projective>(&L_V_i_x_n, &h_i).into();
 
-    // TODO: Implement blinding
-    let C0 = (srs.0[srs.1.len() - 1] * inputs[0].r).into();
-    let C1 = (srs.0[srs.1.len() - 1] * output.r).into();
+    let mut rng2 = StdRng::from_entropy();
+    // R, Q, A, S, P, pR, pi, pi_1, M
+    let r: Vec<_> = (0..9).map(|_| Fr::rand(&mut rng2)).collect();
+    let proof = vec![R_x, Q_x, A_x, S_x, P_x, P_R_x, pi, pi_1];
+    let mut proof: Vec<G1Affine> = proof.iter().enumerate().map(|(i, x)| ((*x) + srs.0[srs.1.len() - 1] * r[i]).into()).collect();
+    proof.push(z);
 
-    return (vec![R_x, Q_x, A_x, S_x, P_x, P_R_x, pi, pi_1, z, C0, C1], vec![setup.1[0]]);
+    // G1 M needed for blinding
+    // h, h_M, h_S, h_g, h_R, h_pi, h_pi_1
+    let M_x_1 = R.iter().sum::<G1Projective>();
+    let C = vec![
+      M_x_1 * r[2] - (srs.0[m * n] - srs.0[0]) * r[1] - srs.0[0] * r[0] + srs.0[srs.1.len() - 1] * r[2] * r[8],
+      srs.0[0] * (r[0] - output.r * Fr::from(m as u32).inverse().unwrap()) - srs.0[n] * r[3],
+      srs.0[N - n] * output.r - srs.0[0] * r[4],
+      srs.0[N - m * n] * r[0] - srs.0[0] * r[5],
+      srs.0[0] * inputs[0].r + (srs.0[0] * gamma_n - srs.0[1]) * r[6],
+      srs.0[0] * r[2] + (srs.0[0] * gamma_n - srs.0[n]) * r[7],
+    ];
+
+    let mut C: Vec<G1Affine> = C.iter().map(|x| (*x).into()).collect();
+    proof.append(&mut C);
+
+    // G2 blinding for M
+    let M_x_2 = (setup.1[0] + srs.1[srs.1.len() - 1] * r[8]).into();
+    let temp: Vec<_> = (0..m).into_par_iter().map(|i| srs.1[n * i]).collect();
+    let A_x_2: G2Affine = util::msm::<G2Projective>(&temp, &inputs[0].poly.coeffs).into();
+    let C1_2 = (A_x_2 * r[8]).into();
+
+    return (proof, vec![M_x_2, C1_2]);
   }
   fn verify<R: Rng>(
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
@@ -172,40 +196,45 @@ impl BasicBlock for CQLinBasicBlock {
     let n = model.shape[1];
     let N = srs.1.len() - 1;
 
-    let [R_x, Q_x, A_x, S_x, P_x, P_R_x, pi, pi_1, z, C0, C1] = proof.0[..] else {
+    let [R_x, Q_x, A_x, S_x, P_x, P_R_x, pi, pi_1, z, C1, C2, C3, C4, C5, C6] = proof.0[..] else {
       panic!("Wrong proof format")
     };
 
+    let [M_x, C1_2] = proof.1[..] else { panic!("Wrong proof format") };
+
     // Check A(x) M(x) = Z(X) Q(X) + R(X)
-    let lhs = Bn254::pairing(A_x, proof.1[0]);
-    let rhs = Bn254::pairing(Q_x, srs.1[m * n] - srs.1[0]) + Bn254::pairing(R_x, srs.1[0]);
+    let lhs = Bn254::pairing(A_x, M_x);
+    let rhs = Bn254::pairing(Q_x, srs.1[m * n] - srs.1[0])
+      + Bn254::pairing(R_x, srs.1[0])
+      + Bn254::pairing(C1, srs.1[srs.1.len() - 1])
+      + Bn254::pairing(srs.0[srs.1.len() - 1], C1_2);
     assert!(lhs == rhs);
 
     // Check R(X) - 1/m g(X) = S(X) X^n
-    let temp: G1Affine = ((output.g1 - C1) * Fr::from(m as u64).inverse().unwrap()).into();
+    let temp: G1Affine = (output.g1 * Fr::from(m as u64).inverse().unwrap()).into();
     let lhs = Bn254::pairing(R_x - temp, srs.1[0]);
-    let rhs = Bn254::pairing(S_x, srs.1[n]);
+    let rhs = Bn254::pairing(S_x, srs.1[n]) + Bn254::pairing(C2, srs.1[srs.1.len() - 1]);
     assert!(lhs == rhs);
 
     // n degree-check for g
-    let lhs = Bn254::pairing(output.g1 - C1, srs.1[N - n]);
-    let rhs = Bn254::pairing(P_x, srs.1[0]);
+    let lhs = Bn254::pairing(output.g1, srs.1[N - n]);
+    let rhs = Bn254::pairing(P_x, srs.1[0]) + Bn254::pairing(C3, srs.1[srs.1.len() - 1]);
     assert!(lhs == rhs);
 
     // mn degree-check for R
     let lhs = Bn254::pairing(R_x, srs.1[N - m * n]);
-    let rhs = Bn254::pairing(P_R_x, srs.1[0]);
+    let rhs = Bn254::pairing(P_R_x, srs.1[0]) + Bn254::pairing(C4, srs.1[srs.1.len() - 1]);
     assert!(lhs == rhs);
 
     // Checks A(gamma) = f(gamma^n)
     let gamma = Fr::rand(rng);
     let gamma_n = gamma.pow(&[n as u64]);
-    let lhs = Bn254::pairing(inputs[0].g1 - C0 - z + pi * gamma_n, srs.1[0]);
-    let rhs = Bn254::pairing(pi, srs.1[1]);
+    let lhs = Bn254::pairing(inputs[0].g1 - z + pi * gamma_n, srs.1[0]);
+    let rhs = Bn254::pairing(pi, srs.1[1]) + Bn254::pairing(C5, srs.1[srs.1.len() - 1]);
     assert!(lhs == rhs);
 
     let lhs = Bn254::pairing(A_x - z + pi_1 * gamma_n, srs.1[0]);
-    let rhs = Bn254::pairing(pi_1, srs.1[n]);
+    let rhs = Bn254::pairing(pi_1, srs.1[n]) + Bn254::pairing(C6, srs.1[srs.1.len() - 1]);
     assert!(lhs == rhs);
   }
 }
