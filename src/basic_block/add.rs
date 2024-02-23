@@ -6,9 +6,9 @@ use rand::rngs::StdRng;
 
 pub struct AddBasicBlock;
 impl BasicBlock for AddBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<ArrayD<Fr>>) -> ArrayD<Fr> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> ArrayD<Fr> {
     let mut r = ArrayD::zeros(inputs[0].shape());
-    azip!((&x in &inputs[0], &y in &inputs[1], z in &mut r) *z = x + y);
+    azip!((&x in inputs[0], &y in inputs[1], z in &mut r) *z = x + y);
     r
   }
   fn prove(

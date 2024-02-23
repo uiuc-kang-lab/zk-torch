@@ -5,6 +5,7 @@ use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine};
 use ark_poly::univariate::DensePolynomial;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::UniformRand;
+pub use constant::ConstBasicBlock;
 pub use cq::CQBasicBlock;
 pub use cqlin::CQLinBasicBlock;
 pub use mul::MulBasicBlock;
@@ -12,6 +13,7 @@ use ndarray::ArrayD;
 use rand::{rngs::StdRng, SeedableRng};
 pub use relu::ReLUBasicBlock;
 pub mod add;
+pub mod constant;
 pub mod cq;
 pub mod cqlin;
 pub mod mul;
@@ -54,7 +56,7 @@ impl DataEnc {
   }
 }
 pub trait BasicBlock {
-  fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<ArrayD<Fr>>) -> ArrayD<Fr> {
+  fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> ArrayD<Fr> {
     ArrayD::zeros(vec![])
   }
   fn setup(&self, srs: (&Vec<G1Affine>, &Vec<G2Affine>), model: &Data) -> (Vec<G1Affine>, Vec<G2Affine>) {

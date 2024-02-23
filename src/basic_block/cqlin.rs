@@ -13,7 +13,7 @@ use rayon::prelude::*;
 
 pub struct CQLinBasicBlock;
 impl BasicBlock for CQLinBasicBlock {
-  fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<ArrayD<Fr>>) -> ArrayD<Fr> {
+  fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> ArrayD<Fr> {
     assert_eq!(model.shape()[0], inputs[0].len());
     let m = model.shape()[0];
     let n = model.shape()[1];
