@@ -106,10 +106,10 @@ pub fn msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {
   return a_chunks.zip(b_chunks).map(|(x, y)| -> P { VariableBaseMSM::msm_unchecked(&x, &y) }).sum();
 }
 
-pub fn gen_cq_table(basic_block: &dyn BasicBlock, table_size: usize) -> ArrayD<Fr> {
+pub fn gen_cq_table(basic_block: &Box<dyn BasicBlock>, table_size: usize) -> ArrayD<Fr> {
   let range: Vec<_> = (0..table_size).map(|i| Fr::from(i as u32) - Fr::from((table_size >> 1) as u32)).collect();
   let range = arr1(&range).into_dyn();
-  let result = basic_block.run(&ArrayD::zeros(vec![]), &vec![&range]);
+  let result = (*basic_block).run(&ArrayD::zeros(vec![]), &vec![&range]);
   let mut r = ArrayD::zeros(range.shape());
   let table_size = Fr::from(table_size as u32);
   azip!((&x in &range, &y in &result, z in &mut r) *z = x + y * table_size);

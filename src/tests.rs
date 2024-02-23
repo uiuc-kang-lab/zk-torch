@@ -11,12 +11,14 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: (&Vec<G1Affine>, &Vec<G2
   let output = basic_block.run(model, inputs);
   let model = Data::new(srs, model);
   let setup = basic_block.setup(srs, &model);
-  let inputs = inputs.iter().map(|x| Data::new(srs, x)).collect();
+  let inputs: Vec<_> = inputs.iter().map(|x| Data::new(srs, x)).collect();
+  let inputs = inputs.iter().map(|x| x).collect();
   let output = Data::new(srs, &output);
   let mut rng2 = rng.clone();
   let proof = basic_block.prove(srs, (&(setup.0), &(setup.1)), &model, &inputs, &output, &mut rng);
   let model = DataEnc::new(srs, &model);
-  let inputs = inputs.iter().map(|x| DataEnc::new(srs, x)).collect();
+  let inputs: Vec<_> = inputs.iter().map(|x| DataEnc::new(srs, x)).collect();
+  let inputs = inputs.iter().map(|x| x).collect();
   let output = DataEnc::new(srs, &output);
   basic_block.verify(srs, &model, &inputs, &output, (&(proof.0), &(proof.1)), &mut rng2);
 }

@@ -16,7 +16,7 @@ impl BasicBlock for AddBasicBlock {
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     _model: &Data,
-    inputs: &Vec<Data>,
+    inputs: &Vec<&Data>,
     output: &Data,
     rng: &mut StdRng,
   ) -> (Vec<G1Affine>, Vec<G2Affine>) {
@@ -28,7 +28,7 @@ impl BasicBlock for AddBasicBlock {
     &self,
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     _model: &DataEnc,
-    inputs: &Vec<DataEnc>,
+    inputs: &Vec<&DataEnc>,
     output: &DataEnc,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
