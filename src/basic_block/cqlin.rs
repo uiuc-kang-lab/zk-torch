@@ -162,7 +162,7 @@ impl BasicBlock for CQLinBasicBlock {
     proof.push(z);
 
     // G1 M needed for blinding
-    // h, h_M, h_S, h_g, h_R, h_pi, h_pi_1
+    // h, h_S, h_g, h_R, h_pi, h_pi_1
     let M_x_1 = R.iter().sum::<G1Projective>();
     let C = vec![
       M_x_1 * r[2] - (srs.0[m * n] - srs.0[0]) * r[1] - srs.0[0] * r[0] + srs.0[srs.1.len() - 1] * r[2] * r[8],
