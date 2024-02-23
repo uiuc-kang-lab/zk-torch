@@ -29,11 +29,22 @@ fn main() {
   let srs = (&srs.0, &srs.1);
   const N: usize = 1 << 6;
   const n: usize = 1 << 3;
-  const m: usize = 1 << 2;
+  const m_1: usize = 1 << 2;
+  const m_2: usize = 1 << 4;
   let a: Vec<_> = (0..N).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect();
+  let a1 = a.clone();
   let b: Vec<_> = (0..N).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect();
   test_basic_block::<AddBasicBlock>(srs, &arr1(&vec![]).into_dyn(), &vec![arr1(&a).into_dyn(), arr1(&b).into_dyn()]);
   test_basic_block::<MulBasicBlock>(srs, &arr1(&vec![]).into_dyn(), &vec![arr1(&a).into_dyn(), arr1(&b).into_dyn()]);
   test_basic_block::<CQBasicBlock>(srs, &arr1(&a).into_dyn(), &vec![arr1(&a[..n]).into_dyn()]);
-  test_basic_block::<CQLinBasicBlock>(srs, &ArrayD::from_shape_vec(vec![m, N / m], a).unwrap(), &vec![arr1(&b[..m]).into_dyn()]);
+  test_basic_block::<CQLinBasicBlock>(
+    srs,
+    &ArrayD::from_shape_vec(vec![m_1, N / m_1], a).unwrap(),
+    &vec![arr1(&b[..m_1]).into_dyn()],
+  );
+  test_basic_block::<CQLinBasicBlock>(
+    srs,
+    &ArrayD::from_shape_vec(vec![m_2, N / m_2], a1).unwrap(),
+    &vec![arr1(&b[..m_2]).into_dyn()],
+  );
 }

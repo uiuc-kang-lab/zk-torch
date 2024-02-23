@@ -165,7 +165,7 @@ impl BasicBlock for CQLinBasicBlock {
     // h, h_S, h_g, h_R, h_pi, h_pi_1
     let M_x_1 = R.iter().sum::<G1Projective>();
     let C = vec![
-      M_x_1 * r[2] - (srs.0[m * n] - srs.0[0]) * r[1] - srs.0[0] * r[0] + srs.0[srs.1.len() - 1] * r[2] * r[8],
+      M_x_1 * r[2] - (srs.0[m * n] - srs.0[0]) * r[1] - srs.0[0] * r[0] + srs.0[srs.1.len() - 1] * r[2] * r[8] + A_x * r[8],
       srs.0[0] * (r[0] - output.r * Fr::from(m as u32).inverse().unwrap()) - srs.0[n] * r[3],
       srs.0[N - n] * output.r - srs.0[0] * r[4],
       srs.0[N - m * n] * r[0] - srs.0[0] * r[5],
@@ -178,11 +178,8 @@ impl BasicBlock for CQLinBasicBlock {
 
     // G2 blinding for M
     let M_x_2 = (setup.1[0] + srs.1[srs.1.len() - 1] * r[8]).into();
-    let temp: Vec<_> = (0..m).into_par_iter().map(|i| srs.1[n * i]).collect();
-    let A_x_2: G2Affine = util::msm::<G2Projective>(&temp, &inputs[0].poly.coeffs).into();
-    let C1_2 = (A_x_2 * r[8]).into();
 
-    return (proof, vec![M_x_2, C1_2]);
+    return (proof, vec![M_x_2]);
   }
   fn verify<R: Rng>(
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
@@ -200,14 +197,11 @@ impl BasicBlock for CQLinBasicBlock {
       panic!("Wrong proof format")
     };
 
-    let [M_x, C1_2] = proof.1[..] else { panic!("Wrong proof format") };
+    let [M_x] = proof.1[..] else { panic!("Wrong proof format") };
 
     // Check A(x) M(x) = Z(X) Q(X) + R(X)
     let lhs = Bn254::pairing(A_x, M_x);
-    let rhs = Bn254::pairing(Q_x, srs.1[m * n] - srs.1[0])
-      + Bn254::pairing(R_x, srs.1[0])
-      + Bn254::pairing(C1, srs.1[srs.1.len() - 1])
-      + Bn254::pairing(srs.0[srs.1.len() - 1], C1_2);
+    let rhs = Bn254::pairing(Q_x, srs.1[m * n] - srs.1[0]) + Bn254::pairing(R_x, srs.1[0]) + Bn254::pairing(C1, srs.1[srs.1.len() - 1]);
     assert!(lhs == rhs);
 
     // Check R(X) - 1/m g(X) = S(X) X^n
