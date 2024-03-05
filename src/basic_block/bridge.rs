@@ -2,7 +2,7 @@ use super::{BasicBlock, Data, DataEnc};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::{pairing::Pairing, VariableBaseMSM};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, Evaluations, GeneralEvaluationDomain, Polynomial};
-use ark_std::{ops::Div, ops::Mul, ops::Sub, One, UniformRand, Zero};
+use ark_std::{ops::Div, ops::Mul, ops::Sub, ops::Add, One, UniformRand, Zero};
 use ndarray::ArrayD;
 use rand::rngs::StdRng;
 
@@ -38,22 +38,32 @@ impl BasicBlock for BridgeBasicBlock {
     _output: &Data,
     rng: &mut StdRng,
   ) -> (Vec<G1Affine>, Vec<G2Affine>) {
+    let alpha = Fr::rand(rng);
     let beta = Fr::rand(rng);
     let beta2 = beta * beta;
     let N = inputs[0].raw.len();
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
     let omega = domain.group_gen();
 
-    let coeff = &inputs[0].raw.clone().into_raw_vec();
-    let coeff1 = &inputs[1].raw.clone().into_raw_vec();
-    let coeff_f: DensePolynomial<Fr> = DenseUVPolynomial::from_coefficients_vec(coeff.to_vec());
-    let coeff_f_1 = DensePolynomial::from_coefficients_vec(coeff1.to_vec());
-    let coeff_f = coeff_f + coeff_f_1;
+    let coeff = inputs[0].raw.clone().into_raw_vec();
+    let mut coeff_f: DensePolynomial<Fr> = DenseUVPolynomial::from_coefficients_vec(coeff);
+    let mut alpha_gen = Fr::one();
+    for i in 1..inputs.len() {
+      let coeff_f_i = DensePolynomial::from_coefficients_vec(inputs[i].raw.clone().into_raw_vec());
+      alpha_gen *= alpha;
+      coeff_f += &coeff_f_i.mul(alpha_gen);
+    }
+    let coeff_f = coeff_f;
     let coeff = &coeff_f.coeffs.to_vec();
     let open_value = coeff_f.evaluate(&omega);
     let open_value_poly = DensePolynomial::from_coefficients_vec(vec![open_value]);
     let coeff_com: G1Affine = G1Projective::msm_unchecked(&srs.0[..coeff.len()], coeff).into();
-    let evals_com = inputs[0].g1 + inputs[1].g1;
+    let mut evals_com = inputs[0].g1;
+    let mut alpha_gen = Fr::one();
+    for i in 1..inputs.len() {
+      alpha_gen *= alpha;
+      evals_com = (inputs[i].g1 * alpha_gen + evals_com).into();
+    }
 
     let mut x_vec = vec![Fr::zero(); N];
     x_vec[1] = Fr::one();
@@ -92,7 +102,14 @@ impl BasicBlock for BridgeBasicBlock {
     let z_omegax = G1Projective::msm_unchecked(&srs.0[..N], &z_omega.coeffs).into();
 
     // T(X) = [Z(wX)-Z(X)-Xf(X)+beta*L_0(X)*Z(X)+beta2*L_n(X)*(Z(wX)-v)]/[X^(N)-1]
-    let t = (z_omega.sub(&z).sub(&(&inputs[0].poly + &inputs[1].poly).mul(&x))
+    let mut input_poly_sum = inputs[0].poly.clone();
+    let mut alpha_gen = Fr::one();
+    for i in 1..inputs.len() {
+      alpha_gen *= alpha;
+      let input_poly_i = inputs[i].poly.mul(alpha_gen);
+      input_poly_sum = input_poly_sum.add(input_poly_i);
+    }
+    let t = (z_omega.sub(&z).sub(&input_poly_sum.mul(&x))
       + (&l0.mul(&z) * beta)
       + (&ln_minus_one.mul(&z_omega.sub(&open_value_poly)) * beta2))
       .divide_by_vanishing_poly(domain)
@@ -123,6 +140,7 @@ impl BasicBlock for BridgeBasicBlock {
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
   ) {
+    let _alpha = Fr::rand(rng);
     let beta = Fr::rand(rng);
     let beta2 = beta * beta;
     // Verify [Z(wX)-Z(X)-Xf(X)+beta*L_0(X)*Z(X)+beta2*L_n(X)*(Z(wX)-v)]=[X^(N)-1]T(X)
