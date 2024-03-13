@@ -8,12 +8,12 @@ use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{ops::Mul, ops::Sub, One, UniformRand, Zero};
 use ndarray::ArrayD;
-use rand::rngs::StdRng;
+use rand::{rngs::StdRng, SeedableRng};
 
-// Inputs to basic block are v,r_1,r_2,... where r_1,r_2,... are the rows of a matrix M
-// Output of basic block is v*M=w where * is matrix multiplication
+// Inputs to basic block are v,r_0,r_1,... where r_0,r_1,... are the rows of a matrix M
+// Output of basic block is w = vM
 // Proof steps:
-// 1. M is converted to the vector "flat" via flat = alpha^0 r_1 + alpha^1 r_2 + ...
+// 1. M is converted to the vector "flat" where flat = alpha^0 r_0 + alpha^1 r_1 + ...
 // 2. flat is pointwise multiplied by v to create the vector A
 // 3. w is pointwise multiplied by the vector pow = [alpha^0, alpha^1, ...] to create the vector B
 // 4. ∑A=∑B is checked by via A(0) and B(0)
@@ -63,17 +63,21 @@ impl BasicBlock for MatMulBasicBlock {
       pow[i + 1] = pow[i] * alpha;
     }
     let pow_poly = DensePolynomial { coeffs: domain_m.ifft(&pow) };
+    let pow_x = util::msm::<G1Projective>(&srs.0, &pow_poly.coeffs);
 
     // Calculate flat
     let mut flat = vec![Fr::zero(); n];
+    let mut flat_r = Fr::zero();
     for i in 0..m {
       for j in 0..n {
         flat[j] += inputs[1 + i].raw[j] * pow[i];
       }
+      flat_r += inputs[1 + i].r * pow[i];
     }
     let flat_poly = DensePolynomial {
       coeffs: domain_n.ifft(&flat),
     };
+    let flat_x = util::msm::<G1Projective>(&srs.0, &flat_poly.coeffs);
 
     // Calculate A
     let A_i: Vec<Fr> = (0..n).map(|i| flat[i] * inputs[0].raw[i]).collect();
@@ -85,7 +89,8 @@ impl BasicBlock for MatMulBasicBlock {
       zero: (srs.0[0] * (Fr::from(n as u32).inverse().unwrap() * A_i.iter().sum::<Fr>())).into(),
       zero_div: util::msm::<G1Projective>(&srs.0, &A_poly.coeffs[1..]).into(),
     };
-    let v_x_2 = util::msm::<G2Projective>(&srs.1, &inputs[0].poly.coeffs).into();
+    let v_x_2 = util::msm::<G2Projective>(&srs.1, &inputs[0].poly.coeffs) + srs.1[srs.1.len() - 1] * inputs[0].r;
+    let v_x_2 = v_x_2.into();
 
     // Calculate B
     let B_i: Vec<Fr> = (0..m).map(|i| output.raw[i] * pow[i]).collect();
@@ -97,9 +102,21 @@ impl BasicBlock for MatMulBasicBlock {
       zero_div: util::msm::<G1Projective>(&srs.0, &B_poly.coeffs[1..]).into(),
     };
 
-    let proof1: Vec<G1Affine> = vec![A.x, A.Q_x, A.zero, A.zero_div, B.x, B.Q_x, B.zero_div];
-    let proof2: Vec<G2Affine> = vec![v_x_2];
-    return (proof1, proof2);
+    // Blinding
+    let mut rng2 = StdRng::from_entropy();
+    let r: Vec<_> = (0..7).map(|_| Fr::rand(&mut rng2)).collect();
+    let proof: Vec<G1Affine> = vec![A.x, A.Q_x, A.zero, A.zero_div, B.x, B.Q_x, B.zero_div];
+    let mut proof: Vec<G1Affine> = proof.iter().enumerate().map(|(i, x)| ((*x) + srs.0[srs.1.len() - 1] * r[i]).into()).collect();
+    let C = vec![
+      -(srs.0[n] - srs.0[0]) * r[1] + inputs[0].g1 * flat_r + flat_x * inputs[0].r + srs.0[srs.1.len() - 1] * inputs[0].r * flat_r - srs.0[0] * r[0],
+      -srs.0[1] * r[3] + srs.0[0] * (r[0] - r[2]),
+      -(srs.0[m] - srs.0[0]) * r[5] + pow_x * output.r - srs.0[0] * r[4],
+      -srs.0[1] * r[6] + srs.0[0] * (r[4] - r[2] * Fr::from(n as u32) * Fr::from(m as u32).inverse().unwrap()),
+    ];
+    let mut C: Vec<G1Affine> = C.iter().map(|x| (*x).into()).collect();
+    proof.append(&mut C);
+
+    return (proof, vec![v_x_2]);
   }
   fn verify(
     &self,
@@ -124,6 +141,7 @@ impl BasicBlock for MatMulBasicBlock {
       Q_x: proof.0[5],
       zero_div: proof.0[6],
     };
+    let [C1, C2, C3, C4] = proof.0[7..] else { panic!("Wrong proof format") };
     let v_x_2 = proof.1[0];
 
     let alpha = Fr::rand(rng);
@@ -144,7 +162,7 @@ impl BasicBlock for MatMulBasicBlock {
 
     // Check A(x) (A_i = flat_i * v_i)
     let lhs = Bn254::pairing(flat_x, v_x_2) - Bn254::pairing(A.x, srs.1[0]);
-    let rhs = Bn254::pairing(A.Q_x, srs.1[n] - srs.1[0]);
+    let rhs = Bn254::pairing(A.Q_x, srs.1[n] - srs.1[0]) + Bn254::pairing(C1, srs.1[srs.1.len() - 1]);
     assert!(lhs == rhs);
 
     // Check v_x_2 is G2 equivalent of v
@@ -154,12 +172,12 @@ impl BasicBlock for MatMulBasicBlock {
 
     // Check A(x) - A(0) is divisible by x
     let lhs = Bn254::pairing(A.x - A.zero, srs.1[0]);
-    let rhs = Bn254::pairing(A.zero_div, srs.1[1]);
+    let rhs = Bn254::pairing(A.zero_div, srs.1[1]) + Bn254::pairing(C2, srs.1[srs.1.len() - 1]);
     assert!(lhs == rhs);
 
     // check B(x) (B_i = w_i * pow_i)
     let lhs = Bn254::pairing(output.g1, pow_x2) - Bn254::pairing(B.x, srs.1[0]);
-    let rhs = Bn254::pairing(B.Q_x, srs.1[m] - srs.1[0]);
+    let rhs = Bn254::pairing(B.Q_x, srs.1[m] - srs.1[0]) + Bn254::pairing(C3, srs.1[srs.1.len() - 1]);
     assert!(lhs == rhs);
 
     // Assume B(0) = A(0)*n/m (which assumes ∑A=∑B)
@@ -167,7 +185,7 @@ impl BasicBlock for MatMulBasicBlock {
 
     //check B(x) - B(0) is divisible by x
     let lhs = Bn254::pairing(B.x - B_zero, srs.1[0]);
-    let rhs = Bn254::pairing(B.zero_div, srs.1[1]);
+    let rhs = Bn254::pairing(B.zero_div, srs.1[1]) + Bn254::pairing(C4, srs.1[srs.1.len() - 1]);
     assert!(lhs == rhs);
   }
 }

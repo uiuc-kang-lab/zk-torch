@@ -27,10 +27,10 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: (&Vec<G1Affine>, &Vec<G2
 fn testBasicBlocks() {
   let srs = ptau::load_file("challenge", 7);
   let srs = (&srs.0, &srs.1);
-  const N: usize = 1 << 6;
-  const n: usize = 1 << 3;
-  const m1: usize = 1 << 2;
-  const m2: usize = 1 << 4;
+  let N: usize = 1 << 6;
+  let n: usize = 1 << 3;
+  let m1: usize = 1 << 2;
+  let m2: usize = 1 << 4;
   let a: Vec<_> = (0..N).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect();
   let a1 = a.clone();
   let b: Vec<_> = (0..N).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect();
@@ -59,4 +59,14 @@ fn testBasicBlocks() {
     &ArrayD::from_shape_vec(vec![m2, N / m2], a1).unwrap(),
     &vec![&arr1(&b[..m2]).into_dyn()],
   );
+
+  let n: usize = 1 << 6;
+  let m: usize = 1 << 3;
+  let mut inputs: Vec<Vec<Fr>> = vec![];
+  for _ in 0..m + 1 {
+    inputs.push((0..n).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect());
+  }
+  let inputs: Vec<ArrayD<Fr>> = inputs.iter().map(|x| arr1(&x).into_dyn()).collect();
+  let inputs: Vec<_> = inputs.iter().map(|x| x).collect();
+  testBasicBlock(MatMulBasicBlock {}, srs, &arr1(&vec![]).into_dyn(), &inputs);
 }
