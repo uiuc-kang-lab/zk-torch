@@ -8,6 +8,7 @@ use ark_std::UniformRand;
 pub use constant::ConstBasicBlock;
 pub use cq::CQBasicBlock;
 pub use cqlin::CQLinBasicBlock;
+pub use matmul::MatMulBasicBlock;
 pub use mul::MulBasicBlock;
 use ndarray::ArrayD;
 use rand::{rngs::StdRng, SeedableRng};
@@ -16,6 +17,7 @@ pub mod add;
 pub mod constant;
 pub mod cq;
 pub mod cqlin;
+pub mod matmul;
 pub mod mul;
 pub mod relu;
 
