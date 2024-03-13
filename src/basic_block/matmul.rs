@@ -155,10 +155,8 @@ impl BasicBlock for MatMulBasicBlock {
     let pow_x2 = util::msm::<G2Projective>(&srs.1, &pow_poly.coeffs);
 
     // Calculate flat
-    let mut flat_x = G1Projective::zero();
-    for i in 0..m {
-      flat_x += inputs[1 + i].g1 * pow[i];
-    }
+    let temp:Vec<_> = (0..m).map(|i|inputs[1 + i].g1).collect();
+    let flat_x = util::msm::<G1Projective>(&temp, &pow);
 
     // Check A(x) (A_i = flat_i * v_i)
     let lhs = Bn254::pairing(flat_x, v_x_2) - Bn254::pairing(A.x, srs.1[0]);
