@@ -16,7 +16,7 @@ pub struct Graph {
 }
 
 impl Graph {
-  pub fn run(&self, inputs: &Vec<&Vec<Fr>>, models: &Vec<&Vec<Fr>>) -> Vec<Vec<Vec<Fr>>> {
+  pub fn run(&self, inputs: &Vec<&Vec<Fr>>, models: &Vec<&Vec<&Vec<Fr>>>) -> Vec<Vec<Vec<Fr>>> {
     let mut outputs = vec![vec![]; self.nodes.len()];
     // Run the nodes that have no inputs
     for i in 0..self.nodes.len() {
@@ -43,14 +43,14 @@ impl Graph {
     }
     return outputs;
   }
-  pub fn setup(&self, srs: &SRS, models: &Vec<&Data>) -> Vec<(Vec<G1Projective>, Vec<G2Projective>)> {
+  pub fn setup(&self, srs: &SRS, models: &Vec<&Vec<&Data>>) -> Vec<(Vec<G1Projective>, Vec<G2Projective>)> {
     self.basic_blocks.iter().zip(models.iter()).map(|(b, m)| b.setup(srs, m)).collect()
   }
   pub fn prove(
     &mut self,
     srs: &SRS,
     setups: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>)>,
-    models: &Vec<&Data>,
+    models: &Vec<&Vec<&Data>>,
     inputs: &Vec<&Data>,
     outputs: &Vec<&Vec<&Data>>,
     rng: &mut StdRng,
@@ -72,7 +72,7 @@ impl Graph {
   pub fn verify(
     &self,
     srs: &SRS,
-    models: &Vec<&DataEnc>,
+    models: &Vec<&Vec<&DataEnc>>,
     inputs: &Vec<&DataEnc>,
     outputs: &Vec<&Vec<&DataEnc>>,
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>)>,

@@ -8,14 +8,14 @@ use rand::{rngs::StdRng, SeedableRng};
 
 pub struct MulBasicBlock;
 impl BasicBlock for MulBasicBlock {
-  fn run(&self, _model: &Vec<Fr>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
+  fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     vec![inputs[0].iter().zip(inputs[1]).map(|(x, y)| *x * *y).collect()]
   }
   fn prove(
     &mut self,
     srs: &SRS,
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
-    _model: &Data,
+    _model: &Vec<&Data>,
     inputs: &Vec<&Data>,
     outputs: &Vec<&Data>,
     _rng: &mut StdRng,
@@ -37,7 +37,7 @@ impl BasicBlock for MulBasicBlock {
   fn verify(
     &self,
     srs: &SRS,
-    _model: &DataEnc,
+    _model: &Vec<&DataEnc>,
     inputs: &Vec<&DataEnc>,
     outputs: &Vec<&DataEnc>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),

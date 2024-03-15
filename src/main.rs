@@ -73,12 +73,15 @@ fn main() {
   inputs.append(&mut matrix);
   let empty = vec![];
   let constant = vec![Fr::from(1 << 6); 1 << 2];
+  let constant = vec![&constant];
   let relu_cq_table = util::gen_cq_table(&graph.basic_blocks[1], 1 << 6);
+  let relu_cq_table = vec![&relu_cq_table];
   let models = vec![&empty, &empty, &constant, &empty, &empty, &relu_cq_table];
   let outputs = graph.run(&inputs, &models);
 
   //Setup:
-  let models: Vec<_> = models.iter().map(|x| Data::new(srs, x)).collect();
+  let models: Vec<Vec<_>> = models.iter().map(|model| model.iter().map(|x| Data::new(srs, x)).collect()).collect();
+  let models: Vec<_> = models.iter().map(|model| model.iter().map(|x| x).collect()).collect();
   let models = models.iter().map(|x| x).collect();
   let setups = graph.setup(srs, &models);
   //Converting to affine
@@ -89,8 +92,8 @@ fn main() {
   //Prove:
   let inputs: Vec<_> = inputs.iter().map(|x| Data::new(srs, x)).collect();
   let inputs = inputs.iter().map(|x| x).collect();
-  let outputs: Vec<Vec<_>> = outputs.iter().map(|output| output.iter().map(|x| Data::new(srs, x)).collect()).collect();
-  let outputs: Vec<Vec<_>> = outputs.iter().map(|output| output.iter().map(|x| x).collect()).collect();
+  let outputs: Vec<Vec<_>> = outputs.iter().map(|x| x.iter().map(|x| Data::new(srs, x)).collect()).collect();
+  let outputs: Vec<Vec<_>> = outputs.iter().map(|x| x.iter().map(|x| x).collect()).collect();
   let outputs: Vec<_> = outputs.iter().map(|x| x).collect();
   let mut rng = StdRng::from_entropy();
   let mut rng2 = rng.clone();
@@ -101,12 +104,13 @@ fn main() {
   let proofs = proofs.iter().map(|x| (&x.0, &x.1)).collect();
 
   //Verify:
-  let models: Vec<_> = models.iter().map(|x| DataEnc::new(srs, x)).collect();
+  let models: Vec<Vec<_>> = models.iter().map(|model| (**model).iter().map(|x| DataEnc::new(srs, *x)).collect()).collect();
+  let models: Vec<_> = models.iter().map(|model| model.iter().map(|x| x).collect()).collect();
   let models = models.iter().map(|x| x).collect();
   let inputs: Vec<_> = inputs.iter().map(|x| DataEnc::new(srs, x)).collect();
   let inputs = inputs.iter().map(|x| x).collect();
-  let outputs: Vec<Vec<_>> = outputs.iter().map(|output| output.iter().map(|x| DataEnc::new(srs, x)).collect()).collect();
-  let outputs: Vec<Vec<_>> = outputs.iter().map(|output| output.iter().map(|x| x).collect()).collect();
+  let outputs: Vec<Vec<_>> = outputs.iter().map(|x| x.iter().map(|x| DataEnc::new(srs, x)).collect()).collect();
+  let outputs: Vec<Vec<_>> = outputs.iter().map(|x| x.iter().map(|x| x).collect()).collect();
   let outputs: Vec<_> = outputs.iter().map(|x| x).collect();
   graph.verify(srs, &models, &inputs, &outputs, &proofs, &mut rng2);
 }

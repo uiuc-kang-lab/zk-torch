@@ -64,17 +64,17 @@ impl DataEnc {
   }
 }
 pub trait BasicBlock {
-  fn run(&self, model: &Vec<Fr>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
+  fn run(&self, model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     vec![]
   }
-  fn setup(&self, srs: &SRS, model: &Data) -> (Vec<G1Projective>, Vec<G2Projective>) {
+  fn setup(&self, srs: &SRS, model: &Vec<&Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
     (Vec::new(), Vec::new())
   }
   fn prove(
     &mut self,
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>),
-    model: &Data,
+    model: &Vec<&Data>,
     inputs: &Vec<&Data>,
     outputs: &Vec<&Data>,
     rng: &mut StdRng,
@@ -84,7 +84,7 @@ pub trait BasicBlock {
   fn verify(
     &self,
     srs: &SRS,
-    model: &DataEnc,
+    model: &Vec<&DataEnc>,
     inputs: &Vec<&DataEnc>,
     outputs: &Vec<&DataEnc>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),

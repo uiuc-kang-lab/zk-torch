@@ -6,10 +6,11 @@ use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
 
-fn testBasicBlock<BB: BasicBlock>(mut basic_block: BB, srs: &SRS, model: &Vec<Fr>, inputs: &Vec<&Vec<Fr>>) {
+fn testBasicBlock<BB: BasicBlock>(mut basic_block: BB, srs: &SRS, model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) {
   let mut rng = StdRng::from_entropy();
   let outputs = basic_block.run(model, inputs);
-  let model = Data::new(srs, model);
+  let model: Vec<_> = model.iter().map(|x| Data::new(srs, x)).collect();
+  let model = model.iter().map(|x| x).collect();
   let setup = basic_block.setup(srs, &model);
   let setup: (Vec<G1Affine>, Vec<G2Affine>) = (
     setup.0.iter().map(|y| (*y).into()).collect(),
@@ -18,8 +19,8 @@ fn testBasicBlock<BB: BasicBlock>(mut basic_block: BB, srs: &SRS, model: &Vec<Fr
   let setup = (&setup.0, &setup.1);
   let inputs: Vec<_> = inputs.iter().map(|x| Data::new(srs, x)).collect();
   let inputs = inputs.iter().map(|x| x).collect();
-  let outputs: Vec<_> = outputs.iter().map(|output| Data::new(srs, output)).collect();
-  let outputs = outputs.iter().map(|output| output).collect();
+  let outputs: Vec<_> = outputs.iter().map(|x| Data::new(srs, x)).collect();
+  let outputs = outputs.iter().map(|x| x).collect();
   let mut rng2 = rng.clone();
   let proof = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng);
   let proof: (Vec<G1Affine>, Vec<G2Affine>) = (
@@ -27,11 +28,12 @@ fn testBasicBlock<BB: BasicBlock>(mut basic_block: BB, srs: &SRS, model: &Vec<Fr
     proof.1.iter().map(|y| (*y).into()).collect(),
   );
   let proof = (&proof.0, &proof.1);
-  let model = DataEnc::new(srs, &model);
+  let model: Vec<_> = model.iter().map(|x| DataEnc::new(srs, x)).collect();
+  let model = model.iter().map(|x| x).collect();
   let inputs: Vec<_> = inputs.iter().map(|x| DataEnc::new(srs, x)).collect();
   let inputs = inputs.iter().map(|x| x).collect();
-  let outputs: Vec<_> = outputs.iter().map(|output| DataEnc::new(srs, output)).collect();
-  let outputs = outputs.iter().map(|output| output).collect();
+  let outputs: Vec<_> = outputs.iter().map(|x| DataEnc::new(srs, x)).collect();
+  let outputs = outputs.iter().map(|x| x).collect();
   basic_block.verify(srs, &model, &inputs, &outputs, proof, &mut rng2);
 }
 
@@ -44,7 +46,7 @@ fn testBasicBlocks() {
   let b: Vec<_> = (0..N).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect();
   testBasicBlock(AddBasicBlock {}, srs, &vec![], &vec![&a, &b]);
   testBasicBlock(MulBasicBlock {}, srs, &vec![], &vec![&a, &b]);
-  testBasicBlock(CQBasicBlock { table_dict: HashMap::new() }, srs, &a, &vec![&a[..n].to_vec()]);
+  testBasicBlock(CQBasicBlock { table_dict: HashMap::new() }, srs, &vec![&a], &vec![&a[..n].to_vec()]);
 
   let l: usize = 1 << 5;
   let m: usize = 1 << 4;

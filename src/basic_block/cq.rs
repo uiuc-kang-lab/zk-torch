@@ -18,12 +18,12 @@ pub struct CQBasicBlock {
   pub table_dict: HashMap<Fr, usize>,
 }
 impl BasicBlock for CQBasicBlock {
-  fn setup(&self, srs: &SRS, model: &Data) -> (Vec<G1Projective>, Vec<G2Projective>) {
-    let N = model.raw.len();
+  fn setup(&self, srs: &SRS, model: &Vec<&Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
+    let N = model[0].raw.len();
     let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
     let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
-    let T_x_2 = util::msm::<G2Projective>(&srs.X2A, &model.poly.coeffs) + srs.Y2P * model.r;
-    let mut temp = model.poly.coeffs[1..].to_vec();
+    let T_x_2 = util::msm::<G2Projective>(&srs.X2A, &model[0].poly.coeffs) + srs.Y2P * model[0].r;
+    let mut temp = model[0].poly.coeffs[1..].to_vec();
     temp.resize(N * 2 - 1, Fr::zero());
     let mut temp2 = srs.X1P[..N].to_vec();
     temp2.reverse();
@@ -46,12 +46,12 @@ impl BasicBlock for CQBasicBlock {
     &mut self,
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>),
-    model: &Data,
+    model: &Vec<&Data>,
     inputs: &Vec<&Data>,
     _outputs: &Vec<&Data>,
     rng: &mut StdRng,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
-    let N = model.raw.len();
+    let N = model[0].raw.len();
     let n = inputs[0].raw.len();
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
 
@@ -61,7 +61,7 @@ impl BasicBlock for CQBasicBlock {
     let L_i_0_x_1 = &setup.0[2 * N..];
     if self.table_dict.len() == 0 {
       for i in 0..N {
-        self.table_dict.insert(model.raw[i], i);
+        self.table_dict.insert(model[0].raw[i], i);
       }
     }
 
@@ -76,7 +76,7 @@ impl BasicBlock for CQBasicBlock {
     let beta = Fr::rand(rng);
 
     // Calculate A
-    let A_i: HashMap<usize, Fr> = m_i.iter().map(|(i, y)| (**i, Fr::from(*y as u32) * (model.raw[**i] + beta).inverse().unwrap())).collect();
+    let A_i: HashMap<usize, Fr> = m_i.iter().map(|(i, y)| (**i, Fr::from(*y as u32) * (model[0].raw[**i] + beta).inverse().unwrap())).collect();
     let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = A_i.iter().map(|(i, y)| (L_i_x_1[*i], *y)).unzip();
     let A_x = util::msm::<G1Projective>(&temp, &temp2);
     let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = A_i.iter().map(|(i, y)| (Q_i_x_1[*i], *y)).unzip();
@@ -107,7 +107,7 @@ impl BasicBlock for CQBasicBlock {
     let proof: Vec<G1Projective> = vec![m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC];
     let mut proof: Vec<G1Projective> = proof.iter().enumerate().map(|(i, x)| (*x) + srs.Y1P * r[i]).collect();
     let mut C = vec![
-      -(srs.X1P[N] - srs.X1P[0]) * r[2] + model.g1 * r[1] + A_x * model.r + (srs.Y1P * model.r * r[1]) + srs.X1P[0] * (r[1] * beta - r[0]),
+      -(srs.X1P[N] - srs.X1P[0]) * r[2] + model[0].g1 * r[1] + A_x * model[0].r + (srs.Y1P * model[0].r * r[1]) + srs.X1P[0] * (r[1] * beta - r[0]),
       -srs.X1P[1] * r[4] + srs.X1P[0] * (r[1] - r[3]),
       -(srs.X1P[n] - srs.X1P[0]) * r[6] + inputs[0].g1 * r[5] + B_x * inputs[0].r + (srs.Y1P * inputs[0].r * r[5]) + srs.X1P[0] * (r[5] * beta),
       -srs.X1P[1] * r[7] + srs.X1P[0] * (r[5] - r[3] * Fr::from(N as u32) * Fr::from(n as u32).inverse().unwrap()),
@@ -120,13 +120,13 @@ impl BasicBlock for CQBasicBlock {
   fn verify(
     &self,
     srs: &SRS,
-    model: &DataEnc,
+    model: &Vec<&DataEnc>,
     inputs: &Vec<&DataEnc>,
     _outputs: &Vec<&DataEnc>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
   ) {
-    let N = model.len;
+    let N = model[0].len;
     let n = inputs[0].len;
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let [m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC, C1, C2, C3, C4, C5] = proof.0[..] else {
@@ -142,7 +142,7 @@ impl BasicBlock for CQBasicBlock {
     assert!(lhs == rhs);
 
     // Check T_x_2 is the G2 equivalent of the model
-    let lhs = Bn254::pairing(model.g1, srs.X2A[0]);
+    let lhs = Bn254::pairing(model[0].g1, srs.X2A[0]);
     let rhs = Bn254::pairing(srs.X1A[0], T_x_2);
     assert!(lhs == rhs);
 

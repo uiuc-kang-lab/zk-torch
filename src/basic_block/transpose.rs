@@ -20,7 +20,7 @@ fn calc_pow(alpha: Fr, n: usize) -> Vec<Fr> {
 pub struct TransposeBasicBlock;
 // inputs are rows to A, outputs are columns of B (checking that B=A)
 impl BasicBlock for TransposeBasicBlock {
-  fn run(&self, _model: &Vec<Fr>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
+  fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     let m = inputs[0].len();
     let n = inputs.len();
     let mut r = vec![vec![Fr::zero(); n]; m];
@@ -35,7 +35,7 @@ impl BasicBlock for TransposeBasicBlock {
     &mut self,
     srs: &SRS,
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
-    _model: &Data,
+    _model: &Vec<&Data>,
     inputs: &Vec<&Data>,
     outputs: &Vec<&Data>,
     rng: &mut StdRng,
@@ -113,7 +113,7 @@ impl BasicBlock for TransposeBasicBlock {
   fn verify(
     &self,
     srs: &SRS,
-    model: &DataEnc,
+    model: &Vec<&DataEnc>,
     inputs: &Vec<&DataEnc>,
     outputs: &Vec<&DataEnc>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),

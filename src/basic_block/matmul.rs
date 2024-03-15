@@ -22,7 +22,7 @@ pub struct MatMulBasicBlock {
 }
 // inputs are rows to A and columns of B, outputs are rows of C
 impl BasicBlock for MatMulBasicBlock {
-  fn run(&self, _model: &Vec<Fr>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
+  fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     let l = self.l;
     let m = inputs[0].len();
     let n = inputs.len() - l;
@@ -40,7 +40,7 @@ impl BasicBlock for MatMulBasicBlock {
     &mut self,
     srs: &SRS,
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
-    _model: &Data,
+    _model: &Vec<&Data>,
     inputs: &Vec<&Data>,
     outputs: &Vec<&Data>,
     rng: &mut StdRng,
@@ -132,7 +132,7 @@ impl BasicBlock for MatMulBasicBlock {
   fn verify(
     &self,
     srs: &SRS,
-    model: &DataEnc,
+    model: &Vec<&DataEnc>,
     inputs: &Vec<&DataEnc>,
     outputs: &Vec<&DataEnc>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
