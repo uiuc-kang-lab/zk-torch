@@ -55,4 +55,13 @@ fn testBasicBlocks() {
   }
   let inputs: Vec<_> = inputs.iter().map(|x| x).collect();
   testBasicBlock(MatMulBasicBlock { l: l }, srs, &vec![], &inputs);
+
+  let m: usize = 1 << 5;
+  let n: usize = 1 << 4;
+  let mut inputs: Vec<Vec<Fr>> = vec![];
+  for _ in 0..n {
+    inputs.push((0..m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect());
+  }
+  let inputs: Vec<_> = inputs.iter().map(|x| x).collect();
+  testBasicBlock(TransposeBasicBlock {}, srs, &vec![], &inputs);
 }

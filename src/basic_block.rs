@@ -11,12 +11,14 @@ pub use matmul::MatMulBasicBlock;
 pub use mul::MulBasicBlock;
 use rand::{rngs::StdRng, SeedableRng};
 pub use relu::ReLUBasicBlock;
+pub use transpose::TransposeBasicBlock;
 pub mod add;
 pub mod constant;
 pub mod cq;
 pub mod matmul;
 pub mod mul;
 pub mod relu;
+pub mod transpose;
 
 pub struct SRS {
   pub X1A: Vec<G1Affine>,
