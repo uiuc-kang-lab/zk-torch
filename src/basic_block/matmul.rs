@@ -30,7 +30,7 @@ struct BProof {
 
 pub struct MatMulBasicBlock;
 impl BasicBlock for MatMulBasicBlock {
-  fn run(&self, _model: &Vec<Fr>, inputs: &Vec<&Vec<Fr>>) -> Vec<Fr> {
+  fn run(&self, _model: &Vec<Fr>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     let m = inputs.len() - 1;
     let n = inputs[0].len();
     let mut r = vec![Fr::zero(); m];
@@ -39,7 +39,7 @@ impl BasicBlock for MatMulBasicBlock {
         r[i] += inputs[1 + i][j] * inputs[0][j];
       }
     }
-    return r;
+    vec![r]
   }
   fn prove(
     &mut self,
@@ -47,7 +47,7 @@ impl BasicBlock for MatMulBasicBlock {
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     _model: &Data,
     inputs: &Vec<&Data>,
-    output: &Data,
+    outputs: &Vec<&Data>,
     rng: &mut StdRng,
   ) -> (Vec<G1Affine>, Vec<G2Affine>) {
     let m = inputs.len() - 1;
@@ -92,9 +92,9 @@ impl BasicBlock for MatMulBasicBlock {
     let v_x_2 = v_x_2.into();
 
     // Calculate B
-    let B_i: Vec<Fr> = (0..m).map(|i| output.raw[i] * pow[i]).collect();
+    let B_i: Vec<Fr> = (0..m).map(|i| outputs[0].raw[i] * pow[i]).collect();
     let B_poly = DensePolynomial { coeffs: domain_m.ifft(&B_i) };
-    let B_Q_poly = output.poly.mul(&pow_poly).sub(&B_poly).divide_by_vanishing_poly(domain_m).unwrap().0;
+    let B_Q_poly = outputs[0].poly.mul(&pow_poly).sub(&B_poly).divide_by_vanishing_poly(domain_m).unwrap().0;
     let B = BProof {
       x: util::msm::<G1Projective>(&srs.0, &B_poly.coeffs).into(),
       Q_x: util::msm::<G1Projective>(&srs.0, &B_Q_poly.coeffs).into(),
@@ -109,7 +109,7 @@ impl BasicBlock for MatMulBasicBlock {
     let C = vec![
       -(srs.0[n] - srs.0[0]) * r[1] + inputs[0].g1 * flat_r + flat_x * inputs[0].r + srs.0[srs.1.len() - 1] * inputs[0].r * flat_r - srs.0[0] * r[0],
       -srs.0[1] * r[3] + srs.0[0] * (r[0] - r[2]),
-      -(srs.0[m] - srs.0[0]) * r[5] + pow_x * output.r - srs.0[0] * r[4],
+      -(srs.0[m] - srs.0[0]) * r[5] + pow_x * outputs[0].r - srs.0[0] * r[4],
       -srs.0[1] * r[6] + srs.0[0] * (r[4] - r[2] * Fr::from(n as u32) * Fr::from(m as u32).inverse().unwrap()),
     ];
     let mut C: Vec<G1Affine> = C.iter().map(|x| (*x).into()).collect();
@@ -122,7 +122,7 @@ impl BasicBlock for MatMulBasicBlock {
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     model: &DataEnc,
     inputs: &Vec<&DataEnc>,
-    output: &DataEnc,
+    outputs: &Vec<&DataEnc>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
   ) {
@@ -173,7 +173,7 @@ impl BasicBlock for MatMulBasicBlock {
     assert!(lhs == rhs);
 
     // check B(x) (B_i = w_i * pow_i)
-    let lhs = Bn254::pairing(output.g1, pow_x2) - Bn254::pairing(B.x, srs.1[0]);
+    let lhs = Bn254::pairing(outputs[0].g1, pow_x2) - Bn254::pairing(B.x, srs.1[0]);
     let rhs = Bn254::pairing(B.Q_x, srs.1[m] - srs.1[0]) + Bn254::pairing(C3, srs.1[srs.1.len() - 1]);
     assert!(lhs == rhs);
 

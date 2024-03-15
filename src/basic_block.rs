@@ -52,7 +52,7 @@ impl DataEnc {
   }
 }
 pub trait BasicBlock {
-  fn run(&self, model: &Vec<Fr>, inputs: &Vec<&Vec<Fr>>) -> Vec<Fr> {
+  fn run(&self, model: &Vec<Fr>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     vec![]
   }
   fn setup(&self, srs: (&Vec<G1Affine>, &Vec<G2Affine>), model: &Data) -> (Vec<G1Affine>, Vec<G2Affine>) {
@@ -64,7 +64,7 @@ pub trait BasicBlock {
     setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     model: &Data,
     inputs: &Vec<&Data>,
-    output: &Data,
+    outputs: &Vec<&Data>,
     rng: &mut StdRng,
   ) -> (Vec<G1Affine>, Vec<G2Affine>) {
     (Vec::new(), Vec::new())
@@ -74,7 +74,7 @@ pub trait BasicBlock {
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     model: &DataEnc,
     inputs: &Vec<&DataEnc>,
-    output: &DataEnc,
+    outputs: &Vec<&DataEnc>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
   ) {

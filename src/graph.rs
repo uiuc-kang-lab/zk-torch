@@ -5,7 +5,7 @@ use rand::rngs::StdRng;
 
 pub struct Node {
   pub basic_block: usize,
-  pub input_nodes: Vec<usize>,
+  pub inputs: Vec<(usize, usize)>, //(node, output #)
   pub output_nodes: Vec<usize>,
 }
 
@@ -16,11 +16,11 @@ pub struct Graph {
 }
 
 impl Graph {
-  pub fn run(&self, inputs: &Vec<&Vec<Fr>>, models: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
+  pub fn run(&self, inputs: &Vec<&Vec<Fr>>, models: &Vec<&Vec<Fr>>) -> Vec<Vec<Vec<Fr>>> {
     let mut outputs = vec![vec![]; self.nodes.len()];
     // Run the nodes that have no inputs
     for i in 0..self.nodes.len() {
-      if self.nodes[i].input_nodes.len() == 0 && i != self.input_node {
+      if self.nodes[i].inputs.len() == 0 && i != self.input_node {
         outputs[i] = self.basic_blocks[self.nodes[i].basic_block].run(&models[self.nodes[i].basic_block], &vec![]);
       }
     }
@@ -32,11 +32,11 @@ impl Graph {
       if curr == self.input_node {
         outputs[curr] = self.basic_blocks[currNode.basic_block].run(&models[currNode.basic_block], inputs);
       } else {
-        let myInputs = currNode.input_nodes.iter().map(|i| &(outputs[*i])).collect();
+        let myInputs = currNode.inputs.iter().map(|(i,j)| &(outputs[*i][*j])).collect();
         outputs[curr] = self.basic_blocks[currNode.basic_block].run(&models[currNode.basic_block], &myInputs);
       }
       for n in &currNode.output_nodes {
-        if *self.nodes[*n].input_nodes.last().unwrap() == curr {
+        if self.nodes[*n].inputs.last().unwrap().0 == curr {
           stack.push(*n);
         }
       }
@@ -52,7 +52,7 @@ impl Graph {
     setups: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>)>,
     models: &Vec<&Data>,
     inputs: &Vec<&Data>,
-    outputs: &Vec<&Data>,
+    outputs: &Vec<&Vec<&Data>>,
     rng: &mut StdRng,
   ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>)> {
     self
@@ -63,7 +63,7 @@ impl Graph {
         if i == self.input_node {
           self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &inputs, outputs[i], rng)
         } else {
-          let inputs = n.input_nodes.iter().map(|j| outputs[*j]).collect();
+          let inputs = n.inputs.iter().map(|(j,k)| outputs[*j][*k]).collect();
           self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &inputs, outputs[i], rng)
         }
       })
@@ -74,7 +74,7 @@ impl Graph {
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     models: &Vec<&DataEnc>,
     inputs: &Vec<&DataEnc>,
-    outputs: &Vec<&DataEnc>,
+    outputs: &Vec<&Vec<&DataEnc>>,
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>)>,
     rng: &mut StdRng,
   ) {
@@ -86,7 +86,7 @@ impl Graph {
         if i == self.input_node {
           self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], inputs, outputs[i], proofs[i], rng)
         } else {
-          let inputs = n.input_nodes.iter().map(|j| outputs[*j]).collect();
+          let inputs = n.inputs.iter().map(|(j,k)| outputs[*j][*k]).collect();
           self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &inputs, outputs[i], proofs[i], rng)
         }
       })

@@ -8,8 +8,8 @@ use rand::{rngs::StdRng, SeedableRng};
 
 pub struct MulBasicBlock;
 impl BasicBlock for MulBasicBlock {
-  fn run(&self, _model: &Vec<Fr>, inputs: &Vec<&Vec<Fr>>) -> Vec<Fr> {
-    inputs[0].iter().zip(inputs[1]).map(|(x,y)|x*y).collect()
+  fn run(&self, _model: &Vec<Fr>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
+    vec![inputs[0].iter().zip(inputs[1]).map(|(x,y)|*x * *y).collect()]
   }
   fn prove(
     &mut self,
@@ -17,14 +17,14 @@ impl BasicBlock for MulBasicBlock {
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     _model: &Data,
     inputs: &Vec<&Data>,
-    output: &Data,
+    outputs: &Vec<&Data>,
     _rng: &mut StdRng,
   ) -> (Vec<G1Affine>, Vec<G2Affine>) {
     let N = inputs[0].raw.len();
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
     let gx2 = util::msm::<G2Projective>(&srs.1[..N], &inputs[1].poly.coeffs) + srs.1[srs.1.len() - 1] * inputs[1].r;
     let gx2 = gx2.into();
-    let t = inputs[0].poly.mul(&inputs[1].poly).sub(&output.poly).divide_by_vanishing_poly(domain).unwrap().0;
+    let t = inputs[0].poly.mul(&inputs[1].poly).sub(&outputs[0].poly).divide_by_vanishing_poly(domain).unwrap().0;
     let tx = util::msm::<G1Projective>(&srs.0[..N - 1], &t.coeffs);
 
     // Blinding
@@ -32,7 +32,7 @@ impl BasicBlock for MulBasicBlock {
     let r = Fr::rand(&mut rng);
     let tx = (tx + srs.0[srs.1.len() - 1] * r).into();
     let C = (inputs[0].g1 * inputs[1].r) + (inputs[1].g1 * inputs[0].r) + (srs.0[srs.1.len() - 1] * (inputs[0].r * inputs[1].r))
-      - (srs.0[0] * output.r)
+      - (srs.0[0] * outputs[0].r)
       - ((srs.0[N] - srs.0[0]) * r);
     let C = C.into();
     return (vec![tx, C], vec![gx2]);
@@ -42,12 +42,12 @@ impl BasicBlock for MulBasicBlock {
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     _model: &DataEnc,
     inputs: &Vec<&DataEnc>,
-    output: &DataEnc,
+    outputs: &Vec<&DataEnc>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
   ) {
     // Verify f(x)*g(x)-h(x)=z(x)t(x)
-    let lhs = Bn254::pairing(inputs[0].g1, proof.1[0]) - Bn254::pairing(output.g1, srs.1[0]);
+    let lhs = Bn254::pairing(inputs[0].g1, proof.1[0]) - Bn254::pairing(outputs[0].g1, srs.1[0]);
     let rhs = Bn254::pairing(proof.0[0], srs.1[inputs[0].len] - srs.1[0]) + Bn254::pairing(proof.0[1], srs.1[srs.1.len() - 1]);
     assert!(lhs == rhs);
     // Verify gx2

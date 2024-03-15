@@ -66,7 +66,7 @@ impl BasicBlock for CQBasicBlock {
     setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     model: &Data,
     inputs: &Vec<&Data>,
-    _output: &Data,
+    _outputs: &Vec<&Data>,
     rng: &mut StdRng,
   ) -> (Vec<G1Affine>, Vec<G2Affine>) {
     let N = model.raw.len();
@@ -150,7 +150,7 @@ impl BasicBlock for CQBasicBlock {
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     model: &DataEnc,
     inputs: &Vec<&DataEnc>,
-    _output: &DataEnc,
+    _outputs: &Vec<&DataEnc>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
   ) {

@@ -109,5 +109,5 @@ pub fn gen_cq_table(basic_block: &Box<dyn BasicBlock>, table_size: usize) -> Vec
   let range: Vec<_> = (0..table_size).map(|i| Fr::from(i as u32) - Fr::from((table_size >> 1) as u32)).collect();
   let result = (*basic_block).run(&vec![], &vec![&range]);
   let table_size = Fr::from(table_size as u32);
-  range.iter().zip(result.iter()).map(|(x,y)|*x + *y * table_size).collect()
+  range.iter().zip(result[0].iter()).map(|(x,y)|*x + *y * table_size).collect()
 }

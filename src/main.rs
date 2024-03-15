@@ -18,6 +18,7 @@ fn main() {
   let srs = (&srs.0, &srs.1);
   let mut graph = Graph {
     basic_blocks: vec![
+      Box::new(MatMulBasicBlock),
       Box::new(ReLUBasicBlock),
       Box::new(ConstBasicBlock),
       Box::new(MulBasicBlock),
@@ -27,32 +28,32 @@ fn main() {
     nodes: vec![
       Node {
         basic_block: 0,
-        input_nodes: vec![],
+        inputs: vec![],
         output_nodes: vec![1, 4],
       },
       Node {
         basic_block: 1,
-        input_nodes: vec![0],
+        inputs: vec![(0,0)],
         output_nodes: vec![3],
       },
       Node {
         basic_block: 2,
-        input_nodes: vec![],
+        inputs: vec![],
         output_nodes: vec![3],
       },
       Node {
         basic_block: 3,
-        input_nodes: vec![2, 1],
+        inputs: vec![(2,0), (1,0)],
         output_nodes: vec![4],
       },
       Node {
         basic_block: 4,
-        input_nodes: vec![0, 3],
+        inputs: vec![(0,0), (3,0)],
         output_nodes: vec![5],
       },
       Node {
         basic_block: 5,
-        input_nodes: vec![4],
+        inputs: vec![(4,0)],
         output_nodes: vec![],
       },
     ],
@@ -61,15 +62,17 @@ fn main() {
 
   const N: usize = 1 << 6;
   const m: usize = 1 << 4;
-  let matrix: Vec<_> = (0..N).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-2..2))).collect();
+  let matrix: Vec<Vec<_>> = (0..N/m).into_par_iter().map_init(rand::thread_rng, |rng, _| (0..m).map(|_|Fr::from(rng.gen_range(-2..2))).collect()).collect();
+  let mut matrix:Vec<_> = matrix.iter().map(|x|x).collect();
   let input: Vec<_> = (0..m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
 
   //Run:
-  let inputs = vec![&input];
+  let mut inputs = vec![&input];
+  inputs.append(&mut matrix);
   let empty = vec![];
   let constant = vec![Fr::from(1 << 6); 1 << 2];
   let relu_cq_table = util::gen_cq_table(&graph.basic_blocks[1], 1 << 6);
-  let models = vec![&matrix, &empty, &constant, &empty, &empty, &relu_cq_table];
+  let models = vec![&empty, &empty, &constant, &empty, &empty, &relu_cq_table];
   let outputs = graph.run(&inputs, &models);
 
   //Setup:
@@ -81,8 +84,9 @@ fn main() {
   //Prove:
   let inputs: Vec<_> = inputs.iter().map(|x| Data::new(srs, x)).collect();
   let inputs = inputs.iter().map(|x| x).collect();
-  let outputs: Vec<_> = outputs.iter().map(|x| Data::new(srs, x)).collect();
-  let outputs = outputs.iter().map(|x| x).collect();
+  let outputs: Vec<Vec<_>> = outputs.iter().map(|output| output.iter().map(|x|Data::new(srs, x)).collect()).collect();
+  let outputs: Vec<Vec<_>> = outputs.iter().map(|output|output.iter().map(|x| x).collect()).collect();
+  let outputs: Vec<_> = outputs.iter().map(|x|x).collect();
   let mut rng = StdRng::from_entropy();
   let mut rng2 = rng.clone();
   let proofs = graph.prove(srs, &setups, &models, &inputs, &outputs, &mut rng);
@@ -93,7 +97,8 @@ fn main() {
   let models = models.iter().map(|x| x).collect();
   let inputs: Vec<_> = inputs.iter().map(|x| DataEnc::new(srs, x)).collect();
   let inputs = inputs.iter().map(|x| x).collect();
-  let outputs: Vec<_> = outputs.iter().map(|x| DataEnc::new(srs, x)).collect();
-  let outputs = outputs.iter().map(|x| x).collect();
+  let outputs: Vec<Vec<_>> = outputs.iter().map(|output| output.iter().map(|x| DataEnc::new(srs, x)).collect()).collect();
+  let outputs: Vec<Vec<_>> = outputs.iter().map(|output|output.iter().map(|x| x).collect()).collect();
+  let outputs: Vec<_> = outputs.iter().map(|x|x).collect();
   graph.verify(srs, &models, &inputs, &outputs, &proofs, &mut rng2);
 }
