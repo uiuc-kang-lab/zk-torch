@@ -1,7 +1,7 @@
 #![allow(unused_variables)]
 use crate::util;
 pub use add::AddBasicBlock;
-use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine};
+use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::univariate::DensePolynomial;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::UniformRand;
@@ -18,18 +18,28 @@ pub mod matmul;
 pub mod mul;
 pub mod relu;
 
+pub struct SRS {
+  pub X1A: Vec<G1Affine>,
+  pub X2A: Vec<G2Affine>,
+  pub X1P: Vec<G1Projective>,
+  pub X2P: Vec<G2Projective>,
+  pub Y1A: G1Affine,
+  pub Y2A: G2Affine,
+  pub Y1P: G1Projective,
+  pub Y2P: G2Projective,
+}
 pub struct Data {
   pub raw: Vec<Fr>,
   pub poly: DensePolynomial<Fr>,
-  pub g1: G1Affine,
+  pub g1: G1Projective,
   pub r: Fr,
 }
 impl Data {
-  pub fn new(srs: (&Vec<G1Affine>, &Vec<G2Affine>), raw: &Vec<Fr>) -> Data {
+  pub fn new(srs: &SRS, raw: &Vec<Fr>) -> Data {
     let N = raw.len();
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
     let f = DensePolynomial { coeffs: domain.ifft(&raw) };
-    let fx: G1Affine = util::msm::<G1Projective>(&srs.0[..N], &f.coeffs).into();
+    let fx = util::msm::<G1Projective>(&srs.X1A, &f.coeffs);
     let mut rng = StdRng::from_entropy();
     return Data {
       raw: raw.clone(),
@@ -44,10 +54,10 @@ pub struct DataEnc {
   pub g1: G1Affine,
 }
 impl DataEnc {
-  pub fn new(srs: (&Vec<G1Affine>, &Vec<G2Affine>), data: &Data) -> DataEnc {
+  pub fn new(srs: &SRS, data: &Data) -> DataEnc {
     return DataEnc {
       len: data.raw.len(),
-      g1: (data.g1 + srs.0[srs.1.len() - 1] * data.r).into(),
+      g1: (data.g1 + srs.Y1P * data.r).into(),
     };
   }
 }
@@ -55,23 +65,23 @@ pub trait BasicBlock {
   fn run(&self, model: &Vec<Fr>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     vec![]
   }
-  fn setup(&self, srs: (&Vec<G1Affine>, &Vec<G2Affine>), model: &Data) -> (Vec<G1Affine>, Vec<G2Affine>) {
+  fn setup(&self, srs: &SRS, model: &Data) -> (Vec<G1Projective>, Vec<G2Projective>) {
     (Vec::new(), Vec::new())
   }
   fn prove(
     &mut self,
-    srs: (&Vec<G1Affine>, &Vec<G2Affine>),
+    srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     model: &Data,
     inputs: &Vec<&Data>,
     outputs: &Vec<&Data>,
     rng: &mut StdRng,
-  ) -> (Vec<G1Affine>, Vec<G2Affine>) {
+  ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     (Vec::new(), Vec::new())
   }
   fn verify(
     &self,
-    srs: (&Vec<G1Affine>, &Vec<G2Affine>),
+    srs: &SRS,
     model: &DataEnc,
     inputs: &Vec<&DataEnc>,
     outputs: &Vec<&DataEnc>,

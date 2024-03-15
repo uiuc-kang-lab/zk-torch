@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 use ark_bn254::Fr;
+use ark_bn254::{G1Affine, G2Affine};
 use basic_block::*;
 use graph::{Graph, Node};
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -14,16 +15,15 @@ mod tests;
 mod util;
 
 fn main() {
-  let srs = ptau::load_file("challenge", 7);
-  let srs = (&srs.0, &srs.1);
+  let srs = &ptau::load_file("challenge", 7);
   let mut graph = Graph {
     basic_blocks: vec![
-      Box::new(MatMulBasicBlock {l: 2}),
+      Box::new(MatMulBasicBlock { l: 2 }),
       Box::new(ReLUBasicBlock),
       Box::new(ConstBasicBlock),
       Box::new(MulBasicBlock),
       Box::new(AddBasicBlock),
-      Box::new(CQBasicBlock{table_dict: HashMap::new()}),
+      Box::new(CQBasicBlock { table_dict: HashMap::new() }),
     ],
     nodes: vec![
       Node {
@@ -33,7 +33,7 @@ fn main() {
       },
       Node {
         basic_block: 1,
-        inputs: vec![(0,0)],
+        inputs: vec![(0, 0)],
         output_nodes: vec![3],
       },
       Node {
@@ -43,17 +43,17 @@ fn main() {
       },
       Node {
         basic_block: 3,
-        inputs: vec![(2,0), (1,0)],
+        inputs: vec![(2, 0), (1, 0)],
         output_nodes: vec![4],
       },
       Node {
         basic_block: 4,
-        inputs: vec![(0,0), (3,0)],
+        inputs: vec![(0, 0), (3, 0)],
         output_nodes: vec![5],
       },
       Node {
         basic_block: 5,
-        inputs: vec![(4,0)],
+        inputs: vec![(4, 0)],
         output_nodes: vec![],
       },
     ],
@@ -62,13 +62,14 @@ fn main() {
 
   const N: usize = 1 << 6;
   const m: usize = 1 << 4;
-  let matrix: Vec<Vec<_>> = (0..N/m).into_par_iter().map_init(rand::thread_rng, |rng, _| (0..m).map(|_|Fr::from(rng.gen_range(-2..2))).collect()).collect();
-  let mut matrix:Vec<_> = matrix.iter().map(|x|x).collect();
+  let matrix: Vec<Vec<_>> =
+    (0..N / m).into_par_iter().map_init(rand::thread_rng, |rng, _| (0..m).map(|_| Fr::from(rng.gen_range(-2..2))).collect()).collect();
+  let mut matrix: Vec<_> = matrix.iter().map(|x| x).collect();
   let input: Vec<_> = (0..m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
   let input2: Vec<_> = (0..m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
 
   //Run:
-  let mut inputs = vec![&input,&input2];
+  let mut inputs = vec![&input, &input2];
   inputs.append(&mut matrix);
   let empty = vec![];
   let constant = vec![Fr::from(1 << 6); 1 << 2];
@@ -80,17 +81,23 @@ fn main() {
   let models: Vec<_> = models.iter().map(|x| Data::new(srs, x)).collect();
   let models = models.iter().map(|x| x).collect();
   let setups = graph.setup(srs, &models);
+  //Converting to affine
+  let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>)> =
+    setups.iter().map(|x| (x.0.iter().map(|y| (*y).into()).collect(), x.1.iter().map(|y| (*y).into()).collect())).collect();
   let setups = setups.iter().map(|x| (&x.0, &x.1)).collect();
 
   //Prove:
   let inputs: Vec<_> = inputs.iter().map(|x| Data::new(srs, x)).collect();
   let inputs = inputs.iter().map(|x| x).collect();
-  let outputs: Vec<Vec<_>> = outputs.iter().map(|output| output.iter().map(|x|Data::new(srs, x)).collect()).collect();
-  let outputs: Vec<Vec<_>> = outputs.iter().map(|output|output.iter().map(|x| x).collect()).collect();
-  let outputs: Vec<_> = outputs.iter().map(|x|x).collect();
+  let outputs: Vec<Vec<_>> = outputs.iter().map(|output| output.iter().map(|x| Data::new(srs, x)).collect()).collect();
+  let outputs: Vec<Vec<_>> = outputs.iter().map(|output| output.iter().map(|x| x).collect()).collect();
+  let outputs: Vec<_> = outputs.iter().map(|x| x).collect();
   let mut rng = StdRng::from_entropy();
   let mut rng2 = rng.clone();
   let proofs = graph.prove(srs, &setups, &models, &inputs, &outputs, &mut rng);
+  //Converting to affine
+  let proofs: Vec<(Vec<G1Affine>, Vec<G2Affine>)> =
+    proofs.iter().map(|x| (x.0.iter().map(|y| (*y).into()).collect(), x.1.iter().map(|y| (*y).into()).collect())).collect();
   let proofs = proofs.iter().map(|x| (&x.0, &x.1)).collect();
 
   //Verify:
@@ -99,7 +106,7 @@ fn main() {
   let inputs: Vec<_> = inputs.iter().map(|x| DataEnc::new(srs, x)).collect();
   let inputs = inputs.iter().map(|x| x).collect();
   let outputs: Vec<Vec<_>> = outputs.iter().map(|output| output.iter().map(|x| DataEnc::new(srs, x)).collect()).collect();
-  let outputs: Vec<Vec<_>> = outputs.iter().map(|output|output.iter().map(|x| x).collect()).collect();
-  let outputs: Vec<_> = outputs.iter().map(|x|x).collect();
+  let outputs: Vec<Vec<_>> = outputs.iter().map(|output| output.iter().map(|x| x).collect()).collect();
+  let outputs: Vec<_> = outputs.iter().map(|x| x).collect();
   graph.verify(srs, &models, &inputs, &outputs, &proofs, &mut rng2);
 }

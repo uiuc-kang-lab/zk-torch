@@ -1,15 +1,16 @@
-use ark_bn254::{Fq, Fq2, G1Affine, G2Affine};
+use crate::basic_block::*;
+use ark_bn254::{Fq, Fq2, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::PrimeField;
 use rayon::prelude::*;
 use std::fs;
 
-pub fn load_file(filename: &str, n: usize) -> (Vec<G1Affine>, Vec<G2Affine>) {
+pub fn load_file(filename: &str, n: usize) -> SRS {
   let bytes = fs::read(filename).unwrap();
 
   let powers_length = 1 << n;
   let powers_g1_length = (powers_length << 1) - 1;
 
-  let g1 = (0..powers_g1_length)
+  let g1: Vec<G1Affine> = (0..powers_g1_length)
     .into_par_iter()
     .map(|i| {
       let start = 64 + i * 64;
@@ -18,8 +19,9 @@ pub fn load_file(filename: &str, n: usize) -> (Vec<G1Affine>, Vec<G2Affine>) {
       G1Affine::new_unchecked(x, y)
     })
     .collect();
+  let g1_p: Vec<G1Projective> = g1.par_iter().map(|x| (*x).into()).collect();
 
-  let g2 = (0..powers_length)
+  let g2: Vec<G2Affine> = (0..powers_length)
     .into_par_iter()
     .map(|i| {
       let start = 64 + 64 * powers_g1_length + 128 * i;
@@ -30,6 +32,16 @@ pub fn load_file(filename: &str, n: usize) -> (Vec<G1Affine>, Vec<G2Affine>) {
       G2Affine::new_unchecked(Fq2 { c0: b, c1: a }, Fq2 { c0: d, c1: c })
     })
     .collect();
+  let g2_p: Vec<G2Projective> = g2.par_iter().map(|x| (*x).into()).collect();
 
-  return (g1, g2);
+  SRS {
+    Y1A: g1[g2.len() - 1],
+    Y2A: g2[g2.len() - 1],
+    Y1P: g1_p[g2.len() - 1],
+    Y2P: g2_p[g2.len() - 1],
+    X1A: g1,
+    X2A: g2,
+    X1P: g1_p,
+    X2P: g2_p,
+  }
 }

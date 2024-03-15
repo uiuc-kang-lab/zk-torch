@@ -1,6 +1,6 @@
 use crate::basic_block::BasicBlock;
 use crate::basic_block::*;
-use ark_bn254::{Fr, G1Affine, G2Affine};
+use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use rand::rngs::StdRng;
 
 pub struct Node {
@@ -32,7 +32,7 @@ impl Graph {
       if curr == self.input_node {
         outputs[curr] = self.basic_blocks[currNode.basic_block].run(&models[currNode.basic_block], inputs);
       } else {
-        let myInputs = currNode.inputs.iter().map(|(i,j)| &(outputs[*i][*j])).collect();
+        let myInputs = currNode.inputs.iter().map(|(i, j)| &(outputs[*i][*j])).collect();
         outputs[curr] = self.basic_blocks[currNode.basic_block].run(&models[currNode.basic_block], &myInputs);
       }
       for n in &currNode.output_nodes {
@@ -43,18 +43,18 @@ impl Graph {
     }
     return outputs;
   }
-  pub fn setup(&self, srs: (&Vec<G1Affine>, &Vec<G2Affine>), models: &Vec<&Data>) -> Vec<(Vec<G1Affine>, Vec<G2Affine>)> {
+  pub fn setup(&self, srs: &SRS, models: &Vec<&Data>) -> Vec<(Vec<G1Projective>, Vec<G2Projective>)> {
     self.basic_blocks.iter().zip(models.iter()).map(|(b, m)| b.setup(srs, m)).collect()
   }
   pub fn prove(
     &mut self,
-    srs: (&Vec<G1Affine>, &Vec<G2Affine>),
+    srs: &SRS,
     setups: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>)>,
     models: &Vec<&Data>,
     inputs: &Vec<&Data>,
     outputs: &Vec<&Vec<&Data>>,
     rng: &mut StdRng,
-  ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>)> {
+  ) -> Vec<(Vec<G1Projective>, Vec<G2Projective>)> {
     self
       .nodes
       .iter()
@@ -63,7 +63,7 @@ impl Graph {
         if i == self.input_node {
           self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &inputs, outputs[i], rng)
         } else {
-          let inputs = n.inputs.iter().map(|(j,k)| outputs[*j][*k]).collect();
+          let inputs = n.inputs.iter().map(|(j, k)| outputs[*j][*k]).collect();
           self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &inputs, outputs[i], rng)
         }
       })
@@ -71,7 +71,7 @@ impl Graph {
   }
   pub fn verify(
     &self,
-    srs: (&Vec<G1Affine>, &Vec<G2Affine>),
+    srs: &SRS,
     models: &Vec<&DataEnc>,
     inputs: &Vec<&DataEnc>,
     outputs: &Vec<&Vec<&DataEnc>>,
@@ -86,7 +86,7 @@ impl Graph {
         if i == self.input_node {
           self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], inputs, outputs[i], proofs[i], rng)
         } else {
-          let inputs = n.inputs.iter().map(|(j,k)| outputs[*j][*k]).collect();
+          let inputs = n.inputs.iter().map(|(j, k)| outputs[*j][*k]).collect();
           self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &inputs, outputs[i], proofs[i], rng)
         }
       })
