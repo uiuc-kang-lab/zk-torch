@@ -18,7 +18,7 @@ fn main() {
   let srs = (&srs.0, &srs.1);
   let mut graph = Graph {
     basic_blocks: vec![
-      Box::new(MatMulBasicBlock),
+      Box::new(MatMulBasicBlock {l: 2}),
       Box::new(ReLUBasicBlock),
       Box::new(ConstBasicBlock),
       Box::new(MulBasicBlock),
@@ -65,9 +65,10 @@ fn main() {
   let matrix: Vec<Vec<_>> = (0..N/m).into_par_iter().map_init(rand::thread_rng, |rng, _| (0..m).map(|_|Fr::from(rng.gen_range(-2..2))).collect()).collect();
   let mut matrix:Vec<_> = matrix.iter().map(|x|x).collect();
   let input: Vec<_> = (0..m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
+  let input2: Vec<_> = (0..m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
 
   //Run:
-  let mut inputs = vec![&input];
+  let mut inputs = vec![&input,&input2];
   inputs.append(&mut matrix);
   let empty = vec![];
   let constant = vec![Fr::from(1 << 6); 1 << 2];
