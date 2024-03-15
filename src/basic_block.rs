@@ -7,32 +7,28 @@ use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::UniformRand;
 pub use constant::ConstBasicBlock;
 pub use cq::CQBasicBlock;
-pub use cqlin::CQLinBasicBlock;
 pub use matmul::MatMulBasicBlock;
 pub use mul::MulBasicBlock;
-use ndarray::ArrayD;
 use rand::{rngs::StdRng, SeedableRng};
 pub use relu::ReLUBasicBlock;
 pub mod add;
 pub mod constant;
 pub mod cq;
-pub mod cqlin;
 pub mod matmul;
 pub mod mul;
 pub mod relu;
 
 pub struct Data {
-  pub raw: ArrayD<Fr>,
+  pub raw: Vec<Fr>,
   pub poly: DensePolynomial<Fr>,
   pub g1: G1Affine,
   pub r: Fr,
 }
 impl Data {
-  pub fn new(srs: (&Vec<G1Affine>, &Vec<G2Affine>), raw: &ArrayD<Fr>) -> Data {
+  pub fn new(srs: (&Vec<G1Affine>, &Vec<G2Affine>), raw: &Vec<Fr>) -> Data {
     let N = raw.len();
-    let vec = raw.clone().into_raw_vec();
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
-    let f = DensePolynomial { coeffs: domain.ifft(&vec) };
+    let f = DensePolynomial { coeffs: domain.ifft(&raw) };
     let fx: G1Affine = util::msm::<G1Projective>(&srs.0[..N], &f.coeffs).into();
     let mut rng = StdRng::from_entropy();
     return Data {
@@ -45,27 +41,25 @@ impl Data {
 }
 pub struct DataEnc {
   pub len: usize,
-  pub shape: Vec<usize>,
   pub g1: G1Affine,
 }
 impl DataEnc {
   pub fn new(srs: (&Vec<G1Affine>, &Vec<G2Affine>), data: &Data) -> DataEnc {
     return DataEnc {
       len: data.raw.len(),
-      shape: data.raw.shape().to_vec(),
       g1: (data.g1 + srs.0[srs.1.len() - 1] * data.r).into(),
     };
   }
 }
 pub trait BasicBlock {
-  fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> ArrayD<Fr> {
-    ArrayD::zeros(vec![])
+  fn run(&self, model: &Vec<Fr>, inputs: &Vec<&Vec<Fr>>) -> Vec<Fr> {
+    vec![]
   }
   fn setup(&self, srs: (&Vec<G1Affine>, &Vec<G2Affine>), model: &Data) -> (Vec<G1Affine>, Vec<G2Affine>) {
     (Vec::new(), Vec::new())
   }
   fn prove(
-    &self,
+    &mut self,
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     model: &Data,

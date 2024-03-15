@@ -4,7 +4,6 @@ use ark_bn254::Fr;
 use ark_ec::{ScalarMul, VariableBaseMSM};
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::Zero;
-use ndarray::{arr1, azip, ArrayD};
 use rayon::prelude::*;
 
 fn bitreverse(mut n: u32, l: u64) -> u32 {
@@ -106,12 +105,9 @@ pub fn msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {
   return a_chunks.zip(b_chunks).map(|(x, y)| -> P { VariableBaseMSM::msm_unchecked(&x, &y) }).sum();
 }
 
-pub fn gen_cq_table(basic_block: &Box<dyn BasicBlock>, table_size: usize) -> ArrayD<Fr> {
+pub fn gen_cq_table(basic_block: &Box<dyn BasicBlock>, table_size: usize) -> Vec<Fr> {
   let range: Vec<_> = (0..table_size).map(|i| Fr::from(i as u32) - Fr::from((table_size >> 1) as u32)).collect();
-  let range = arr1(&range).into_dyn();
-  let result = (*basic_block).run(&ArrayD::zeros(vec![]), &vec![&range]);
-  let mut r = ArrayD::zeros(range.shape());
+  let result = (*basic_block).run(&vec![], &vec![&range]);
   let table_size = Fr::from(table_size as u32);
-  azip!((&x in &range, &y in &result, z in &mut r) *z = x + y * table_size);
-  r
+  range.iter().zip(result.iter()).map(|(x,y)|*x + *y * table_size).collect()
 }

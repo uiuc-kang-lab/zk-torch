@@ -1,18 +1,15 @@
 use super::{BasicBlock, Data, DataEnc};
 use ark_bn254::{Bn254, Fr, G1Affine, G2Affine};
 use ark_ec::pairing::Pairing;
-use ndarray::{azip, ArrayD};
 use rand::rngs::StdRng;
 
 pub struct AddBasicBlock;
 impl BasicBlock for AddBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> ArrayD<Fr> {
-    let mut r = ArrayD::zeros(inputs[0].shape());
-    azip!((&x in inputs[0], &y in inputs[1], z in &mut r) *z = x + y);
-    r
+  fn run(&self, _model: &Vec<Fr>, inputs: &Vec<&Vec<Fr>>) -> Vec<Fr> {
+    inputs[0].iter().zip(inputs[1].iter()).map(|(x,y)|x+y).collect()
   }
   fn prove(
-    &self,
+    &mut self,
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     _model: &Data,

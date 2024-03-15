@@ -27,7 +27,9 @@ struct BProof {
   DC: G1Affine,       // Degree Check
 }
 
-pub struct CQBasicBlock;
+pub struct CQBasicBlock{
+  pub table_dict: HashMap<Fr, usize>
+}
 impl BasicBlock for CQBasicBlock {
   fn setup(&self, srs: (&Vec<G1Affine>, &Vec<G2Affine>), model: &Data) -> (Vec<G1Affine>, Vec<G2Affine>) {
     let N = model.raw.len();
@@ -59,7 +61,7 @@ impl BasicBlock for CQBasicBlock {
     return (setup, vec![T_x_2]);
   }
   fn prove(
-    &self,
+    &mut self,
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     model: &Data,
@@ -75,15 +77,16 @@ impl BasicBlock for CQBasicBlock {
     let Q_i_x_1 = &setup.0[..N];
     let L_i_x_1 = &setup.0[N..2 * N];
     let L_i_0_x_1 = &setup.0[2 * N..];
-    let mut table_dict = HashMap::new();
-    for i in 0..N {
-      table_dict.insert(model.raw[i], i);
+    if self.table_dict.len() == 0{
+      for i in 0..N {
+        self.table_dict.insert(model.raw[i], i);
+      }
     }
 
     // Calculate m
     let mut m_i = HashMap::new();
     for x in inputs[0].raw.iter() {
-      m_i.entry(table_dict.get(x).unwrap()).and_modify(|y| *y += 1).or_insert(1);
+      m_i.entry(self.table_dict.get(x).unwrap()).and_modify(|y| *y += 1).or_insert(1);
     }
     let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = m_i.iter().map(|(i, y)| (L_i_x_1[**i], Fr::from(*y as u32))).unzip();
     let m_x = util::msm::<G1Projective>(&temp, &temp2).into();

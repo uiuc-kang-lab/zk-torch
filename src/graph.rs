@@ -1,7 +1,6 @@
 use crate::basic_block::BasicBlock;
 use crate::basic_block::*;
 use ark_bn254::{Fr, G1Affine, G2Affine};
-use ndarray::ArrayD;
 use rand::rngs::StdRng;
 
 pub struct Node {
@@ -17,8 +16,8 @@ pub struct Graph {
 }
 
 impl Graph {
-  pub fn run(&self, inputs: &Vec<&ArrayD<Fr>>, models: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    let mut outputs = vec![ArrayD::zeros(vec![]); self.nodes.len()];
+  pub fn run(&self, inputs: &Vec<&Vec<Fr>>, models: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
+    let mut outputs = vec![vec![]; self.nodes.len()];
     // Run the nodes that have no inputs
     for i in 0..self.nodes.len() {
       if self.nodes[i].input_nodes.len() == 0 && i != self.input_node {
@@ -48,7 +47,7 @@ impl Graph {
     self.basic_blocks.iter().zip(models.iter()).map(|(b, m)| b.setup(srs, m)).collect()
   }
   pub fn prove(
-    &self,
+    &mut self,
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     setups: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>)>,
     models: &Vec<&Data>,

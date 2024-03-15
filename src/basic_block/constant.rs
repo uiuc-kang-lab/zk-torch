@@ -1,10 +1,9 @@
 use super::BasicBlock;
 use ark_bn254::Fr;
-use ndarray::ArrayD;
 
 pub struct ConstBasicBlock;
 impl BasicBlock for ConstBasicBlock {
-  fn run(&self, model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> ArrayD<Fr> {
+  fn run(&self, model: &Vec<Fr>, _inputs: &Vec<&Vec<Fr>>) -> Vec<Fr> {
     model.clone()
   }
 }

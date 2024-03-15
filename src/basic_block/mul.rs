@@ -4,18 +4,15 @@ use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{ops::Mul, ops::Sub, UniformRand};
-use ndarray::{azip, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
 
 pub struct MulBasicBlock;
 impl BasicBlock for MulBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> ArrayD<Fr> {
-    let mut r = ArrayD::zeros(inputs[0].shape());
-    azip!((&x in inputs[0], &y in inputs[1], z in &mut r) *z = x * y);
-    r
+  fn run(&self, _model: &Vec<Fr>, inputs: &Vec<&Vec<Fr>>) -> Vec<Fr> {
+    inputs[0].iter().zip(inputs[1]).map(|(x,y)|x*y).collect()
   }
   fn prove(
-    &self,
+    &mut self,
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     _model: &Data,

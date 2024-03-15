@@ -7,7 +7,6 @@ use ark_ec::pairing::Pairing;
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{ops::Mul, ops::Sub, One, UniformRand, Zero};
-use ndarray::ArrayD;
 use rand::{rngs::StdRng, SeedableRng};
 
 // Inputs to basic block are v,r_0,r_1,... where r_0,r_1,... are the rows of a matrix M
@@ -31,10 +30,10 @@ struct BProof {
 
 pub struct MatMulBasicBlock;
 impl BasicBlock for MatMulBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> ArrayD<Fr> {
+  fn run(&self, _model: &Vec<Fr>, inputs: &Vec<&Vec<Fr>>) -> Vec<Fr> {
     let m = inputs.len() - 1;
-    let n = inputs[0].shape()[0];
-    let mut r = ArrayD::zeros(vec![m]);
+    let n = inputs[0].len();
+    let mut r = vec![Fr::zero(); m];
     for i in 0..m {
       for j in 0..n {
         r[i] += inputs[1 + i][j] * inputs[0][j];
@@ -43,7 +42,7 @@ impl BasicBlock for MatMulBasicBlock {
     return r;
   }
   fn prove(
-    &self,
+    &mut self,
     srs: (&Vec<G1Affine>, &Vec<G2Affine>),
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     _model: &Data,
@@ -52,7 +51,7 @@ impl BasicBlock for MatMulBasicBlock {
     rng: &mut StdRng,
   ) -> (Vec<G1Affine>, Vec<G2Affine>) {
     let m = inputs.len() - 1;
-    let n = inputs[0].raw.shape()[0];
+    let n = inputs[0].raw.len();
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
     let alpha = Fr::rand(rng);
@@ -128,7 +127,7 @@ impl BasicBlock for MatMulBasicBlock {
     rng: &mut StdRng,
   ) {
     let m = inputs.len() - 1;
-    let n = inputs[0].shape[0];
+    let n = inputs[0].len;
     let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
     let A = AProof {
       x: proof.0[0],
