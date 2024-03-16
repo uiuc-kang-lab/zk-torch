@@ -47,6 +47,12 @@ fn testBasicBlocks() {
   testBasicBlock(AddBasicBlock {}, srs, &vec![], &vec![&a, &b]);
   testBasicBlock(MulBasicBlock {}, srs, &vec![], &vec![&a, &b]);
   testBasicBlock(CQBasicBlock { table_dict: HashMap::new() }, srs, &vec![&a], &vec![&a[..n].to_vec()]);
+  testBasicBlock(
+    CQ2BasicBlock { table_dict: HashMap::new() },
+    srs,
+    &vec![&a, &b],
+    &vec![&a[..n].to_vec(), &b[..n].to_vec()],
+  );
 
   let l: usize = 1 << 5;
   let m: usize = 1 << 4;

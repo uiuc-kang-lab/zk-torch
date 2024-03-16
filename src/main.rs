@@ -20,40 +20,22 @@ fn main() {
     basic_blocks: vec![
       Box::new(MatMulBasicBlock { l: 2 }),
       Box::new(ReLUBasicBlock),
-      Box::new(ConstBasicBlock),
-      Box::new(MulBasicBlock),
-      Box::new(AddBasicBlock),
-      Box::new(CQBasicBlock { table_dict: HashMap::new() }),
+      Box::new(CQ2BasicBlock { table_dict: HashMap::new() }),
     ],
     nodes: vec![
       Node {
         basic_block: 0,
         inputs: vec![],
-        output_nodes: vec![1, 4],
+        output_nodes: vec![1, 2],
       },
       Node {
         basic_block: 1,
         inputs: vec![(0, 0)],
-        output_nodes: vec![3],
+        output_nodes: vec![2],
       },
       Node {
         basic_block: 2,
-        inputs: vec![],
-        output_nodes: vec![3],
-      },
-      Node {
-        basic_block: 3,
-        inputs: vec![(2, 0), (1, 0)],
-        output_nodes: vec![4],
-      },
-      Node {
-        basic_block: 4,
-        inputs: vec![(0, 0), (3, 0)],
-        output_nodes: vec![5],
-      },
-      Node {
-        basic_block: 5,
-        inputs: vec![(4, 0)],
+        inputs: vec![(0, 0), (1, 0)],
         output_nodes: vec![],
       },
     ],
@@ -72,11 +54,9 @@ fn main() {
   let mut inputs = vec![&input, &input2];
   inputs.append(&mut matrix);
   let empty = vec![];
-  let constant = vec![Fr::from(1 << 6); 1 << 2];
-  let constant = vec![&constant];
-  let relu_cq_table = util::gen_cq_table(&graph.basic_blocks[1], 1 << 6);
-  let relu_cq_table = vec![&relu_cq_table];
-  let models = vec![&empty, &empty, &constant, &empty, &empty, &relu_cq_table];
+  let (id, relu_cq_table) = util::gen_cq_table(&graph.basic_blocks[1], 1 << 6);
+  let relu_cq_table = vec![&id, &relu_cq_table];
+  let models = vec![&empty, &empty, &relu_cq_table];
   let outputs = graph.run(&inputs, &models);
 
   //Setup:
