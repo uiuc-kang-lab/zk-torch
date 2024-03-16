@@ -1,4 +1,5 @@
 #![allow(unused_variables)]
+#![allow(unused_imports)]
 use crate::util;
 pub use add::AddBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -8,18 +9,28 @@ use ark_std::UniformRand;
 pub use constant::ConstBasicBlock;
 pub use cq::CQBasicBlock;
 pub use cq2::CQ2BasicBlock;
+pub use exp::ExpBasicBlock;
+pub use log::LogBasicBlock;
 pub use matmul::MatMulBasicBlock;
+pub use max::MaxBasicBlock;
 pub use mul::MulBasicBlock;
 use rand::{rngs::StdRng, SeedableRng};
 pub use relu::ReLUBasicBlock;
+pub use sub::SubScalarBasicBlock;
+pub use sum::SumBasicBlock;
 pub use transpose::TransposeBasicBlock;
 pub mod add;
 pub mod constant;
 pub mod cq;
 pub mod cq2;
+pub mod exp;
+pub mod log;
 pub mod matmul;
+pub mod max;
 pub mod mul;
 pub mod relu;
+pub mod sub;
+pub mod sum;
 pub mod transpose;
 
 pub struct SRS {
