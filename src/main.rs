@@ -25,27 +25,27 @@ fn main() {
     nodes: vec![
       Node {
         basic_block: 0,
-        inputs: vec![],
+        inputs: vec![(-1,0),(-1,1),(-1,2),(-1,3),(-1,4),(-1,5)],
         output_nodes: vec![1, 2],
       },
       Node {
         basic_block: 1,
-        inputs: vec![(0, 0)],
+        inputs: vec![(0, 1)],
         output_nodes: vec![2],
       },
       Node {
         basic_block: 2,
-        inputs: vec![(0, 0), (1, 0)],
+        inputs: vec![(0, 1), (1, 0)],
         output_nodes: vec![],
       },
     ],
-    input_node: 0,
+    input_nodes: vec![0],
   };
 
-  const N: usize = 1 << 6;
   const m: usize = 1 << 4;
+  const n: usize = 1 << 2;
   let matrix: Vec<Vec<_>> =
-    (0..N / m).into_par_iter().map_init(rand::thread_rng, |rng, _| (0..m).map(|_| Fr::from(rng.gen_range(-2..2))).collect()).collect();
+    (0..n).into_par_iter().map_init(rand::thread_rng, |rng, _| (0..m).map(|_| Fr::from(rng.gen_range(-2..2))).collect()).collect();
   let mut matrix: Vec<_> = matrix.iter().map(|x| x).collect();
   let input: Vec<_> = (0..m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
   let input2: Vec<_> = (0..m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();

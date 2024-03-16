@@ -5,14 +5,14 @@ use rand::rngs::StdRng;
 
 pub struct Node {
   pub basic_block: usize,
-  pub inputs: Vec<(usize, usize)>, //(node, output #)
+  pub inputs: Vec<(i32, usize)>, //(node, output #)
   pub output_nodes: Vec<usize>,
 }
 
 pub struct Graph {
   pub basic_blocks: Vec<Box<dyn BasicBlock>>,
   pub nodes: Vec<Node>,
-  pub input_node: usize,
+  pub input_nodes: Vec<usize>,
 }
 
 impl Graph {
@@ -20,23 +20,21 @@ impl Graph {
     let mut outputs = vec![vec![]; self.nodes.len()];
     // Run the nodes that have no inputs
     for i in 0..self.nodes.len() {
-      if self.nodes[i].inputs.len() == 0 && i != self.input_node {
+      if self.nodes[i].inputs.len() == 0 {
+        println!("running {i}");
         outputs[i] = self.basic_blocks[self.nodes[i].basic_block].run(&models[self.nodes[i].basic_block], &vec![]);
       }
     }
     // DFS:
-    let mut stack = vec![self.input_node];
+    let mut stack = self.input_nodes.clone();
     while stack.len() > 0 {
       let curr = stack.pop().unwrap();
       let currNode = &self.nodes[curr];
-      if curr == self.input_node {
-        outputs[curr] = self.basic_blocks[currNode.basic_block].run(&models[currNode.basic_block], inputs);
-      } else {
-        let myInputs = currNode.inputs.iter().map(|(i, j)| &(outputs[*i][*j])).collect();
-        outputs[curr] = self.basic_blocks[currNode.basic_block].run(&models[currNode.basic_block], &myInputs);
-      }
+      let myInputs = currNode.inputs.iter().map(|(i, j)| if *i<0{inputs[*j]} else{ &(outputs[*i as usize][*j])}).collect();
+      println!("running {}",currNode.basic_block);
+      outputs[curr] = self.basic_blocks[currNode.basic_block].run(&models[currNode.basic_block], &myInputs);
       for n in &currNode.output_nodes {
-        if self.nodes[*n].inputs.last().unwrap().0 == curr {
+        if self.nodes[*n].inputs.last().unwrap().0 == (curr as i32) {
           stack.push(*n);
         }
       }
@@ -60,12 +58,9 @@ impl Graph {
       .iter()
       .enumerate()
       .map(|(i, n)| {
-        if i == self.input_node {
-          self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &inputs, outputs[i], rng)
-        } else {
-          let inputs = n.inputs.iter().map(|(j, k)| outputs[*j][*k]).collect();
-          self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &inputs, outputs[i], rng)
-        }
+        let myInputs:Vec<_> = n.inputs.iter().map(|(j, k)| if *j<0{inputs[*k]} else{ &(outputs[*j as usize][*k])}).collect();
+        println!("proving {i} {}",myInputs.len());
+        self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &myInputs, outputs[i], rng)
       })
       .collect()
   }
@@ -83,12 +78,8 @@ impl Graph {
       .iter()
       .enumerate()
       .map(|(i, n)| {
-        if i == self.input_node {
-          self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], inputs, outputs[i], proofs[i], rng)
-        } else {
-          let inputs = n.inputs.iter().map(|(j, k)| outputs[*j][*k]).collect();
-          self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &inputs, outputs[i], proofs[i], rng)
-        }
+        let myInputs = n.inputs.iter().map(|(j, k)| if *j<0{inputs[*k]} else{ &(outputs[*j as usize][*k])}).collect();
+        self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng)
       })
       .collect()
   }
