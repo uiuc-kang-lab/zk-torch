@@ -3,10 +3,21 @@ use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
 use rand::rngs::StdRng;
 
-pub struct SubScalarBasicBlock;
-impl BasicBlock for SubScalarBasicBlock {
+pub struct SubBasicBlock;
+impl BasicBlock for SubBasicBlock {
   fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
-    vec![inputs[0].iter().map(|x| *x - inputs[1][0]).collect()]
+    let mut r = vec![];
+    let m = ark_std::cmp::max(inputs[0].len(), inputs[1].len());
+    for i in 0..m {
+      if inputs[0].len() <= i{
+        r.push(inputs[0][0] - inputs[1][i]);
+      }else if inputs[1].len() <= i{
+        r.push(inputs[0][i] - inputs[1][0]);
+      }else{
+        r.push(inputs[0][i] - inputs[1][i]);
+      }
+    }
+    vec![r]
   }
   fn prove(
     &mut self,

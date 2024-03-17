@@ -44,8 +44,13 @@ fn testBasicBlocks() {
   let n: usize = 1 << 3;
   let a: Vec<_> = (0..N).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect();
   let b: Vec<_> = (0..N).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect();
+  testBasicBlock(EqBasicBlock {}, srs, &vec![], &vec![&a, &a]);
   testBasicBlock(AddBasicBlock {}, srs, &vec![], &vec![&a, &b]);
-  testBasicBlock(SubScalarBasicBlock {}, srs, &vec![], &vec![&a, &vec![b[0]]]);
+  testBasicBlock(AddBasicBlock {}, srs, &vec![], &vec![&a, &vec![b[0]]]);
+  testBasicBlock(AddBasicBlock {}, srs, &vec![], &vec![&vec![a[0]], &b]);
+  testBasicBlock(SubBasicBlock {}, srs, &vec![], &vec![&a, &b]);
+  testBasicBlock(SubBasicBlock {}, srs, &vec![], &vec![&a, &vec![b[0]]]);
+  testBasicBlock(SubBasicBlock {}, srs, &vec![], &vec![&vec![a[0]], &b]);
   testBasicBlock(MulBasicBlock {}, srs, &vec![], &vec![&a, &b]);
   testBasicBlock(MulScalarBasicBlock {}, srs, &vec![], &vec![&a, &vec![b[0]]]);
   testBasicBlock(MulConstBasicBlock { c: 12345 }, srs, &vec![], &vec![&a]);

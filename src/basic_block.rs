@@ -2,6 +2,7 @@
 #![allow(unused_imports)]
 use crate::util;
 pub use add::AddBasicBlock;
+pub use eq::EqBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::univariate::DensePolynomial;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
@@ -18,10 +19,11 @@ pub use mul::{MulBasicBlock, MulConstBasicBlock, MulScalarBasicBlock};
 use rand::{rngs::StdRng, SeedableRng};
 pub use relu::ReLUBasicBlock;
 pub use sqrt::SqrtBasicBlock;
-pub use sub::SubScalarBasicBlock;
+pub use sub::SubBasicBlock;
 pub use sum::SumBasicBlock;
 pub use transpose::TransposeBasicBlock;
 pub mod add;
+pub mod eq;
 pub mod constant;
 pub mod cq;
 pub mod cq2;
