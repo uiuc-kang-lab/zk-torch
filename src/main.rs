@@ -54,7 +54,7 @@ fn main() {
   let mut inputs = vec![&input, &input2];
   inputs.append(&mut matrix);
   let empty = vec![];
-  let (id, relu_cq_table) = util::gen_cq_table(&graph.basic_blocks[1], 1 << 6);
+  let (id, relu_cq_table) = util::gen_cq_table(&graph.basic_blocks[1], 1 << 6, -( 1<< 5));
   let relu_cq_table = vec![&id, &relu_cq_table];
   let models = vec![&empty, &empty, &relu_cq_table];
   let outputs = graph.run(&inputs, &models);
