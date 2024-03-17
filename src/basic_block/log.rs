@@ -1,6 +1,6 @@
 use super::BasicBlock;
+use crate::util;
 use ark_bn254::Fr;
-use ark_ff::PrimeField;
 use ark_std::Zero;
 
 pub struct LogBasicBlock {
@@ -11,12 +11,7 @@ impl BasicBlock for LogBasicBlock {
   fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     let mut r = vec![];
     for x in inputs[0].iter() {
-      let x = *x;
-      let mut x = if x < Fr::from(1 << 28) {
-        x.into_bigint().0[0] as f32
-      } else {
-        -((-x).into_bigint().0[0] as f32)
-      };
+      let mut x = util::fr_to_int(*x) as f32;
       x /= (1 << self.input_SF) as f32;
       x = x.ln();
       x *= (1 << self.output_SF) as f32;

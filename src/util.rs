@@ -2,6 +2,7 @@
 use crate::BasicBlock;
 use ark_bn254::Fr;
 use ark_ec::{ScalarMul, VariableBaseMSM};
+use ark_ff::PrimeField;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::Zero;
 use rayon::prelude::*;
@@ -109,4 +110,12 @@ pub fn gen_cq_table(basic_block: &Box<dyn BasicBlock>, table_size: usize, offset
   let range: Vec<_> = (0..table_size).map(|i| Fr::from(i as u32) + Fr::from(offset)).collect();
   let result = (*basic_block).run(&vec![], &vec![&range]);
   (range, result[0].clone())
+}
+
+pub fn fr_to_int(x: Fr) -> i32 {
+  if x < Fr::from(1 << 28) {
+    x.into_bigint().0[0] as i32
+  } else {
+    -((-x).into_bigint().0[0] as i32)
+  }
 }

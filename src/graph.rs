@@ -31,7 +31,7 @@ impl Graph {
       let curr = stack.pop().unwrap();
       let currNode = &self.nodes[curr];
       let myInputs = currNode.inputs.iter().map(|(i, j)| if *i < 0 { inputs[*j] } else { &(outputs[*i as usize][*j]) }).collect();
-      println!("running {}",currNode.basic_block);
+      println!("running {}", currNode.basic_block);
       outputs[curr] = self.basic_blocks[currNode.basic_block].run(&models[currNode.basic_block], &myInputs);
       for n in &currNode.output_nodes {
         if self.nodes[*n].inputs.last().unwrap().0 == (curr as i32) {
@@ -59,7 +59,7 @@ impl Graph {
       .enumerate()
       .map(|(i, n)| {
         let myInputs: Vec<_> = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
-        println!("proving {i} {}",myInputs.len());
+        println!("proving {i} {}", myInputs.len());
         self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &myInputs, outputs[i], rng)
       })
       .collect()

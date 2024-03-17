@@ -47,6 +47,8 @@ fn testBasicBlocks() {
   testBasicBlock(AddBasicBlock {}, srs, &vec![], &vec![&a, &b]);
   testBasicBlock(SubScalarBasicBlock {}, srs, &vec![], &vec![&a, &vec![b[0]]]);
   testBasicBlock(MulBasicBlock {}, srs, &vec![], &vec![&a, &b]);
+  testBasicBlock(MulScalarBasicBlock {}, srs, &vec![], &vec![&a, &vec![b[0]]]);
+  testBasicBlock(MulConstBasicBlock { c: 12345 }, srs, &vec![], &vec![&a]);
   testBasicBlock(CQBasicBlock { table_dict: HashMap::new() }, srs, &vec![&a], &vec![&a[..n].to_vec()]);
   testBasicBlock(
     CQ2BasicBlock { table_dict: HashMap::new() },
