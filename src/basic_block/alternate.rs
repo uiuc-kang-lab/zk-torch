@@ -10,8 +10,8 @@ use ark_std::{ops::Mul, ops::Sub, One, UniformRand, Zero};
 use rand::{rngs::StdRng, SeedableRng};
 
 // Takes in A,B and intertwines them into C
-pub struct AlternateBasicBlock;
-impl BasicBlock for AlternateBasicBlock {
+pub struct CombineBasicBlock;
+impl BasicBlock for CombineBasicBlock {
   fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     let n = inputs[0].len();
     let mut C = vec![];

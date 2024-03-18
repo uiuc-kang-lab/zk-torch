@@ -2,8 +2,7 @@
 #![allow(unused_imports)]
 use crate::util;
 pub use add::AddBasicBlock;
-pub use alternate::AlternateBasicBlock;
-pub use alternate::SplitBasicBlock;
+pub use alternate::{CombineBasicBlock, SplitBasicBlock};
 pub use alternating::AlternatingBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::univariate::DensePolynomial;
@@ -21,6 +20,7 @@ pub use max::MaxBasicBlock;
 pub use mul::{MulBasicBlock, MulConstBasicBlock, MulScalarBasicBlock};
 use rand::{rngs::StdRng, SeedableRng};
 pub use relu::ReLUBasicBlock;
+pub use rope::RoPEBasicBlock;
 pub use sqrt::SqrtBasicBlock;
 pub use sub::SubBasicBlock;
 pub use sum::SumBasicBlock;
@@ -39,6 +39,7 @@ pub mod matmul;
 pub mod max;
 pub mod mul;
 pub mod relu;
+pub mod rope;
 pub mod sqrt;
 pub mod sub;
 pub mod sum;
