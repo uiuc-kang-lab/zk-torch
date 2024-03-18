@@ -9,11 +9,11 @@ impl BasicBlock for AddBasicBlock {
     let mut r = vec![];
     let m = ark_std::cmp::max(inputs[0].len(), inputs[1].len());
     for i in 0..m {
-      if inputs[0].len() <= i{
+      if inputs[0].len() <= i {
         r.push(inputs[0][0] + inputs[1][i]);
-      }else if inputs[1].len() <= i{
+      } else if inputs[1].len() <= i {
         r.push(inputs[0][i] + inputs[1][0]);
-      }else{
+      } else {
         r.push(inputs[0][i] + inputs[1][i]);
       }
     }

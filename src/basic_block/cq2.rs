@@ -81,6 +81,9 @@ impl BasicBlock for CQ2BasicBlock {
     let mut m_i = HashMap::new();
     for x in inputs[0].raw.iter().zip(inputs[1].raw.iter()) {
       let temp = (*x.0, *x.1);
+      if !self.table_dict.contains_key(&temp) {
+        println!("{:?}", temp);
+      }
       m_i.entry(self.table_dict.get(&temp).unwrap()).and_modify(|y| *y += 1).or_insert(1);
     }
     let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = m_i.iter().map(|(i, y)| (L_i_x_1[**i], Fr::from(*y as u32))).unzip();

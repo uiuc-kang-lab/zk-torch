@@ -7,6 +7,7 @@ pub struct Node {
   pub basic_block: usize,
   pub inputs: Vec<(i32, usize)>, //(node, output #)
   pub output_nodes: Vec<usize>,
+  pub prev: usize,
 }
 
 pub struct Graph {
@@ -21,7 +22,7 @@ impl Graph {
     // Run the nodes that have no inputs
     for i in 0..self.nodes.len() {
       if self.nodes[i].inputs.len() == 0 {
-        println!("running {i}");
+        println!("running {i} {:?}", self.nodes[i].basic_block);
         outputs[i] = self.basic_blocks[self.nodes[i].basic_block].run(&models[self.nodes[i].basic_block], &vec![]);
       }
     }
@@ -30,11 +31,11 @@ impl Graph {
     while stack.len() > 0 {
       let curr = stack.pop().unwrap();
       let currNode = &self.nodes[curr];
+      println!("running {curr} {:?}", currNode.basic_block);
       let myInputs = currNode.inputs.iter().map(|(i, j)| if *i < 0 { inputs[*j] } else { &(outputs[*i as usize][*j]) }).collect();
-      println!("running {}", currNode.basic_block);
       outputs[curr] = self.basic_blocks[currNode.basic_block].run(&models[currNode.basic_block], &myInputs);
       for n in &currNode.output_nodes {
-        if self.nodes[*n].inputs.last().unwrap().0 == (curr as i32) {
+        if self.nodes[*n].prev == curr {
           stack.push(*n);
         }
       }

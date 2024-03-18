@@ -20,18 +20,22 @@ impl BasicBlock for DivConstBasicBlock {
 }
 
 pub struct DivScalarBasicBlock {
-  pub SF: usize,
+  pub output_SF: usize,
 }
 impl BasicBlock for DivScalarBasicBlock {
   fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
-    let SF = self.SF as i32;
+    let SF = self.output_SF as i32;
     let mut div = vec![];
     let mut rem = vec![];
     let y = util::fr_to_int(inputs[1][0]); //Assumes this is positive
     for x in inputs[0].iter() {
       let x = util::fr_to_int(*x);
-      let z = (2 * x * SF + y) / (2 * y);
-      let r = (2 * x * SF + y) % (2 * y);
+      let mut z = (2 * x * SF + y) / (2 * y);
+      let mut r = (2 * x * SF + y) % (2 * y);
+      if r < 0 {
+        z -= 1;
+        r += 2 * y;
+      }
       div.push(Fr::from(z));
       rem.push(Fr::from(r));
     }

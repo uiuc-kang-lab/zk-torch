@@ -27,16 +27,19 @@ fn main() {
         basic_block: 0,
         inputs: vec![(-1, 0), (-1, 1), (-1, 2), (-1, 3), (-1, 4), (-1, 5)],
         output_nodes: vec![1, 2],
+        prev: 0,
       },
       Node {
         basic_block: 1,
         inputs: vec![(0, 1)],
         output_nodes: vec![2],
+        prev: 0,
       },
       Node {
         basic_block: 2,
         inputs: vec![(0, 1), (1, 0)],
         output_nodes: vec![],
+        prev: 1,
       },
     ],
     input_nodes: vec![0],
@@ -54,7 +57,7 @@ fn main() {
   let mut inputs = vec![&input, &input2];
   inputs.append(&mut matrix);
   let empty = vec![];
-  let (id, relu_cq_table) = util::gen_cq_table(&graph.basic_blocks[1], 1 << 6, -(1 << 5));
+  let (id, relu_cq_table) = util::gen_cq_table(vec![&graph.basic_blocks[1]], -(1 << 5), 1 << 6);
   let relu_cq_table = vec![&id, &relu_cq_table];
   let models = vec![&empty, &empty, &relu_cq_table];
   let outputs = graph.run(&inputs, &models);
