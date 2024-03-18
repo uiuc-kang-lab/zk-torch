@@ -2,6 +2,9 @@
 #![allow(unused_imports)]
 use crate::util;
 pub use add::AddBasicBlock;
+pub use alternate::AlternateBasicBlock;
+pub use alternate::SplitBasicBlock;
+pub use alternating::AlternatingBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::univariate::DensePolynomial;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
@@ -23,6 +26,8 @@ pub use sub::SubBasicBlock;
 pub use sum::SumBasicBlock;
 pub use transpose::TransposeBasicBlock;
 pub mod add;
+pub mod alternate;
+pub mod alternating;
 pub mod constant;
 pub mod cq;
 pub mod cq2;

@@ -73,4 +73,10 @@ fn testBasicBlocks() {
   testBasicBlock(MatMulBasicBlock { l: l }, srs, &vec![], &inputs);
   testBasicBlock(TransposeBasicBlock {}, srs, &vec![], &inputs[l..].to_vec());
   testBasicBlock(SumBasicBlock {}, srs, &vec![], &inputs[l..].to_vec());
+  let intertwined = (AlternateBasicBlock {}).run(&vec![], &vec![inputs[0], inputs[1]]);
+  let intertwined = &intertwined[0];
+  testBasicBlock(AlternatingBasicBlock {}, srs, &vec![], &vec![inputs[0], inputs[1], intertwined]);
+  let split = (SplitBasicBlock {}).run(&vec![], &vec![inputs[0]]);
+  let split = (&split[0], &split[1]);
+  testBasicBlock(AlternatingBasicBlock {}, srs, &vec![], &vec![split.0, split.1, inputs[0]]);
 }
