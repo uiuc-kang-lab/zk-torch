@@ -26,23 +26,16 @@ fn main() {
       Node {
         basic_block: 0,
         inputs: vec![(-1, 0), (-1, 1), (-1, 2), (-1, 3), (-1, 4), (-1, 5)],
-        output_nodes: vec![1, 2],
-        prev: 0,
       },
       Node {
         basic_block: 1,
         inputs: vec![(0, 1)],
-        output_nodes: vec![2],
-        prev: 0,
       },
       Node {
         basic_block: 2,
         inputs: vec![(0, 1), (1, 0)],
-        output_nodes: vec![],
-        prev: 1,
       },
     ],
-    input_nodes: vec![0],
   };
 
   const m: usize = 1 << 4;
