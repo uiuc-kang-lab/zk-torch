@@ -62,9 +62,9 @@ fn testBasicBlocks() {
     &vec![&a[..n].to_vec(), &b[..n].to_vec()],
   );
 
-  let l: usize = 1 << 5;
-  let m: usize = 1 << 4;
-  let n: usize = 1 << 3;
+  let l: usize = 1 << 4;
+  let m: usize = 1 << 3;
+  let n: usize = 1 << 2;
   let mut inputs: Vec<Vec<Fr>> = vec![];
   for _ in 0..l + n {
     inputs.push((0..m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect());
@@ -73,6 +73,7 @@ fn testBasicBlocks() {
   testBasicBlock(MatMulBasicBlock { l: l }, srs, &vec![], &inputs);
   testBasicBlock(TransposeBasicBlock {}, srs, &vec![], &inputs[l..].to_vec());
   testBasicBlock(SumBasicBlock {}, srs, &vec![], &inputs[l..].to_vec());
+  testBasicBlock(ConcatBasicBlock {}, srs, &vec![], &inputs[l..].to_vec());
   let intertwined = (CombineBasicBlock {}).run(&vec![], &vec![inputs[0], inputs[1]]);
   let intertwined = &intertwined[0];
   testBasicBlock(AlternatingBasicBlock {}, srs, &vec![], &vec![inputs[0], inputs[1], intertwined]);
