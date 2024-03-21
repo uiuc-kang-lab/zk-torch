@@ -26,7 +26,7 @@ impl BasicBlock for ConcatBasicBlock {
     let mut r = vec![Fr::zero(); n * m];
     for i in 0..n {
       for j in 0..m {
-        r[i*m + j] = inputs[i][j];
+        r[i * m + j] = inputs[i][j];
       }
     }
     vec![r]
@@ -51,11 +51,13 @@ impl BasicBlock for ConcatBasicBlock {
     let alpha_pow = calc_pow(alpha, n);
     let beta_pow = calc_pow(beta, m);
     let beta_pow = Data::new(srs, &beta_pow); //r is ignored
-    let alpha_beta_pow: Vec<Fr> = (0..n * m).map(|i| {
-      let j = i/m;
-      let k = i%m;
-      alpha_pow[j] * beta_pow.raw[k]
-    }).collect();
+    let alpha_beta_pow: Vec<Fr> = (0..n * m)
+      .map(|i| {
+        let j = i / m;
+        let k = i % m;
+        alpha_pow[j] * beta_pow.raw[k]
+      })
+      .collect();
     let alpha_beta_pow = Data::new(srs, &alpha_beta_pow); //r is ignored
 
     let mut flat_A = vec![Fr::zero(); m];
@@ -81,7 +83,7 @@ impl BasicBlock for ConcatBasicBlock {
     let left_zero_div = util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs[1..]);
 
     // Calculate Right
-    let right_raw: Vec<Fr> = (0..n*m).map(|i| outputs[0].raw[i] * alpha_beta_pow.raw[i]).collect();
+    let right_raw: Vec<Fr> = (0..n * m).map(|i| outputs[0].raw[i] * alpha_beta_pow.raw[i]).collect();
     let right_poly = DensePolynomial {
       coeffs: domain_nm.ifft(&right_raw),
     };
@@ -130,11 +132,13 @@ impl BasicBlock for ConcatBasicBlock {
     let beta_pow = calc_pow(beta, m);
     let beta_pow_coeff = domain_m.ifft(&beta_pow);
     let beta_pow_g2: G2Affine = util::msm::<G2Projective>(&srs.X2A, &beta_pow_coeff).into();
-    let alpha_beta_pow: Vec<Fr> = (0..n * m).map(|i| {
-      let j = i/m;
-      let k = i%m;
-      alpha_pow[j] * beta_pow[k]
-    }).collect();
+    let alpha_beta_pow: Vec<Fr> = (0..n * m)
+      .map(|i| {
+        let j = i / m;
+        let k = i % m;
+        alpha_pow[j] * beta_pow[k]
+      })
+      .collect();
     let alpha_beta_pow_coeff = domain_nm.ifft(&alpha_beta_pow);
     let alpha_beta_pow_g2: G2Affine = util::msm::<G2Projective>(&srs.X2A, &alpha_beta_pow_coeff).into();
 
