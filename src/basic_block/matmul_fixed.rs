@@ -232,11 +232,6 @@ impl BasicBlock for MatMulFixedBasicBlock {
     let alpha = Fr::rand(rng);
     let alpha_pow = calc_pow(alpha, l);
 
-    // Check A(x) M(x) = Z(X) Q(X) + R(X)
-    let lhs = Bn254::pairing(A_x, M_x);
-    let rhs = Bn254::pairing(Q_x, srs.X2A[m * n] - srs.X2A[0]) + Bn254::pairing(R_x, srs.X2A[0]) + Bn254::pairing(C1, srs.Y2A);
-    assert!(lhs == rhs);
-
     // Calculate flat_A
     let temp: Vec<_> = (0..l).map(|i| inputs[i].g1).collect();
     let flat_A_g1 = util::msm::<G1Projective>(&temp, &alpha_pow);
@@ -244,6 +239,11 @@ impl BasicBlock for MatMulFixedBasicBlock {
     // Calculate flat_C
     let temp: Vec<_> = (0..l).map(|i| outputs[i].g1).collect();
     let flat_C_g1 = util::msm::<G1Projective>(&temp, &alpha_pow);
+
+    // Check A(x) M(x) = Z(X) Q(X) + R(X)
+    let lhs = Bn254::pairing(A_x, M_x);
+    let rhs = Bn254::pairing(Q_x, srs.X2A[m * n] - srs.X2A[0]) + Bn254::pairing(R_x, srs.X2A[0]) + Bn254::pairing(C1, srs.Y2A);
+    assert!(lhs == rhs);
 
     // Check R(X) - 1/m g(X) = S(X) X^n
     let temp: G1Affine = (flat_C_g1 * Fr::from(m as u64).inverse().unwrap()).into();
