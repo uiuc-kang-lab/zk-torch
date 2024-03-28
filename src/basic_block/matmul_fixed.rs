@@ -6,24 +6,36 @@ use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
 use ark_ff::Field;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain, Polynomial};
-use ark_std::{UniformRand, Zero};
+use ark_std::{One, UniformRand, Zero};
 use ndarray::ArrayD;
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 
-pub struct CQLinBasicBlock;
-impl BasicBlock for CQLinBasicBlock {
+fn calc_pow(alpha: Fr, n: usize) -> Vec<Fr> {
+  let mut pow: Vec<Fr> = vec![Fr::one(); n];
+  for i in 0..n - 1 {
+    pow[i + 1] = pow[i] * alpha;
+  }
+  pow
+}
+
+pub struct MatMulFixedBasicBlock;
+// input is rows of A, model is rows of B, outputs are rows of C
+impl BasicBlock for MatMulFixedBasicBlock {
   fn run(&self, model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     assert_eq!(model.len(), inputs[0].len());
+    let l = inputs.len();
     let m = model.len();
     let n = model[0].len();
-    let mut r = vec![Fr::zero(); n];
-    for i in 0..n {
-      for j in 0..m {
-        r[i] += model[j][i] * inputs[0][j];
+    let mut r = vec![vec![Fr::zero(); n]; l];
+    for i in 0..l {
+      for j in 0..n {
+        for k in 0..m {
+          r[i][j] += inputs[i][k] * model[k][j];
+        }
       }
     }
-    return vec![r];
+    r
   }
   fn setup(&self, srs: &SRS, model: &Vec<&Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
     let m = model.len();
@@ -110,15 +122,42 @@ impl BasicBlock for CQLinBasicBlock {
     setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     model: &Vec<&Data>,
     inputs: &Vec<&Data>,
-    output: &Vec<&Data>,
+    outputs: &Vec<&Data>,
     rng: &mut StdRng,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
+    let l = inputs.len();
     let m = model.len();
     let n = model[0].raw.len();
     let N = srs.X2P.len() - 1;
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
     let domain_mn = GeneralEvaluationDomain::<Fr>::new(m * n).unwrap();
+    let alpha = Fr::rand(rng);
+
+    let alpha_pow = calc_pow(alpha, l);
+    let alpha_pow = Data::new(srs, &alpha_pow); //r is ignored (unnecessary msm)
+
+    let mut flat_A = vec![Fr::zero(); m];
+    let mut flat_A_r = Fr::zero();
+    for i in 0..l {
+      for j in 0..m {
+        flat_A[j] += inputs[i].raw[j] * alpha_pow.raw[i];
+      }
+      flat_A_r += inputs[i].r * alpha_pow.raw[i];
+    }
+    let mut flat_A = Data::new(srs, &flat_A);
+    flat_A.r = flat_A_r;
+
+    let mut flat_C = vec![Fr::zero(); n];
+    let mut flat_C_r = Fr::zero();
+    for i in 0..l {
+      for j in 0..n {
+        flat_C[j] += outputs[i].raw[j] * alpha_pow.raw[i];
+      }
+      flat_C_r += outputs[i].r * alpha_pow.raw[i];
+    }
+    let mut flat_C = Data::new(srs, &flat_C);
+    flat_C.r = flat_C_r;
 
     let R = &setup.0[..m];
     let Q = &setup.0[m..2 * m];
@@ -128,18 +167,18 @@ impl BasicBlock for CQLinBasicBlock {
     let L_V_i_x = &setup.0[5 * m..6 * m];
     let L_H_i_x = &setup.0[6 * m..];
 
-    let R_x = util::msm::<G1Projective>(R, &inputs[0].raw).into();
-    let Q_x = util::msm::<G1Projective>(Q, &inputs[0].raw).into();
+    let R_x = util::msm::<G1Projective>(R, &flat_A.raw).into();
+    let Q_x = util::msm::<G1Projective>(Q, &flat_A.raw).into();
     let temp: Vec<_> = (0..m).into_par_iter().map(|i| srs.X1A[n * i]).collect();
-    let A_x = util::msm::<G1Projective>(&temp, &inputs[0].poly.coeffs).into();
-    let S_x = util::msm::<G1Projective>(S, &inputs[0].raw).into();
-    let P_x = util::msm::<G1Projective>(&srs.X1A[N - n..N], &output[0].poly.coeffs).into();
-    let P_R_x: G1Affine = util::msm::<G1Projective>(&P_R, &inputs[0].raw).into();
+    let A_x = util::msm::<G1Projective>(&temp, &flat_A.poly.coeffs).into();
+    let S_x = util::msm::<G1Projective>(S, &flat_A.raw).into();
+    let P_x = util::msm::<G1Projective>(&srs.X1A[N - n..N], &flat_C.poly.coeffs).into();
+    let P_R_x: G1Affine = util::msm::<G1Projective>(&P_R, &flat_A.raw).into();
 
     let gamma = Fr::rand(rng);
     let gamma_n = gamma.pow(&[n as u64]);
-    let z = inputs[0].poly.evaluate(&gamma_n);
-    let h_i: Vec<_> = (0..m).into_par_iter().map(|i| (inputs[0].raw[i] - z) * (domain_m.element(i) - gamma_n).inverse().unwrap()).collect();
+    let z = flat_A.poly.evaluate(&gamma_n);
+    let h_i: Vec<_> = (0..m).into_par_iter().map(|i| (flat_A.raw[i] - z) * (domain_m.element(i) - gamma_n).inverse().unwrap()).collect();
     let z = (srs.X1P[0] * z).into();
     let pi = util::msm::<G1Projective>(&L_V_i_x, &h_i).into();
     let pi_1 = util::msm::<G1Projective>(&L_V_i_x_n, &h_i).into();
@@ -156,10 +195,10 @@ impl BasicBlock for CQLinBasicBlock {
     let M_x_1 = R.iter().sum::<G1Projective>();
     let mut C = vec![
       M_x_1 * r[2] - (srs.X1P[m * n] - srs.X1P[0]) * r[1] - srs.X1P[0] * r[0] + srs.Y1P * r[2] * r[8] + A_x * r[8],
-      srs.X1P[0] * (r[0] - output[0].r * Fr::from(m as u32).inverse().unwrap()) - srs.X1P[n] * r[3],
-      srs.X1P[N - n] * output[0].r - srs.X1P[0] * r[4],
+      srs.X1P[0] * (r[0] - flat_C.r * Fr::from(m as u32).inverse().unwrap()) - srs.X1P[n] * r[3],
+      srs.X1P[N - n] * flat_C.r - srs.X1P[0] * r[4],
       srs.X1P[N - m * n] * r[0] - srs.X1P[0] * r[5],
-      srs.X1P[0] * inputs[0].r + (srs.X1P[0] * gamma_n - srs.X1P[1]) * r[6],
+      srs.X1P[0] * flat_A.r + (srs.X1P[0] * gamma_n - srs.X1P[1]) * r[6],
       srs.X1P[0] * r[2] + (srs.X1P[0] * gamma_n - srs.X1P[n]) * r[7],
     ];
 
@@ -175,10 +214,11 @@ impl BasicBlock for CQLinBasicBlock {
     srs: &SRS,
     model: &Vec<&DataEnc>,
     inputs: &Vec<&DataEnc>,
-    output: &Vec<&DataEnc>,
+    outputs: &Vec<&DataEnc>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
   ) {
+    let l = inputs.len();
     let m = model.len();
     let n = model[0].len;
     let N = srs.X2P.len() - 1;
@@ -189,19 +229,30 @@ impl BasicBlock for CQLinBasicBlock {
 
     let [M_x] = proof.1[..] else { panic!("Wrong proof format") };
 
+    let alpha = Fr::rand(rng);
+    let alpha_pow = calc_pow(alpha, l);
+
     // Check A(x) M(x) = Z(X) Q(X) + R(X)
     let lhs = Bn254::pairing(A_x, M_x);
     let rhs = Bn254::pairing(Q_x, srs.X2A[m * n] - srs.X2A[0]) + Bn254::pairing(R_x, srs.X2A[0]) + Bn254::pairing(C1, srs.Y2A);
     assert!(lhs == rhs);
 
+    // Calculate flat_A
+    let temp: Vec<_> = (0..l).map(|i| inputs[i].g1).collect();
+    let flat_A_g1 = util::msm::<G1Projective>(&temp, &alpha_pow);
+
+    // Calculate flat_C
+    let temp: Vec<_> = (0..l).map(|i| outputs[i].g1).collect();
+    let flat_C_g1 = util::msm::<G1Projective>(&temp, &alpha_pow);
+
     // Check R(X) - 1/m g(X) = S(X) X^n
-    let temp: G1Affine = (output[0].g1 * Fr::from(m as u64).inverse().unwrap()).into();
+    let temp: G1Affine = (flat_C_g1 * Fr::from(m as u64).inverse().unwrap()).into();
     let lhs = Bn254::pairing(R_x - temp, srs.X2A[0]);
     let rhs = Bn254::pairing(S_x, srs.X2A[n]) + Bn254::pairing(C2, srs.Y2A);
     assert!(lhs == rhs);
 
     // n degree-check for g
-    let lhs = Bn254::pairing(output[0].g1, srs.X2A[N - n]);
+    let lhs = Bn254::pairing(flat_C_g1, srs.X2A[N - n]);
     let rhs = Bn254::pairing(P_x, srs.X2A[0]) + Bn254::pairing(C3, srs.Y2A);
     assert!(lhs == rhs);
 
@@ -213,7 +264,7 @@ impl BasicBlock for CQLinBasicBlock {
     // Checks A(gamma) = f(gamma^n)
     let gamma = Fr::rand(rng);
     let gamma_n = gamma.pow(&[n as u64]);
-    let lhs = Bn254::pairing(inputs[0].g1 - z + pi * gamma_n, srs.X2A[0]);
+    let lhs = Bn254::pairing(flat_A_g1 - z + pi * gamma_n, srs.X2A[0]);
     let rhs = Bn254::pairing(pi, srs.X2A[1]) + Bn254::pairing(C5, srs.Y2A);
     assert!(lhs == rhs);
 

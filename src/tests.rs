@@ -81,13 +81,15 @@ fn testBasicBlocks() {
   let split = (&split[0], &split[1]);
   testBasicBlock(AlternatingBasicBlock {}, srs, &vec![], &vec![split.0, split.1, inputs[0]]);
 
-  let m: usize = 1 << 3;
-  let n: usize = 1 << 2;
   let mut matrix: Vec<Vec<Fr>> = vec![];
-  for _ in 0..n {
-    matrix.push((0..m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect());
+  for _ in 0..m {
+    matrix.push((0..n).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect());
   }
   let matrix: Vec<_> = matrix.iter().map(|x| x).collect();
-  let input = (0..n).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect();
-  testBasicBlock(CQLinBasicBlock {}, srs, &matrix, &vec![&input]);
+  let mut inputs: Vec<Vec<Fr>> = vec![];
+  for _ in 0..l {
+    inputs.push((0..m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect());
+  }
+  let inputs: Vec<_> = inputs.iter().map(|x| x).collect();
+  testBasicBlock(MatMulFixedBasicBlock {}, srs, &matrix, &inputs);
 }
