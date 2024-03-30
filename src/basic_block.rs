@@ -2,6 +2,7 @@
 #![allow(unused_imports)]
 use crate::util;
 pub use add::AddBasicBlock;
+pub use add_model::AddModelBasicBlock;
 pub use alternate::{CombineBasicBlock, SplitBasicBlock};
 pub use alternating::AlternatingBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -28,6 +29,7 @@ pub use sub::SubBasicBlock;
 pub use sum::SumBasicBlock;
 pub use transpose::TransposeBasicBlock;
 pub mod add;
+pub mod add_model;
 pub mod alternate;
 pub mod alternating;
 pub mod concat;

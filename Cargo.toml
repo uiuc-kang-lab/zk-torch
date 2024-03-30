@@ -12,3 +12,4 @@ ark-bn254 = "0.4"
 rand = "0.8.5"
 rayon = "1"
 ndarray = "0.15.6"
+tract-onnx = { git = "https://github.com/sonos/tract/", rev = "7b1aa33b2f7d1f19b80e270c83320f0f94daff69"}

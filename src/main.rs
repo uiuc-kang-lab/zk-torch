@@ -9,6 +9,7 @@ use rayon::prelude::*;
 use std::collections::HashMap;
 mod basic_block;
 mod graph;
+mod onnx_converter;
 mod ptau;
 #[cfg(test)]
 mod tests;
@@ -16,43 +17,29 @@ mod util;
 
 fn main() {
   let srs = &ptau::load_file("challenge", 7);
-  let mut graph = Graph {
-    basic_blocks: vec![
-      Box::new(MatMulBasicBlock { l: 2 }),
-      Box::new(ReLUBasicBlock),
-      Box::new(CQ2BasicBlock { table_dict: HashMap::new() }),
-    ],
-    nodes: vec![
-      Node {
-        basic_block: 0,
-        inputs: vec![(-1, 0), (-1, 1), (-1, 2), (-1, 3), (-1, 4), (-1, 5)],
-      },
-      Node {
-        basic_block: 1,
-        inputs: vec![(0, 1)],
-      },
-      Node {
-        basic_block: 2,
-        inputs: vec![(0, 1), (1, 0)],
-      },
-    ],
-  };
+  let (mut graph, mut updated_models) = Graph::build_from_onnx("network.onnx").unwrap();
 
-  const m: usize = 1 << 4;
-  const n: usize = 1 << 2;
-  let matrix: Vec<Vec<_>> =
-    (0..n).into_par_iter().map_init(rand::thread_rng, |rng, _| (0..m).map(|_| Fr::from(rng.gen_range(-2..2))).collect()).collect();
-  let mut matrix: Vec<_> = matrix.iter().map(|x| x).collect();
-  let input: Vec<_> = (0..m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
-  let input2: Vec<_> = (0..m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
+  // make models from Vec<Vec<Vec<Fr>>> to Vec<&Vec<&Vec<Fr>>
+  let mut models_ref = vec![vec![]; updated_models.len()];
+  for (i, mm) in updated_models.iter().enumerate() {
+    for (_, mmm) in mm.iter().enumerate() {
+      models_ref[i].push(mmm);
+    }
+  }
+  let mut models = vec![];
+  for (_, mm) in models_ref.iter().enumerate() {
+    models.push(mm);
+  }
+
+  for (i, n) in graph.nodes.iter().enumerate() {
+    println!("Node {}: {:?}", i, n.basic_block);
+  }
+
+  // create fake input tensor
+  let input: Vec<_> = (0..2).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
 
   //Run:
-  let mut inputs = vec![&input, &input2];
-  inputs.append(&mut matrix);
-  let empty = vec![];
-  let (id, relu_cq_table) = util::gen_cq_table(vec![&graph.basic_blocks[1]], -(1 << 5), 1 << 6);
-  let relu_cq_table = vec![&id, &relu_cq_table];
-  let models = vec![&empty, &empty, &relu_cq_table];
+  let mut inputs = vec![&input];
   let outputs = graph.run(&inputs, &models);
 
   //Setup:

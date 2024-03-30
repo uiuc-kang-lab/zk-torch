@@ -1,7 +1,9 @@
 use crate::basic_block::BasicBlock;
 use crate::basic_block::*;
+use crate::onnx_converter::{create_updated_models, load_onnx_tract_model, load_const_block, match_node_notes, match_node_op};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use rand::rngs::StdRng;
+use std::error::Error;
 
 pub struct Node {
   pub basic_block: usize,
@@ -14,6 +16,29 @@ pub struct Graph {
 }
 
 impl Graph {
+  pub fn build_from_onnx(path: &str) -> Result<(Self, Vec<Vec<Vec<Fr>>>), Box<dyn Error>> {
+    let mut basic_blocks = vec![];
+    let mut nodes = vec![];
+    let mut models = vec![];
+    let mut notes = match_node_notes::new(basic_blocks, nodes, models);
+
+    let (tract_model, _) = load_onnx_tract_model(path).unwrap();
+
+    let model_weight = load_const_block(&tract_model);
+
+    match_node_op(tract_model, &mut notes);
+    let updated_models = create_updated_models(&notes, 2); // small scale factor (i.e., 2) for now
+    let basic_blocks = notes.basic_blocks;
+    let nodes = notes.nodes;
+    
+    Ok((
+      Self {
+        basic_blocks: basic_blocks,
+        nodes: nodes,
+      },
+      updated_models,
+    ))
+  }
   pub fn run(&self, inputs: &Vec<&Vec<Fr>>, models: &Vec<&Vec<&Vec<Fr>>>) -> Vec<Vec<Vec<Fr>>> {
     let mut outputs = vec![vec![]; self.nodes.len()];
     self.nodes.iter().enumerate().for_each(|(i, n)| {
