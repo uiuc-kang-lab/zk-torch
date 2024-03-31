@@ -2,48 +2,35 @@ use crate::basic_block::BasicBlock;
 use crate::graph::Node;
 use crate::util;
 use ark_bn254::Fr;
-use ndarray::{azip, ArrayD};
+use ndarray::ArrayD;
 use std::collections::HashMap;
 use std::error::Error;
 use tract_onnx;
 use tract_onnx::prelude::{Framework, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp};
 use tract_onnx::tract_core::internal::DatumType;
-use tract_onnx::tract_hir::ops::scan::Scan;
 type TractResult = (Graph<TypedFact, Box<dyn TypedOp>>, SymbolValues);
 
-pub struct match_node_notes {
+pub struct MatchNodeNotes {
   pub basic_blocks: Vec<Box<dyn BasicBlock>>,
   pub nodes: Vec<Node>,
-  pub models: Vec<ArrayD<f32>>,
-  pub nonlinear_indices: Vec<usize>,
-  const_tmp: Vec<ArrayD<f32>>,
-  tract_node_to_const_id: HashMap<usize, usize>,
-  tract_node_to_graph_node: HashMap<usize, usize>,
+  pub tract_node_id: Vec<usize>,
 }
 
-impl match_node_notes {
-  pub fn new(basic_blocks: Vec<Box<dyn BasicBlock>>, nodes: Vec<Node>, models: Vec<ArrayD<f32>>) -> Self {
-    let tract_node_to_const_id = HashMap::new();
-    let tract_node_to_graph_node = HashMap::new();
-    let const_tmp = vec![];
-    let nonlinear_indices = vec![];
+impl MatchNodeNotes {
+  pub fn new(basic_blocks: Vec<Box<dyn BasicBlock>>, nodes: Vec<Node>, tract_node_id: Vec<usize>) -> Self {
     Self {
       basic_blocks,
       nodes,
-      models,
-      nonlinear_indices,
-      const_tmp,
-      tract_node_to_const_id,
-      tract_node_to_graph_node,
+      tract_node_id,
     }
   }
 }
 
-// load model weights
-pub fn load_const_block(model: &Graph<TypedFact, Box<dyn TypedOp>>) -> HashMap<usize, ArrayD<f32>> {
+// load Const block in tract graph as model weights
+pub fn load_model_weights(model: &Graph<TypedFact, Box<dyn TypedOp>>) -> HashMap<usize, ArrayD<f32>> {
   let mut tract_id_to_const_data = HashMap::new();
   for node in model.nodes.iter() {
-    let node = match node.op().name().as_ref() {
+    let _ = match node.op().name().as_ref() {
       "Const" => {
         let idx = node.id;
         let op = load_op::<tract_onnx::tract_hir::ops::konst::Const>(node.op(), idx, node.op().name().to_string()).unwrap();
@@ -53,165 +40,275 @@ pub fn load_const_block(model: &Graph<TypedFact, Box<dyn TypedOp>>) -> HashMap<u
         let model = ArrayD::from_shape_vec(dims, vals).unwrap();
         tract_id_to_const_data.insert(idx, model);
       }
-      &_ => {
-        continue;
-      }
+      &_ => continue,
     };
   }
   tract_id_to_const_data
 }
 
-pub fn match_node_op(model: Graph<TypedFact, Box<dyn TypedOp>>, notes: &mut match_node_notes) {
+// load tract graph and match nodes to basic blocks
+pub fn load_tract_graph_basicblocks(model: Graph<TypedFact, Box<dyn TypedOp>>, scale_factor: u32) -> MatchNodeNotes {
+  let basic_blocks = vec![];
+  let nodes = vec![];
+  let tract_node_id = vec![];
+  let mut notes = MatchNodeNotes::new(basic_blocks, nodes, tract_node_id);
   for (idx, node) in model.nodes.iter().enumerate() {
     println!("Node {}: {:?}", idx, node);
-    let node = match node.op().name().as_ref() {
-      "Const" => {
-        let op = load_op::<tract_onnx::tract_hir::ops::konst::Const>(node.op(), idx, node.op().name().to_string()).unwrap();
-        // let dt = op.0.datum_type(); // Raw values are always f32
-        let dims = op.0.shape().to_vec();
-        let vals = op.0.as_slice::<f32>().unwrap().to_vec();
-        let model = ArrayD::from_shape_vec(dims, vals).unwrap();
-        notes.tract_node_to_const_id.insert(idx, notes.const_tmp.len());
-        notes.const_tmp.push(model);
-      }
+    let _ = match node.op().name().as_ref() {
       "Add" => {
         notes.basic_blocks.push(Box::new(crate::basic_block::AddModelBasicBlock));
         let mut inputs = vec![];
-        for (i, input_tract) in node.inputs.iter().enumerate() {
-          let input_tract_node = input_tract.node;
-          if notes.tract_node_to_const_id.contains_key(&input_tract_node) {
-            let input_model_id = notes.tract_node_to_const_id.get(&input_tract_node).unwrap().clone();
-            let model = notes.const_tmp[notes.tract_node_to_const_id.get(&input_tract_node).unwrap().clone()].clone();
-            notes.models.push(model);
-          } else if notes.tract_node_to_graph_node.contains_key(&input_tract_node) {
-            let input_graph_node_id = notes.tract_node_to_graph_node.get(&input_tract_node).unwrap().clone();
-            inputs.push((input_graph_node_id as i32, input_tract.slot));
-          } else {
-            panic!("Input node not found!");
-          }
+        for input_tract in node.inputs.iter() {
+          inputs.push((input_tract.node as i32, input_tract.slot));
         }
         notes.nodes.push(Node {
           basic_block: notes.basic_blocks.len() - 1,
           inputs: inputs,
         });
-        notes.tract_node_to_graph_node.insert(idx, notes.nodes.len() - 1);
+        notes.tract_node_id.push(node.id);
       }
-      "Mul" => {
-        notes.basic_blocks.push(Box::new(crate::basic_block::MulBasicBlock));
+      "Div" => {
+        notes.basic_blocks.push(Box::new(crate::basic_block::DivScalarBasicBlock {
+          output_SF: scale_factor as usize,
+        }));
         let mut inputs = vec![];
-        for (i, input_tract) in node.inputs.iter().enumerate() {
-          let input_tract_node = input_tract.node;
-          if notes.tract_node_to_const_id.contains_key(&input_tract_node) {
-            let input_model_id = notes.tract_node_to_const_id.get(&input_tract_node).unwrap().clone();
-            let model = notes.const_tmp[notes.tract_node_to_const_id.get(&input_tract_node).unwrap().clone()].clone();
-            notes.models.push(model);
-          } else if notes.tract_node_to_graph_node.contains_key(&input_tract_node) {
-            let input_graph_node_id = notes.tract_node_to_graph_node.get(&input_tract_node).unwrap().clone();
-            inputs.push((input_graph_node_id as i32, input_tract.slot));
-          } else {
-            panic!("Input node not found!");
-          }
+        for input_tract in node.inputs.iter() {
+          inputs.push((input_tract.node as i32, input_tract.slot));
         }
         notes.nodes.push(Node {
           basic_block: notes.basic_blocks.len() - 1,
           inputs: inputs,
         });
-        notes.tract_node_to_graph_node.insert(idx, notes.nodes.len() - 1);
-      }
-      "Max" => {
-        if node.name.contains("Relu") {
-          notes.basic_blocks.push(Box::new(crate::basic_block::ReLUBasicBlock));
-          let input_node_id = notes.tract_node_to_graph_node.get(&node.inputs[0].node).unwrap().clone();
-          notes.nonlinear_indices.push(notes.basic_blocks.len() - 1);
-          notes.nodes.push(Node {
-            basic_block: notes.basic_blocks.len() - 1,
-            inputs: vec![(input_node_id as i32, 0)],
-          });
-          notes.models.push(ArrayD::zeros(vec![]));
-
-          notes.basic_blocks.push(Box::new(crate::basic_block::CQ2BasicBlock { table_dict: HashMap::new() }));
-          notes.nodes.push(Node {
-            basic_block: notes.basic_blocks.len() - 1,
-            inputs: vec![(input_node_id as i32, 0), (notes.nodes.len() as i32 - 1, 0)],
-          });
-          notes.models.push(ArrayD::zeros(vec![])); // should be cq table
-
-          notes.tract_node_to_graph_node.insert(idx, notes.nodes.len()); // we insert two nodes
-        } else {
-          panic!("Max not implemented!");
-        }
-      }
-      "Sigmoid" => {
-        println!("Sigmoid to be implemented");
+        notes.tract_node_id.push(node.id);
       }
       "EinSum" => {
         let op = load_op::<tract_onnx::tract_core::ops::einsum::EinSum>(node.op(), idx, node.op().name().to_string()).unwrap();
         let axes = &op.axes;
+        let mut inputs = vec![];
         match axes.to_string().as_ref() {
-          "mk,nk->mn" => {
+          "mk,nk->mn" => { // Gemm
             // normal matrix multiplication for FeedForward layers
-            println!("EinSum mk,nk->mn");
             notes.basic_blocks.push(Box::new(crate::basic_block::CQLinBasicBlock));
 
-            if notes.tract_node_to_graph_node.keys().len() == 0 {
-              notes.nodes.push(Node {
-                basic_block: notes.basic_blocks.len() - 1,
-                inputs: vec![(-1, 0)],
-              });
-            } else {
-              let input_node_id = notes.tract_node_to_graph_node.get(&node.inputs[0].node).unwrap().clone();
-              notes.nodes.push(Node {
-                basic_block: notes.basic_blocks.len() - 1,
-                inputs: vec![(input_node_id as i32, 0)],
-              });
+            for input_tract in node.inputs.iter() {
+              inputs.push((input_tract.node as i32, input_tract.slot));
             }
-            notes.tract_node_to_graph_node.insert(idx, notes.nodes.len() - 1);
-
-            let model = notes.const_tmp[notes.tract_node_to_const_id.get(&node.inputs[1].node).unwrap().clone()].clone();
-            notes.models.push(model.t().to_owned());
+            notes.nodes.push(Node {
+              basic_block: notes.basic_blocks.len() - 1,
+              inputs: inputs,
+            });
+            notes.tract_node_id.push(node.id);
           }
-          &_ => println!("Do nothing!"),
+          "amk,kn->amn" => { // TODO: merge Lilia's CQLin matrix multiplication
+            notes.basic_blocks.push(Box::new(crate::basic_block::CQLinBasicBlock));
+
+            for input_tract in node.inputs.iter() {
+              inputs.push((input_tract.node as i32, input_tract.slot));
+            }
+            notes.nodes.push(Node {
+              basic_block: notes.basic_blocks.len() - 1,
+              inputs: inputs,
+            });
+            notes.tract_node_id.push(node.id);
+          }
+          "amk,akn->amn" => { // TODO: merge Ari's MatMul after ndarray shape issues are resolved)
+            notes.basic_blocks.push(Box::new(crate::basic_block::MatMulBasicBlock {l: 2})); // FIXME: hardcoded l=2 for now
+            for input_tract in node.inputs.iter() {
+              inputs.push((input_tract.node as i32, input_tract.slot));
+            }
+            notes.nodes.push(Node {
+              basic_block: notes.basic_blocks.len() - 1,
+              inputs: inputs,
+            });
+            notes.tract_node_id.push(node.id);
+
+          }
+          &_ => {
+            panic!("Unsupported EinSum axes!");
+          }
         }
       }
-      &_ => println!("Do nothing!"),
+      "Max" => {
+        if node.name.contains("Relu") {
+          notes.basic_blocks.push(Box::new(crate::basic_block::ReLUBasicBlock));
+          notes.nodes.push(Node {
+            basic_block: notes.basic_blocks.len() - 1,
+            inputs: vec![(node.inputs[0].node as i32, node.inputs[0].slot)],
+          });
+          notes.tract_node_id.push(node.id);
+
+          notes.basic_blocks.push(Box::new(crate::basic_block::CQ2BasicBlock { table_dict: HashMap::new() }));
+          notes.nodes.push(Node {
+            basic_block: notes.basic_blocks.len() - 1,
+            inputs: vec![
+              (node.inputs[0].node as i32, node.inputs[0].slot),
+              (node.inputs[0].node as i32, node.inputs[0].slot),
+            ], // the second one should be output node
+          });
+          notes.tract_node_id.push(node.id);
+        } else {
+          panic!("Max not implemented!");
+        }
+      }
+      "Mul" => {
+        notes.basic_blocks.push(Box::new(crate::basic_block::MulBasicBlock));
+        let mut inputs = vec![];
+        for input_tract in node.inputs.iter() {
+          inputs.push((input_tract.node as i32, input_tract.slot));
+        }
+        notes.nodes.push(Node {
+          basic_block: notes.basic_blocks.len() - 1,
+          inputs: inputs,
+        });
+        notes.tract_node_id.push(node.id);
+      }
+      "Sigmoid" => {
+        notes.basic_blocks.push(Box::new(crate::basic_block::SigmoidBasicBlock {
+          input_SF: scale_factor as usize,
+          output_SF: scale_factor as usize,
+        }));
+        notes.nodes.push(Node {
+          basic_block: notes.basic_blocks.len() - 1,
+          inputs: vec![(node.inputs[0].node as i32, node.inputs[0].slot)],
+        });
+        notes.tract_node_id.push(node.id);
+
+        notes.basic_blocks.push(Box::new(crate::basic_block::CQ2BasicBlock { table_dict: HashMap::new() }));
+        notes.nodes.push(Node {
+          basic_block: notes.basic_blocks.len() - 1,
+          inputs: vec![
+            (node.inputs[0].node as i32, node.inputs[0].slot),
+            (node.inputs[0].node as i32, node.inputs[0].slot),
+          ], // the second one should be output node
+        });
+        notes.tract_node_id.push(node.id);
+      }
+      "Sqrt" => {
+        notes.basic_blocks.push(Box::new(crate::basic_block::SqrtBasicBlock {
+          input_SF: scale_factor as usize,
+          output_SF: scale_factor as usize,
+        }));
+        notes.nodes.push(Node {
+          basic_block: notes.basic_blocks.len() - 1,
+          inputs: vec![(node.inputs[0].node as i32, node.inputs[0].slot)],
+        });
+        notes.tract_node_id.push(node.id);
+
+        notes.basic_blocks.push(Box::new(crate::basic_block::CQ2BasicBlock { table_dict: HashMap::new() }));
+        notes.nodes.push(Node {
+          basic_block: notes.basic_blocks.len() - 1,
+          inputs: vec![
+            (node.inputs[0].node as i32, node.inputs[0].slot),
+            (node.inputs[0].node as i32, node.inputs[0].slot),
+          ], // the second one should be output node
+        });
+        notes.tract_node_id.push(node.id);
+      }
+      "Transpose" => {
+        notes.basic_blocks.push(Box::new(crate::basic_block::TransposeBasicBlock));
+        let mut inputs = vec![];
+        for input_tract in node.inputs.iter() {
+          inputs.push((input_tract.node as i32, input_tract.slot));
+        }
+        notes.nodes.push(Node {
+          basic_block: notes.basic_blocks.len() - 1,
+          inputs: inputs,
+        });
+        notes.tract_node_id.push(node.id);
+      }
+      &_ => continue, // skip unsupported ops for now
     };
   }
+  notes
 }
 
-pub fn create_updated_models(notes: &match_node_notes, scale_factor: u32) -> Vec<Vec<Vec<Fr>>> {
-  let models = &notes.models;
-  let mut updated_models = vec![];
-  for model in models.iter() {
-    let mut updated_model = vec![];
-    if model.ndim() == 0 {
-      updated_model.push(vec![]);
-    } else if model.ndim() == 1 {
+// temporary function to convert ArrayD<f32> to Vec<Vec<Fr>> (we don't need this after we adopt ArrayD<Fr> in Basicblocks)
+pub fn convert_array_to_vec(model: ArrayD<f32>, scale_factor: u32) -> Vec<Vec<Fr>> {
+  let mut updated_model = vec![];
+  if model.ndim() == 0 {
+    updated_model.push(vec![]);
+  } else if model.ndim() == 1 {
+    let mut updated_model_d = vec![];
+    for val in model.iter() {
+      updated_model_d.push(Fr::from((val.clone() * scale_factor as f32).round() as i32));
+    }
+    updated_model.push(updated_model_d);
+  } else if model.ndim() == 2 {
+    let model_shape = model.shape();
+    for i in 0..model_shape[0] {
       let mut updated_model_d = vec![];
-      for val in model.iter() {
-        updated_model_d.push(Fr::from((val.clone() * scale_factor as f32).round() as i32));
+      for j in 0..model_shape[1] {
+        updated_model_d.push(Fr::from((model[[i, j]] * scale_factor as f32).round() as i32));
       }
       updated_model.push(updated_model_d);
-    } else if model.ndim() == 2 {
-      let model_shape = model.shape();
-      for i in 0..model_shape[0] {
-        let mut updated_model_d = vec![];
-        for j in 0..model_shape[1] {
-          updated_model_d.push(Fr::from((model[[i, j]] * scale_factor as f32).round() as i32));
-        }
-        updated_model.push(updated_model_d);
-      }
-    } else {
-      panic!("Unsupported model shape!");
     }
-    updated_models.push(updated_model);
+  } else {
+    panic!("Unsupported model shape!");
   }
+  updated_model
+}
 
-  for nonlinear_idx in notes.nonlinear_indices.iter() {
-    let (id, relu_cq_table) = util::gen_cq_table(vec![&notes.basic_blocks[*nonlinear_idx]], -(1 << 5), 1 << 6);
-    let model = vec![id, relu_cq_table];
-    updated_models[*nonlinear_idx+1] = model;
+// convert tract graph to zkllm graph (reindexing inputs and creating models)
+pub fn convert_tract_to_zkg(
+  tract_graph_basicblocks: &mut MatchNodeNotes,
+  model_weight: HashMap<usize, ArrayD<f32>>,
+  scale_factor: u32,
+) -> (Vec<Node>, Vec<Vec<Vec<Fr>>>) {
+  let mut tract_to_zkllm_id: HashMap<usize, i32> = HashMap::new();
+  let mut models = vec![];
+  let mut inputs = vec![];
+  let mut no_model = true;
+  for (i, n) in tract_graph_basicblocks.nodes.iter().enumerate() {
+    // print basicblock name, self id, and inputs
+    // println!("{i} {:?}", tract_graph_basicblocks.basic_blocks[n.basic_block].name());
+    // println!("{i} {:?}", tract_graph_basicblocks.tract_node_id[i]);
+    // println!("{i} {:?}", n.inputs);
+
+    let name = tract_graph_basicblocks.basic_blocks[n.basic_block].name();
+
+    // convert inputs
+    let mut updated_inputs = vec![];
+    for (j, input) in n.inputs.iter().enumerate() {
+      let input_node = input.0 as usize;
+      let input_slot = input.1 as usize;
+      if model_weight.contains_key(&input_node) {
+        let model = model_weight.get(&input_node).unwrap();
+        let model = convert_array_to_vec(model.clone(), scale_factor);
+        models.push(model);
+        no_model = false;
+      } else if name == "CQ2" && j == 1 {
+        let (id, relu_cq_table) = util::gen_cq_table(vec![&tract_graph_basicblocks.basic_blocks[i - 1]], -(1 << 5), 1 << 6);
+        let model = vec![id, relu_cq_table];
+        models.push(model);
+        updated_inputs.push(((i - 1) as i32, input_slot));
+        no_model = false;
+      } else {
+        if input_node == 0 {
+          // input node
+          updated_inputs.push((-1 as i32, input_slot));
+        } else if tract_to_zkllm_id.contains_key(&input_node) {
+          // internal node
+          let input_id = tract_to_zkllm_id.get(&input_node).unwrap();
+          updated_inputs.push((*input_id, input_slot));
+        } else {
+          panic!("Input node not found!");
+        }
+      }
+    }
+    if name != "CQ2" {
+      tract_to_zkllm_id.insert(tract_graph_basicblocks.tract_node_id[i], i as i32);
+    }
+    if no_model {
+      models.push(vec![]);
+    } else {
+      no_model = true;
+    }
+    inputs.push(Node {
+      basic_block: n.basic_block,
+      inputs: updated_inputs,
+    });
   }
-  updated_models
+  (inputs, models)
 }
 
 fn load_op<C: tract_onnx::prelude::Op + Clone>(op: &dyn tract_onnx::prelude::Op, idx: usize, name: String) -> Result<C, Box<dyn std::error::Error>> {

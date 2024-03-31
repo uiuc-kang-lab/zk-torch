@@ -1,8 +1,7 @@
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 use crate::util;
-pub use add::AddBasicBlock;
-pub use add_model::AddModelBasicBlock;
+pub use add::{AddBasicBlock, AddModelBasicBlock};
 pub use alternate::{CombineBasicBlock, SplitBasicBlock};
 pub use alternating::AlternatingBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -21,15 +20,16 @@ pub use log::LogBasicBlock;
 pub use matmul::MatMulBasicBlock;
 pub use max::MaxBasicBlock;
 pub use mul::{MulBasicBlock, MulConstBasicBlock, MulScalarBasicBlock};
+pub use pow::PowBasicBlock;
 use rand::{rngs::StdRng, SeedableRng};
 pub use relu::ReLUBasicBlock;
 pub use rope::RoPEBasicBlock;
+pub use sigmoid::SigmoidBasicBlock;
 pub use sqrt::SqrtBasicBlock;
 pub use sub::SubBasicBlock;
 pub use sum::SumBasicBlock;
 pub use transpose::TransposeBasicBlock;
 pub mod add;
-pub mod add_model;
 pub mod alternate;
 pub mod alternating;
 pub mod concat;
@@ -44,8 +44,10 @@ pub mod log;
 pub mod matmul;
 pub mod max;
 pub mod mul;
+pub mod pow;
 pub mod relu;
 pub mod rope;
+pub mod sigmoid;
 pub mod sqrt;
 pub mod sub;
 pub mod sum;
@@ -95,6 +97,9 @@ impl DataEnc {
   }
 }
 pub trait BasicBlock {
+  fn name(&self) -> &str {
+    "Basic"
+  }
   fn run(&self, model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     vec![]
   }

@@ -8,8 +8,26 @@ import torch.nn.functional as F
 import json
 
 
-model = nn.Sequential(nn.Linear(2, 2), nn.ReLU())
+# model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4), nn.ReLU())
 x = torch.randn(1, 2)
+
+class TinyModel(torch.nn.Module):
+
+    def __init__(self):
+        super(TinyModel, self).__init__()
+
+        self.linear1 = torch.nn.Linear(2,2)
+        self.activation1 = torch.nn.ReLU()
+        self.linear2 = torch.nn.Linear(2,2)
+        self.activation2 = torch.nn.Sigmoid()
+
+    def forward(self, x):
+        x = self.linear1(x)
+        x = self.activation1(x)
+        x = self.linear2(x)
+        return self.activation2(x)
+
+model = TinyModel()
 
 print(x)
 

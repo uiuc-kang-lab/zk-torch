@@ -3,10 +3,9 @@
 use ark_bn254::Fr;
 use ark_bn254::{G1Affine, G2Affine};
 use basic_block::*;
-use graph::{Graph, Node};
+use graph::Graph;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rayon::prelude::*;
-use std::collections::HashMap;
 mod basic_block;
 mod graph;
 mod onnx_converter;
@@ -17,7 +16,7 @@ mod util;
 
 fn main() {
   let srs = &ptau::load_file("challenge", 7);
-  let (mut graph, mut updated_models) = Graph::build_from_onnx("network.onnx").unwrap();
+  let (mut graph, updated_models) = Graph::build_from_onnx("network.onnx").unwrap();
 
   // make models from Vec<Vec<Vec<Fr>>> to Vec<&Vec<&Vec<Fr>>
   let mut models_ref = vec![vec![]; updated_models.len()];
@@ -31,15 +30,11 @@ fn main() {
     models.push(mm);
   }
 
-  for (i, n) in graph.nodes.iter().enumerate() {
-    println!("Node {}: {:?}", i, n.basic_block);
-  }
-
   // create fake input tensor
   let input: Vec<_> = (0..2).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
 
   //Run:
-  let mut inputs = vec![&input];
+  let inputs = vec![&input];
   let outputs = graph.run(&inputs, &models);
 
   //Setup:
