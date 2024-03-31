@@ -10,6 +10,9 @@ pub struct MulConstBasicBlock {
   pub c: usize,
 }
 impl BasicBlock for MulConstBasicBlock {
+  fn name(&self) -> &str {
+    "MulConst"
+  }
   fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     vec![inputs[0].iter().map(|x| *x * Fr::from(self.c as u32)).collect()]
   }

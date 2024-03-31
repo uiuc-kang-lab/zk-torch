@@ -18,6 +18,9 @@ pub struct CQ2BasicBlock {
   pub table_dict: HashMap<(Fr, Fr), usize>,
 }
 impl BasicBlock for CQ2BasicBlock {
+  fn name(&self) -> &str {
+    "CQ2"
+  }
   fn setup(&self, srs: &SRS, model: &Vec<&Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
     let N = model[0].raw.len();
     let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();

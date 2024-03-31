@@ -12,9 +12,9 @@ impl BasicBlock for SqrtBasicBlock {
     let mut r = vec![];
     for x in inputs[0].iter() {
       let mut x = util::fr_to_int(*x) as f32;
-      x /= (1 << self.input_SF) as f32;
+      x /= self.input_SF as f32;
       x = x.sqrt();
-      x *= (1 << self.output_SF) as f32;
+      x *= self.output_SF as f32;
       let x = Fr::from(x.round() as i32);
       r.push(x);
     }

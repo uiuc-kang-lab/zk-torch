@@ -15,8 +15,8 @@ impl BasicBlock for RoPEBasicBlock {
       let x = (self.token_i as f32) / (10000_f32.powf((i as f32) / 64_f32));
       let mut a = x.cos();
       let mut b = x.sin();
-      a *= (1 << self.output_SF) as f32;
-      b *= (1 << self.output_SF) as f32;
+      a *= self.output_SF as f32;
+      b *= self.output_SF as f32;
       let a = Fr::from(a.round() as i32);
       let b = Fr::from(b.round() as i32);
       r1.push(a);
