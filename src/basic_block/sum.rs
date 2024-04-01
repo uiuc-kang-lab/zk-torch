@@ -11,6 +11,9 @@ use rand::{rngs::StdRng, SeedableRng};
 
 pub struct SumBasicBlock;
 impl BasicBlock for SumBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![], vec![2])
+  }
   fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     vec![vec![inputs.iter().map(|x| x.iter().sum::<Fr>()).sum::<Fr>()]]
   }

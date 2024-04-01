@@ -22,6 +22,9 @@ pub struct AlternatingBasicBlock;
 // Inputs are X,Y,Z where X alternating with Y equals Z
 // X,Y,Z are multiplied by alpha,beta,alpha_beta to get A,B,C
 impl BasicBlock for AlternatingBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![], vec![1, 1, 1])
+  }
   fn prove(
     &mut self,
     srs: &SRS,

@@ -20,6 +20,9 @@ fn calc_pow(alpha: Fr, n: usize) -> Vec<Fr> {
 pub struct ConcatBasicBlock;
 // inputs are rows to A, output is concatenated rows of A
 impl BasicBlock for ConcatBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![], vec![2])
+  }
   fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     let n = inputs.len();
     let m = inputs[0].len();

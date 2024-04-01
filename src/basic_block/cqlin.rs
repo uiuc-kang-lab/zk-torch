@@ -13,6 +13,9 @@ use rayon::prelude::*;
 
 pub struct CQLinBasicBlock;
 impl BasicBlock for CQLinBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![2], vec![1])
+  }
   fn run(&self, model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     assert_eq!(model.len(), inputs[0].len());
     let m = model.len();

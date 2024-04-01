@@ -12,6 +12,9 @@ use rand::{rngs::StdRng, SeedableRng};
 // Takes in A,B and intertwines them into C
 pub struct CombineBasicBlock;
 impl BasicBlock for CombineBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![], vec![1, 1])
+  }
   fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     let n = inputs[0].len();
     let mut C = vec![];
@@ -26,6 +29,9 @@ impl BasicBlock for CombineBasicBlock {
 // Takes in C and splits it into evens A and odds B
 pub struct SplitBasicBlock;
 impl BasicBlock for SplitBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![], vec![1])
+  }
   fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     let n2 = inputs[0].len();
     let mut A = vec![];

@@ -20,6 +20,9 @@ fn calc_pow(alpha: Fr, n: usize) -> Vec<Fr> {
 pub struct TransposeBasicBlock;
 // inputs are rows to A, outputs are columns of B (checking that B=A)
 impl BasicBlock for TransposeBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![], vec![2])
+  }
   fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     let m = inputs[0].len();
     let n = inputs.len();

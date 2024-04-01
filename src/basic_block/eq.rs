@@ -5,6 +5,9 @@ use rand::rngs::StdRng;
 
 pub struct EqBasicBlock;
 impl BasicBlock for EqBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![], vec![1, 1])
+  }
   fn prove(
     &mut self,
     srs: &SRS,

@@ -22,6 +22,9 @@ pub struct MatMulBasicBlock {
 }
 // inputs are rows to A and columns of B, outputs are rows of C
 impl BasicBlock for MatMulBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![], vec![2, 2])
+  }
   fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     let l = self.l;
     let m = inputs[0].len();

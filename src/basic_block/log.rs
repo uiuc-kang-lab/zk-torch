@@ -8,6 +8,9 @@ pub struct LogBasicBlock {
   pub output_SF: usize,
 }
 impl BasicBlock for LogBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![], vec![1])
+  }
   fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     let mut r = vec![];
     for x in inputs[0].iter() {
