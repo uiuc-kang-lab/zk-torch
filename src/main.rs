@@ -3,12 +3,14 @@
 use ark_bn254::Fr;
 use ark_bn254::{G1Affine, G2Affine};
 use basic_block::*;
+use batched_basic_block::*;
 use graph::{Graph, Node};
 use ndarray::{arr0, arr1, ArrayD, Axis};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
 mod basic_block;
+mod batched_basic_block;
 mod graph;
 mod ptau;
 #[cfg(test)]

@@ -1,7 +1,6 @@
 use super::BasicBlock;
 use crate::util;
 use ark_bn254::Fr;
-use ark_std::Zero;
 
 pub struct SqrtBasicBlock {
   pub input_SF: usize,

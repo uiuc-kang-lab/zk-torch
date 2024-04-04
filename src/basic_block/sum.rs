@@ -6,7 +6,7 @@ use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
-use ark_std::{ops::Mul, ops::Sub, One, UniformRand, Zero};
+use ark_std::{UniformRand, Zero};
 use rand::{rngs::StdRng, SeedableRng};
 
 pub struct SumBasicBlock;

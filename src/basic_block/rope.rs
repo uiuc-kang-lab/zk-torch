@@ -1,7 +1,5 @@
 use super::BasicBlock;
-use crate::util;
 use ark_bn254::Fr;
-use ark_std::Zero;
 
 pub struct RoPEBasicBlock {
   pub token_i: usize,

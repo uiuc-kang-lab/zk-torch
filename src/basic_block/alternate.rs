@@ -1,13 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{BasicBlock, Data, DataEnc, SRS};
-use crate::util;
-use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ec::pairing::Pairing;
-use ark_ff::Field;
-use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
-use ark_std::{ops::Mul, ops::Sub, One, UniformRand, Zero};
-use rand::{rngs::StdRng, SeedableRng};
+use super::BasicBlock;
+use ark_bn254::Fr;
 
 // Takes in A,B and intertwines them into C
 pub struct CombineBasicBlock;
