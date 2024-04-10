@@ -2,6 +2,7 @@ use super::BasicBlock;
 use crate::util;
 use ark_bn254::Fr;
 use ark_std::Zero;
+use ark_ff::Field;
 
 pub struct DivConstBasicBlock {
   pub c: usize,
@@ -40,5 +41,17 @@ impl BasicBlock for DivScalarBasicBlock {
       rem.push(Fr::from(r));
     }
     vec![div, rem]
+  }
+}
+
+pub struct ReciprocalBasicBlock;
+impl BasicBlock for ReciprocalBasicBlock {
+  fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
+    let mut r = vec![];
+    for x in inputs[0].iter() {
+      let y = x.inverse().unwrap();
+      r.push(y);
+    }
+    vec![r]
   }
 }

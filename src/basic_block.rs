@@ -1,6 +1,7 @@
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 use crate::util;
+pub use abs::AbsBasicBlock;
 pub use add::{AddBasicBlock, AddModelBasicBlock};
 pub use alternate::{CombineBasicBlock, SplitBasicBlock};
 pub use alternating::AlternatingBasicBlock;
@@ -13,11 +14,12 @@ pub use constant::ConstBasicBlock;
 pub use cq::CQBasicBlock;
 pub use cq2::CQ2BasicBlock;
 pub use cqlin::CQLinBasicBlock;
-pub use div::{DivConstBasicBlock, DivScalarBasicBlock};
+pub use div::{DivConstBasicBlock, DivScalarBasicBlock, ReciprocalBasicBlock};
 pub use eq::EqBasicBlock;
 pub use exp::ExpBasicBlock;
 pub use log::LogBasicBlock;
 pub use matmul::MatMulBasicBlock;
+pub use matmul_fixed::MatMulFixedBasicBlock;
 pub use max::MaxBasicBlock;
 pub use mul::{MulBasicBlock, MulConstBasicBlock, MulScalarBasicBlock};
 pub use pow::PowBasicBlock;
@@ -29,6 +31,7 @@ pub use sqrt::SqrtBasicBlock;
 pub use sub::SubBasicBlock;
 pub use sum::SumBasicBlock;
 pub use transpose::TransposeBasicBlock;
+pub mod abs;
 pub mod add;
 pub mod alternate;
 pub mod alternating;
@@ -42,6 +45,7 @@ pub mod eq;
 pub mod exp;
 pub mod log;
 pub mod matmul;
+pub mod matmul_fixed;
 pub mod max;
 pub mod mul;
 pub mod pow;
