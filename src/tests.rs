@@ -91,5 +91,5 @@ fn testBasicBlocks() {
     inputs.push((0..m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect());
   }
   let inputs: Vec<_> = inputs.iter().map(|x| x).collect();
-  testBasicBlock(MatMulFixedBasicBlock {}, srs, &matrix, &inputs);
+  testBasicBlock(CQLinBasicBlock {}, srs, &matrix, &inputs);
 }

@@ -19,9 +19,12 @@ fn calc_pow(alpha: Fr, n: usize) -> Vec<Fr> {
   pow
 }
 
-pub struct MatMulFixedBasicBlock;
+pub struct CQLinBasicBlock;
 // input is rows of A, model is rows of B, outputs are rows of C
-impl BasicBlock for MatMulFixedBasicBlock {
+impl BasicBlock for CQLinBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![2], vec![2])
+  }
   fn run(&self, model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     assert_eq!(model.len(), inputs[0].len());
     let l = inputs.len();

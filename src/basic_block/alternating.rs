@@ -6,7 +6,7 @@ use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
-use ark_std::{ops::Mul, ops::Sub, One, UniformRand, Zero};
+use ark_std::{ops::Mul, ops::Sub, UniformRand};
 use rand::{rngs::StdRng, SeedableRng};
 
 // Start at alpha^1
@@ -22,6 +22,9 @@ pub struct AlternatingBasicBlock;
 // Inputs are X,Y,Z where X alternating with Y equals Z
 // X,Y,Z are multiplied by alpha,beta,alpha_beta to get A,B,C
 impl BasicBlock for AlternatingBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![], vec![1, 1, 1])
+  }
   fn prove(
     &mut self,
     srs: &SRS,

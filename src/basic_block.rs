@@ -12,12 +12,12 @@ pub use concat::ConcatBasicBlock;
 pub use constant::ConstBasicBlock;
 pub use cq::CQBasicBlock;
 pub use cq2::CQ2BasicBlock;
+pub use cqlin::CQLinBasicBlock;
 pub use div::{DivConstBasicBlock, DivScalarBasicBlock};
 pub use eq::EqBasicBlock;
 pub use exp::ExpBasicBlock;
 pub use log::LogBasicBlock;
 pub use matmul::MatMulBasicBlock;
-pub use matmul_fixed::MatMulFixedBasicBlock;
 pub use max::MaxBasicBlock;
 pub use mul::{MulBasicBlock, MulConstBasicBlock, MulScalarBasicBlock};
 use rand::{rngs::StdRng, SeedableRng};
@@ -34,12 +34,12 @@ pub mod concat;
 pub mod constant;
 pub mod cq;
 pub mod cq2;
+pub mod cqlin;
 pub mod div;
 pub mod eq;
 pub mod exp;
 pub mod log;
 pub mod matmul;
-pub mod matmul_fixed;
 pub mod max;
 pub mod mul;
 pub mod relu;
@@ -80,6 +80,16 @@ impl Data {
     };
   }
 }
+impl Clone for Data {
+  fn clone(&self) -> Data {
+    Data {
+      raw: self.raw.clone(),
+      poly: self.poly.clone(),
+      g1: self.g1.clone(),
+      r: self.r.clone(),
+    }
+  }
+}
 pub struct DataEnc {
   pub len: usize,
   pub g1: G1Affine,
@@ -92,7 +102,16 @@ impl DataEnc {
     };
   }
 }
+impl Clone for DataEnc {
+  fn clone(&self) -> DataEnc {
+    DataEnc {
+      len: self.len.clone(),
+      g1: self.g1.clone(),
+    }
+  }
+}
 pub trait BasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>);
   fn run(&self, model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     vec![]
   }

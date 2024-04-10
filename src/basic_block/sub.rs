@@ -5,6 +5,9 @@ use rand::rngs::StdRng;
 
 pub struct SubBasicBlock;
 impl BasicBlock for SubBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![], vec![1, 1])
+  }
   fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     let mut r = vec![];
     let m = ark_std::cmp::max(inputs[0].len(), inputs[1].len());

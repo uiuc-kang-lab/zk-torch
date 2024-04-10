@@ -1,12 +1,14 @@
 use super::BasicBlock;
 use crate::util;
 use ark_bn254::Fr;
-use ark_std::Zero;
 
 pub struct DivConstBasicBlock {
   pub c: usize,
 }
 impl BasicBlock for DivConstBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![], vec![1])
+  }
   fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     let mut r = vec![];
     for x in inputs[0].iter() {
@@ -23,6 +25,9 @@ pub struct DivScalarBasicBlock {
   pub output_SF: usize,
 }
 impl BasicBlock for DivScalarBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![], vec![1])
+  }
   fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     let SF = self.output_SF as i32;
     let mut div = vec![];

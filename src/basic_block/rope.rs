@@ -1,13 +1,14 @@
 use super::BasicBlock;
-use crate::util;
 use ark_bn254::Fr;
-use ark_std::Zero;
 
 pub struct RoPEBasicBlock {
   pub token_i: usize,
   pub output_SF: usize,
 }
 impl BasicBlock for RoPEBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![], vec![])
+  }
   fn run(&self, _model: &Vec<&Vec<Fr>>, _inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     let mut r1 = vec![];
     let mut r2 = vec![];

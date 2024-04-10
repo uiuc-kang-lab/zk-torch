@@ -10,6 +10,9 @@ pub struct MulConstBasicBlock {
   pub c: usize,
 }
 impl BasicBlock for MulConstBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![], vec![1])
+  }
   fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     vec![inputs[0].iter().map(|x| *x * Fr::from(self.c as u32)).collect()]
   }
@@ -41,6 +44,9 @@ impl BasicBlock for MulConstBasicBlock {
 }
 pub struct MulScalarBasicBlock;
 impl BasicBlock for MulScalarBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![], vec![1])
+  }
   fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     vec![inputs[0].iter().map(|x| *x * inputs[1][0]).collect()]
   }
@@ -78,6 +84,9 @@ impl BasicBlock for MulScalarBasicBlock {
 }
 pub struct MulBasicBlock;
 impl BasicBlock for MulBasicBlock {
+  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
+    (vec![], vec![1, 1])
+  }
   fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
     vec![inputs[0].iter().zip(inputs[1]).map(|(x, y)| *x * *y).collect()]
   }
