@@ -1,21 +1,13 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 use super::{BasicBlock, Data, DataEnc, SRS};
-use crate::util;
+use crate::util::{self, calc_pow};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{ops::Mul, ops::Sub, One, UniformRand, Zero};
 use rand::{rngs::StdRng, SeedableRng};
-
-fn calc_pow(alpha: Fr, n: usize) -> Vec<Fr> {
-  let mut pow: Vec<Fr> = vec![Fr::one(); n];
-  for i in 0..n - 1 {
-    pow[i + 1] = pow[i] * alpha;
-  }
-  pow
-}
 
 pub struct TransposeBasicBlock;
 // inputs are rows to A, outputs are columns of B (checking that B=A)

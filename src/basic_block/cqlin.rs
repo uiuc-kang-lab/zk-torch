@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 use super::{BasicBlock, Data, DataEnc, SRS};
-use crate::util;
+use crate::util::{self, calc_pow};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
 use ark_ff::Field;
@@ -10,14 +10,6 @@ use ark_std::{One, UniformRand, Zero};
 use ndarray::ArrayD;
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
-
-fn calc_pow(alpha: Fr, n: usize) -> Vec<Fr> {
-  let mut pow: Vec<Fr> = vec![Fr::one(); n];
-  for i in 0..n - 1 {
-    pow[i + 1] = pow[i] * alpha;
-  }
-  pow
-}
 
 pub struct CQLinBasicBlock;
 // input is rows of A, model is rows of B, outputs are rows of C
