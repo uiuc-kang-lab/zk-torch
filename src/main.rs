@@ -65,7 +65,7 @@ fn main() {
   let matrix = ArrayD::from_shape_vec(vec![m, n], matrix).unwrap();
   let matrix = vec![&matrix];
   let input: Vec<_> = (0..n).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
-  let input = arr1(&input).into_dyn();
+  let input = ArrayD::from_shape_vec(vec![n, 1], input).unwrap();
 
   //Run:
   let inputs = vec![&input];
