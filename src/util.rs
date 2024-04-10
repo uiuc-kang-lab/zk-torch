@@ -4,7 +4,7 @@ use ark_bn254::Fr;
 use ark_ec::{ScalarMul, VariableBaseMSM};
 use ark_ff::PrimeField;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
-use ark_std::{One, Zero};
+use ark_std::Zero;
 use rayon::prelude::*;
 
 fn bitreverse(mut n: u32, l: u64) -> u32 {
@@ -124,7 +124,8 @@ pub fn fr_to_int(x: Fr) -> i32 {
 }
 
 pub fn calc_pow(alpha: Fr, n: usize) -> Vec<Fr> {
-  let mut pow: Vec<Fr> = vec![Fr::one(); n];
+  // Starts at alpha^1 for AlternatingBasicBlock to distinguish first elements
+  let mut pow: Vec<Fr> = vec![alpha; n];
   for i in 0..n - 1 {
     pow[i + 1] = pow[i] * alpha;
   }
