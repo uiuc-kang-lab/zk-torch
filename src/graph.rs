@@ -1,6 +1,6 @@
 use crate::basic_block::BasicBlock;
 use crate::basic_block::*;
-use crate::onnx_converter::{convert_tract_to_zkg, load_model_weights, load_onnx_tract_model, load_tract_graph_basicblocks};
+use crate::onnx_converter::{convert_tract_to_basicblocks, load_onnx_tract_model, load_tract_layers};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use rand::rngs::StdRng;
 use std::error::Error;
@@ -18,14 +18,13 @@ pub struct Graph {
 impl Graph {
   pub fn build_from_onnx(path: &str) -> Result<(Self, Vec<Vec<Vec<Fr>>>), Box<dyn Error>> {
     let scale_factor = 2; // small scale factor (2 here) for now
-    let (tract_model, _) = load_onnx_tract_model(path).unwrap();
+    let (tract_model, symbol_values) = load_onnx_tract_model(path).unwrap();
 
-    let model_weight = load_model_weights(&tract_model);
-    let mut tract_graph_basicblocks = load_tract_graph_basicblocks(tract_model, scale_factor);
-
-    let (inputs, models) = convert_tract_to_zkg(&mut tract_graph_basicblocks, model_weight, scale_factor);
-    let basic_blocks = tract_graph_basicblocks.basic_blocks;
-    let nodes = inputs;
+    let weights_map = load_tract_layers(&tract_model, &symbol_values);
+    let (basic_blocks, nodes, models) = convert_tract_to_basicblocks(weights_map, &tract_model, scale_factor);
+    // println!("models {:?}", models.len());
+    // println!("nodes {:?}", nodes.len());
+    // println!("basic_blocks {:?}", basic_blocks.len());
 
     Ok((
       Self {
