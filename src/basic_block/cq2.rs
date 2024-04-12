@@ -20,6 +20,7 @@ pub struct CQ2BasicBlock {
 }
 impl BasicBlock for CQ2BasicBlock {
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
+    assert!(model.ndim() == 1 && model.len() == 2);
     let N = model[0].raw.len();
     let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
     let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
@@ -56,8 +57,10 @@ impl BasicBlock for CQ2BasicBlock {
     _outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
+    assert!(inputs.len() == 2 && inputs[0].len() == 1 && inputs[1].len() == 1);
     let N = model[0].raw.len();
     let inputs = vec![inputs[0].first().unwrap(), inputs[1].first().unwrap()];
+    assert!(inputs[0].raw.len() == inputs[1].raw.len());
     let n = inputs[0].raw.len();
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let alpha = Fr::rand(rng);

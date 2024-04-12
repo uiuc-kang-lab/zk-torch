@@ -19,9 +19,11 @@ pub struct PermuteBasicBlock {
 // This is proven via a * inputs[0] * b = c * outputs[0] * d (for vectors a,b,c,d comprised of powers of alpha)
 impl BasicBlock for PermuteBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    assert!(inputs.len() == 1 && inputs[0].ndim() == 2);
     let n = inputs[0].len_of(Axis(0));
     vec![Array::from_shape_fn((self.permutation.0.len(), self.permutation.1.len()), |(i, j)| {
       let s = self.permutation.0[i] + self.permutation.1[j];
+      assert!(s < inputs[0].len());
       inputs[0][[s % n, s / n]]
     })
     .into_dyn()]

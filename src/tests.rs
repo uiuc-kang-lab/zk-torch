@@ -3,7 +3,7 @@ use crate::convert_to_data;
 use crate::ptau;
 use ark_bn254::{Fr, G1Affine, G2Affine};
 use ark_std::UniformRand;
-use ndarray::{concatenate, s, ArrayD, Axis, IxDyn};
+use ndarray::{arr0, concatenate, s, ArrayD, Axis, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use std::collections::HashMap;
 
@@ -45,7 +45,7 @@ fn testBasicBlocks() {
   let n: usize = 1 << 3;
   let a = ArrayD::from_shape_fn(IxDyn(&[N]), |_| Fr::rand(&mut rng));
   let a_n = a.slice(s![..n]).to_owned().into_dyn();
-  let a_1 = a.slice(s![..1]).to_owned().into_dyn();
+  let a_1 = arr0(a[0]).into_dyn();
   let b = ArrayD::from_shape_fn(IxDyn(&[N]), |_| Fr::rand(&mut rng));
   let b_n = b.slice(s![..n]).to_owned().into_dyn();
   let temp1 = a.view().into_shape(IxDyn(&[1, N])).unwrap();
@@ -65,13 +65,19 @@ fn testBasicBlocks() {
   testBasicBlock(CQBasicBlock { table_dict: HashMap::new() }, srs, &a, &vec![&a_n]);
   testBasicBlock(CQ2BasicBlock { table_dict: HashMap::new() }, srs, &ab, &vec![&a_n, &b_n]);
 
-  let l: usize = 1 << 4;
-  let m: usize = 1 << 3;
-  let n: usize = 1 << 2;
+  let l: usize = 1 << 3;
+  let m: usize = 1 << 2;
+  let n: usize = 1 << 1;
   let a = ArrayD::from_shape_fn(IxDyn(&[l, m]), |_| Fr::rand(&mut rng));
   let b = ArrayD::from_shape_fn(IxDyn(&[n, m]), |_| Fr::rand(&mut rng));
   let c = ArrayD::from_shape_fn(IxDyn(&[m, n]), |_| Fr::rand(&mut rng));
   testBasicBlock(MatMulBasicBlock {}, srs, &empty, &vec![&a, &b]);
   testBasicBlock(SumBasicBlock {}, srs, &empty, &vec![&a]);
   testBasicBlock(CQLinBasicBlock {}, srs, &c, &vec![&a]);
+  let p1 = (vec![0], (0..l * m).collect::<Vec<_>>()); // Concatenate columns
+  let p2 = (vec![0], (0..l * m).map(|i| (i % m) * l + (i / m)).collect::<Vec<_>>()); // Concatenate rows
+  let p3 = ((0..m).map(|i| i * l).collect::<Vec<_>>(), (0..l).collect::<Vec<_>>()); // Transpose
+  testBasicBlock(PermuteBasicBlock { permutation: p1 }, srs, &empty, &vec![&a]);
+  testBasicBlock(PermuteBasicBlock { permutation: p2 }, srs, &empty, &vec![&a]);
+  testBasicBlock(PermuteBasicBlock { permutation: p3 }, srs, &empty, &vec![&a]);
 }

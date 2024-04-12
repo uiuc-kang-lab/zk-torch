@@ -13,6 +13,7 @@ use rand::{rngs::StdRng, SeedableRng};
 pub struct SumBasicBlock;
 impl BasicBlock for SumBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    assert!(inputs.len() == 1 && inputs[0].ndim() == 2);
     vec![arr0(inputs[0].iter().sum::<Fr>()).into_dyn()]
   }
   fn prove(

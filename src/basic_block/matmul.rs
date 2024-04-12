@@ -13,6 +13,7 @@ use rand::{rngs::StdRng, SeedableRng};
 pub struct MatMulBasicBlock;
 impl BasicBlock for MatMulBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    assert!(inputs.len() == 2 && inputs[0].ndim() == 2 && inputs[1].ndim() == 2 && inputs[0].shape()[1] == inputs[1].shape()[1]);
     let (a, b) = (
       inputs[0].view().into_dimensionality::<Ix2>().unwrap(),
       inputs[1].view().into_dimensionality::<Ix2>().unwrap(),

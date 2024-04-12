@@ -15,6 +15,7 @@ pub struct CQLinBasicBlock;
 // input is rows of A, model is rows of B, outputs are rows of C
 impl BasicBlock for CQLinBasicBlock {
   fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    assert!(model.ndim() == 2 && inputs.len() == 1 && inputs[0].ndim() == 2 && inputs[0].shape()[1] == model.shape()[0]);
     let (a, b) = (
       model.view().into_dimensionality::<Ix2>().unwrap(),
       inputs[0].view().into_dimensionality::<Ix2>().unwrap(),

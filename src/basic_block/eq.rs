@@ -15,6 +15,7 @@ impl BasicBlock for EqBasicBlock {
     _outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
+    assert!(inputs.len() == 2 && inputs[0].ndim() <= 1 && inputs[1].ndim() <= 1);
     let a = inputs[0].first().unwrap();
     let b = inputs[1].first().unwrap();
     // Blinding
