@@ -1,5 +1,4 @@
 use crate::basic_block::*;
-use crate::batched_basic_block::*;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ndarray::ArrayD;
 use rand::rngs::StdRng;
@@ -10,12 +9,12 @@ pub struct Node {
 }
 
 pub struct Graph {
-  pub basic_blocks: Vec<BatchedBasicBlock>,
+  pub basic_blocks: Vec<Box<dyn BasicBlock>>,
   pub nodes: Vec<Node>,
 }
 
 impl Graph {
-  pub fn run(&self, inputs: &Vec<&ArrayD<Fr>>, models: &Vec<&Vec<&ArrayD<Fr>>>) -> Vec<Vec<ArrayD<Fr>>> {
+  pub fn run(&self, inputs: &Vec<&ArrayD<Fr>>, models: &Vec<&ArrayD<Fr>>) -> Vec<Vec<ArrayD<Fr>>> {
     let mut outputs = vec![vec![]; self.nodes.len()];
     self.nodes.iter().enumerate().for_each(|(i, n)| {
       println!("running {i} {:?}", n.basic_block);
@@ -24,14 +23,14 @@ impl Graph {
     });
     return outputs;
   }
-  pub fn setup(&self, srs: &SRS, models: &Vec<&Vec<&ArrayD<Data>>>) -> Vec<(Vec<G1Projective>, Vec<G2Projective>)> {
-    self.basic_blocks.iter().zip(models.iter()).map(|(b, m)| b.setup(srs, m)).collect()
+  pub fn setup(&self, srs: &SRS, models: &Vec<&ArrayD<Data>>) -> Vec<(Vec<G1Projective>, Vec<G2Projective>)> {
+    self.basic_blocks.iter().zip(models.iter()).map(|(b, m)| b.setup(srs, *m)).collect()
   }
   pub fn prove(
     &mut self,
     srs: &SRS,
     setups: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>)>,
-    models: &Vec<&Vec<&ArrayD<Data>>>,
+    models: &Vec<&ArrayD<Data>>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&Vec<&ArrayD<Data>>>,
     rng: &mut StdRng,
@@ -49,7 +48,7 @@ impl Graph {
   pub fn verify(
     &self,
     srs: &SRS,
-    models: &Vec<&Vec<&ArrayD<DataEnc>>>,
+    models: &Vec<&ArrayD<DataEnc>>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&Vec<&ArrayD<DataEnc>>>,
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>)>,

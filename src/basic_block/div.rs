@@ -1,34 +1,13 @@
 use super::BasicBlock;
 use crate::util;
 use ark_bn254::Fr;
-
-pub struct DivConstBasicBlock {
-  pub c: usize,
-}
-impl BasicBlock for DivConstBasicBlock {
-  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
-    (vec![], vec![1])
-  }
-  fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
-    let mut r = vec![];
-    for x in inputs[0].iter() {
-      let mut x = util::fr_to_int(*x) as f32;
-      x /= self.c as f32;
-      let x = Fr::from(x.round() as i32);
-      r.push(x);
-    }
-    vec![r]
-  }
-}
+use ndarray::{arr1, ArrayD};
 
 pub struct DivScalarBasicBlock {
   pub output_SF: usize,
 }
 impl BasicBlock for DivScalarBasicBlock {
-  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
-    (vec![], vec![1])
-  }
-  fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     let SF = self.output_SF as i32;
     let mut div = vec![];
     let mut rem = vec![];
@@ -44,6 +23,6 @@ impl BasicBlock for DivScalarBasicBlock {
       div.push(Fr::from(z));
       rem.push(Fr::from(r));
     }
-    vec![div, rem]
+    vec![arr1(&div).into_dyn(), arr1(&rem).into_dyn()]
   }
 }

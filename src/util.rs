@@ -5,6 +5,7 @@ use ark_ec::{ScalarMul, VariableBaseMSM};
 use ark_ff::PrimeField;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::Zero;
+use ndarray::{concatenate, Array1, ArrayD, Axis, IxDyn};
 use rayon::prelude::*;
 
 fn bitreverse(mut n: u32, l: u64) -> u32 {
@@ -106,13 +107,10 @@ pub fn msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {
   return a_chunks.zip(b_chunks).map(|(x, y)| -> P { VariableBaseMSM::msm_unchecked(&x, &y) }).sum();
 }
 
-pub fn gen_cq_table(basic_blocks: Vec<&Box<dyn BasicBlock>>, offset: i32, size: usize) -> (Vec<Fr>, Vec<Fr>) {
-  let range: Vec<_> = (0..size).map(|i| Fr::from(i as u32) + Fr::from(offset)).collect();
-  let mut result = range.clone();
-  for basic_block in basic_blocks.iter() {
-    result = (**basic_block).run(&vec![], &vec![&result])[0].clone();
-  }
-  (range, result.clone())
+pub fn gen_cq_table(basic_block: &Box<dyn BasicBlock>, offset: i32, size: usize) -> ArrayD<Fr> {
+  let range = Array1::from_shape_fn(size, |i| Fr::from(i as u32) + Fr::from(offset)).into_dyn();
+  let result = &(**basic_block).run(&ArrayD::zeros(IxDyn(&[0])), &vec![&range])[0];
+  concatenate![Axis(0), range.view(), result.view()]
 }
 
 pub fn fr_to_int(x: Fr) -> i32 {

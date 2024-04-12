@@ -1,0 +1,181 @@
+#![allow(non_snake_case)]
+#![allow(non_upper_case_globals)]
+use super::{BasicBlock, Data, DataEnc, SRS};
+use crate::util::{self, calc_pow};
+use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_ec::pairing::Pairing;
+use ark_ff::Field;
+use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
+use ark_std::{ops::Mul, ops::Sub, One, UniformRand, Zero};
+use ndarray::{Array, ArrayD, Axis, IxDyn};
+use rand::{rngs::StdRng, SeedableRng};
+
+pub struct PermuteBasicBlock {
+  pub permutation: (Vec<usize>, Vec<usize>),
+}
+// Permute elements of a 2d matrix into another 2d matrix
+// LHS: inputs[0][i,j]  * alpha^(i+nj)
+// RHS: outputs[0][i,j] * alpha^(p[i]+p[j])
+// This is proven via a * inputs[0] * b = c * outputs[0] * d (for vectors a,b,c,d comprised of powers of alpha)
+impl BasicBlock for PermuteBasicBlock {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    let n = inputs[0].len_of(Axis(0));
+    vec![Array::from_shape_fn((self.permutation.0.len(), self.permutation.1.len()), |(i, j)| {
+      let s = self.permutation.0[i] + self.permutation.1[j];
+      inputs[0][[s % n, s / n]]
+    })
+    .into_dyn()]
+  }
+  fn prove(
+    &mut self,
+    srs: &SRS,
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
+    _model: &ArrayD<Data>,
+    inputs: &Vec<&ArrayD<Data>>,
+    outputs: &Vec<&ArrayD<Data>>,
+    rng: &mut StdRng,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>) {
+    let alpha = Fr::rand(rng);
+    let (input, output) = (inputs[0], outputs[0]);
+
+    // n rows, m columns in input
+    let n = input.len();
+    let m = input[0].raw.len();
+    let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
+    let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
+    // n2 rows, m2 columns in output
+    let n2 = self.permutation.0.len();
+    let m2 = self.permutation.1.len();
+    let domain_m2 = GeneralEvaluationDomain::<Fr>::new(m2).unwrap();
+
+    let alpha_pow = calc_pow(alpha, n * m);
+    let b: Vec<_> = (0..m).map(|i| alpha_pow[i * n]).collect();
+    let b = Data::new(srs, &b);
+    let d: Vec<_> = (0..m2).map(|i| alpha_pow[self.permutation.1[i]]).collect();
+    let d = Data::new(srs, &d);
+
+    let mut flat_L = vec![Fr::zero(); m];
+    let mut flat_L_r = Fr::zero();
+    for i in 0..n {
+      for j in 0..m {
+        flat_L[j] += input[i].raw[j] * alpha_pow[i];
+      }
+      flat_L_r += input[i].r * alpha_pow[i];
+    }
+    let mut flat_L = Data::new(srs, &flat_L);
+    flat_L.r = flat_L_r;
+
+    let mut flat_R = vec![Fr::zero(); m2];
+    let mut flat_R_r = Fr::zero();
+    for i in 0..n2 {
+      for j in 0..m2 {
+        flat_R[j] += output[i].raw[j] * alpha_pow[self.permutation.0[i]];
+      }
+      flat_R_r += output[i].r * alpha_pow[self.permutation.0[i]];
+    }
+    let mut flat_R = Data::new(srs, &flat_R);
+    flat_R.r = flat_R_r;
+
+    // Calculate Left
+    let left_raw: Vec<Fr> = (0..m).map(|i| flat_L.raw[i] * alpha_pow[i * n]).collect();
+    let left_poly = DensePolynomial {
+      coeffs: domain_m.ifft(&left_raw),
+    };
+    let left_x = util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs);
+    let left_Q_poly = flat_L.poly.mul(&b.poly).sub(&left_poly).divide_by_vanishing_poly(domain_m).unwrap().0;
+    let left_Q_x = util::msm::<G1Projective>(&srs.X1A, &left_Q_poly.coeffs);
+    let left_zero = srs.X1A[0] * (Fr::from(m as u32).inverse().unwrap() * left_raw.iter().sum::<Fr>());
+    let left_zero_div = util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs[1..]);
+
+    // Calculate Right
+    let right_raw: Vec<Fr> = (0..m2).map(|i| flat_R.raw[i] * alpha_pow[self.permutation.1[i]]).collect();
+    let right_poly = DensePolynomial {
+      coeffs: domain_m2.ifft(&right_raw),
+    };
+    let right_x = util::msm::<G1Projective>(&srs.X1A, &right_poly.coeffs);
+    let right_Q_poly = flat_R.poly.mul(&d.poly).sub(&right_poly).divide_by_vanishing_poly(domain_m2).unwrap().0;
+    let right_Q_x = util::msm::<G1Projective>(&srs.X1A, &right_Q_poly.coeffs);
+    let right_zero_div = util::msm::<G1Projective>(&srs.X1A, &right_poly.coeffs[1..]);
+
+    // Blinding
+    let mut rng2 = StdRng::from_entropy();
+    let r: Vec<_> = (0..7).map(|_| Fr::rand(&mut rng2)).collect();
+    let proof: Vec<G1Projective> = vec![left_x, left_Q_x, left_zero, left_zero_div, right_x, right_Q_x, right_zero_div];
+    let mut proof: Vec<G1Projective> = proof.iter().enumerate().map(|(i, x)| (*x) + srs.Y1P * r[i]).collect();
+    let mut corr = vec![
+      -(srs.X1P[m] - srs.X1P[0]) * r[1] + b.g1 * flat_L.r - srs.X1P[0] * r[0],
+      -srs.X1P[1] * r[3] + srs.X1P[0] * (r[0] - r[2]),
+      -(srs.X1P[m2] - srs.X1P[0]) * r[5] + d.g1 * flat_R.r - srs.X1P[0] * r[4],
+      -srs.X1P[1] * r[6] + srs.X1P[0] * (r[4] - r[2] * Fr::from(m as u32) * Fr::from(m2 as u32).inverse().unwrap()),
+    ];
+    proof.append(&mut corr);
+
+    return (proof, vec![]);
+  }
+  fn verify(
+    &self,
+    srs: &SRS,
+    _model: &ArrayD<DataEnc>,
+    inputs: &Vec<&ArrayD<DataEnc>>,
+    outputs: &Vec<&ArrayD<DataEnc>>,
+    proof: (&Vec<G1Affine>, &Vec<G2Affine>),
+    rng: &mut StdRng,
+  ) {
+    let alpha = Fr::rand(rng);
+    let (input, output) = (inputs[0], outputs[0]);
+
+    // n rows, m columns in input
+    let n = input.len();
+    let m = input[0].len;
+    let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
+    // n2 rows, m2 columns in output
+    let n2 = self.permutation.0.len();
+    let m2 = self.permutation.1.len();
+    let domain_m2 = GeneralEvaluationDomain::<Fr>::new(m2).unwrap();
+
+    let [left_x, left_Q_x, left_zero, left_zero_div, right_x, right_Q_x, right_zero_div, corr1, corr2, corr3, corr4] = proof.0[..] else {
+      panic!("Wrong proof format")
+    };
+
+    let alpha_pow = calc_pow(alpha, n * m);
+    let b: Vec<_> = (0..m).map(|i| alpha_pow[i * n]).collect();
+    let c: Vec<_> = (0..n2).map(|i| alpha_pow[self.permutation.0[i]]).collect();
+    let d: Vec<_> = (0..m2).map(|i| alpha_pow[self.permutation.1[i]]).collect();
+
+    let b_coeff = domain_m.ifft(&b);
+    let b_g2: G2Affine = util::msm::<G2Projective>(&srs.X2A, &b_coeff).into();
+    let d_coeff = domain_m2.ifft(&d);
+    let d_g2: G2Affine = util::msm::<G2Projective>(&srs.X2A, &d_coeff).into();
+
+    // Calculate flat_L
+    let temp: Vec<_> = (0..n).map(|i| input[i].g1).collect();
+    let flat_L_g1 = util::msm::<G1Projective>(&temp, &alpha_pow[..n]);
+
+    // Calculate flat_R
+    let temp: Vec<_> = (0..n2).map(|i| output[i].g1).collect();
+    let flat_R_g1 = util::msm::<G1Projective>(&temp, &c);
+
+    // Check left(x) (left = flat_L * b)
+    let lhs = Bn254::pairing(flat_L_g1, b_g2) - Bn254::pairing(left_x, srs.X2A[0]);
+    let rhs = Bn254::pairing(left_Q_x, srs.X2A[m] - srs.X2A[0]) + Bn254::pairing(corr1, srs.Y2A);
+    assert!(lhs == rhs);
+
+    // Check left(x) - left(0) is divisible by x
+    let lhs = Bn254::pairing(left_x - left_zero, srs.X2A[0]);
+    let rhs = Bn254::pairing(left_zero_div, srs.X2A[1]) + Bn254::pairing(corr2, srs.Y2A);
+    assert!(lhs == rhs);
+
+    // Check right(x) (right = flat_R * d)
+    let lhs = Bn254::pairing(flat_R_g1, d_g2) - Bn254::pairing(right_x, srs.X2A[0]);
+    let rhs = Bn254::pairing(right_Q_x, srs.X2A[m2] - srs.X2A[0]) + Bn254::pairing(corr3, srs.Y2A);
+    assert!(lhs == rhs);
+
+    // Assume right(0) = left(0)*m/m2 (which assumes ∑left=∑right)
+    let right_zero: G1Affine = (left_zero * (Fr::from(m as u32) * Fr::from(m2 as u32).inverse().unwrap())).into();
+
+    //check right(x) - right(0) is divisible by x
+    let lhs = Bn254::pairing(right_x - right_zero, srs.X2A[0]);
+    let rhs = Bn254::pairing(right_zero_div, srs.X2A[1]) + Bn254::pairing(corr4, srs.Y2A);
+    assert!(lhs == rhs);
+  }
+}

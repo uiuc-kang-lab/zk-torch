@@ -3,84 +3,69 @@
 use ark_bn254::Fr;
 use ark_bn254::{G1Affine, G2Affine};
 use basic_block::*;
-use batched_basic_block::*;
 use graph::{Graph, Node};
-use ndarray::{arr0, arr1, ArrayD, Axis};
+use ndarray::{arr0, arr1, ArrayD, Axis, IxDyn};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
 mod basic_block;
-mod batched_basic_block;
 mod graph;
 mod ptau;
 #[cfg(test)]
 mod tests;
 mod util;
 
-fn convert_to_data(srs: &SRS, a: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
-  a.iter()
-    .map(|x| {
-      if x.ndim() == 1 {
-        arr0(Data::new(srs, &(*x).clone().into_owned().into_raw_vec())).into_dyn()
-      } else {
-        x.map_axis(Axis(x.ndim() - 2), |y| Data::new(srs, &y.into_owned().into_raw_vec()))
-      }
-    })
-    .collect()
+fn convert_to_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
+  if a.ndim() == 0 {
+    return arr0(Data::new(srs, a.view().as_slice().unwrap())).into_dyn();
+  }
+  a.map_axis(Axis(a.ndim() - 1), |r| Data::new(srs, r.as_slice().unwrap()))
 }
 
 fn main() {
   let srs = &ptau::load_file("challenge", 7);
   let mut graph = Graph {
-    basic_blocks: vec![
-      BatchedBasicBlock {
-        basic_block: Box::new(CQLinBasicBlock),
-      },
-      BatchedBasicBlock {
-        basic_block: Box::new(ReLUBasicBlock),
-      },
-      BatchedBasicBlock {
-        basic_block: Box::new(CQ2BasicBlock { table_dict: HashMap::new() }),
-      },
-    ],
-    nodes: vec![
-      Node {
-        basic_block: 0,
-        inputs: vec![(-1, 0)],
-      },
-      Node {
-        basic_block: 1,
-        inputs: vec![(0, 0)],
-      },
-      Node {
-        basic_block: 2,
-        inputs: vec![(0, 0), (1, 0)],
-      },
-    ],
+    basic_blocks: vec![Box::new(PermuteBasicBlock {
+      permutation: (
+        vec![0],
+        (0..1 << 6)
+          .map(|i| {
+            let (x, y) = (i % (1 << 4), i / (1 << 4));
+            x * (1 << 2) + y
+          })
+          .collect::<Vec<_>>(),
+      ),
+    })],
+    nodes: vec![Node {
+      basic_block: 0,
+      inputs: vec![(-1, 0)],
+    }],
   };
 
   const m: usize = 1 << 4;
   const n: usize = 1 << 2;
-  let matrix: Vec<_> = (0..n * m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-2..2))).collect();
-  let matrix = ArrayD::from_shape_vec(vec![m, n], matrix).unwrap();
-  let matrix = vec![&matrix];
-  let input: Vec<_> = (0..n).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
-  let input = ArrayD::from_shape_vec(vec![n, 1], input).unwrap();
+  let input1: Vec<_> = (0..n * m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
+  let input1 = ArrayD::from_shape_vec(vec![n, m], input1).unwrap();
+  //let input2: Vec<_> = (0..n * m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
+  //let input2 = ArrayD::from_shape_vec(vec![n, m], input2).unwrap();
+  let empty = ArrayD::zeros(IxDyn(&[0]));
+
+  //let input1: Vec<_> = (0..n).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
+  //let input1 = ArrayD::from_shape_vec(vec![n], input1).unwrap();
+  //let input2: Vec<_> = (0..n).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
+  //let input2 = ArrayD::from_shape_vec(vec![n], input2).unwrap();
 
   //Run:
-  let inputs = vec![&input];
-  let empty = vec![];
-  let (id, relu_cq_table) = util::gen_cq_table(vec![&graph.basic_blocks[1].basic_block], -(1 << 5), 1 << 6);
-  let (id, relu_cq_table) = (arr1(&id).into_dyn(), arr1(&relu_cq_table).into_dyn());
-  let relu_cq_table = vec![&id, &relu_cq_table];
-  let models = vec![&matrix, &empty, &relu_cq_table];
+  let inputs = vec![&input1]; //, &input2
+  let models = vec![&empty];
   let outputs = graph.run(&inputs, &models);
+  println!("{:?}", inputs[0].map(|x| util::fr_to_int(*x)));
+  println!("{:?}", outputs[0][0].map(|x| util::fr_to_int(*x)));
   let outputs: Vec<Vec<&ArrayD<Fr>>> = outputs.iter().map(|output| output.iter().map(|x| x).collect()).collect();
 
   //Setup:
-  let models: Vec<Vec<ArrayD<Data>>> = models.iter().map(|model| convert_to_data(srs, model)).collect();
-  let models: Vec<Vec<&ArrayD<Data>>> = models.iter().map(|model| model.iter().map(|x| x).collect()).collect();
-  let models: Vec<&Vec<&ArrayD<Data>>> = models.iter().map(|x| x).collect();
+  let models: Vec<ArrayD<Data>> = models.iter().map(|model| convert_to_data(srs, model)).collect();
+  let models: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
   let setups = graph.setup(srs, &models);
   //Converting to affine
   let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>)> =
@@ -88,10 +73,10 @@ fn main() {
   let setups = setups.iter().map(|x| (&x.0, &x.1)).collect();
 
   //Prove:
-  let inputs: Vec<ArrayD<Data>> = convert_to_data(srs, &inputs);
+  let inputs: Vec<ArrayD<Data>> = inputs.iter().map(|input| convert_to_data(srs, input)).collect();
   let inputs: Vec<&ArrayD<Data>> = inputs.iter().map(|input| input).collect();
-  let outputs: Vec<Vec<ArrayD<Data>>> = outputs.iter().map(|output| convert_to_data(srs, output)).collect();
-  let outputs: Vec<Vec<&ArrayD<Data>>> = outputs.iter().map(|output| output.iter().map(|x| x).collect()).collect();
+  let outputs: Vec<Vec<ArrayD<Data>>> = outputs.iter().map(|outputs| outputs.iter().map(|output| convert_to_data(srs, output)).collect()).collect();
+  let outputs: Vec<Vec<&ArrayD<Data>>> = outputs.iter().map(|outputs| outputs.iter().map(|x| x).collect()).collect();
   let outputs: Vec<&Vec<&ArrayD<Data>>> = outputs.iter().map(|x| x).collect();
   let mut rng = StdRng::from_entropy();
   let mut rng2 = rng.clone();
@@ -102,9 +87,8 @@ fn main() {
   let proofs = proofs.iter().map(|x| (&x.0, &x.1)).collect();
 
   //Verify:
-  let models: Vec<Vec<ArrayD<DataEnc>>> = models.iter().map(|model| (**model).iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect()).collect();
-  let models: Vec<Vec<&ArrayD<DataEnc>>> = models.iter().map(|model| model.iter().map(|x| x).collect()).collect();
-  let models: Vec<&Vec<&ArrayD<DataEnc>>> = models.iter().map(|x| x).collect();
+  let models: Vec<ArrayD<DataEnc>> = models.iter().map(|model| (**model).map(|x| DataEnc::new(srs, x))).collect();
+  let models: Vec<&ArrayD<DataEnc>> = models.iter().map(|model| model).collect();
   let inputs: Vec<ArrayD<DataEnc>> = inputs.iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect();
   let inputs: Vec<&ArrayD<DataEnc>> = inputs.iter().map(|input| input).collect();
   let outputs: Vec<Vec<ArrayD<DataEnc>>> =

@@ -1,15 +1,13 @@
 use super::BasicBlock;
 use ark_bn254::Fr;
+use ndarray::{arr1, ArrayD};
 
 pub struct RoPEBasicBlock {
   pub token_i: usize,
   pub output_SF: usize,
 }
 impl BasicBlock for RoPEBasicBlock {
-  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
-    (vec![], vec![])
-  }
-  fn run(&self, _model: &Vec<&Vec<Fr>>, _inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     let mut r1 = vec![];
     let mut r2 = vec![];
     for i in 0..64 {
@@ -23,6 +21,6 @@ impl BasicBlock for RoPEBasicBlock {
       r1.push(a);
       r2.push(b);
     }
-    vec![r1, r2]
+    vec![arr1(&r1).into_dyn(), arr1(&r2).into_dyn()]
   }
 }
