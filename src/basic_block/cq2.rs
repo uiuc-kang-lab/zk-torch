@@ -59,7 +59,6 @@ impl BasicBlock for CQ2BasicBlock {
     let N = model[0].raw.len();
     let inputs = vec![inputs[0].first().unwrap(), inputs[1].first().unwrap()];
     let n = inputs[0].raw.len();
-    println!("{N} {n}");
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let alpha = Fr::rand(rng);
     let agg_input: Vec<_> = inputs[0].raw.iter().zip(inputs[1].raw.iter()).map(|(x, y)| *x + *y * alpha).collect();

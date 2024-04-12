@@ -25,27 +25,40 @@ fn convert_to_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
 fn main() {
   let srs = &ptau::load_file("challenge14", 14);
   let mut graph = Graph {
-    basic_blocks: vec![Box::new(CQLinBasicBlock {})],
-    nodes: vec![Node {
-      basic_block: 0,
-      inputs: vec![(-1, 0)],
-    }],
+    basic_blocks: vec![
+      Box::new(CQLinBasicBlock),
+      Box::new(ReLUBasicBlock { input_SF: 1, output_SF: 1 }),
+      Box::new(CQ2BasicBlock { table_dict: HashMap::new() }),
+    ],
+    nodes: vec![
+      Node {
+        basic_block: 0,
+        inputs: vec![(-1, 0)],
+      },
+      Node {
+        basic_block: 1,
+        inputs: vec![(0, 0)],
+      },
+      Node {
+        basic_block: 2,
+        inputs: vec![(0, 0), (1, 0)],
+      },
+    ],
   };
 
-  const m: usize = 1 << 1;
+  const m: usize = 1 << 4;
   const n: usize = 1 << 2;
-  const k: usize = 1 << 3;
-  let input1: Vec<_> = (0..n * m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
-  let input1 = ArrayD::from_shape_vec(vec![n, m], input1).unwrap();
-  let model: Vec<_> = (0..m * k).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
-  let model = ArrayD::from_shape_vec(vec![m, k], model).unwrap();
+  let matrix: Vec<_> = (0..n * m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-2..2))).collect();
+  let matrix = ArrayD::from_shape_vec(vec![n, m], matrix).unwrap();
+  let input: Vec<_> = (0..n).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
+  let input = ArrayD::from_shape_vec(vec![1, n], input).unwrap();
 
   //Run:
-  let inputs = vec![&input1]; //, &input2
-  let models = vec![&model];
+  let inputs = vec![&input];
+  let empty = ArrayD::zeros(IxDyn(&[0]));
+  let relu_cq_table = util::gen_cq_table(&graph.basic_blocks[1], -(1 << 5), 1 << 6);
+  let models = vec![&matrix, &empty, &relu_cq_table];
   let outputs = graph.run(&inputs, &models);
-  println!("{:?}", inputs.iter().map(|input| input.map(|x| util::fr_to_int(*x))).collect::<Vec<_>>());
-  println!("{:?}", outputs[0][0].map(|x| util::fr_to_int(*x)));
   let outputs: Vec<Vec<&ArrayD<Fr>>> = outputs.iter().map(|output| output.iter().map(|x| x).collect()).collect();
 
   //Setup:
