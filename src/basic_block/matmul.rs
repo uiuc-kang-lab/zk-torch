@@ -7,43 +7,30 @@ use ark_ec::pairing::Pairing;
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{ops::Mul, ops::Sub, One, UniformRand, Zero};
+use ndarray::{ArrayD, Ix2};
 use rand::{rngs::StdRng, SeedableRng};
 
-pub struct MatMulBasicBlock {
-  pub l: usize,
-}
-// inputs are rows to A and columns of B, outputs are rows of C
+pub struct MatMulBasicBlock;
 impl BasicBlock for MatMulBasicBlock {
-  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
-    (vec![], vec![2, 2])
-  }
-  fn run(&self, _model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
-    let l = self.l;
-    let m = inputs[0].len();
-    let n = inputs.len() - l;
-    let mut r = vec![vec![Fr::zero(); n]; l];
-    for i in 0..l {
-      for j in 0..n {
-        for k in 0..m {
-          r[i][j] += inputs[i][k] * inputs[l + j][k];
-        }
-      }
-    }
-    r
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    let (a, b) = (
+      inputs[0].view().into_dimensionality::<Ix2>().unwrap(),
+      inputs[1].view().into_dimensionality::<Ix2>().unwrap(),
+    );
+    vec![a.dot(&b.t()).into_dyn()]
   }
   fn prove(
     &mut self,
     srs: &SRS,
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
-    _model: &Vec<&Data>,
-    inputs: &Vec<&Data>,
-    outputs: &Vec<&Data>,
+    _model: &ArrayD<Data>,
+    inputs: &Vec<&ArrayD<Data>>,
+    outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
-    let l = self.l;
-    let m = inputs[0].raw.len();
-    let n = inputs.len() - l;
-    let domain_l = GeneralEvaluationDomain::<Fr>::new(l).unwrap();
+    let l = inputs[0].len();
+    let m = inputs[0][0].raw.len();
+    let n = inputs[1].len();
     let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let alpha = Fr::rand(rng);
@@ -58,9 +45,9 @@ impl BasicBlock for MatMulBasicBlock {
     let mut flat_A_r = Fr::zero();
     for i in 0..l {
       for j in 0..m {
-        flat_A[j] += inputs[i].raw[j] * alpha_pow.raw[i];
+        flat_A[j] += inputs[0][i].raw[j] * alpha_pow.raw[i];
       }
-      flat_A_r += inputs[i].r * alpha_pow.raw[i];
+      flat_A_r += inputs[0][i].r * alpha_pow.raw[i];
     }
     let mut flat_A = Data::new(srs, &flat_A);
     flat_A.r = flat_A_r;
@@ -69,9 +56,9 @@ impl BasicBlock for MatMulBasicBlock {
     let mut flat_B_r = Fr::zero();
     for i in 0..n {
       for j in 0..m {
-        flat_B[j] += inputs[l + i].raw[j] * beta_pow.raw[i];
+        flat_B[j] += inputs[1][i].raw[j] * beta_pow.raw[i];
       }
-      flat_B_r += inputs[l + i].r * beta_pow.raw[i];
+      flat_B_r += inputs[1][i].r * beta_pow.raw[i];
     }
     let mut flat_B = Data::new(srs, &flat_B);
     flat_B.r = flat_B_r;
@@ -80,9 +67,9 @@ impl BasicBlock for MatMulBasicBlock {
     let mut flat_C_r = Fr::zero();
     for i in 0..l {
       for j in 0..n {
-        flat_C[j] += outputs[i].raw[j] * alpha_pow.raw[i];
+        flat_C[j] += outputs[0][i].raw[j] * alpha_pow.raw[i];
       }
-      flat_C_r += outputs[i].r * alpha_pow.raw[i];
+      flat_C_r += outputs[0][i].r * alpha_pow.raw[i];
     }
     let mut flat_C = Data::new(srs, &flat_C);
     flat_C.r = flat_C_r;
@@ -127,15 +114,15 @@ impl BasicBlock for MatMulBasicBlock {
   fn verify(
     &self,
     srs: &SRS,
-    model: &Vec<&DataEnc>,
-    inputs: &Vec<&DataEnc>,
-    outputs: &Vec<&DataEnc>,
+    _model: &ArrayD<DataEnc>,
+    inputs: &Vec<&ArrayD<DataEnc>>,
+    outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
   ) {
-    let l = self.l;
-    let m = inputs[0].len;
-    let n = inputs.len() - l;
+    let l = inputs[0].len();
+    let m = inputs[0][0].len;
+    let n = inputs[1].len();
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let [left_x, left_Q_x, left_zero, left_zero_div, right_x, right_Q_x, right_zero_div, corr1, corr2, corr3, corr4] = proof.0[..] else {
       panic!("Wrong proof format")
@@ -151,15 +138,15 @@ impl BasicBlock for MatMulBasicBlock {
     let beta_pow_g2: G2Affine = util::msm::<G2Projective>(&srs.X2A, &beta_pow_coeff).into();
 
     // Calculate flat_A
-    let temp: Vec<_> = (0..l).map(|i| inputs[i].g1).collect();
+    let temp: Vec<_> = (0..l).map(|i| inputs[0][i].g1).collect();
     let flat_A_g1 = util::msm::<G1Projective>(&temp, &alpha_pow);
 
     // Calculate flat_B
-    let temp: Vec<_> = (0..n).map(|i| inputs[l + i].g1).collect();
+    let temp: Vec<_> = (0..n).map(|i| inputs[1][i].g1).collect();
     let flat_B_g1 = util::msm::<G1Projective>(&temp, &beta_pow);
 
     // Calculate flat_C
-    let temp: Vec<_> = (0..l).map(|i| outputs[i].g1).collect();
+    let temp: Vec<_> = (0..l).map(|i| outputs[0][i].g1).collect();
     let flat_C_g1 = util::msm::<G1Projective>(&temp, &alpha_pow);
 
     // Check left(x) (left_i = flat_A_i * flat_B_i)

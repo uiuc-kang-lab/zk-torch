@@ -10,6 +10,7 @@ use ark_std::{
   ops::{Mul, Sub},
   One, UniformRand, Zero,
 };
+use ndarray::ArrayD;
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -18,10 +19,7 @@ pub struct CQ2BasicBlock {
   pub table_dict: HashMap<(Fr, Fr), usize>,
 }
 impl BasicBlock for CQ2BasicBlock {
-  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
-    (vec![1, 1], vec![1, 1])
-  }
-  fn setup(&self, srs: &SRS, model: &Vec<&Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
+  fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
     let N = model[0].raw.len();
     let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
     let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
@@ -53,16 +51,18 @@ impl BasicBlock for CQ2BasicBlock {
     &mut self,
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>),
-    model: &Vec<&Data>,
-    inputs: &Vec<&Data>,
-    _outputs: &Vec<&Data>,
+    model: &ArrayD<Data>,
+    inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     let N = model[0].raw.len();
+    let inputs = vec![inputs[0].first().unwrap(), inputs[1].first().unwrap()];
     let n = inputs[0].raw.len();
+    println!("{N} {n}");
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let alpha = Fr::rand(rng);
-    let agg_input = inputs[0].raw.iter().zip(inputs[1].raw.iter()).map(|(x, y)| *x + *y * alpha).collect();
+    let agg_input: Vec<_> = inputs[0].raw.iter().zip(inputs[1].raw.iter()).map(|(x, y)| *x + *y * alpha).collect();
     let mut agg_input = Data::new(srs, &agg_input); //Unnecessary msm
     agg_input.r = inputs[0].r + inputs[1].r * alpha;
     let agg_model_g1 = model[0].g1 + model[1].g1 * alpha;
@@ -106,11 +106,11 @@ impl BasicBlock for CQ2BasicBlock {
       .collect();
     let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = A_i.iter().map(|(i, y)| (L_i_x_1[*i], *y)).unzip();
     let A_x = util::msm::<G1Projective>(&temp, &temp2);
-    let temp: Vec<G1Projective> = A_i.iter().map(|(i, y)| Q_i_x_1_A[*i] + Q_i_x_1_B[*i] * alpha).collect();
+    let temp: Vec<G1Projective> = A_i.iter().map(|(i, _)| Q_i_x_1_A[*i] + Q_i_x_1_B[*i] * alpha).collect();
     let temp: Vec<G1Affine> = temp.iter().map(|x| (*x).into()).collect();
     let A_Q_x = util::msm::<G1Projective>(&temp, &temp2);
     let A_zero = srs.X1P[0] * (Fr::from(N as u32).inverse().unwrap() * A_i.iter().map(|(_, y)| *y).sum::<Fr>());
-    let temp: Vec<G1Affine> = A_i.iter().map(|(i, y)| L_i_0_x_1[*i]).collect();
+    let temp: Vec<G1Affine> = A_i.iter().map(|(i, _)| L_i_0_x_1[*i]).collect();
     let A_zero_div = util::msm::<G1Projective>(&temp, &temp2);
 
     // Calculate B
@@ -152,16 +152,16 @@ impl BasicBlock for CQ2BasicBlock {
   fn verify(
     &self,
     srs: &SRS,
-    model: &Vec<&DataEnc>,
-    inputs: &Vec<&DataEnc>,
-    _outputs: &Vec<&DataEnc>,
+    model: &ArrayD<DataEnc>,
+    inputs: &Vec<&ArrayD<DataEnc>>,
+    _outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
   ) {
+    let inputs = vec![inputs[0].first().unwrap(), inputs[1].first().unwrap()];
     let N = model[0].len;
     let n = inputs[0].len;
     let alpha = Fr::rand(rng);
-    let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let [m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC, C1, C2, C3, C4, C5] = proof.0[..] else {
       panic!("Wrong proof format")
     };

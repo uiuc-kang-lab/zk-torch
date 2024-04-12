@@ -7,32 +7,22 @@ use ark_ec::pairing::Pairing;
 use ark_ff::Field;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain, Polynomial};
 use ark_std::{One, UniformRand, Zero};
-use ndarray::ArrayD;
+use ndarray::{ArrayD, Ix2};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 
 pub struct CQLinBasicBlock;
 // input is rows of A, model is rows of B, outputs are rows of C
 impl BasicBlock for CQLinBasicBlock {
-  fn get_dims(&self) -> (Vec<usize>, Vec<usize>) {
-    (vec![2], vec![2])
+  fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    let (a, b) = (
+      model.view().into_dimensionality::<Ix2>().unwrap(),
+      inputs[0].view().into_dimensionality::<Ix2>().unwrap(),
+    );
+    //vec![a.dot(&b).into_dyn()]
+    vec![b.dot(&a).into_dyn()]
   }
-  fn run(&self, model: &Vec<&Vec<Fr>>, inputs: &Vec<&Vec<Fr>>) -> Vec<Vec<Fr>> {
-    assert_eq!(model.len(), inputs[0].len());
-    let l = inputs.len();
-    let m = model.len();
-    let n = model[0].len();
-    let mut r = vec![vec![Fr::zero(); n]; l];
-    for i in 0..l {
-      for j in 0..n {
-        for k in 0..m {
-          r[i][j] += inputs[i][k] * model[k][j];
-        }
-      }
-    }
-    r
-  }
-  fn setup(&self, srs: &SRS, model: &Vec<&Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
+  fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
     let m = model.len();
     let n = model[0].raw.len();
     let N = srs.X2P.len() - 1;
@@ -115,18 +105,16 @@ impl BasicBlock for CQLinBasicBlock {
     &mut self,
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>),
-    model: &Vec<&Data>,
-    inputs: &Vec<&Data>,
-    outputs: &Vec<&Data>,
+    model: &ArrayD<Data>,
+    inputs: &Vec<&ArrayD<Data>>,
+    outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
-    let l = inputs.len();
+    let l = inputs[0].len();
     let m = model.len();
     let n = model[0].raw.len();
     let N = srs.X2P.len() - 1;
-    let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
-    let domain_mn = GeneralEvaluationDomain::<Fr>::new(m * n).unwrap();
     let alpha = Fr::rand(rng);
 
     let alpha_pow = calc_pow(alpha, l);
@@ -136,9 +124,9 @@ impl BasicBlock for CQLinBasicBlock {
     let mut flat_A_r = Fr::zero();
     for i in 0..l {
       for j in 0..m {
-        flat_A[j] += inputs[i].raw[j] * alpha_pow.raw[i];
+        flat_A[j] += inputs[0][i].raw[j] * alpha_pow.raw[i];
       }
-      flat_A_r += inputs[i].r * alpha_pow.raw[i];
+      flat_A_r += inputs[0][i].r * alpha_pow.raw[i];
     }
     let mut flat_A = Data::new(srs, &flat_A);
     flat_A.r = flat_A_r;
@@ -147,9 +135,9 @@ impl BasicBlock for CQLinBasicBlock {
     let mut flat_C_r = Fr::zero();
     for i in 0..l {
       for j in 0..n {
-        flat_C[j] += outputs[i].raw[j] * alpha_pow.raw[i];
+        flat_C[j] += outputs[0][i].raw[j] * alpha_pow.raw[i];
       }
-      flat_C_r += outputs[i].r * alpha_pow.raw[i];
+      flat_C_r += outputs[0][i].r * alpha_pow.raw[i];
     }
     let mut flat_C = Data::new(srs, &flat_C);
     flat_C.r = flat_C_r;
@@ -160,7 +148,6 @@ impl BasicBlock for CQLinBasicBlock {
     let P_R = &setup.0[3 * m..4 * m];
     let L_V_i_x_n = &setup.0[4 * m..5 * m];
     let L_V_i_x = &setup.0[5 * m..6 * m];
-    let L_H_i_x = &setup.0[6 * m..];
 
     let R_x = util::msm::<G1Projective>(R, &flat_A.raw).into();
     let Q_x = util::msm::<G1Projective>(Q, &flat_A.raw).into();
@@ -207,13 +194,13 @@ impl BasicBlock for CQLinBasicBlock {
   fn verify(
     &self,
     srs: &SRS,
-    model: &Vec<&DataEnc>,
-    inputs: &Vec<&DataEnc>,
-    outputs: &Vec<&DataEnc>,
+    model: &ArrayD<DataEnc>,
+    inputs: &Vec<&ArrayD<DataEnc>>,
+    outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
   ) {
-    let l = inputs.len();
+    let l = inputs[0].len();
     let m = model.len();
     let n = model[0].len;
     let N = srs.X2P.len() - 1;
@@ -228,11 +215,11 @@ impl BasicBlock for CQLinBasicBlock {
     let alpha_pow = calc_pow(alpha, l);
 
     // Calculate flat_A
-    let temp: Vec<_> = (0..l).map(|i| inputs[i].g1).collect();
+    let temp: Vec<_> = (0..l).map(|i| inputs[0][i].g1).collect();
     let flat_A_g1 = util::msm::<G1Projective>(&temp, &alpha_pow);
 
     // Calculate flat_C
-    let temp: Vec<_> = (0..l).map(|i| outputs[i].g1).collect();
+    let temp: Vec<_> = (0..l).map(|i| outputs[0][i].g1).collect();
     let flat_C_g1 = util::msm::<G1Projective>(&temp, &alpha_pow);
 
     // Check A(x) M(x) = Z(X) Q(X) + R(X)

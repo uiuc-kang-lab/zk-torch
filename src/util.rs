@@ -110,7 +110,9 @@ pub fn msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {
 pub fn gen_cq_table(basic_block: &Box<dyn BasicBlock>, offset: i32, size: usize) -> ArrayD<Fr> {
   let range = Array1::from_shape_fn(size, |i| Fr::from(i as u32) + Fr::from(offset)).into_dyn();
   let result = &(**basic_block).run(&ArrayD::zeros(IxDyn(&[0])), &vec![&range])[0];
-  concatenate![Axis(0), range.view(), result.view()]
+  let range = range.view().into_shape(IxDyn(&[1, size])).unwrap();
+  let result = result.view().into_shape(IxDyn(&[1, size])).unwrap();
+  concatenate(Axis(0), &[range, result]).unwrap()
 }
 
 pub fn fr_to_int(x: Fr) -> i32 {

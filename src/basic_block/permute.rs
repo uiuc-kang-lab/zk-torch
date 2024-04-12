@@ -41,7 +41,6 @@ impl BasicBlock for PermuteBasicBlock {
     // n rows, m columns in input
     let n = input.len();
     let m = input[0].raw.len();
-    let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
     // n2 rows, m2 columns in output
     let n2 = self.permutation.0.len();
