@@ -1,11 +1,11 @@
 #![allow(dead_code)]
-use crate::BasicBlock;
+use crate::{BasicBlock, Data, SRS};
 use ark_bn254::Fr;
 use ark_ec::{ScalarMul, VariableBaseMSM};
 use ark_ff::PrimeField;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::Zero;
-use ndarray::{concatenate, Array1, ArrayD, Axis, IxDyn};
+use ndarray::{arr0, concatenate, Array1, ArrayD, Axis, IxDyn};
 use rayon::prelude::*;
 
 fn bitreverse(mut n: u32, l: u64) -> u32 {
@@ -130,4 +130,11 @@ pub fn calc_pow(alpha: Fr, n: usize) -> Vec<Fr> {
     pow[i + 1] = pow[i] * alpha;
   }
   pow
+}
+
+pub fn convert_to_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
+  if a.ndim() == 0 {
+    return arr0(Data::new(srs, a.view().as_slice().unwrap())).into_dyn();
+  }
+  a.map_axis(Axis(a.ndim() - 1), |r| Data::new(srs, r.as_slice().unwrap()))
 }

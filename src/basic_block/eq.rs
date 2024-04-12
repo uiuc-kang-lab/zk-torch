@@ -15,8 +15,10 @@ impl BasicBlock for EqBasicBlock {
     _outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
+    let a = inputs[0].first().unwrap();
+    let b = inputs[1].first().unwrap();
     // Blinding
-    let C = srs.X1P[0] * (inputs[0][0].r - inputs[1][0].r);
+    let C = srs.X1P[0] * (a.r - b.r);
     (vec![C], Vec::new())
   }
   fn verify(
@@ -28,9 +30,11 @@ impl BasicBlock for EqBasicBlock {
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
   ) {
+    let a = inputs[0].first().unwrap();
+    let b = inputs[1].first().unwrap();
     // Verify f(x)+g(x)=h(x)
-    let lhs = Bn254::pairing(inputs[0][0].g1, srs.X2A[0]);
-    let rhs = Bn254::pairing(inputs[1][0].g1, srs.X2A[0]) + Bn254::pairing(proof.0[0], srs.Y2A);
+    let lhs = Bn254::pairing(a.g1, srs.X2A[0]);
+    let rhs = Bn254::pairing(b.g1, srs.X2A[0]) + Bn254::pairing(proof.0[0], srs.Y2A);
     assert!(lhs == rhs);
   }
 }

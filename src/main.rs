@@ -4,23 +4,17 @@ use ark_bn254::Fr;
 use ark_bn254::{G1Affine, G2Affine};
 use basic_block::*;
 use graph::{Graph, Node};
-use ndarray::{arr0, arr1, ArrayD, Axis, IxDyn};
+use ndarray::{ArrayD, IxDyn};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
+use util::convert_to_data;
 mod basic_block;
 mod graph;
 mod ptau;
 #[cfg(test)]
 mod tests;
 mod util;
-
-fn convert_to_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
-  if a.ndim() == 0 {
-    return arr0(Data::new(srs, a.view().as_slice().unwrap())).into_dyn();
-  }
-  a.map_axis(Axis(a.ndim() - 1), |r| Data::new(srs, r.as_slice().unwrap()))
-}
 
 fn main() {
   let srs = &ptau::load_file("challenge14", 14);
