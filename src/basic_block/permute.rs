@@ -14,9 +14,12 @@ pub struct PermuteBasicBlock {
   pub permutation: (Vec<usize>, Vec<usize>),
 }
 // Permute elements of a 2d matrix into another 2d matrix
-// LHS: inputs[0][i,j]  * alpha^(i+nj)
-// RHS: outputs[0][i,j] * alpha^(p[i]+p[j])
-// This is proven via a * inputs[0] * b = c * outputs[0] * d (for vectors a,b,c,d comprised of powers of alpha)
+// This is proven via this equation:
+// [alpha^0,alpha^1,alpha^2,...] A [alpha^0,alpha^n,alpha^(2n),...]^T
+//                                =
+// [alpha^(p_0[0]),alpha^(p_0[1]),alpha^(p_0[2]),...] B [alpha^(p_1[0]),alpha^(p_1[1]),alpha^(p_1[2]),...]^T
+// Where A is in the input matrix, B is the output matrix, and p is the permutation
+// In order to do a matrix transpose, we set p_0[i]=ni and p_1[i]=i
 impl BasicBlock for PermuteBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1 && inputs[0].ndim() == 2);

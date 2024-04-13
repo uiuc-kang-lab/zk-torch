@@ -17,7 +17,7 @@ mod tests;
 mod util;
 
 fn main() {
-  let srs = &ptau::load_file("challenge14", 14);
+  let srs = &ptau::load_file("challenge", 7);
   let mut graph = Graph {
     basic_blocks: vec![
       Box::new(CQLinBasicBlock),

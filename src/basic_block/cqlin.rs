@@ -20,7 +20,6 @@ impl BasicBlock for CQLinBasicBlock {
       model.view().into_dimensionality::<Ix2>().unwrap(),
       inputs[0].view().into_dimensionality::<Ix2>().unwrap(),
     );
-    //vec![a.dot(&b).into_dyn()]
     vec![b.dot(&a).into_dyn()]
   }
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
