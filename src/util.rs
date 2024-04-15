@@ -1,12 +1,13 @@
 #![allow(dead_code)]
 use crate::{BasicBlock, Data, SRS};
-use ark_bn254::Fr;
+use ark_bn254::{Fr, G1Affine, G2Affine};
 use ark_ec::{ScalarMul, VariableBaseMSM};
 use ark_ff::PrimeField;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
-use ark_std::Zero;
+use ark_std::{UniformRand, Zero};
 use ndarray::{arr0, concatenate, Array1, ArrayD, Axis, IxDyn};
 use rayon::prelude::*;
+use std::collections::HashMap;
 
 fn bitreverse(mut n: u32, l: u64) -> u32 {
   let mut r = 0;
@@ -137,4 +138,29 @@ pub fn convert_to_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
     return arr0(Data::new(srs, a.view().as_slice().unwrap())).into_dyn();
   }
   a.map_axis(Axis(a.ndim() - 1), |r| Data::new(srs, r.as_slice().unwrap()))
+}
+
+pub fn combine_pairing_checks(checks: &Vec<&Vec<(G1Affine, G2Affine, bool)>>) -> (Vec<G1Affine>, Vec<G2Affine>) {
+  let mut a: HashMap<G1Affine, G2Affine> = HashMap::new();
+  let mut b: HashMap<G2Affine, G1Affine> = HashMap::new();
+  let mut rng = ark_std::test_rng();
+  let gamma = Fr::rand(&mut rng);
+  let mut curr = gamma;
+  for eqn in checks.iter() {
+    for pairing in eqn.iter() {
+      if pairing.2 {
+        let x: G2Affine = (pairing.1 * curr).into();
+        a.entry(pairing.0).and_modify(|y| *y = (*y + x).into()).or_insert(x);
+      } else {
+        let x: G1Affine = (pairing.0 * curr).into();
+        b.entry(pairing.1).and_modify(|y| *y = (*y + x).into()).or_insert(x);
+      }
+    }
+    curr *= gamma;
+  }
+  let mut a: (Vec<G1Affine>, Vec<G2Affine>) = a.iter().unzip();
+  let mut b: (Vec<G2Affine>, Vec<G1Affine>) = b.iter().unzip();
+  a.0.append(&mut b.1);
+  a.1.append(&mut b.0);
+  a
 }
