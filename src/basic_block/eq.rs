@@ -5,7 +5,12 @@ use ndarray::ArrayD;
 use rand::rngs::StdRng;
 
 pub struct EqBasicBlock;
+
 impl BasicBlock for EqBasicBlock {
+  fn name(&self) -> String {
+    "Eq".to_string()
+  }
+
   fn prove(
     &mut self,
     srs: &SRS,
@@ -22,6 +27,7 @@ impl BasicBlock for EqBasicBlock {
     let C = srs.X1P[0] * (a.r - b.r);
     (vec![C], Vec::new())
   }
+
   fn verify(
     &self,
     srs: &SRS,

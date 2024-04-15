@@ -5,11 +5,19 @@ use ndarray::{azip, ArrayD, IxDyn};
 use rand::rngs::StdRng;
 
 pub struct AddBasicBlock;
+
 impl BasicBlock for AddBasicBlock {
+  fn name(&self) -> String {
+    "Add".to_string()
+  }
+
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 2 && inputs[0].ndim() <= 1 && inputs[1].ndim() <= 1);
     let mut r = ArrayD::zeros(IxDyn(&[std::cmp::max(inputs[0].len(), inputs[1].len())]));
-    if inputs[0].len() == 1 {
+
+    if inputs[0].len() == 1 && inputs[1].len() == 1 {
+      r[0] = inputs[0].first().unwrap() + inputs[1].first().unwrap();
+    } else if inputs[0].len() == 1 {
       azip!((r in &mut r, &x in inputs[1]) *r = x + inputs[0].first().unwrap());
     } else if inputs[1].len() == 1 {
       azip!((r in &mut r, &x in inputs[0]) *r = x + inputs[1].first().unwrap());
@@ -18,6 +26,7 @@ impl BasicBlock for AddBasicBlock {
     }
     vec![r]
   }
+
   fn prove(
     &mut self,
     srs: &SRS,
@@ -34,6 +43,7 @@ impl BasicBlock for AddBasicBlock {
     let C = srs.X1P[0] * (a.r + b.r - c.r);
     (vec![C], Vec::new())
   }
+
   fn verify(
     &self,
     srs: &SRS,

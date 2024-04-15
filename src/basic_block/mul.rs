@@ -10,11 +10,18 @@ use rand::{rngs::StdRng, SeedableRng};
 pub struct MulConstBasicBlock {
   pub c: usize,
 }
+
 impl BasicBlock for MulConstBasicBlock {
+  fn name(&self) -> String {
+    // concat "Mul" and self.c
+    format!("Mul[c: {}]", self.c)
+  }
+
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1 && inputs[0].ndim() == 1);
     vec![inputs[0].map(|x| *x * Fr::from(self.c as u32))]
   }
+
   fn prove(
     &mut self,
     srs: &SRS,
@@ -27,6 +34,7 @@ impl BasicBlock for MulConstBasicBlock {
     let C = srs.X1P[0] * (Fr::from(self.c as u32) * inputs[0].first().unwrap().r - outputs[0].first().unwrap().r);
     return (vec![C], vec![]);
   }
+
   fn verify(
     &self,
     srs: &SRS,
@@ -41,12 +49,19 @@ impl BasicBlock for MulConstBasicBlock {
     assert!(lhs == rhs);
   }
 }
+
 pub struct MulScalarBasicBlock;
+
 impl BasicBlock for MulScalarBasicBlock {
+  fn name(&self) -> String {
+    "MulScalar".to_string()
+  }
+
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[1].len() == 1);
     vec![inputs[0].map(|x| *x * inputs[1].first().unwrap())]
   }
+
   fn prove(
     &mut self,
     srs: &SRS,
@@ -63,6 +78,7 @@ impl BasicBlock for MulScalarBasicBlock {
     let C = inp0.g1 * inp1.r + inp1.g1 * inp0.r + srs.Y1P * (inp0.r * inp1.r) - srs.X1P[0] * out.r;
     return (vec![C], vec![gx2]);
   }
+
   fn verify(
     &self,
     srs: &SRS,
@@ -85,14 +101,21 @@ impl BasicBlock for MulScalarBasicBlock {
     assert!(lhs == rhs);
   }
 }
+
 pub struct MulBasicBlock;
+
 impl BasicBlock for MulBasicBlock {
+  fn name(&self) -> String {
+    "Mul".to_string()
+  }
+
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[0].shape() == inputs[1].shape());
     let mut r = ArrayD::zeros(inputs[0].dim());
     azip!((r in &mut r, &x in inputs[0], &y in inputs[1]) *r = x * y);
     vec![r]
   }
+
   fn prove(
     &mut self,
     srs: &SRS,
@@ -117,6 +140,7 @@ impl BasicBlock for MulBasicBlock {
     let C = (inp0.g1 * inp1.r) + (inp1.g1 * inp0.r) + (srs.Y1P * (inp0.r * inp1.r)) - (srs.X1P[0] * out.r) - ((srs.X1P[N] - srs.X1P[0]) * r);
     return (vec![tx, C], vec![gx2]);
   }
+
   fn verify(
     &self,
     srs: &SRS,

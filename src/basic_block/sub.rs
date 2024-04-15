@@ -1,11 +1,16 @@
 use super::{BasicBlock, Data, DataEnc, SRS};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
-use ndarray::{azip, ArrayD, IxDyn};
+use ndarray::{azip, s, ArrayD, IxDyn};
 use rand::rngs::StdRng;
 
 pub struct SubBasicBlock;
+
 impl BasicBlock for SubBasicBlock {
+  fn name(&self) -> String {
+    "Sub".to_string()
+  }
+
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 2 && inputs[0].ndim() <= 1 && inputs[1].ndim() <= 1);
     let mut r = ArrayD::zeros(IxDyn(&[std::cmp::max(inputs[0].len(), inputs[1].len())]));
@@ -18,6 +23,7 @@ impl BasicBlock for SubBasicBlock {
     }
     vec![r]
   }
+
   fn prove(
     &mut self,
     srs: &SRS,
@@ -34,6 +40,7 @@ impl BasicBlock for SubBasicBlock {
     let C = srs.X1P[0] * (a.r - b.r - c.r);
     (vec![C], Vec::new())
   }
+
   fn verify(
     &self,
     srs: &SRS,

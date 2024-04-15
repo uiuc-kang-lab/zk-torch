@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
+
 use super::{BasicBlock, Data, DataEnc, SRS};
 use crate::util;
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -17,8 +18,15 @@ use std::collections::HashMap;
 
 pub struct CQ2BasicBlock {
   pub table_dict: HashMap<(Fr, Fr), usize>,
+  pub name: String,
 }
+
 impl BasicBlock for CQ2BasicBlock {
+  fn name(&self) -> String {
+    // concat "CQ2" with self.name
+    format!("CQ2({})", self.name)
+  }
+
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
     assert!(model.ndim() == 1 && model.len() == 2);
     let N = model[0].raw.len();
@@ -48,6 +56,7 @@ impl BasicBlock for CQ2BasicBlock {
     setup.extend(L_i_0_x_1);
     return (setup, setup2);
   }
+
   fn prove(
     &mut self,
     srs: &SRS,
@@ -151,6 +160,7 @@ impl BasicBlock for CQ2BasicBlock {
 
     return (proof, vec![(setup.1[0] + setup.1[1] * alpha).into(), f_x_2]);
   }
+
   fn verify(
     &self,
     srs: &SRS,

@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
+
 use super::{BasicBlock, Data, DataEnc, SRS};
 use crate::util::{self, calc_pow};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -11,7 +12,12 @@ use ndarray::{ArrayD, Ix2};
 use rand::{rngs::StdRng, SeedableRng};
 
 pub struct MatMulBasicBlock;
+
 impl BasicBlock for MatMulBasicBlock {
+  fn name(&self) -> String {
+    "MatMul".to_string()
+  }
+
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 2 && inputs[0].ndim() == 2 && inputs[1].ndim() == 2 && inputs[0].shape()[1] == inputs[1].shape()[1]);
     let (a, b) = (
@@ -20,6 +26,7 @@ impl BasicBlock for MatMulBasicBlock {
     );
     vec![a.dot(&b.t()).into_dyn()]
   }
+
   fn prove(
     &mut self,
     srs: &SRS,
@@ -112,6 +119,7 @@ impl BasicBlock for MatMulBasicBlock {
 
     return (proof, vec![flat_B_g2]);
   }
+
   fn verify(
     &self,
     srs: &SRS,

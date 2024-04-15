@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+
 use crate::util;
 pub use add::AddBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -19,8 +20,10 @@ pub use ops::{ExpBasicBlock, LogBasicBlock, ReLUBasicBlock, SqrtBasicBlock};
 pub use permute::PermuteBasicBlock;
 use rand::{rngs::StdRng, SeedableRng};
 pub use rope::RoPEBasicBlock;
+pub use squeeze::{SqueezeBasicBlock, UnsqueezeBasicBlock};
 pub use sub::SubBasicBlock;
 pub use sum::SumBasicBlock;
+
 pub mod add;
 pub mod constant;
 pub mod cq;
@@ -34,6 +37,7 @@ pub mod mul;
 pub mod ops;
 pub mod permute;
 pub mod rope;
+pub mod squeeze;
 pub mod sub;
 pub mod sum;
 
@@ -47,12 +51,14 @@ pub struct SRS {
   pub Y1P: G1Projective,
   pub Y2P: G2Projective,
 }
+
 pub struct Data {
   pub raw: Vec<Fr>,
   pub poly: DensePolynomial<Fr>,
   pub g1: G1Projective,
   pub r: Fr,
 }
+
 impl Data {
   pub fn new(srs: &SRS, raw: &[Fr]) -> Data {
     let N = raw.len();
@@ -68,10 +74,12 @@ impl Data {
     };
   }
 }
+
 pub struct DataEnc {
   pub len: usize,
   pub g1: G1Affine,
 }
+
 impl DataEnc {
   pub fn new(srs: &SRS, data: &Data) -> DataEnc {
     return DataEnc {
@@ -80,13 +88,20 @@ impl DataEnc {
     };
   }
 }
+
 pub trait BasicBlock {
+  fn name(&self) -> String {
+    "".to_string()
+  }
+
   fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     vec![]
   }
+
   fn setup(&self, _srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
     (Vec::new(), Vec::new())
   }
+
   fn prove(
     &mut self,
     _srs: &SRS,
@@ -98,6 +113,7 @@ pub trait BasicBlock {
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     (Vec::new(), Vec::new())
   }
+
   fn verify(
     &self,
     _srs: &SRS,

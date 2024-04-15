@@ -6,7 +6,12 @@ pub struct RoPEBasicBlock {
   pub token_i: usize,
   pub output_SF: usize,
 }
+
 impl BasicBlock for RoPEBasicBlock {
+  fn name(&self) -> String {
+    format!("RoPE[token_i: {}, output_SF: {}]", self.token_i, self.output_SF)
+  }
+
   fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     let mut r1 = vec![];
     let mut r2 = vec![];

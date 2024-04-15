@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
+
 use super::{BasicBlock, Data, DataEnc, SRS};
 use crate::util;
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -11,11 +12,17 @@ use ndarray::{arr0, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
 
 pub struct SumBasicBlock;
+
 impl BasicBlock for SumBasicBlock {
+  fn name(&self) -> String {
+    "Sum".to_string()
+  }
+
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1 && inputs[0].ndim() == 2);
     vec![arr0(inputs[0].iter().sum::<Fr>()).into_dyn()]
   }
+
   fn prove(
     &mut self,
     srs: &SRS,
@@ -47,6 +54,7 @@ impl BasicBlock for SumBasicBlock {
     let C = -srs.X1P[1] * zero_div_r + srs.X1P[0] * (input_r - outputs[0].first().unwrap().r * Fr::from(m as u32).inverse().unwrap());
     return (vec![zero_div, C], vec![]);
   }
+  
   fn verify(
     &self,
     srs: &SRS,

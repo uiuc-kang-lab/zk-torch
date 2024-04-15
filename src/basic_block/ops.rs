@@ -12,7 +12,13 @@ macro_rules! make_basic_block {
       pub input_SF: usize,
       pub output_SF: usize,
     }
+
     impl BasicBlock for $name {
+      fn name(&self) -> String {
+        // concat stringify!($name) and self.input_SF and self.output_SF
+        format!("{}[input_SF: {}, output_SF: {}]", stringify!($name), self.input_SF, self.output_SF)
+      }
+
       fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
         assert!(inputs.len() == 1);
         vec![inputs[0].map(|x| {
@@ -27,8 +33,10 @@ macro_rules! make_basic_block {
   };
 }
 
-make_basic_block!(ExpBasicBlock, { |x: f32| { x.exp() } });
-make_basic_block!(LogBasicBlock, { |x: f32| { x.ln() } });
+make_basic_block!(ExpBasicBlock, { |x: f32| x.exp() });
+
+make_basic_block!(LogBasicBlock, { |x: f32| x.ln() });
+
 make_basic_block!(ReLUBasicBlock, {
   |x: f32| {
     if x < 0f32 {
@@ -38,5 +46,7 @@ make_basic_block!(ReLUBasicBlock, {
     }
   }
 });
-make_basic_block!(SqrtBasicBlock, { |x: f32| { x.sqrt() } });
-make_basic_block!(ChangeSFBasicBlock, { |x: f32| { x } });
+
+make_basic_block!(SqrtBasicBlock, { |x: f32| x.sqrt() });
+
+make_basic_block!(ChangeSFBasicBlock, { |x: f32| x });

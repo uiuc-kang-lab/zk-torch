@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
+
 use super::{BasicBlock, Data, DataEnc, SRS};
 use crate::util::{self, calc_pow};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -12,8 +13,13 @@ use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 
 pub struct CQLinBasicBlock;
+
 // input is rows of A, model is rows of B, outputs are rows of C
 impl BasicBlock for CQLinBasicBlock {
+  fn name(&self) -> String {
+    "CQLin".to_string()
+  }
+
   fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(model.ndim() == 2 && inputs.len() == 1 && inputs[0].ndim() == 2 && inputs[0].shape()[1] == model.shape()[0]);
     let (a, b) = (
@@ -22,6 +28,7 @@ impl BasicBlock for CQLinBasicBlock {
     );
     vec![b.dot(&a).into_dyn()]
   }
+
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
     let m = model.len();
     let n = model[0].raw.len();
@@ -101,6 +108,7 @@ impl BasicBlock for CQLinBasicBlock {
     setup.append(&mut L_H_i_x);
     (setup, vec![M_x.into()])
   }
+
   fn prove(
     &mut self,
     srs: &SRS,
@@ -191,6 +199,7 @@ impl BasicBlock for CQLinBasicBlock {
 
     return (proof, vec![M_x_2]);
   }
+
   fn verify(
     &self,
     srs: &SRS,

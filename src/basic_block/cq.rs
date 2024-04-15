@@ -18,7 +18,12 @@ use std::collections::HashMap;
 pub struct CQBasicBlock {
   pub table_dict: HashMap<Fr, usize>,
 }
+
 impl BasicBlock for CQBasicBlock {
+  fn name(&self) -> String {
+    "CQ".to_string()
+  }
+
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
     assert!(model.len() == 1);
     let model = model.first().unwrap();
@@ -45,6 +50,7 @@ impl BasicBlock for CQBasicBlock {
     setup.extend(L_i_0_x_1);
     return (setup, vec![T_x_2]);
   }
+
   fn prove(
     &mut self,
     srs: &SRS,
@@ -127,6 +133,7 @@ impl BasicBlock for CQBasicBlock {
 
     return (proof, vec![setup.1[0].into(), f_x_2]);
   }
+
   fn verify(
     &self,
     srs: &SRS,

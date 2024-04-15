@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+
 use crate::{BasicBlock, Data, SRS};
 use ark_bn254::Fr;
 use ark_ec::{ScalarMul, VariableBaseMSM};
@@ -16,6 +17,7 @@ fn bitreverse(mut n: u32, l: u64) -> u32 {
   }
   r
 }
+
 pub fn fft_helper<G: ScalarMul + std::ops::MulAssign<Fr>>(a: &mut Vec<G>, domain: GeneralEvaluationDomain<Fr>, inv: bool) {
   let n = a.len();
   let log_size = domain.log_size_of_group();
@@ -53,20 +55,24 @@ pub fn fft_helper<G: ScalarMul + std::ops::MulAssign<Fr>>(a: &mut Vec<G>, domain
     (0..n).into_par_iter().map(|i| curr.0[i]).collect_into_vec(curr.1);
   }
 }
+
 pub fn fft<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvaluationDomain<Fr>, a: &Vec<G>) -> Vec<G> {
   let mut r = a.to_vec();
   fft_helper(&mut r, domain, false);
   r
 }
+
 pub fn ifft<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvaluationDomain<Fr>, a: &Vec<G>) -> Vec<G> {
   let mut r = a.to_vec();
   fft_helper(&mut r, domain, true);
   r.par_iter_mut().for_each(|x| *x *= domain.size_inv());
   r
 }
+
 pub fn fft_in_place<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvaluationDomain<Fr>, a: &mut Vec<G>) {
   fft_helper(a, domain, false);
 }
+
 pub fn ifft_in_place<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvaluationDomain<Fr>, a: &mut Vec<G>) {
   fft_helper(a, domain, true);
   a.par_iter_mut().for_each(|x| *x *= domain.size_inv());

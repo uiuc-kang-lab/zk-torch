@@ -4,7 +4,12 @@ use ark_std::Zero;
 use ndarray::{arr0, ArrayD};
 
 pub struct MaxBasicBlock;
+
 impl BasicBlock for MaxBasicBlock {
+  fn name(&self) -> String {
+    "Max".to_string()
+  }
+
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1);
     vec![arr0(inputs[0].fold(Fr::zero(), |max, x| {

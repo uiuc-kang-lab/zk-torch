@@ -3,7 +3,12 @@ use ark_bn254::Fr;
 use ndarray::ArrayD;
 
 pub struct ConstBasicBlock;
+
 impl BasicBlock for ConstBasicBlock {
+  fn name(&self) -> String {
+    "Constant".to_string()
+  }
+
   fn run(&self, model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     vec![model.clone()]
   }

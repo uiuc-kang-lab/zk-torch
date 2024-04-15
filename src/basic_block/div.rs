@@ -6,7 +6,13 @@ use ndarray::{arr1, ArrayD};
 pub struct DivScalarBasicBlock {
   pub output_SF: usize,
 }
+
 impl BasicBlock for DivScalarBasicBlock {
+  fn name(&self) -> String {
+    // concat "DivScalar" and self.output_SF
+    format!("DivScalar[output_SF: {}]", self.output_SF)
+  }
+
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[1].len() == 1);
     let SF = self.output_SF as i32;
