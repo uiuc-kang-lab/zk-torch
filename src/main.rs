@@ -4,7 +4,7 @@
 use ark_bn254::Fr;
 use ark_bn254::{G1Affine, G2Affine};
 use basic_block::*;
-use graph::{Graph, Node};
+use graph::Graph;
 use layer::*;
 use ndarray::{ArrayD, IxDyn};
 use rand::{rngs::StdRng, Rng, SeedableRng};

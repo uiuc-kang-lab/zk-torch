@@ -100,8 +100,7 @@ pub struct CustomLayer {
 
 impl Layer for CustomLayer {
   fn load_onnx_layer(&self, config: &LayerConfig) -> Vec<Node> {
-    let layer = self.nodes.iter().zip(&self.inputs).map(|(x, y)| Node { basic_block: *x, inputs: y.to_vec() }).collect();
-    layer
+    self.nodes.iter().zip(&self.inputs).map(|(x, y)| Node { basic_block: *x, inputs: y.to_vec() }).collect()
   }
 
   fn layer_output_node(&self, config: &LayerConfig) -> (usize, usize) {
