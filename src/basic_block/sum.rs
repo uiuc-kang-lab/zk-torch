@@ -54,7 +54,7 @@ impl BasicBlock for SumBasicBlock {
     let C = -srs.X1P[1] * zero_div_r + srs.X1P[0] * (input_r - outputs[0].first().unwrap().r * Fr::from(m as u32).inverse().unwrap());
     return (vec![zero_div, C], vec![]);
   }
-  
+
   fn verify(
     &self,
     srs: &SRS,

@@ -4,7 +4,7 @@
 use ark_bn254::Fr;
 use ark_bn254::{G1Affine, G2Affine};
 use basic_block::*;
-use graph::{Graph, Node, Subgraph};
+use graph::{Graph, Node};
 use layer::*;
 use ndarray::{ArrayD, IxDyn};
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -25,7 +25,8 @@ mod util;
 fn main() {
   let srs = &ptau::load_file("challenge", 7);
 
-  // create subgraph 0
+  // create layer 0: a custom layer
+  let layer0 = CustomLayer;
   let mut basic_block: Vec<Box<dyn BasicBlock>> = vec![
     Box::new(CQLinBasicBlock),
     Box::new(ReLUBasicBlock { input_SF: 1, output_SF: 1 }),
@@ -36,55 +37,51 @@ fn main() {
     Box::new(SqueezeBasicBlock),
   ];
 
-  let subgraph0 = Subgraph {
-    nodes: vec![
-      Node {
-        basic_block: 0,
-        inputs: vec![(-1, 0)],
-      },
-      Node {
-        basic_block: 1,
-        inputs: vec![(0, 0)],
-      },
-      Node {
-        basic_block: 2,
-        inputs: vec![(0, 0), (1, 0)],
-      },
-      Node {
-        basic_block: 3,
-        inputs: vec![(1, 0)],
-      },
-    ],
-  };
+  let subgraph0 = vec![
+    Node {
+      basic_block: 0,
+      inputs: vec![(-1, 0)],
+    },
+    Node {
+      basic_block: 1,
+      inputs: vec![(0, 0)],
+    },
+    Node {
+      basic_block: 2,
+      inputs: vec![(0, 0), (1, 0)],
+    },
+    Node {
+      basic_block: 3,
+      inputs: vec![(1, 0)],
+    },
+  ];
 
-  // create subgraph 1
+  let custom_layer_output_node = (3, 0);
+
+  // create layer 1: a Softmax layer
   let softmax_config = LayerConfig {
     input_params: HashMap::from([("input_SF".to_string(), 1), ("output_SF".to_string(), 1)]),
   };
 
   let shift_len = basic_block.len();
 
-  basic_block.append(&mut SoftmaxLayer::consume_basic_block(&softmax_config)); // we will need to handle repeated basic blocks later
-  let (mut subgraph1_basicblocks, subgraph1_inputs) = SoftmaxLayer::load_onnx_layer(&softmax_config);
-  subgraph1_basicblocks.iter_mut().for_each(|x| *x += shift_len);
+  let softmax = SoftmaxLayer {};
 
-  let subgraph1 = Subgraph {
-    nodes: subgraph1_basicblocks
-      .iter()
-      .enumerate()
-      .map(|(i, x)| Node {
-        basic_block: *x,
-        inputs: subgraph1_inputs[i].clone(),
-      })
-      .collect(),
-  };
+  let softmax_output_node = softmax.layer_output_node(&softmax_config);
+
+  basic_block.append(&mut softmax.consume_basic_block(&softmax_config)); // we will need to handle repeated basic blocks later
+  let (mut subgraph1_nodes, subgraph1_inputs) = softmax.load_onnx_layer(&softmax_config);
+  subgraph1_nodes.iter_mut().for_each(|x| *x += shift_len);
+
+  let subgraph1 = subgraph1_nodes.iter().zip(subgraph1_inputs).map(|(x, y)| Node { basic_block: *x, inputs: y }).collect();
 
   // create graph by combining subgraphs
   let mut graph = Graph {
     basic_blocks: basic_block,
-    subgraphs: vec![subgraph0, subgraph1],
+    layers: vec![Box::new(layer0), Box::new(softmax)],
+    subgraph_nodes: vec![subgraph0, subgraph1],
     subgraph_inputs: vec![vec![(-1, 0)], vec![(0, 0)]], // ONNX graph (subgraph id, subgraph slot), which can be loaded from ONNX file
-    output_in_subgraph: vec![(3, 0), SoftmaxLayer::layer_output_node(&softmax_config)],
+    output_in_subgraph: vec![custom_layer_output_node, softmax_output_node],
   };
 
   const m: usize = 1 << 4;

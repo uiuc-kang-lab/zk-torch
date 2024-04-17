@@ -6,8 +6,8 @@ use std::collections::HashMap;
 pub struct SoftmaxLayer;
 
 impl Layer for SoftmaxLayer {
-  fn load_onnx_layer(config: &LayerConfig) -> (Vec<usize>, Vec<Vec<(i32, usize)>>) {
-    let blocks: Vec<String> = SoftmaxLayer::consume_basic_block(config).iter().map(|b| b.name()).collect();
+  fn load_onnx_layer(&self, config: &LayerConfig) -> (Vec<usize>, Vec<Vec<(i32, usize)>>) {
+    let blocks: Vec<String> = self.consume_basic_block(config).iter().map(|b| b.name()).collect();
 
     let blocks_idx = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3];
 
@@ -29,7 +29,7 @@ impl Layer for SoftmaxLayer {
     (blocks_idx, nodes)
   }
 
-  fn consume_basic_block(config: &LayerConfig) -> Vec<Box<dyn BasicBlock>> {
+  fn consume_basic_block(&self, config: &LayerConfig) -> Vec<Box<dyn BasicBlock>> {
     vec![
       Box::new(crate::basic_block::MaxBasicBlock),
       Box::new(crate::basic_block::SubBasicBlock),
@@ -55,7 +55,7 @@ impl Layer for SoftmaxLayer {
     ]
   }
 
-  fn layer_output_node(config: &LayerConfig) -> (usize, usize) {
+  fn layer_output_node(&self, config: &LayerConfig) -> (usize, usize) {
     (10, 0)
   }
 }
