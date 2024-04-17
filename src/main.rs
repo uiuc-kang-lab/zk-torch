@@ -26,7 +26,7 @@ fn main() {
   let srs = &ptau::load_file("challenge", 7);
 
   // create layer 0: a custom layer
-  let layer0 = CustomLayer;
+  let custom_layer = CustomLayer;
   let mut basic_block: Vec<Box<dyn BasicBlock>> = vec![
     Box::new(CQLinBasicBlock),
     Box::new(ReLUBasicBlock { input_SF: 1, output_SF: 1 }),
@@ -37,7 +37,7 @@ fn main() {
     Box::new(SqueezeBasicBlock),
   ];
 
-  let subgraph0 = vec![
+  let layer0 = vec![
     Node {
       basic_block: 0,
       inputs: vec![(-1, 0)],
@@ -70,18 +70,18 @@ fn main() {
   let softmax_output_node = softmax.layer_output_node(&softmax_config);
 
   basic_block.append(&mut softmax.consume_basic_block(&softmax_config)); // we will need to handle repeated basic blocks later
-  let (mut subgraph1_nodes, subgraph1_inputs) = softmax.load_onnx_layer(&softmax_config);
-  subgraph1_nodes.iter_mut().for_each(|x| *x += shift_len);
+  let (mut layer1_nodes, layer1_inputs) = softmax.load_onnx_layer(&softmax_config);
+  layer1_nodes.iter_mut().for_each(|x| *x += shift_len);
 
-  let subgraph1 = subgraph1_nodes.iter().zip(subgraph1_inputs).map(|(x, y)| Node { basic_block: *x, inputs: y }).collect();
+  let layer1 = layer1_nodes.iter().zip(layer1_inputs).map(|(x, y)| Node { basic_block: *x, inputs: y }).collect();
 
-  // create graph by combining subgraphs
+  // create graph by combining layers
   let mut graph = Graph {
     basic_blocks: basic_block,
-    layers: vec![Box::new(layer0), Box::new(softmax)],
-    subgraph_nodes: vec![subgraph0, subgraph1],
-    subgraph_inputs: vec![vec![(-1, 0)], vec![(0, 0)]], // ONNX graph (subgraph id, subgraph slot), which can be loaded from ONNX file
-    output_in_subgraph: vec![custom_layer_output_node, softmax_output_node],
+    layers: vec![Box::new(custom_layer), Box::new(softmax)],
+    layer_nodes: vec![layer0, layer1],
+    layer_inputs: vec![vec![(-1, 0)], vec![(0, 0)]], // ONNX graph (layer id, layer slot), which can be loaded from ONNX file
+    output_in_layer: vec![custom_layer_output_node, softmax_output_node],
   };
 
   const m: usize = 1 << 4;

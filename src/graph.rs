@@ -11,9 +11,9 @@ pub struct Node {
 pub struct Graph {
   pub basic_blocks: Vec<Box<dyn BasicBlock>>,
   pub layers: Vec<Box<dyn Layer>>,
-  pub subgraph_nodes: Vec<Vec<Node>>,          // each Vec<Node> is a subgraph
-  pub subgraph_inputs: Vec<Vec<(i32, usize)>>, // ONNX graph (subgraph id, subgraph slot)
-  pub output_in_subgraph: Vec<(usize, usize)>, // In subgraph, specify which node is the subgraph output (output node, output #)
+  pub layer_nodes: Vec<Vec<Node>>,          // each Vec<Node> is a layer
+  pub layer_inputs: Vec<Vec<(i32, usize)>>, // ONNX graph (layer id, layer slot)
+  pub output_in_layer: Vec<(usize, usize)>, // In layer, specify which node is the layer output (output node, output #)
 }
 
 impl Graph {
@@ -21,18 +21,18 @@ impl Graph {
     let mut outputs: Vec<Vec<Vec<ArrayD<Fr>>>> = vec![vec![]; self.layers.len()];
 
     self.layers.iter().enumerate().for_each(|(i, s)| {
-      let myInputs = self.subgraph_inputs[i]
+      let myInputs = self.layer_inputs[i]
         .iter()
         .map(|(j, k)| {
           if *j < 0 {
             inputs[*k]
           } else {
-            &(outputs[*j as usize][self.output_in_subgraph[*j as usize].0][self.output_in_subgraph[*j as usize].1])
+            &(outputs[*j as usize][self.output_in_layer[*j as usize].0][self.output_in_layer[*j as usize].1])
           }
         })
         .collect();
 
-      outputs[i] = s.run(&self.subgraph_nodes[i], &myInputs, models, &self.basic_blocks);
+      outputs[i] = s.run(&self.layer_nodes[i], &myInputs, models, &self.basic_blocks);
     });
 
     return outputs;
@@ -56,19 +56,19 @@ impl Graph {
       .iter_mut()
       .enumerate()
       .map(|(i, s)| {
-        let myInputs = self.subgraph_inputs[i]
+        let myInputs = self.layer_inputs[i]
           .iter()
           .map(|(j, k)| {
             if *j < 0 {
               inputs[*k]
             } else {
-              &(outputs[*j as usize][self.output_in_subgraph[*j as usize].0][self.output_in_subgraph[*j as usize].1])
+              &(outputs[*j as usize][self.output_in_layer[*j as usize].0][self.output_in_layer[*j as usize].1])
             }
           })
           .collect();
 
         s.prove(
-          &mut &self.subgraph_nodes[i],
+          &mut &self.layer_nodes[i],
           srs,
           &setups,
           models,
@@ -95,19 +95,19 @@ impl Graph {
       .iter()
       .enumerate()
       .map(|(i, s)| {
-        let myInputs = self.subgraph_inputs[i]
+        let myInputs = self.layer_inputs[i]
           .iter()
           .map(|(j, k)| {
             if *j < 0 {
               inputs[*k]
             } else {
-              &(outputs[*j as usize][self.output_in_subgraph[*j as usize].0][self.output_in_subgraph[*j as usize].1])
+              &(outputs[*j as usize][self.output_in_layer[*j as usize].0][self.output_in_layer[*j as usize].1])
             }
           })
           .collect();
 
         s.verify(
-          &mut &self.subgraph_nodes[i],
+          &mut &self.layer_nodes[i],
           srs,
           models,
           &myInputs,
