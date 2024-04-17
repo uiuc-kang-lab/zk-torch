@@ -26,7 +26,6 @@ fn main() {
   let srs = &ptau::load_file("challenge", 7);
 
   // create layer 0: a custom layer
-  let custom_layer = CustomLayer;
   let mut basic_block: Vec<Box<dyn BasicBlock>> = vec![
     Box::new(CQLinBasicBlock),
     Box::new(ReLUBasicBlock { input_SF: 1, output_SF: 1 }),
@@ -37,51 +36,29 @@ fn main() {
     Box::new(SqueezeBasicBlock),
   ];
 
-  let layer0 = vec![
-    Node {
-      basic_block: 0,
-      inputs: vec![(-1, 0)],
-    },
-    Node {
-      basic_block: 1,
-      inputs: vec![(0, 0)],
-    },
-    Node {
-      basic_block: 2,
-      inputs: vec![(0, 0), (1, 0)],
-    },
-    Node {
-      basic_block: 3,
-      inputs: vec![(1, 0)],
-    },
-  ];
+  let shift_len = &basic_block.len();
 
-  let custom_layer_output_node = (3, 0);
+  let custom_layer = CustomLayer {
+    nodes: vec![0, 1, 2, 3],
+    inputs: vec![vec![(-1, 0)], vec![(0, 0)], vec![(0, 0), (1, 0)], vec![(1, 0)]],
+    output_node: (3, 0),
+  };
 
   // create layer 1: a Softmax layer
   let softmax_config = LayerConfig {
-    input_params: HashMap::from([("input_SF".to_string(), 1), ("output_SF".to_string(), 1)]),
+    input_params: HashMap::from([("input_SF".to_string(), 1), ("output_SF".to_string(), 1), ("shift_len".to_string(), *shift_len)]),
   };
-
-  let shift_len = basic_block.len();
 
   let softmax = SoftmaxLayer {};
 
-  let softmax_output_node = softmax.layer_output_node(&softmax_config);
-
   basic_block.append(&mut softmax.consume_basic_block(&softmax_config)); // we will need to handle repeated basic blocks later
-  let (mut layer1_nodes, layer1_inputs) = softmax.load_onnx_layer(&softmax_config);
-  layer1_nodes.iter_mut().for_each(|x| *x += shift_len);
-
-  let layer1 = layer1_nodes.iter().zip(layer1_inputs).map(|(x, y)| Node { basic_block: *x, inputs: y }).collect();
 
   // create graph by combining layers
   let mut graph = Graph {
     basic_blocks: basic_block,
     layers: vec![Box::new(custom_layer), Box::new(softmax)],
-    layer_nodes: vec![layer0, layer1],
+    layer_configs: vec![LayerConfig { input_params: HashMap::new() }, softmax_config],
     layer_inputs: vec![vec![(-1, 0)], vec![(0, 0)]], // ONNX graph (layer id, layer slot), which can be loaded from ONNX file
-    output_in_layer: vec![custom_layer_output_node, softmax_output_node],
   };
 
   const m: usize = 1 << 4;

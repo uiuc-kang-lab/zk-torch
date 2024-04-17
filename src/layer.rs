@@ -20,8 +20,8 @@ pub struct LayerConfig {
 }
 
 pub trait Layer {
-  fn load_onnx_layer(&self, config: &LayerConfig) -> (Vec<usize>, Vec<Vec<(i32, usize)>>) {
-    (vec![], vec![]) // vec of basic block idx & vec of inputs
+  fn load_onnx_layer(&self, config: &LayerConfig) -> Vec<Node> {
+    vec![] // vec of nodes
   }
 
   fn consume_basic_block(&self, config: &LayerConfig) -> Vec<Box<dyn BasicBlock>> {
@@ -92,5 +92,19 @@ pub trait Layer {
   }
 }
 
-pub struct CustomLayer;
-impl Layer for CustomLayer {}
+pub struct CustomLayer {
+  pub nodes: Vec<usize>,
+  pub inputs: Vec<Vec<(i32, usize)>>,
+  pub output_node: (usize, usize),
+}
+
+impl Layer for CustomLayer {
+  fn load_onnx_layer(&self, config: &LayerConfig) -> Vec<Node> {
+    let layer = self.nodes.iter().zip(&self.inputs).map(|(x, y)| Node { basic_block: *x, inputs: y.to_vec() }).collect();
+    layer
+  }
+
+  fn layer_output_node(&self, config: &LayerConfig) -> (usize, usize) {
+    self.output_node
+  }
+}

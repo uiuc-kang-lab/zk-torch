@@ -1,4 +1,4 @@
-use crate::{basic_block::*, Layer};
+use crate::{basic_block::*, Layer, LayerConfig};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ndarray::ArrayD;
 use rand::rngs::StdRng;
@@ -11,9 +11,8 @@ pub struct Node {
 pub struct Graph {
   pub basic_blocks: Vec<Box<dyn BasicBlock>>,
   pub layers: Vec<Box<dyn Layer>>,
-  pub layer_nodes: Vec<Vec<Node>>,          // each Vec<Node> is a layer
+  pub layer_configs: Vec<LayerConfig>,
   pub layer_inputs: Vec<Vec<(i32, usize)>>, // ONNX graph (layer id, layer slot)
-  pub output_in_layer: Vec<(usize, usize)>, // In layer, specify which node is the layer output (output node, output #)
 }
 
 impl Graph {
@@ -27,12 +26,14 @@ impl Graph {
           if *j < 0 {
             inputs[*k]
           } else {
-            &(outputs[*j as usize][self.output_in_layer[*j as usize].0][self.output_in_layer[*j as usize].1])
+            let output_in_layer = self.layers[*j as usize].layer_output_node(&self.layer_configs[i]);
+            &(outputs[*j as usize][output_in_layer.0][output_in_layer.1])
           }
         })
         .collect();
-
-      outputs[i] = s.run(&self.layer_nodes[i], &myInputs, models, &self.basic_blocks);
+      
+      let layer_nodes = s.load_onnx_layer(&self.layer_configs[i]);
+      outputs[i] = s.run(&layer_nodes, &myInputs, models, &self.basic_blocks);
     });
 
     return outputs;
@@ -53,7 +54,7 @@ impl Graph {
   ) -> Vec<Vec<(Vec<G1Projective>, Vec<G2Projective>)>> {
     self
       .layers
-      .iter_mut()
+      .iter()
       .enumerate()
       .map(|(i, s)| {
         let myInputs = self.layer_inputs[i]
@@ -62,13 +63,15 @@ impl Graph {
             if *j < 0 {
               inputs[*k]
             } else {
-              &(outputs[*j as usize][self.output_in_layer[*j as usize].0][self.output_in_layer[*j as usize].1])
+              let output_in_layer = self.layers[*j as usize].layer_output_node(&self.layer_configs[i]);
+              &(outputs[*j as usize][output_in_layer.0][output_in_layer.1])
             }
           })
           .collect();
-
+        
+        let layer_nodes = s.load_onnx_layer(&self.layer_configs[i]);
         s.prove(
-          &mut &self.layer_nodes[i],
+          &mut &layer_nodes,
           srs,
           &setups,
           models,
@@ -101,13 +104,15 @@ impl Graph {
             if *j < 0 {
               inputs[*k]
             } else {
-              &(outputs[*j as usize][self.output_in_layer[*j as usize].0][self.output_in_layer[*j as usize].1])
+              let output_in_layer = s.layer_output_node(&self.layer_configs[i]);
+              &(outputs[*j as usize][output_in_layer.0][output_in_layer.1])
             }
           })
           .collect();
-
+        
+        let layer_nodes = s.load_onnx_layer(&self.layer_configs[i]);
         s.verify(
-          &mut &self.layer_nodes[i],
+          &mut &layer_nodes,
           srs,
           models,
           &myInputs,
