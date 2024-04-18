@@ -26,7 +26,7 @@ impl Graph {
           if *j < 0 {
             inputs[*k]
           } else {
-            let output_in_layer = self.layers[*j as usize].layer_output_node(&self.layer_configs[i]);
+            let output_in_layer = self.layers[*j as usize].layer_output_node(&self.layer_configs[*j as usize]);
             &(outputs[*j as usize][output_in_layer.0][output_in_layer.1])
           }
         })
@@ -63,7 +63,7 @@ impl Graph {
             if *j < 0 {
               inputs[*k]
             } else {
-              let output_in_layer = self.layers[*j as usize].layer_output_node(&self.layer_configs[i]);
+              let output_in_layer = self.layers[*j as usize].layer_output_node(&self.layer_configs[*j as usize]);
               &(outputs[*j as usize][output_in_layer.0][output_in_layer.1])
             }
           })
@@ -104,7 +104,7 @@ impl Graph {
             if *j < 0 {
               inputs[*k]
             } else {
-              let output_in_layer = s.layer_output_node(&self.layer_configs[i]);
+              let output_in_layer = self.layers[*j as usize].layer_output_node(&self.layer_configs[*j as usize]);
               &(outputs[*j as usize][output_in_layer.0][output_in_layer.1])
             }
           })

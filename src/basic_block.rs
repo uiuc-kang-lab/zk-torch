@@ -126,3 +126,18 @@ pub trait BasicBlock {
     ()
   }
 }
+
+// hash for trait basicblock
+impl std::hash::Hash for dyn BasicBlock {
+  fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    self.name().hash(state);
+  }
+}
+
+impl std::cmp::PartialEq for dyn BasicBlock {
+  fn eq(&self, other: &Self) -> bool {
+    self.name() == other.name()
+  }
+}
+
+impl std::cmp::Eq for dyn BasicBlock {}

@@ -17,7 +17,9 @@ pub struct CQLinBasicBlock;
 // input is rows of A, model is rows of B, outputs are rows of C
 impl BasicBlock for CQLinBasicBlock {
   fn name(&self) -> String {
-    "CQLin".to_string()
+    let name = "CQLin".to_string();
+    let random_string = Fr::rand(&mut rand::thread_rng()).to_string(); // every instance of the block should have a unique name
+    format!("{}-{}", name, random_string)
   }
 
   fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
