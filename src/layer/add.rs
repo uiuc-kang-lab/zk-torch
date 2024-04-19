@@ -6,17 +6,16 @@ use std::collections::HashMap;
 pub struct AddLayer;
 
 impl Layer for AddLayer {
-  fn load_onnx_layer(&self, config: &LayerConfig) -> Vec<Node> {
-    // if "shift_len" in config.input_params 
-    let mut node = 0;
-    if config.input_params.contains_key("shift_len") {
-      let shift_len = config.input_params.get("shift_len").unwrap();
-      node = *shift_len;
-    }
+  fn load_layer_nodes(&self, config: &LayerConfig, basic_blocks: &Vec<Box<dyn BasicBlock>>) -> Vec<Node> {
+    let basic_block_map: HashMap<&Box<dyn BasicBlock>, usize> = basic_blocks.iter().enumerate().map(|(i, b)| (b, i)).collect();
+    let used_blocks: Vec<Box<dyn BasicBlock>> = self.consume_basic_block(config);
 
-    vec![
-      Node { basic_block: node, inputs: vec![(-1, 0), (-1, 1)] }
-    ]
+    let node = *basic_block_map.get(&used_blocks[0]).unwrap();
+
+    vec![Node {
+      basic_block: node,
+      inputs: vec![(-1, 0), (-1, 1)],
+    }]
   }
 
   fn consume_basic_block(&self, config: &LayerConfig) -> Vec<Box<dyn BasicBlock>> {

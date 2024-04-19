@@ -31,8 +31,8 @@ impl Graph {
           }
         })
         .collect();
-      
-      let layer_nodes = s.load_onnx_layer(&self.layer_configs[i]);
+
+      let layer_nodes = s.load_layer_nodes(&self.layer_configs[i], &self.basic_blocks);
       outputs[i] = s.run(&layer_nodes, &myInputs, models, &self.basic_blocks);
     });
 
@@ -68,8 +68,8 @@ impl Graph {
             }
           })
           .collect();
-        
-        let layer_nodes = s.load_onnx_layer(&self.layer_configs[i]);
+
+        let layer_nodes = s.load_layer_nodes(&self.layer_configs[i], &self.basic_blocks);
         s.prove(
           &mut &layer_nodes,
           srs,
@@ -109,18 +109,9 @@ impl Graph {
             }
           })
           .collect();
-        
-        let layer_nodes = s.load_onnx_layer(&self.layer_configs[i]);
-        s.verify(
-          &mut &layer_nodes,
-          srs,
-          models,
-          &myInputs,
-          outputs[i],
-          proofs[i],
-          &self.basic_blocks,
-          rng,
-        )
+
+        let layer_nodes = s.load_layer_nodes(&self.layer_configs[i], &self.basic_blocks);
+        s.verify(&mut &layer_nodes, srs, models, &myInputs, outputs[i], proofs[i], &self.basic_blocks, rng)
       })
       .collect()
   }

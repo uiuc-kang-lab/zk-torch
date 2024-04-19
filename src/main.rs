@@ -26,7 +26,7 @@ fn main() {
   let srs = &ptau::load_file("challenge", 7);
 
   // create layer 0: a custom layer
-  let mut basic_block: Vec<Box<dyn BasicBlock>> = vec![
+  let mut basic_blocks: Vec<Box<dyn BasicBlock>> = vec![
     Box::new(CQLinBasicBlock),
     Box::new(ReLUBasicBlock { input_SF: 1, output_SF: 1 }),
     Box::new(CQ2BasicBlock {
@@ -36,8 +36,6 @@ fn main() {
     Box::new(SqueezeBasicBlock),
   ];
 
-  let shift_len = &basic_block.len();
-
   let custom_layer = CustomLayer {
     nodes: vec![0, 1, 2, 3],
     inputs: vec![vec![(-1, 0)], vec![(0, 0)], vec![(0, 0), (1, 0)], vec![(1, 0)]],
@@ -46,18 +44,23 @@ fn main() {
 
   // create layer 1: a Softmax layer
   let softmax_config = LayerConfig {
-    input_params: HashMap::from([("input_SF".to_string(), 1), ("output_SF".to_string(), 1), ("shift_len".to_string(), *shift_len)]),
+    input_params: HashMap::from([("input_SF".to_string(), 1), ("output_SF".to_string(), 1)]),
   };
 
   let softmax = SoftmaxLayer {};
 
-  basic_block.append(&mut softmax.consume_basic_block(&softmax_config)); // we will need to handle repeated basic blocks later
+  basic_blocks.append(&mut softmax.consume_basic_block(&softmax_config)); // we will need to handle repeated basic blocks later
 
   // create graph by combining layers
   let mut graph = Graph {
-    basic_blocks: basic_block,
+    basic_blocks: basic_blocks,
     layers: vec![Box::new(custom_layer), Box::new(softmax)],
-    layer_configs: vec![LayerConfig { input_params: HashMap::new() }, softmax_config],
+    layer_configs: vec![
+      LayerConfig {
+        input_params: HashMap::new(),
+      },
+      softmax_config,
+    ],
     layer_inputs: vec![vec![(-1, 0)], vec![(0, 0)]], // ONNX graph (layer id, layer slot), which can be loaded from ONNX file
   };
 

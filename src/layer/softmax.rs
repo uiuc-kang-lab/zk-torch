@@ -6,16 +6,13 @@ use std::collections::HashMap;
 pub struct SoftmaxLayer;
 
 impl Layer for SoftmaxLayer {
-  fn load_onnx_layer(&self, config: &LayerConfig) -> Vec<Node> {
-    let blocks: Vec<String> = self.consume_basic_block(config).iter().map(|b| b.name()).collect();
+  fn load_layer_nodes(&self, config: &LayerConfig, basic_blocks: &Vec<Box<dyn BasicBlock>>) -> Vec<Node> {
+    let basic_block_map: HashMap<&Box<dyn BasicBlock>, usize> = basic_blocks.iter().enumerate().map(|(i, b)| (b, i)).collect();
+    let used_blocks: Vec<Box<dyn BasicBlock>> = self.consume_basic_block(config);
 
-    let mut nodes = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3];
-    // if "shift_len" in config.input_params 
-    if config.input_params.contains_key("shift_len") {
-      let shift_len = config.input_params.get("shift_len").unwrap();
-      nodes = nodes.iter().map(|x| x + shift_len).collect();
-    }
+    let nodes: Vec<usize> = used_blocks.iter().map(|b| *basic_block_map.get(b).unwrap()).collect();
 
+    // TODO: we need to handle axes from config later
     let inputs = vec![
       vec![(-1, 0)],         // max
       vec![(-1, 0), (0, 0)], // sub
