@@ -17,11 +17,12 @@ use std::collections::HashMap;
 
 pub struct CQBasicBlock {
   pub table_dict: HashMap<Fr, usize>,
+  pub name: String,
 }
 
 impl BasicBlock for CQBasicBlock {
   fn name(&self) -> String {
-    "CQ".to_string()
+    format!("CQ({})", self.name)
   }
 
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
