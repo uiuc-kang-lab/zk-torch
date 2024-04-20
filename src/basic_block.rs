@@ -127,7 +127,9 @@ pub trait BasicBlock {
   }
 }
 
-// hash for trait basicblock
+// Q. Do we have to distinguish basic blocks with different models (e.g. table for CQ) in the hash fn?
+// A. Yes, we need; but we implement name() for each basic block to distinguish them. 
+//    Please see the implementation of name() in CQBasicBlock and CQ2BasicBlock.
 impl std::hash::Hash for dyn BasicBlock {
   fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
     self.name().hash(state);

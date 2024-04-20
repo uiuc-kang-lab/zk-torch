@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 pub struct CQBasicBlock {
   pub table_dict: HashMap<Fr, usize>,
-  pub name: String,
+  pub name: String, // we put function name here, such as "Range: 0.."
 }
 
 impl BasicBlock for CQBasicBlock {
