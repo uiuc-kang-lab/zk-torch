@@ -130,7 +130,8 @@ pub trait BasicBlock {
 /// Hash, PartialEq, Eq are implemented for dyn BasicBlock trait objects
 /// so that BasicBlock can be used in HashMaps, which is useful for tracking
 /// the usage of BasicBlocks in a graph. This prevents redundant setups for 
-/// the same BasicBlock.
+/// the same BasicBlock (e.g., we use CQ2 for ReLU and Log, but we don't 
+/// want to setup CQ2 twice for ReLU)
 impl std::hash::Hash for dyn BasicBlock {
   fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
     self.name().hash(state);
