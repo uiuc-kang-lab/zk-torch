@@ -127,9 +127,10 @@ pub trait BasicBlock {
   }
 }
 
-// Q. Do we have to distinguish basic blocks with different models (e.g. table for CQ) in the hash fn?
-// A. Yes, we need; but we implement name() for each basic block to distinguish them. 
-//    Please see the implementation of name() in CQBasicBlock and CQ2BasicBlock.
+/// Hash, PartialEq, Eq are implemented for dyn BasicBlock trait objects
+/// so that BasicBlock can be used in HashMaps, which is useful for tracking
+/// the usage of BasicBlocks in a graph. This prevents redundant setups for 
+/// the same BasicBlock.
 impl std::hash::Hash for dyn BasicBlock {
   fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
     self.name().hash(state);
