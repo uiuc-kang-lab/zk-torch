@@ -47,6 +47,7 @@ pub struct SRS {
   pub Y1P: G1Projective,
   pub Y2P: G2Projective,
 }
+#[derive(Clone)]
 pub struct Data {
   pub raw: Vec<Fr>,
   pub poly: DensePolynomial<Fr>,
@@ -83,6 +84,9 @@ impl DataEnc {
 pub trait BasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     vec![]
+  }
+  fn encodeOutputs(&self, srs: &SRS, _model: &ArrayD<Data>, _inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
+    outputs.iter().map(|x| util::convert_to_data(srs, x)).collect()
   }
   fn setup(&self, _srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
     (Vec::new(), Vec::new())

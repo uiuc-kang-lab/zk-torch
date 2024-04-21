@@ -23,6 +23,20 @@ impl Graph {
     });
     return outputs;
   }
+  pub fn encodeOutputs(
+    &self,
+    srs: &SRS,
+    models: &Vec<&ArrayD<Data>>,
+    inputs: &Vec<&ArrayD<Data>>,
+    outputs: &Vec<&Vec<&ArrayD<Fr>>>,
+  ) -> Vec<Vec<ArrayD<Data>>> {
+    let mut outputsEnc = vec![vec![]; self.nodes.len()];
+    self.nodes.iter().enumerate().for_each(|(i, n)| {
+      let myInputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputsEnc[*j as usize][*k]) }).collect();
+      outputsEnc[i] = self.basic_blocks[n.basic_block].encodeOutputs(srs, &models[n.basic_block], &myInputs, outputs[i]);
+    });
+    return outputsEnc;
+  }
   pub fn setup(&self, srs: &SRS, models: &Vec<&ArrayD<Data>>) -> Vec<(Vec<G1Projective>, Vec<G2Projective>)> {
     self.basic_blocks.iter().zip(models.iter()).map(|(b, m)| b.setup(srs, *m)).collect()
   }

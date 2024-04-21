@@ -20,7 +20,7 @@ fn testBasicBlock<BB: BasicBlock>(mut basic_block: BB, srs: &SRS, model: &ArrayD
   let setup = (&setup.0, &setup.1);
   let inputs: Vec<ArrayD<Data>> = inputs.iter().map(|input| convert_to_data(srs, input)).collect();
   let inputs: Vec<&ArrayD<Data>> = inputs.iter().map(|input| input).collect();
-  let outputs: Vec<ArrayD<Data>> = outputs.iter().map(|output| convert_to_data(srs, output)).collect();
+  let outputs: Vec<ArrayD<Data>> = basic_block.encodeOutputs(srs, &model, &inputs, &outputs);
   let outputs: Vec<&ArrayD<Data>> = outputs.iter().map(|output| output).collect();
   let mut rng2 = rng.clone();
   let proof = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng);
