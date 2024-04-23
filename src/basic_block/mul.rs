@@ -10,7 +10,7 @@ use rand::{rngs::StdRng, SeedableRng};
 pub struct MulConstBasicBlock {
   pub c: usize,
 }
-impl BasicBlock for MulConstBasicBlock {
+/*impl BasicBlock for MulConstBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1 && inputs[0].ndim() == 1);
     vec![inputs[0].map(|x| *x * Fr::from(self.c as u32))]
@@ -84,7 +84,7 @@ impl BasicBlock for MulScalarBasicBlock {
     let rhs = Bn254::pairing(srs.X1A[0], proof.1[0]);
     assert!(lhs == rhs);
   }
-}
+}*/
 pub struct MulBasicBlock;
 impl BasicBlock for MulBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
@@ -125,17 +125,20 @@ impl BasicBlock for MulBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
-  ) {
+  ) -> Vec<Vec<(G1Affine, G2Affine)>> {
     let inp0 = inputs[0].first().unwrap();
     let inp1 = inputs[1].first().unwrap();
     let out = outputs[0].first().unwrap();
+    let mut checks = vec![];
     // Verify f(x)*g(x)-h(x)=z(x)t(x)
-    let lhs = Bn254::pairing(inp0.g1, proof.1[0]) - Bn254::pairing(out.g1, srs.X2A[0]);
-    let rhs = Bn254::pairing(proof.0[0], srs.X2A[inp0.len] - srs.X2A[0]) + Bn254::pairing(proof.0[1], srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![
+      (inp0.g1, proof.1[0]),
+      (-out.g1, srs.X2A[0]),
+      (-proof.0[0], (srs.X2A[inp0.len] - srs.X2A[0]).into()),
+      (-proof.0[1], srs.Y2A),
+    ]);
     // Verify gx2
-    let lhs = Bn254::pairing(inp1.g1, srs.X2A[0]);
-    let rhs = Bn254::pairing(srs.X1A[0], proof.1[0]);
-    assert!(lhs == rhs);
+    checks.push(vec![(inp1.g1, srs.X2A[0]), (srs.X1A[0], -proof.1[0])]);
+    checks
   }
 }

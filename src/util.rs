@@ -148,17 +148,17 @@ pub fn convert_to_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
 pub fn combine_pairing_checks(checks: &Vec<&Vec<(G1Affine, G2Affine)>>) -> (Vec<G1Affine>, Vec<G2Affine>) {
   println!("{:?}", checks.iter().map(|x| x.len()).sum::<usize>());
 
-  let mut a = HashMap::new();
-  let mut b = HashMap::new();
+  let mut A = HashMap::new();
+  let mut B = HashMap::new();
   let mut res: (Vec<G1Affine>, Vec<G2Affine>) = (Vec::new(), Vec::new());
 
   let mut rng = StdRng::from_entropy();
   let gamma = Fr::rand(&mut rng);
   let mut curr = gamma;
-  for eqn in checks.iter() {
-    for pairing in eqn.iter() {
-      a.entry(pairing.0).or_insert(HashSet::new()).insert((pairing.1, curr));
-      b.entry(pairing.1).or_insert(HashSet::new()).insert((pairing.0, curr));
+  for check in checks.iter() {
+    for pairing in check.iter() {
+      A.entry(pairing.0).or_insert(HashSet::new()).insert((pairing.1, curr));
+      B.entry(pairing.1).or_insert(HashSet::new()).insert((pairing.0, curr));
     }
     curr *= gamma;
   }
@@ -167,50 +167,51 @@ pub fn combine_pairing_checks(checks: &Vec<&Vec<(G1Affine, G2Affine)>>) -> (Vec<
     let (x, y) = a.xy().unwrap();
     (*x, *y)
   }
-  let mut a2 = BTreeSet::from_iter(a.iter().map(|(x, y)| (y.len(), get_xy(x))));
-  let mut b2 = BTreeSet::from_iter(b.iter().map(|(x, y)| (y.len(), get_xy(x))));
+  let mut ATree = BTreeSet::from_iter(A.iter().map(|(p, s)| (s.len(), get_xy(p))));
+  let mut BTree = BTreeSet::from_iter(B.iter().map(|(p, s)| (s.len(), get_xy(p))));
 
-  while b.len() > 0 {
-    let (ax, _) = a2.last().unwrap();
-    let (bx, _) = b2.last().unwrap();
-    if ax > bx {
-      // Greedily combine g1 elements
-      let (_, ay) = a2.pop_last().unwrap();
-      let temp: G1Affine = G1Affine::new_unchecked(ay.0, ay.1);
-      res.0.push(temp);
-      res.1.push(a[&temp].iter().map(|(x, y)| *x * y).sum::<G2Projective>().into());
-      for (x, y) in a[&temp].iter() {
-        let y1 = get_xy(x);
-        b2.remove(&(b[&x].len(), y1));
-        let temp2 = b.get_mut(&x).unwrap();
-        if temp2.len() == 1 {
-          b.remove(&x);
+  while !A.is_empty() {
+    let (AAmt, _) = ATree.last().unwrap();
+    let (BAmt, _) = BTree.last().unwrap();
+    if AAmt > BAmt {
+      // Combine G2 elements with the same G1 element
+      let (_, AMax) = ATree.pop_last().unwrap();
+      let AMax = G1Affine::new_unchecked(AMax.0, AMax.1);
+      res.0.push(AMax);
+      res.1.push(A[&AMax].iter().map(|(p, r)| *p * r).sum::<G2Projective>().into()); //TODO: Convert to MSM
+      for (p, r) in A[&AMax].iter() {
+        let S = B.get_mut(&p).unwrap();
+        let p2 = get_xy(p);
+        BTree.remove(&(S.len(), p2));
+        if S.len() == 1 {
+          B.remove(&p);
         } else {
-          temp2.remove(&(temp, *y));
-          b2.insert((b[&x].len(), y1));
+          S.remove(&(AMax, *r));
+          BTree.insert((S.len(), p2));
         }
       }
-      a.remove(&temp);
+      A.remove(&AMax);
     } else {
-      // Greedily combine g2 elements
-      let (_, ay) = b2.pop_last().unwrap();
-      let temp: G2Affine = G2Affine::new_unchecked(ay.0, ay.1);
-      res.0.push(b[&temp].iter().map(|(x, y)| *x * y).sum::<G1Projective>().into());
-      res.1.push(temp);
-      for (x, y) in b[&temp].iter() {
-        let y1 = get_xy(x);
-        a2.remove(&(a[&x].len(), y1));
-        let temp2 = a.get_mut(&x).unwrap();
-        if temp2.len() == 1 {
-          a.remove(&x);
+      // Combine G1 elements with the same G2 element
+      let (_, BMax) = BTree.pop_last().unwrap();
+      let BMax: G2Affine = G2Affine::new_unchecked(BMax.0, BMax.1);
+      res.0.push(B[&BMax].iter().map(|(p, r)| *p * r).sum::<G1Projective>().into()); //TODO: Convert to MSM
+      res.1.push(BMax);
+      for (p, r) in B[&BMax].iter() {
+        let S = A.get_mut(&p).unwrap();
+        let p2 = get_xy(p);
+        ATree.remove(&(S.len(), p2));
+        if S.len() == 1 {
+          A.remove(&p);
         } else {
-          temp2.remove(&(temp, *y));
-          a2.insert((a[&x].len(), y1));
+          S.remove(&(BMax, *r));
+          ATree.insert((S.len(), p2));
         }
       }
-      b.remove(&temp);
+      B.remove(&BMax);
     }
   }
+  assert!(ATree.is_empty() && B.is_empty() && BTree.is_empty());
   println!("{:?}", res.0.len());
   res
 }
