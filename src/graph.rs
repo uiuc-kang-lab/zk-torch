@@ -2,7 +2,7 @@ use crate::basic_block::*;
 use crate::util;
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::{Pairing, PairingOutput};
-use ark_std::{UniformRand, Zero};
+use ark_std::Zero;
 use ndarray::ArrayD;
 use rand::rngs::StdRng;
 
@@ -57,7 +57,7 @@ impl Graph {
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>)>,
     rng: &mut StdRng,
   ) {
-    let pairings: Vec<Vec<Vec<(G1Affine, G2Affine, bool)>>> = self
+    let pairings: Vec<Vec<Vec<(G1Affine, G2Affine)>>> = self
       .nodes
       .iter()
       .enumerate()

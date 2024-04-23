@@ -106,7 +106,7 @@ pub trait BasicBlock {
     _outputs: &Vec<&ArrayD<DataEnc>>,
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
-  ) -> Vec<Vec<(G1Affine, G2Affine, bool)>> {
+  ) -> Vec<Vec<(G1Affine, G2Affine)>> {
     vec![]
   }
 }

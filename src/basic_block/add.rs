@@ -42,14 +42,10 @@ impl BasicBlock for AddBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
-  ) -> Vec<Vec<(G1Affine, G2Affine, bool)>> {
+  ) -> Vec<Vec<(G1Affine, G2Affine)>> {
     let a = inputs[0].first().unwrap();
     let b = inputs[1].first().unwrap();
     let c = outputs[0].first().unwrap();
-    vec![vec![
-      ((a.g1 + b.g1).into(), srs.X2A[0], false),
-      (-c.g1, srs.X2A[0], false),
-      (-proof.0[0], srs.Y2A, false),
-    ]]
+    vec![vec![((a.g1 + b.g1).into(), srs.X2A[0]), (-c.g1, srs.X2A[0]), (-proof.0[0], srs.Y2A)]]
   }
 }
