@@ -23,7 +23,7 @@ impl BasicBlock for AddBasicBlock {
     let b = inputs[1].first().unwrap();
     vec![arr0(Data {
       raw: outputs[0].clone().into_raw_vec(),
-      poly: a.poly.clone() + b.poly.clone(),
+      poly: (&a.poly) + (&b.poly),
       g1: a.g1 + b.g1,
       r: a.r + b.r,
     })
