@@ -177,38 +177,38 @@ pub fn combine_pairing_checks(checks: &Vec<&Vec<(G1Affine, G2Affine)>>) -> (Vec<
       // Combine G2 elements with the same G1 element
       let (_, AMax) = ATree.pop_last().unwrap();
       let AMax = G1Affine::new_unchecked(AMax.0, AMax.1);
+      let (points, scalars):(Vec<G2Affine>, Vec<Fr>) = A.remove(&AMax).unwrap().into_iter().unzip();
       res.0.push(AMax);
-      res.1.push(A[&AMax].iter().map(|(p, r)| *p * r).sum::<G2Projective>().into()); //TODO: Convert to MSM
-      for (p, r) in A[&AMax].iter() {
+      res.1.push(msm::<G2Projective>(&points, &scalars).into());
+      for (p, r) in points.iter().zip(scalars) {
         let S = B.get_mut(&p).unwrap();
         let p2 = get_xy(p);
         BTree.remove(&(S.len(), p2));
         if S.len() == 1 {
           B.remove(&p);
         } else {
-          S.remove(&(AMax, *r));
+          S.remove(&(AMax, r));
           BTree.insert((S.len(), p2));
         }
       }
-      A.remove(&AMax);
     } else {
       // Combine G1 elements with the same G2 element
       let (_, BMax) = BTree.pop_last().unwrap();
       let BMax: G2Affine = G2Affine::new_unchecked(BMax.0, BMax.1);
-      res.0.push(B[&BMax].iter().map(|(p, r)| *p * r).sum::<G1Projective>().into()); //TODO: Convert to MSM
+      let (points, scalars):(Vec<G1Affine>, Vec<Fr>) = B.remove(&BMax).unwrap().into_iter().unzip();
+      res.0.push(msm::<G1Projective>(&points, &scalars).into());
       res.1.push(BMax);
-      for (p, r) in B[&BMax].iter() {
+      for (p, r) in points.iter().zip(scalars) {
         let S = A.get_mut(&p).unwrap();
         let p2 = get_xy(p);
         ATree.remove(&(S.len(), p2));
         if S.len() == 1 {
           A.remove(&p);
         } else {
-          S.remove(&(BMax, *r));
+          S.remove(&(BMax, r));
           ATree.insert((S.len(), p2));
         }
       }
-      B.remove(&BMax);
     }
   }
   assert!(ATree.is_empty() && B.is_empty() && BTree.is_empty());
