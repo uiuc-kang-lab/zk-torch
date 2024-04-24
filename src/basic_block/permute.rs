@@ -2,12 +2,11 @@
 #![allow(non_upper_case_globals)]
 use super::{BasicBlock, Data, DataEnc, SRS};
 use crate::util::{self, calc_pow};
-use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ec::pairing::Pairing;
+use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
-use ark_std::{ops::Mul, ops::Sub, One, UniformRand, Zero};
-use ndarray::{Array, ArrayD, Axis, IxDyn};
+use ark_std::{ops::Mul, ops::Sub, UniformRand, Zero};
+use ndarray::{Array, ArrayD, Axis};
 use rand::{rngs::StdRng, SeedableRng};
 
 pub struct PermuteBasicBlock {
@@ -124,7 +123,8 @@ impl BasicBlock for PermuteBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
-  ) {
+  ) -> Vec<Vec<(G1Affine, G2Affine)>> {
+    let mut checks = Vec::new();
     let alpha = Fr::rand(rng);
     let (input, output) = (inputs[0], outputs[0]);
 
@@ -153,33 +153,45 @@ impl BasicBlock for PermuteBasicBlock {
 
     // Calculate flat_L
     let temp: Vec<_> = (0..n).map(|i| input[i].g1).collect();
-    let flat_L_g1 = util::msm::<G1Projective>(&temp, &alpha_pow[..n]);
+    let flat_L_g1 = util::msm::<G1Projective>(&temp, &alpha_pow[..n]).into();
 
     // Calculate flat_R
     let temp: Vec<_> = (0..n2).map(|i| output[i].g1).collect();
-    let flat_R_g1 = util::msm::<G1Projective>(&temp, &c);
+    let flat_R_g1 = util::msm::<G1Projective>(&temp, &c).into();
 
     // Check left(x) (left = flat_L * b)
-    let lhs = Bn254::pairing(flat_L_g1, b_g2) - Bn254::pairing(left_x, srs.X2A[0]);
-    let rhs = Bn254::pairing(left_Q_x, srs.X2A[m] - srs.X2A[0]) + Bn254::pairing(corr1, srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![
+      (flat_L_g1, b_g2),
+      (-left_x, srs.X2A[0]),
+      (-left_Q_x, (srs.X2A[m] - srs.X2A[0]).into()),
+      (-corr1, srs.Y2A),
+    ]);
 
     // Check left(x) - left(0) is divisible by x
-    let lhs = Bn254::pairing(left_x - left_zero, srs.X2A[0]);
-    let rhs = Bn254::pairing(left_zero_div, srs.X2A[1]) + Bn254::pairing(corr2, srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![
+      ((left_x - left_zero).into(), srs.X2A[0]),
+      (-left_zero_div, srs.X2A[1]),
+      (-corr2, srs.Y2A),
+    ]);
 
     // Check right(x) (right = flat_R * d)
-    let lhs = Bn254::pairing(flat_R_g1, d_g2) - Bn254::pairing(right_x, srs.X2A[0]);
-    let rhs = Bn254::pairing(right_Q_x, srs.X2A[m2] - srs.X2A[0]) + Bn254::pairing(corr3, srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![
+      (flat_R_g1, d_g2),
+      (-right_x, srs.X2A[0]),
+      (-right_Q_x, (srs.X2A[m2] - srs.X2A[0]).into()),
+      (-corr3, srs.Y2A),
+    ]);
 
     // Assume right(0) = left(0)*m/m2 (which assumes ∑left=∑right)
     let right_zero: G1Affine = (left_zero * (Fr::from(m as u32) * Fr::from(m2 as u32).inverse().unwrap())).into();
 
     //check right(x) - right(0) is divisible by x
-    let lhs = Bn254::pairing(right_x - right_zero, srs.X2A[0]);
-    let rhs = Bn254::pairing(right_zero_div, srs.X2A[1]) + Bn254::pairing(corr4, srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![
+      ((right_x - right_zero).into(), srs.X2A[0]),
+      (-right_zero_div, srs.X2A[1]),
+      (-corr4, srs.Y2A),
+    ]);
+
+    checks
   }
 }

@@ -1,8 +1,9 @@
 use crate::basic_block::*;
-use crate::convert_to_data;
-use crate::ptau;
-use ark_bn254::{Fr, G1Affine, G2Affine};
+use crate::{convert_to_data, ptau, util};
+use ark_bn254::{Bn254, Fr, G1Affine, G2Affine};
+use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_std::UniformRand;
+use ark_std::Zero;
 use ndarray::{arr0, concatenate, s, ArrayD, Axis, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use std::collections::HashMap;
@@ -34,7 +35,10 @@ fn testBasicBlock<BB: BasicBlock>(mut basic_block: BB, srs: &SRS, model: &ArrayD
   let inputs: Vec<&ArrayD<DataEnc>> = inputs.iter().map(|input| input).collect();
   let outputs: Vec<ArrayD<DataEnc>> = outputs.iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect();
   let outputs: Vec<&ArrayD<DataEnc>> = outputs.iter().map(|output| output).collect();
-  basic_block.verify(srs, &model, &inputs, &outputs, proof, &mut rng2);
+  let pairings = basic_block.verify(srs, &model, &inputs, &outputs, proof, &mut rng2);
+  let pairings = pairings.iter().map(|x| x).collect();
+  let pairings = util::combine_pairing_checks(&pairings);
+  assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
 }
 
 #[test]

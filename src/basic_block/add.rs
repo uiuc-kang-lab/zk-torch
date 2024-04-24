@@ -1,6 +1,5 @@
 use super::{BasicBlock, Data, DataEnc, SRS};
-use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ec::pairing::Pairing;
+use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ndarray::{azip, ArrayD, IxDyn};
 use rand::rngs::StdRng;
 

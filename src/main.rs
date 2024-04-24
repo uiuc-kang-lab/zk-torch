@@ -20,30 +20,38 @@ fn main() {
   let srs = &ptau::load_file("challenge", 7);
   let mut graph = Graph {
     basic_blocks: vec![
-      //Box::new(CQLinBasicBlock),
-      //Box::new(ReLUBasicBlock { input_SF: 1, output_SF: 1 }),
-      //Box::new(CQ2BasicBlock { table_dict: HashMap::new() }),
-      Box::new(AddBasicBlock),
+      Box::new(CQLinBasicBlock),
+      Box::new(ReLUBasicBlock { input_SF: 1, output_SF: 1 }),
+      Box::new(CQ2BasicBlock { table_dict: HashMap::new() }),
     ],
-    nodes: vec![Node {
-      basic_block: 0,
-      inputs: vec![(-1, 0), (-1, 0)],
-    }],
+    nodes: vec![
+      Node {
+        basic_block: 0,
+        inputs: vec![(-1, 0)],
+      },
+      Node {
+        basic_block: 1,
+        inputs: vec![(0, 0)],
+      },
+      Node {
+        basic_block: 2,
+        inputs: vec![(0, 0), (1, 0)],
+      },
+    ],
   };
 
-  //const m: usize = 1 << 4;
+  const m: usize = 1 << 4;
   const n: usize = 1 << 2;
-  //let matrix: Vec<_> = (0..n * m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-2..2))).collect();
-  //let matrix = ArrayD::from_shape_vec(vec![n, m], matrix).unwrap();
+  let matrix: Vec<_> = (0..n * m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-2..2))).collect();
+  let matrix = ArrayD::from_shape_vec(vec![n, m], matrix).unwrap();
   let input: Vec<_> = (0..n).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
-  let input = ArrayD::from_shape_vec(vec![n], input).unwrap();
+  let input = ArrayD::from_shape_vec(vec![1, n], input).unwrap();
 
   //Run:
   let inputs = vec![&input];
   let empty = ArrayD::zeros(IxDyn(&[0]));
-  //let relu_cq_table = util::gen_cq_table(&graph.basic_blocks[1], -(1 << 5), 1 << 6);
-  //let models = vec![&matrix, &empty, &relu_cq_table];
-  let models = vec![&empty];
+  let relu_cq_table = util::gen_cq_table(&graph.basic_blocks[1], -(1 << 5), 1 << 6);
+  let models = vec![&matrix, &empty, &relu_cq_table];
   let outputs = graph.run(&inputs, &models);
   let outputs: Vec<Vec<&ArrayD<Fr>>> = outputs.iter().map(|output| output.iter().map(|x| x).collect()).collect();
 

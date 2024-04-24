@@ -1,7 +1,6 @@
 use super::{BasicBlock, Data, DataEnc, SRS};
 use crate::util;
-use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ec::pairing::Pairing;
+use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{ops::Mul, ops::Sub, UniformRand};
 use ndarray::{azip, ArrayD};
@@ -10,7 +9,7 @@ use rand::{rngs::StdRng, SeedableRng};
 pub struct MulConstBasicBlock {
   pub c: usize,
 }
-/*impl BasicBlock for MulConstBasicBlock {
+impl BasicBlock for MulConstBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1 && inputs[0].ndim() == 1);
     vec![inputs[0].map(|x| *x * Fr::from(self.c as u32))]
@@ -35,10 +34,12 @@ pub struct MulConstBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
-  ) {
-    let lhs = Bn254::pairing(inputs[0].first().unwrap().g1, srs.X2P[0] * Fr::from(self.c as u32));
-    let rhs = Bn254::pairing(outputs[0].first().unwrap().g1, srs.X2A[0]) + Bn254::pairing(proof.0[0], srs.Y2A);
-    assert!(lhs == rhs);
+  ) -> Vec<Vec<(G1Affine, G2Affine)>> {
+    vec![vec![
+      (inputs[0].first().unwrap().g1, (srs.X2P[0] * Fr::from(self.c as u32)).into()),
+      (-outputs[0].first().unwrap().g1, srs.X2A[0]),
+      (-proof.0[0], srs.Y2A),
+    ]]
   }
 }
 pub struct MulScalarBasicBlock;
@@ -71,20 +72,20 @@ impl BasicBlock for MulScalarBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
-  ) {
+  ) -> Vec<Vec<(G1Affine, G2Affine)>> {
+    let mut checks = Vec::new();
     let inp0 = inputs[0].first().unwrap();
     let inp1 = inputs[1].first().unwrap();
     let out = outputs[0].first().unwrap();
     // Verify f(x)*g(x)=h(x)
-    let lhs = Bn254::pairing(inp0.g1, proof.1[0]);
-    let rhs = Bn254::pairing(out.g1, srs.X2A[0]) + Bn254::pairing(proof.0[0], srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![(inp0.g1, proof.1[0]), (-out.g1, srs.X2A[0]), (-proof.0[0], srs.Y2A)]);
+
     // Verify gx2
-    let lhs = Bn254::pairing(inp1.g1, srs.X2A[0]);
-    let rhs = Bn254::pairing(srs.X1A[0], proof.1[0]);
-    assert!(lhs == rhs);
+    checks.push(vec![(inp1.g1, srs.X2A[0]), (srs.X1A[0], -proof.1[0])]);
+
+    checks
   }
-}*/
+}
 pub struct MulBasicBlock;
 impl BasicBlock for MulBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

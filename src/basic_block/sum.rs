@@ -2,8 +2,7 @@
 #![allow(non_upper_case_globals)]
 use super::{BasicBlock, Data, DataEnc, SRS};
 use crate::util;
-use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ec::pairing::Pairing;
+use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{UniformRand, Zero};
@@ -55,7 +54,7 @@ impl BasicBlock for SumBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
-  ) {
+  ) -> Vec<Vec<(G1Affine, G2Affine)>> {
     let input = inputs[0];
     let m = input[0].len;
     let [zero_div, C] = proof.0[..] else { panic!("Wrong proof format") };
@@ -63,8 +62,6 @@ impl BasicBlock for SumBasicBlock {
     let input: G1Projective = input.iter().map(|x| x.g1).sum();
     let zero = outputs[0].first().unwrap().g1 * Fr::from(m as u32).inverse().unwrap();
 
-    let lhs = Bn254::pairing(input - zero, srs.X2A[0]);
-    let rhs = Bn254::pairing(zero_div, srs.X2A[1]) + Bn254::pairing(C, srs.Y2A);
-    assert!(lhs == rhs);
+    vec![vec![((input - zero).into(), srs.X2A[0]), (-zero_div, srs.X2A[1]), (-C, srs.Y2A)]]
   }
 }

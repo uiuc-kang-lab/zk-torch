@@ -1,6 +1,5 @@
 use super::{BasicBlock, Data, DataEnc, SRS};
-use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ec::pairing::Pairing;
+use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ndarray::{azip, ArrayD, IxDyn};
 use rand::rngs::StdRng;
 
@@ -42,13 +41,11 @@ impl BasicBlock for SubBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
-  ) {
+  ) -> Vec<Vec<(G1Affine, G2Affine)>> {
     let a = inputs[0].first().unwrap();
     let b = inputs[1].first().unwrap();
     let c = outputs[0].first().unwrap();
     // Verify f(x)-g(x)=h(x)
-    let lhs = Bn254::pairing(a.g1 - b.g1, srs.X2A[0]);
-    let rhs = Bn254::pairing(c.g1, srs.X2A[0]) + Bn254::pairing(proof.0[0], srs.Y2A);
-    assert!(lhs == rhs);
+    vec![vec![((a.g1 - b.g1).into(), srs.X2A[0]), (-c.g1, srs.X2A[0]), (-proof.0[0], srs.Y2A)]]
   }
 }
