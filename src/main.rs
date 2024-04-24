@@ -54,6 +54,7 @@ fn main() {
   let models = vec![&matrix, &empty, &relu_cq_table];
   let outputs = graph.run(&inputs, &models);
   let outputs: Vec<Vec<&ArrayD<Fr>>> = outputs.iter().map(|output| output.iter().map(|x| x).collect()).collect();
+  let outputs: Vec<&Vec<&ArrayD<Fr>>> = outputs.iter().map(|output| output).collect();
 
   //Setup:
   let models: Vec<ArrayD<Data>> = models.iter().map(|model| convert_to_data(srs, model)).collect();
@@ -67,7 +68,7 @@ fn main() {
   //Prove:
   let inputs: Vec<ArrayD<Data>> = inputs.iter().map(|input| convert_to_data(srs, input)).collect();
   let inputs: Vec<&ArrayD<Data>> = inputs.iter().map(|input| input).collect();
-  let outputs: Vec<Vec<ArrayD<Data>>> = outputs.iter().map(|outputs| outputs.iter().map(|output| convert_to_data(srs, output)).collect()).collect();
+  let outputs: Vec<Vec<ArrayD<Data>>> = graph.encodeOutputs(srs, &models, &inputs, &outputs);
   let outputs: Vec<Vec<&ArrayD<Data>>> = outputs.iter().map(|outputs| outputs.iter().map(|x| x).collect()).collect();
   let outputs: Vec<&Vec<&ArrayD<Data>>> = outputs.iter().map(|x| x).collect();
   let mut rng = StdRng::from_entropy();

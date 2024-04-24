@@ -1,6 +1,6 @@
 use super::{BasicBlock, Data, DataEnc, SRS};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ndarray::{azip, ArrayD, IxDyn};
+use ndarray::{arr0, azip, ArrayD, IxDyn};
 use rand::rngs::StdRng;
 
 pub struct AddBasicBlock;
@@ -17,34 +17,31 @@ impl BasicBlock for AddBasicBlock {
     }
     vec![r]
   }
-  fn prove(
-    &mut self,
-    srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
-    _model: &ArrayD<Data>,
-    inputs: &Vec<&ArrayD<Data>>,
-    outputs: &Vec<&ArrayD<Data>>,
-    _rng: &mut StdRng,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>) {
+  fn encodeOutputs(&self, _srs: &SRS, _model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
     let a = inputs[0].first().unwrap();
     let b = inputs[1].first().unwrap();
-    let c = outputs[0].first().unwrap();
-    // Blinding
-    let C = srs.X1P[0] * (a.r + b.r - c.r);
-    (vec![C], Vec::new())
+    vec![arr0(Data {
+      raw: outputs[0].clone().into_raw_vec(),
+      poly: (&a.poly) + (&b.poly),
+      g1: a.g1 + b.g1,
+      r: a.r + b.r,
+    })
+    .into_dyn()]
   }
   fn verify(
     &self,
-    srs: &SRS,
+    _srs: &SRS,
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    proof: (&Vec<G1Affine>, &Vec<G2Affine>),
+    _proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
   ) -> Vec<Vec<(G1Affine, G2Affine)>> {
     let a = inputs[0].first().unwrap();
     let b = inputs[1].first().unwrap();
     let c = outputs[0].first().unwrap();
-    vec![vec![((a.g1 + b.g1).into(), srs.X2A[0]), (-c.g1, srs.X2A[0]), (-proof.0[0], srs.Y2A)]]
+    // Verify f(x)+g(x)=h(x)
+    assert!(a.g1 + b.g1 == c.g1);
+    vec![]
   }
 }

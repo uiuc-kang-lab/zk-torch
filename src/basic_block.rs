@@ -47,6 +47,7 @@ pub struct SRS {
   pub Y1P: G1Projective,
   pub Y2P: G2Projective,
 }
+#[derive(Clone)]
 pub struct Data {
   pub raw: Vec<Fr>,
   pub poly: DensePolynomial<Fr>,
@@ -84,9 +85,20 @@ pub trait BasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     vec![]
   }
+
+  // This function encodes the outputs of the BasicBlock into Data objects.
+  // It defaults to running Data::new() on the last dimension of the outputs which runs an FFT and an MSM.
+  // But for certain basic blocks such as add and reshape, this can be done much faster, and it should be overriden in these cases.
+  fn encodeOutputs(&self, srs: &SRS, _model: &ArrayD<Data>, _inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
+    outputs.iter().map(|x| util::convert_to_data(srs, x)).collect()
+  }
+
+  // The subsequent setup/prove/verify functions run on encoded Data objects (vector commitments).
+  // This reduces computation because the Data objects can be encoded once at the beginning and then reused for these functions.
   fn setup(&self, _srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
     (Vec::new(), Vec::new())
   }
+
   fn prove(
     &mut self,
     _srs: &SRS,
@@ -98,6 +110,7 @@ pub trait BasicBlock {
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     (Vec::new(), Vec::new())
   }
+
   fn verify(
     &self,
     _srs: &SRS,
