@@ -71,7 +71,7 @@ impl Graph {
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>)>,
     rng: &mut StdRng,
   ) {
-    let pairings: Vec<Vec<Vec<(G1Affine, G2Affine)>>> = self
+    let pairings: Vec<Vec<PairingCheck>> = self
       .nodes
       .iter()
       .enumerate()

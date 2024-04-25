@@ -47,6 +47,7 @@ pub struct SRS {
   pub Y1P: G1Projective,
   pub Y2P: G2Projective,
 }
+pub type PairingCheck = Vec<(G1Affine, G2Affine)>;
 #[derive(Clone)]
 pub struct Data {
   pub raw: Vec<Fr>,
@@ -119,7 +120,7 @@ pub trait BasicBlock {
     _outputs: &Vec<&ArrayD<DataEnc>>,
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
-  ) -> Vec<Vec<(G1Affine, G2Affine)>> {
+  ) -> Vec<PairingCheck> {
     vec![]
   }
 }

@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::{BasicBlock, Data, SRS};
+use crate::{BasicBlock, Data, PairingCheck, SRS};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::models::short_weierstrass::SWCurveConfig;
 use ark_ec::short_weierstrass::Affine;
@@ -145,7 +145,7 @@ pub fn convert_to_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
   a.map_axis(Axis(a.ndim() - 1), |r| Data::new(srs, r.as_slice().unwrap()))
 }
 
-pub fn combine_pairing_checks(checks: &Vec<&Vec<(G1Affine, G2Affine)>>) -> (Vec<G1Affine>, Vec<G2Affine>) {
+pub fn combine_pairing_checks(checks: &Vec<&PairingCheck>) -> (Vec<G1Affine>, Vec<G2Affine>) {
   println!("{:?}", checks.iter().map(|x| x.len()).sum::<usize>());
 
   let mut A = HashMap::new();
@@ -177,7 +177,7 @@ pub fn combine_pairing_checks(checks: &Vec<&Vec<(G1Affine, G2Affine)>>) -> (Vec<
       // Combine G2 elements with the same G1 element
       let (_, AMax) = ATree.pop_last().unwrap();
       let AMax = G1Affine::new_unchecked(AMax.0, AMax.1);
-      let (points, scalars):(Vec<G2Affine>, Vec<Fr>) = A.remove(&AMax).unwrap().into_iter().unzip();
+      let (points, scalars): (Vec<G2Affine>, Vec<Fr>) = A.remove(&AMax).unwrap().into_iter().unzip();
       res.0.push(AMax);
       res.1.push(msm::<G2Projective>(&points, &scalars).into());
       for (p, r) in points.iter().zip(scalars) {
@@ -195,7 +195,7 @@ pub fn combine_pairing_checks(checks: &Vec<&Vec<(G1Affine, G2Affine)>>) -> (Vec<
       // Combine G1 elements with the same G2 element
       let (_, BMax) = BTree.pop_last().unwrap();
       let BMax: G2Affine = G2Affine::new_unchecked(BMax.0, BMax.1);
-      let (points, scalars):(Vec<G1Affine>, Vec<Fr>) = B.remove(&BMax).unwrap().into_iter().unzip();
+      let (points, scalars): (Vec<G1Affine>, Vec<Fr>) = B.remove(&BMax).unwrap().into_iter().unzip();
       res.0.push(msm::<G1Projective>(&points, &scalars).into());
       res.1.push(BMax);
       for (p, r) in points.iter().zip(scalars) {

@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{BasicBlock, Data, DataEnc, SRS};
+use super::{BasicBlock, Data, DataEnc, PairingCheck, SRS};
 use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
@@ -54,7 +54,7 @@ impl BasicBlock for SumBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
-  ) -> Vec<Vec<(G1Affine, G2Affine)>> {
+  ) -> Vec<PairingCheck> {
     let input = inputs[0];
     let m = input[0].len;
     let [zero_div, C] = proof.0[..] else { panic!("Wrong proof format") };

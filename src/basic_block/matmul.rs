@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{BasicBlock, Data, DataEnc, SRS};
+use super::{BasicBlock, Data, DataEnc, PairingCheck, SRS};
 use crate::util::{self, calc_pow};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
@@ -119,7 +119,7 @@ impl BasicBlock for MatMulBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
-  ) -> Vec<Vec<(G1Affine, G2Affine)>> {
+  ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let l = inputs[0].len();
     let m = inputs[0][0].len;

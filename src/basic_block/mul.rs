@@ -1,4 +1,4 @@
-use super::{BasicBlock, Data, DataEnc, SRS};
+use super::{BasicBlock, Data, DataEnc, PairingCheck, SRS};
 use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
@@ -34,7 +34,7 @@ impl BasicBlock for MulConstBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
-  ) -> Vec<Vec<(G1Affine, G2Affine)>> {
+  ) -> Vec<PairingCheck> {
     vec![vec![
       (inputs[0].first().unwrap().g1, (srs.X2P[0] * Fr::from(self.c as u32)).into()),
       (-outputs[0].first().unwrap().g1, srs.X2A[0]),
@@ -72,7 +72,7 @@ impl BasicBlock for MulScalarBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
-  ) -> Vec<Vec<(G1Affine, G2Affine)>> {
+  ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let inp0 = inputs[0].first().unwrap();
     let inp1 = inputs[1].first().unwrap();
@@ -126,7 +126,7 @@ impl BasicBlock for MulBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
-  ) -> Vec<Vec<(G1Affine, G2Affine)>> {
+  ) -> Vec<PairingCheck> {
     let inp0 = inputs[0].first().unwrap();
     let inp1 = inputs[1].first().unwrap();
     let out = outputs[0].first().unwrap();
