@@ -133,10 +133,6 @@ pub trait BasicBlock {
     vec![]
   }
 
-  // fn setup(&self, _srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
-  //   (Vec::new(), Vec::new())
-  // }
-
   fn prove(
     &mut self,
     _srs: &SRS,
