@@ -30,7 +30,6 @@ pub struct LayerConfig {
   pub layer_type: LayerType,
   pub input_params: HashMap<String, usize>,
   pub weights_names: Vec<String>,
-  // pub table_names: Vec<String>,
 }
 
 pub trait Layer {
@@ -67,7 +66,6 @@ pub trait Layer {
     nodes: &mut &Vec<Node>,
     srs: &SRS,
     setups: &Setup,
-    // models: &Vec<&ArrayD<Data>>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&Vec<&ArrayD<Data>>>,
     basic_blocks: &mut Vec<Box<dyn BasicBlock>>,
