@@ -1,8 +1,11 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
-use super::{BasicBlock, Data, DataEnc, SRS};
-use crate::util::{self, calc_pow};
+use super::{BasicBlock, BasicBlockType, Data, DataEnc, SRS};
+use crate::{
+  setup::{CQLinSetup, CQSetup},
+  util::{self, calc_pow},
+};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
 use ark_ff::Field;
@@ -23,12 +26,16 @@ pub struct PermuteBasicBlock {
 // Where A is in the input matrix, B is the output matrix, and p is the permutation
 // In order to do a matrix transpose, we set p_0[i]=ni and p_1[i]=i
 impl BasicBlock for PermuteBasicBlock {
+  fn block_type(&self) -> BasicBlockType {
+    BasicBlockType::Permute
+  }
+
   fn name(&self) -> String {
     // concat self.permutation to string
     format!("Permute({:?},{:?})", self.permutation.0, self.permutation.1)
   }
 
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1 && inputs[0].ndim() == 2);
     let n = inputs[0].len_of(Axis(0));
     vec![Array::from_shape_fn((self.permutation.0.len(), self.permutation.1.len()), |(i, j)| {
@@ -42,8 +49,7 @@ impl BasicBlock for PermuteBasicBlock {
   fn prove(
     &mut self,
     srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
-    _model: &ArrayD<Data>,
+    _setup: &(Option<&CQLinSetup>, Option<&CQSetup>),
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,

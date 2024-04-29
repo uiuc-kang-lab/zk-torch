@@ -1,8 +1,11 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
-use super::{BasicBlock, Data, DataEnc, SRS};
-use crate::util;
+use super::{BasicBlock, BasicBlockType, Data, DataEnc, SRS};
+use crate::{
+  setup::{CQLinSetup, CQSetup},
+  util,
+};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
 use ark_ff::Field;
@@ -22,52 +25,27 @@ pub struct CQ2BasicBlock {
 }
 
 impl BasicBlock for CQ2BasicBlock {
+  fn block_type(&self) -> BasicBlockType {
+    BasicBlockType::CQ2
+  }
+
   fn name(&self) -> String {
     // concat "CQ2" with self.name
     format!("CQ2({})", self.name)
   }
 
-  fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
-    assert!(model.ndim() == 1 && model.len() == 2);
-    let N = model[0].raw.len();
-    let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
-    let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
-    let mut setup = vec![];
-    let mut setup2 = vec![];
-    for i in 0..2 {
-      setup2.push(util::msm::<G2Projective>(&srs.X2A, &model[i].poly.coeffs) + srs.Y2P * model[i].r);
-      let mut temp = model[i].poly.coeffs[1..].to_vec();
-      temp.resize(N * 2 - 1, Fr::zero());
-      let mut temp2 = srs.X1P[..N].to_vec();
-      temp2.reverse();
-      let mut Q_i_x_1 = util::toeplitz_mul(domain_2N, &temp, &temp2);
-      util::fft_in_place(domain_N, &mut Q_i_x_1);
-      let temp = Fr::from(N as u32).inverse().unwrap();
-      let temp2 = domain_N.group_gen_inv().pow(&[(N - 1) as u64]);
-      Q_i_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x *= temp * temp2.pow(&[i as u64]));
-      setup.extend(Q_i_x_1);
-    }
-    let mut L_i_x_1 = srs.X1P[..N].to_vec();
-    util::ifft_in_place(domain_N, &mut L_i_x_1);
-    let mut L_i_0_x_1 = L_i_x_1.clone();
-    let temp = srs.X1P[N - 1] * Fr::from(N as u64).inverse().unwrap();
-    L_i_0_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x = *x * domain_N.group_gen_inv().pow(&[i as u64]) - temp);
-    setup.extend(L_i_x_1);
-    setup.extend(L_i_0_x_1);
-    return (setup, setup2);
-  }
-
   fn prove(
     &mut self,
     srs: &SRS,
-    setup: (&Vec<G1Affine>, &Vec<G2Affine>),
-    model: &ArrayD<Data>,
+    setup: &(Option<&CQLinSetup>, Option<&CQSetup>),
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     assert!(inputs.len() == 2 && inputs[0].len() == 1 && inputs[1].len() == 1);
-    let N = model[0].raw.len();
+    let setup = setup.1.unwrap();
+    let table = &setup.table;
+    let N = table[0].raw.len();
     let inputs = vec![inputs[0].first().unwrap(), inputs[1].first().unwrap()];
     assert!(inputs[0].raw.len() == inputs[1].raw.len());
     let n = inputs[0].raw.len();
@@ -76,18 +54,18 @@ impl BasicBlock for CQ2BasicBlock {
     let agg_input: Vec<_> = inputs[0].raw.iter().zip(inputs[1].raw.iter()).map(|(x, y)| *x + *y * alpha).collect();
     let mut agg_input = Data::new(srs, &agg_input); //Unnecessary msm
     agg_input.r = inputs[0].r + inputs[1].r * alpha;
-    let agg_model_g1 = model[0].g1 + model[1].g1 * alpha;
-    let agg_model_r = model[0].r + model[1].r * alpha;
+    let agg_table_g1 = table[0].g1 + table[1].g1 * alpha;
+    let agg_table_r = table[0].r + table[1].r * alpha;
 
     // gen(N, t):
-    let Q_i_x_1_A = &setup.0[..N];
-    let Q_i_x_1_B = &setup.0[N..2 * N];
-    let L_i_x_1 = &setup.0[2 * N..3 * N];
-    let L_i_0_x_1 = &setup.0[3 * N..];
+    let Q_i_x_1_A = &setup.Q_i_x_1[0];
+    let Q_i_x_1_B = &setup.Q_i_x_1[1];
+    let L_i_x_1 = &setup.L_i_x_1;
+    let L_i_0_x_1 = &setup.L_i_0_x_1;
 
     if self.table_dict.len() == 0 {
       for i in 0..N {
-        self.table_dict.insert((model[0].raw[i], model[1].raw[i]), i);
+        self.table_dict.insert((table[0].raw[i], table[1].raw[i]), i);
       }
     }
 
@@ -111,7 +89,7 @@ impl BasicBlock for CQ2BasicBlock {
       .map(|(i, y)| {
         (
           **i,
-          Fr::from(*y as u32) * (model[0].raw[**i] + model[1].raw[**i] * alpha + beta).inverse().unwrap(),
+          Fr::from(*y as u32) * (table[0].raw[**i] + table[1].raw[**i] * alpha + beta).inverse().unwrap(),
         )
       })
       .collect();
@@ -147,9 +125,9 @@ impl BasicBlock for CQ2BasicBlock {
     let mut proof: Vec<G1Projective> = proof.iter().enumerate().map(|(i, x)| (*x) + srs.Y1P * r[i]).collect();
     let mut C = vec![
       -(srs.X1P[N] - srs.X1P[0]) * r[2]
-        + agg_model_g1 * r[1]
-        + A_x * agg_model_r
-        + (srs.Y1P * agg_model_r * r[1])
+        + agg_table_g1 * r[1]
+        + A_x * agg_table_r
+        + (srs.Y1P * agg_table_r * r[1])
         + srs.X1P[0] * (r[1] * beta - r[0]),
       -srs.X1P[1] * r[4] + srs.X1P[0] * (r[1] - r[3]),
       -(srs.X1P[n] - srs.X1P[0]) * r[6] + agg_input.g1 * r[5] + B_x * agg_input.r + (srs.Y1P * agg_input.r * r[5]) + srs.X1P[0] * (r[5] * beta),
@@ -158,7 +136,7 @@ impl BasicBlock for CQ2BasicBlock {
     ];
     proof.append(&mut C);
 
-    return (proof, vec![(setup.1[0] + setup.1[1] * alpha).into(), f_x_2]);
+    return (proof, vec![(setup.T_x_2[0] + setup.T_x_2[1] * alpha).into(), f_x_2]);
   }
 
   fn verify(

@@ -1,8 +1,11 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
-use super::{BasicBlock, Data, DataEnc, SRS};
-use crate::util;
+use super::{BasicBlock, BasicBlockType, Data, DataEnc, SRS};
+use crate::{
+  setup::{CQLinSetup, CQSetup},
+  util,
+};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
 use ark_ff::Field;
@@ -14,11 +17,15 @@ use rand::{rngs::StdRng, SeedableRng};
 pub struct SumBasicBlock;
 
 impl BasicBlock for SumBasicBlock {
+  fn block_type(&self) -> BasicBlockType {
+    BasicBlockType::Sum
+  }
+
   fn name(&self) -> String {
     "Sum".to_string()
   }
 
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1 && inputs[0].ndim() == 2);
     vec![arr0(inputs[0].iter().sum::<Fr>()).into_dyn()]
   }
@@ -26,8 +33,7 @@ impl BasicBlock for SumBasicBlock {
   fn prove(
     &mut self,
     srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
-    _model: &ArrayD<Data>,
+    _setup: &(Option<&CQLinSetup>, Option<&CQSetup>),
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,

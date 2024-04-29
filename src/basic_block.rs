@@ -1,5 +1,6 @@
 #![allow(unused_imports)]
 
+use crate::setup::{CQLinSetup, CQSetup};
 use crate::util;
 pub use add::AddBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -89,24 +90,57 @@ impl DataEnc {
   }
 }
 
+pub enum BasicBlockType {
+  Add,
+  ChangeSF,
+  Constant,
+  CQ,
+  CQ2,
+  CQLin,
+  Div,
+  Eq,
+  Exp,
+  Log,
+  MatMul,
+  Max,
+  Mul,
+  MulConst,
+  MulScalar,
+  Permute,
+  ReLU,
+  RoPE,
+  Sqrt,
+  Squeeze,
+  Sub,
+  Sum,
+  Unsqueeze,
+}
+
 pub trait BasicBlock {
+  fn block_type(&self) -> BasicBlockType {
+    BasicBlockType::Constant
+  }
+
   fn name(&self) -> String {
     "".to_string()
   }
 
-  fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn weights_name(&self) -> String {
+    "".to_string()
+  }
+
+  fn run(&self, _weights: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     vec![]
   }
 
-  fn setup(&self, _srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
-    (Vec::new(), Vec::new())
-  }
+  // fn setup(&self, _srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
+  //   (Vec::new(), Vec::new())
+  // }
 
   fn prove(
     &mut self,
     _srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
-    _model: &ArrayD<Data>,
+    _setup: &(Option<&CQLinSetup>, Option<&CQSetup>),
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
@@ -129,8 +163,8 @@ pub trait BasicBlock {
 
 /// Hash, PartialEq, Eq are implemented for dyn BasicBlock trait objects
 /// so that BasicBlock can be used in HashMaps, which is useful for tracking
-/// the usage of BasicBlocks in a graph. This prevents redundant setups for 
-/// the same BasicBlock (e.g., we use CQ2 for ReLU and Log, but we don't 
+/// the usage of BasicBlocks in a graph. This prevents redundant setups for
+/// the same BasicBlock (e.g., we use CQ2 for ReLU and Log, but we don't
 /// want to setup CQ2 twice for ReLU)
 impl std::hash::Hash for dyn BasicBlock {
   fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

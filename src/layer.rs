@@ -1,22 +1,37 @@
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 
-use crate::basic_block::BasicBlock;
 use crate::graph::Node;
+use crate::util::convert_to_data;
+use crate::{basic_block::BasicBlock, setup::Setup};
 pub use add::AddLayer;
+pub use cqlin::CQLinLayer;
 pub use softmax::SoftmaxLayer;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::basic_block::*;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ndarray::ArrayD;
+use ndarray::{ArrayD, IxDyn};
 use rand::rngs::StdRng;
 
 pub mod add;
+pub mod cqlin;
 pub mod softmax;
 
+#[derive(Debug)]
+pub enum LayerType {
+  Add,
+  CQLin,
+  Softmax,
+}
+
+#[derive(Debug)]
 pub struct LayerConfig {
+  pub layer_type: LayerType,
   pub input_params: HashMap<String, usize>,
+  pub weights_names: Vec<String>,
+  // pub table_names: Vec<String>,
 }
 
 pub trait Layer {
@@ -36,14 +51,14 @@ pub trait Layer {
     &self,
     nodes: &Vec<Node>,
     inputs: &Vec<&ArrayD<Fr>>,
-    models: &Vec<&ArrayD<Fr>>,
+    weights: &Vec<Rc<ArrayD<Fr>>>,
     basic_blocks: &Vec<Box<dyn BasicBlock>>,
   ) -> Vec<Vec<ArrayD<Fr>>> {
     let mut outputs = vec![vec![]; nodes.len()];
     nodes.iter().enumerate().for_each(|(i, n)| {
       println!("running {i} {:?}", n.basic_block);
-      let myInputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
-      outputs[i] = basic_blocks[n.basic_block].run(&models[n.basic_block], &myInputs);
+      let inputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
+      outputs[i] = basic_blocks[n.basic_block].run(&weights[n.basic_block], &inputs);
     });
     return outputs;
   }
@@ -52,8 +67,8 @@ pub trait Layer {
     &self,
     nodes: &mut &Vec<Node>,
     srs: &SRS,
-    setups: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>)>,
-    models: &Vec<&ArrayD<Data>>,
+    setups: &Setup,
+    // models: &Vec<&ArrayD<Data>>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&Vec<&ArrayD<Data>>>,
     basic_blocks: &mut Vec<Box<dyn BasicBlock>>,
@@ -63,9 +78,13 @@ pub trait Layer {
       .iter()
       .enumerate()
       .map(|(i, n)| {
-        let myInputs: Vec<&ArrayD<Data>> = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
+        let inputs: Vec<&ArrayD<Data>> = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
+        let empty = convert_to_data(&srs, &ArrayD::zeros(IxDyn(&[0])));
+
         println!("proving {i} {:?}", n.basic_block);
-        basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &myInputs, outputs[i], rng)
+        let bb = &mut basic_blocks[n.basic_block];
+        let setup = (setups.weights.get(&bb.weights_name()), setups.tables.get(&bb.name()));
+        bb.prove(srs, &setup, &inputs, outputs[i], rng)
       })
       .collect()
   }
@@ -74,7 +93,8 @@ pub trait Layer {
     &self,
     nodes: &Vec<Node>,
     srs: &SRS,
-    models: &Vec<&ArrayD<DataEnc>>,
+    weights: &HashMap<String, ArrayD<DataEnc>>,
+    tables: &HashMap<String, ArrayD<DataEnc>>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&Vec<&ArrayD<DataEnc>>>,
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>)>,
@@ -86,7 +106,17 @@ pub trait Layer {
       .enumerate()
       .map(|(i, n)| {
         let myInputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
-        basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng)
+        let bb = &basic_blocks[n.basic_block];
+        let setup = (weights.get(&bb.weights_name()), tables.get(&bb.name()));
+        let empty = convert_to_data(&srs, &ArrayD::zeros(IxDyn(&[0]))).map(|x| DataEnc::new(srs, x));
+        let model = if let Some(s) = setup.0 {
+          s
+        } else if let Some(s) = setup.1 {
+          s
+        } else {
+          &empty
+        };
+        bb.verify(srs, model, &myInputs, outputs[i], proofs[i], rng)
       })
       .collect()
   }

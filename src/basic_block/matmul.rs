@@ -2,7 +2,11 @@
 #![allow(non_upper_case_globals)]
 
 use super::{BasicBlock, Data, DataEnc, SRS};
-use crate::util::{self, calc_pow};
+use crate::{
+  setup::{CQLinSetup, CQSetup},
+  util::{self, calc_pow},
+  BasicBlockType,
+};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
 use ark_ff::Field;
@@ -14,11 +18,15 @@ use rand::{rngs::StdRng, SeedableRng};
 pub struct MatMulBasicBlock;
 
 impl BasicBlock for MatMulBasicBlock {
+  fn block_type(&self) -> BasicBlockType {
+    BasicBlockType::MatMul
+  }
+
   fn name(&self) -> String {
     "MatMul".to_string()
   }
 
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 2 && inputs[0].ndim() == 2 && inputs[1].ndim() == 2 && inputs[0].shape()[1] == inputs[1].shape()[1]);
     let (a, b) = (
       inputs[0].view().into_dimensionality::<Ix2>().unwrap(),
@@ -30,8 +38,7 @@ impl BasicBlock for MatMulBasicBlock {
   fn prove(
     &mut self,
     srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
-    _model: &ArrayD<Data>,
+    _setup: &(Option<&CQLinSetup>, Option<&CQSetup>),
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,

@@ -1,6 +1,7 @@
 use super::{Layer, LayerConfig};
 use crate::basic_block::BasicBlock;
 use crate::graph::Node;
+use crate::{AddBasicBlock, CQ2BasicBlock, ExpBasicBlock, LogBasicBlock, MaxBasicBlock, SubBasicBlock, SumBasicBlock, UnsqueezeBasicBlock};
 use std::collections::HashMap;
 
 pub struct SoftmaxLayer;
@@ -34,29 +35,35 @@ impl Layer for SoftmaxLayer {
   }
 
   fn consume_basic_block(&self, config: &LayerConfig) -> Vec<Box<dyn BasicBlock>> {
-    vec![
-      Box::new(crate::basic_block::MaxBasicBlock),
-      Box::new(crate::basic_block::SubBasicBlock),
-      Box::new(crate::basic_block::ExpBasicBlock {
+    let mut basic_blocks: Vec<Box<dyn BasicBlock>> = vec![
+      Box::new(MaxBasicBlock),
+      Box::new(SubBasicBlock),
+      Box::new(ExpBasicBlock {
         input_SF: *config.input_params.get("input_SF").unwrap(),
         output_SF: *config.input_params.get("output_SF").unwrap(),
       }),
-      Box::new(crate::basic_block::CQ2BasicBlock {
+    ];
+    basic_blocks.extend(vec![
+      Box::new(CQ2BasicBlock {
+        // TODO: make name have the input output sf
         table_dict: HashMap::new(),
-        name: "Exp".to_string(),
-      }),
-      Box::new(crate::basic_block::UnsqueezeBasicBlock),
-      Box::new(crate::basic_block::SumBasicBlock),
-      Box::new(crate::basic_block::LogBasicBlock {
+        name: basic_blocks[basic_blocks.len() - 1].name(),
+      }) as Box<dyn BasicBlock>,
+      Box::new(UnsqueezeBasicBlock) as Box<dyn BasicBlock>,
+      Box::new(SumBasicBlock) as Box<dyn BasicBlock>,
+      Box::new(LogBasicBlock {
         input_SF: *config.input_params.get("input_SF").unwrap(),
         output_SF: *config.input_params.get("output_SF").unwrap(),
-      }),
-      Box::new(crate::basic_block::CQ2BasicBlock {
+      }) as Box<dyn BasicBlock>,
+    ]);
+    basic_blocks.extend(vec![
+      Box::new(CQ2BasicBlock {
         table_dict: HashMap::new(),
-        name: "Log".to_string(),
-      }),
-      Box::new(crate::basic_block::AddBasicBlock),
-    ]
+        name: basic_blocks[basic_blocks.len() - 1].name(),
+      }) as Box<dyn BasicBlock>,
+      Box::new(AddBasicBlock) as Box<dyn BasicBlock>,
+    ]);
+    basic_blocks
   }
 
   fn layer_output_node(&self, config: &LayerConfig) -> (usize, usize) {

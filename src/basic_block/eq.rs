@@ -1,4 +1,6 @@
-use super::{BasicBlock, Data, DataEnc, SRS};
+use crate::setup::{CQLinSetup, CQSetup};
+
+use super::{BasicBlock, BasicBlockType, Data, DataEnc, SRS};
 use ark_bn254::{Bn254, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
 use ndarray::ArrayD;
@@ -7,6 +9,10 @@ use rand::rngs::StdRng;
 pub struct EqBasicBlock;
 
 impl BasicBlock for EqBasicBlock {
+  fn block_type(&self) -> BasicBlockType {
+    BasicBlockType::Eq
+  }
+
   fn name(&self) -> String {
     "Eq".to_string()
   }
@@ -14,8 +20,7 @@ impl BasicBlock for EqBasicBlock {
   fn prove(
     &mut self,
     srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
-    _model: &ArrayD<Data>,
+    _setup: &(Option<&CQLinSetup>, Option<&CQSetup>),
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,

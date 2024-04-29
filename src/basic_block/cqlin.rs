@@ -1,8 +1,11 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
-use super::{BasicBlock, Data, DataEnc, SRS};
-use crate::util::{self, calc_pow};
+use super::{BasicBlock, BasicBlockType, Data, DataEnc, SRS};
+use crate::{
+  setup::{CQLinSetup, CQSetup},
+  util::{self, calc_pow},
+};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
 use ark_ff::Field;
@@ -12,117 +15,46 @@ use ndarray::{ArrayD, Ix2};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 
-pub struct CQLinBasicBlock;
+pub struct CQLinBasicBlock {
+  pub weights_name: String,
+}
 
 // input is rows of A, model is rows of B, outputs are rows of C
 impl BasicBlock for CQLinBasicBlock {
-  fn name(&self) -> String {
-    let name = "CQLin".to_string();
-    let random_string = Fr::rand(&mut rand::thread_rng()).to_string(); // every instance of the block should have a unique name
-    format!("{}-{}", name, random_string)
+  fn block_type(&self) -> BasicBlockType {
+    BasicBlockType::CQLin
   }
 
-  fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    assert!(model.ndim() == 2 && inputs.len() == 1 && inputs[0].ndim() == 2 && inputs[0].shape()[1] == model.shape()[0]);
+  fn name(&self) -> String {
+    format!("CQLin-{}", self.weights_name)
+  }
+
+  fn weights_name(&self) -> String {
+    self.weights_name.clone()
+  }
+
+  fn run(&self, weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    assert!(weights.ndim() == 2 && inputs.len() == 1 && inputs[0].ndim() == 2 && inputs[0].shape()[1] == weights.shape()[0]);
     let (a, b) = (
-      model.view().into_dimensionality::<Ix2>().unwrap(),
+      weights.view().into_dimensionality::<Ix2>().unwrap(),
       inputs[0].view().into_dimensionality::<Ix2>().unwrap(),
     );
     vec![b.dot(&a).into_dyn()]
   }
 
-  fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
-    let m = model.len();
-    let n = model[0].raw.len();
-    let N = srs.X2P.len() - 1;
-    let m_inv = Fr::from(m as u64).inverse().unwrap();
-    let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
-    let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
-    let domain_2m = GeneralEvaluationDomain::<Fr>::new(2 * m).unwrap();
-
-    let mut L_H_i_x = srs.X1P[..n].to_vec();
-    util::ifft_in_place(domain_n, &mut L_H_i_x);
-    let mut L_V_i_x_n: Vec<_> = (0..m).into_par_iter().map(|i| srs.X1P[n * i]).collect();
-    util::ifft_in_place(domain_m, &mut L_V_i_x_n);
-    let mut L_V_i_x: Vec<G1Projective> = srs.X1P[..m].into_par_iter().map(|x| (*x).into()).collect();
-    util::ifft_in_place::<G1Projective>(domain_m, &mut L_V_i_x);
-
-    // Calculate G1 U for R and S
-    let mut temp: Vec<Vec<_>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| srs.X1P[i + n * j]).collect()).collect();
-    temp.par_iter_mut().for_each(|x| util::ifft_in_place(domain_m, x));
-    let mut U: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| temp[j][i]).collect()).collect();
-    U.par_iter_mut().for_each(|x| util::ifft_in_place(domain_n, x));
-
-    // Calculate U for mn-degree check
-    let mut temp: Vec<Vec<_>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| srs.X1P[N - m * n + i + n * j]).collect()).collect();
-    temp.par_iter_mut().for_each(|x| util::ifft_in_place(domain_m, x));
-    let mut U_P_R: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| temp[j][i]).collect()).collect();
-    U_P_R.par_iter_mut().for_each(|x| util::ifft_in_place(domain_n, x));
-
-    // Calculate G2 U for M
-    let mut temp: Vec<Vec<G2Projective>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| srs.X2P[i + n * j]).collect()).collect();
-    temp.par_iter_mut().for_each(|x| util::ifft_in_place(domain_m, x));
-    let mut U2: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| temp[j][i]).collect()).collect();
-    U2.par_iter_mut().for_each(|x| util::ifft_in_place(domain_n, x));
-    let mut V = srs.X1P[m * n - n..m * n].to_vec();
-    util::ifft_in_place(domain_n, &mut V);
-    V.par_iter_mut().for_each(|x| *x *= m_inv);
-
-    let mut srs_star: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| srs.X1P[n * i..n * i + n].to_vec()).collect();
-    srs_star.par_iter_mut().for_each(|x| util::ifft_in_place(domain_n, x));
-    srs_star = (0..n).into_par_iter().map(|i| (0..m).map(|j| srs_star[m - 1 - j][i]).collect()).collect();
-    srs_star.par_iter_mut().for_each(|x| x.append(&mut vec![G1Projective::zero(); m]));
-    srs_star.par_iter_mut().for_each(|x| util::fft_in_place(domain_2m, x));
-
-    let S: Vec<Vec<_>> = (0..m)
-      .into_par_iter()
-      .map(|i| (0..n).map(|j| (U[i][j] * domain_m.element(i).inverse().unwrap() - V[j]) * model[i].raw[j]).collect())
-      .collect();
-    let mut S: Vec<_> = S.par_iter().map(|x| x.iter().sum::<G1Projective>()).collect();
-
-    let R: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| U[i][j] * model[i].raw[j]).collect()).collect();
-    let R: Vec<_> = R.par_iter().map(|x| x.iter().sum::<G1Projective>()).collect();
-
-    let P_R: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| U_P_R[i][j] * model[i].raw[j]).collect()).collect();
-    let mut P_R: Vec<_> = P_R.par_iter().map(|x| x.iter().sum::<G1Projective>()).collect();
-
-    // Calculate C for Q
-    let mut C: Vec<Vec<_>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| model[j].raw[i]).collect()).collect();
-    C.par_iter_mut().for_each(|x| domain_m.ifft_in_place(x));
-
-    // Calculate Q. The C above corresponds to the C in the cqlin paper
-    C.par_iter_mut().for_each(|x| x.append(&mut vec![Fr::zero(); m]));
-    C.par_iter_mut().for_each(|x| domain_2m.fft_in_place(x));
-    let temp: Vec<Vec<_>> = (0..2 * m).into_par_iter().map(|i| (0..n).map(|j| srs_star[j][i] * C[j][i]).collect()).collect();
-    let mut temp: Vec<_> = temp.par_iter().map(|x| x.iter().sum::<G1Projective>()).collect();
-    util::ifft_in_place(domain_2m, &mut temp);
-    let mut temp = temp[m..].to_vec();
-    util::fft_in_place(domain_m, &mut temp);
-    let mut Q: Vec<_> = (0..m).into_par_iter().map(|i| temp[i] * domain_m.element(i) * m_inv).collect();
-    let M_x = (0..m).into_par_iter().map(|i| (0..n).map(|j| U2[i][j] * model[i].raw[j]).sum::<G2Projective>()).sum::<G2Projective>(); //TODO: Change to msm
-
-    let mut setup = R;
-    setup.append(&mut Q);
-    setup.append(&mut S);
-    setup.append(&mut P_R);
-    setup.append(&mut L_V_i_x_n);
-    setup.append(&mut L_V_i_x);
-    setup.append(&mut L_H_i_x);
-    (setup, vec![M_x.into()])
-  }
-
   fn prove(
     &mut self,
     srs: &SRS,
-    setup: (&Vec<G1Affine>, &Vec<G2Affine>),
-    model: &ArrayD<Data>,
+    setup: &(Option<&CQLinSetup>, Option<&CQSetup>),
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
+    let setup = setup.0.unwrap();
+    let weights = &setup.weights;
     let l = inputs[0].len();
-    let m = model.len();
-    let n = model[0].raw.len();
+    let m = weights.len();
+    let n = weights[0].raw.len();
     let N = srs.X2P.len() - 1;
     let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
     let alpha = Fr::rand(rng);
@@ -152,12 +84,12 @@ impl BasicBlock for CQLinBasicBlock {
     let mut flat_C = Data::new(srs, &flat_C);
     flat_C.r = flat_C_r;
 
-    let R = &setup.0[..m];
-    let Q = &setup.0[m..2 * m];
-    let S = &setup.0[2 * m..3 * m];
-    let P_R = &setup.0[3 * m..4 * m];
-    let L_V_i_x_n = &setup.0[4 * m..5 * m];
-    let L_V_i_x = &setup.0[5 * m..6 * m];
+    let R = &setup.R;
+    let Q = &setup.Q;
+    let S = &setup.S;
+    let P_R = &setup.P_R;
+    let L_V_i_x_n = &setup.L_V_i_x_n;
+    let L_V_i_x = &setup.L_V_i_x;
 
     let R_x = util::msm::<G1Projective>(R, &flat_A.raw).into();
     let Q_x = util::msm::<G1Projective>(Q, &flat_A.raw).into();
@@ -197,7 +129,7 @@ impl BasicBlock for CQLinBasicBlock {
     proof.append(&mut C);
 
     // G2 blinding for M
-    let M_x_2 = (setup.1[0] + srs.Y2P * r[8]).into();
+    let M_x_2 = (setup.M_x + srs.Y2P * r[8]).into();
 
     return (proof, vec![M_x_2]);
   }

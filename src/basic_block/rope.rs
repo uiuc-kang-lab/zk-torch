@@ -1,4 +1,4 @@
-use super::BasicBlock;
+use super::{BasicBlock, BasicBlockType};
 use ark_bn254::Fr;
 use ndarray::{arr1, ArrayD};
 
@@ -8,11 +8,15 @@ pub struct RoPEBasicBlock {
 }
 
 impl BasicBlock for RoPEBasicBlock {
+  fn block_type(&self) -> BasicBlockType {
+    BasicBlockType::RoPE
+  }
+
   fn name(&self) -> String {
     format!("RoPE[token_i: {}, output_SF: {}]", self.token_i, self.output_SF)
   }
 
-  fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _weights: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     let mut r1 = vec![];
     let mut r2 = vec![];
     for i in 0..64 {

@@ -1,4 +1,4 @@
-use super::BasicBlock;
+use super::{BasicBlock, BasicBlockType};
 use crate::util;
 use ark_bn254::Fr;
 use ndarray::{arr1, ArrayD};
@@ -8,12 +8,16 @@ pub struct DivScalarBasicBlock {
 }
 
 impl BasicBlock for DivScalarBasicBlock {
+  fn block_type(&self) -> BasicBlockType {
+    BasicBlockType::Div
+  }
+
   fn name(&self) -> String {
     // concat "DivScalar" and self.output_SF
     format!("DivScalar[output_SF: {}]", self.output_SF)
   }
 
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[1].len() == 1);
     let SF = self.output_SF as i32;
     let mut div = vec![];

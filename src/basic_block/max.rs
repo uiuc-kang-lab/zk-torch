@@ -1,4 +1,4 @@
-use super::BasicBlock;
+use super::{BasicBlock, BasicBlockType};
 use ark_bn254::Fr;
 use ark_std::Zero;
 use ndarray::{arr0, ArrayD};
@@ -6,11 +6,15 @@ use ndarray::{arr0, ArrayD};
 pub struct MaxBasicBlock;
 
 impl BasicBlock for MaxBasicBlock {
+  fn block_type(&self) -> BasicBlockType {
+    BasicBlockType::Max
+  }
+
   fn name(&self) -> String {
     "Max".to_string()
   }
 
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1);
     vec![arr0(inputs[0].fold(Fr::zero(), |max, x| {
       if *x < Fr::from(1 << 28) && *x > max {

@@ -1,4 +1,4 @@
-use super::BasicBlock;
+use super::{BasicBlock, BasicBlockType};
 use ark_bn254::Fr;
 use ark_std::Zero;
 use ndarray::{ArrayD, Axis};
@@ -9,11 +9,15 @@ use ndarray::{ArrayD, Axis};
 pub struct SqueezeBasicBlock;
 
 impl BasicBlock for SqueezeBasicBlock {
+  fn block_type(&self) -> BasicBlockType {
+    BasicBlockType::Squeeze
+  }
+
   fn name(&self) -> String {
     "Squeeze".to_string()
   }
 
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     // squeeze the input tensor
     assert!(inputs.len() == 1);
     let r = inputs[0].clone();
@@ -26,6 +30,10 @@ impl BasicBlock for SqueezeBasicBlock {
 pub struct UnsqueezeBasicBlock;
 
 impl BasicBlock for UnsqueezeBasicBlock {
+  fn block_type(&self) -> BasicBlockType {
+    BasicBlockType::Unsqueeze
+  }
+
   fn name(&self) -> String {
     "Unsqueeze".to_string()
   }
