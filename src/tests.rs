@@ -9,7 +9,6 @@ use ark_std::UniformRand;
 use ndarray::{arr0, concatenate, s, ArrayD, Axis, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use std::collections::HashMap;
-use std::rc::Rc;
 
 fn testBasicBlock<BB: BasicBlock>(
   mut basic_block: BB,
@@ -77,13 +76,13 @@ fn testBasicBlocks() {
   testBasicBlock(SubBasicBlock {}, srs, &setup0, &empty, &vec![&a_1, &b]);
   testBasicBlock(SubBasicBlock {}, srs, &setup0, &empty, &vec![&b, &a_1]);
 
-  let table_map = HashMap::from([("test1".to_string(), Rc::new(a.clone())), ("test2".to_string(), Rc::new(ab.clone()))]);
+  let table_map = HashMap::from([("test1".to_string(), a.clone()), ("test2".to_string(), ab.clone())]);
 
   let l: usize = 1 << 3;
   let m: usize = 1 << 2;
   let n: usize = 1 << 1;
   let c = ArrayD::from_shape_fn(IxDyn(&[m, n]), |_| Fr::rand(&mut rng));
-  let weights_map = HashMap::from([("test3".to_string(), Rc::new(c.clone()))]);
+  let weights_map = HashMap::from([("test3".to_string(), c.clone())]);
 
   let setup = Setup::new(&srs, &weights_map, &table_map);
 

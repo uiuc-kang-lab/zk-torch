@@ -4,13 +4,12 @@
 use ark_bn254::Fr;
 use ark_bn254::{G1Affine, G2Affine};
 use basic_block::*;
-use graph::{Graph, Node};
+use graph::Graph;
 use layer::*;
-use ndarray::{ArrayD, IxDyn};
+use ndarray::ArrayD;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
-use std::rc::Rc;
 use util::convert_to_data;
 
 mod basic_block;
@@ -30,7 +29,7 @@ fn main() {
   let matrix: Vec<_> = (0..n * m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-2..2))).collect();
   let matrix = ArrayD::from_shape_vec(vec![n, m], matrix).unwrap();
 
-  let weights = HashMap::from([("w1".to_string(), Rc::new(matrix))]);
+  let weights = HashMap::from([("w1".to_string(), matrix)]);
 
   // create layer 0: a cqlin layer
   let cqlin_config = LayerConfig {
@@ -48,7 +47,7 @@ fn main() {
 
   let mut graph = Graph::new(
     vec![cqlin_config, softmax_config],
-    &weights,
+    weights,
     vec![vec![(-1, 0)], vec![(0, 0)]],
     -(1 << 5),
     1 << 6,

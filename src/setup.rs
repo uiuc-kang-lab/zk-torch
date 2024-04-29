@@ -2,7 +2,7 @@ use crate::util::{self, convert_to_data};
 use ark_ff::Field;
 use ark_std::Zero;
 use rayon::prelude::*;
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 use crate::basic_block::*;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -168,7 +168,7 @@ impl Setup {
     }
   }
 
-  pub fn new(srs: &SRS, weights: &HashMap<String, Rc<ArrayD<Fr>>>, tables: &HashMap<String, Rc<ArrayD<Fr>>>) -> Self {
+  pub fn new(srs: &SRS, weights: &HashMap<String, ArrayD<Fr>>, tables: &HashMap<String, ArrayD<Fr>>) -> Self {
     let weight_setups: HashMap<_, _> = weights.iter().map(|(k, v)| (k.clone(), Self::setup_weights(&srs, v))).collect();
 
     let table_setups: HashMap<_, _> = tables.iter().map(|(k, v)| (k.clone(), Self::setup_table(&srs, v))).collect();

@@ -51,7 +51,7 @@ pub trait Layer {
     &self,
     nodes: &Vec<Node>,
     inputs: &Vec<&ArrayD<Fr>>,
-    weights: &Vec<Rc<ArrayD<Fr>>>,
+    weights: &Vec<&ArrayD<Fr>>,
     basic_blocks: &Vec<Box<dyn BasicBlock>>,
   ) -> Vec<Vec<ArrayD<Fr>>> {
     let mut outputs = vec![vec![]; nodes.len()];

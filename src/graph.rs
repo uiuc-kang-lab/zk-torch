@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 use crate::{basic_block::*, setup::Setup, util, AddLayer, CQLinLayer, Layer, LayerConfig, LayerType, SoftmaxLayer};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -15,9 +15,8 @@ pub struct Graph {
   pub layer_configs: Vec<LayerConfig>,
   pub layer_inputs: Vec<Vec<(i32, usize)>>, // ONNX graph (layer id, layer slot)
   pub basic_blocks: Vec<Box<dyn BasicBlock>>,
-  pub basic_block_weights: Vec<Rc<ArrayD<Fr>>>,
-  pub weights_map: HashMap<String, Rc<ArrayD<Fr>>>,
-  pub table_map: HashMap<String, Rc<ArrayD<Fr>>>,
+  pub weights_map: HashMap<String, ArrayD<Fr>>,
+  pub table_map: HashMap<String, ArrayD<Fr>>,
 }
 
 impl Graph {
@@ -31,7 +30,7 @@ impl Graph {
 
   pub fn new(
     configs: Vec<LayerConfig>,
-    weights: &HashMap<String, Rc<ArrayD<Fr>>>,
+    weights: HashMap<String, ArrayD<Fr>>,
     layer_inputs: Vec<Vec<(i32, usize)>>,
     table_offset: i32,
     table_size: usize,
@@ -43,8 +42,7 @@ impl Graph {
       basic_blocks.append(&mut layer.consume_basic_block(&configs[i]));
     }
 
-    let empty = Rc::new(ArrayD::zeros(IxDyn(&[0])));
-    let mut table_map: HashMap<String, Rc<ArrayD<Fr>>> = HashMap::new();
+    let mut table_map: HashMap<String, ArrayD<Fr>> = HashMap::new();
     for i in 1..basic_blocks.len() {
       let table = match (basic_blocks[i - 1].block_type(), basic_blocks[i].block_type()) {
         (BasicBlockType::ChangeSF, BasicBlockType::CQ2)
@@ -61,30 +59,16 @@ impl Graph {
         _ => None,
       };
       if let Some(t) = table {
-        let temp = Rc::new(t);
-        table_map.insert(basic_blocks[i].name(), temp);
+        table_map.insert(basic_blocks[i].name(), t);
       }
     }
-
-    let basic_block_weights: Vec<_> = basic_blocks
-      .iter()
-      .map(|bb| {
-        let name = bb.weights_name();
-        if name.is_empty() {
-          empty.clone()
-        } else {
-          weights.get(&name).unwrap().clone()
-        }
-      })
-      .collect();
 
     Graph {
       layers,
       layer_configs: configs,
       layer_inputs,
       basic_blocks,
-      basic_block_weights,
-      weights_map: weights.clone(),
+      weights_map: weights,
       table_map,
     }
   }
@@ -105,8 +89,22 @@ impl Graph {
         })
         .collect();
 
+      let empty = &ArrayD::zeros(IxDyn(&[0]));
+      let basic_block_weights: Vec<_> = self
+        .basic_blocks
+        .iter()
+        .map(|bb| {
+          let name = bb.weights_name();
+          if name.is_empty() {
+            empty
+          } else {
+            self.weights_map.get(&name).unwrap()
+          }
+        })
+        .collect();
+
       let layer_nodes = s.load_layer_nodes(&self.layer_configs[i], &self.basic_blocks);
-      outputs[i] = s.run(&layer_nodes, &myInputs, &self.basic_block_weights, &self.basic_blocks);
+      outputs[i] = s.run(&layer_nodes, &myInputs, &basic_block_weights, &self.basic_blocks);
     });
 
     return outputs;
