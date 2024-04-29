@@ -8,7 +8,6 @@ pub use add::AddLayer;
 pub use cqlin::CQLinLayer;
 pub use softmax::SoftmaxLayer;
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use crate::basic_block::*;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
