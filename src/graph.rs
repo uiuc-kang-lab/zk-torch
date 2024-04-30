@@ -98,6 +98,7 @@ impl Graph {
     }
   }
 
+  // Returns outputs indexed by [layer no.][node id in that layer][output index of that node].
   pub fn run(&self, inputs: &Vec<&ArrayD<Fr>>) -> Vec<Vec<Vec<ArrayD<Fr>>>> {
     let mut outputs: Vec<Vec<Vec<ArrayD<Fr>>>> = vec![vec![]; self.layers.len()];
 
