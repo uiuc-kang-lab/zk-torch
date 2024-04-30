@@ -3,7 +3,7 @@
 
 use super::{BasicBlock, Data, DataEnc, SRS};
 use crate::{
-  setup::{CQLinSetup, CQSetup},
+  graph::SetupType,
   util::{self, calc_pow},
   BasicBlockType,
 };
@@ -38,7 +38,7 @@ impl BasicBlock for MatMulBasicBlock {
   fn prove(
     &mut self,
     srs: &SRS,
-    _setup: &(Option<&CQLinSetup>, Option<&CQSetup>),
+    _setup: &SetupType,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,

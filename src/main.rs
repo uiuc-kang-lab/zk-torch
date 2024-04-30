@@ -15,7 +15,6 @@ use util::convert_to_data;
 mod basic_block;
 mod graph;
 mod layer;
-mod setup;
 
 mod ptau;
 #[cfg(test)]

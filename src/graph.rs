@@ -1,15 +1,47 @@
 use std::collections::HashMap;
 
-use crate::{basic_block::*, setup::Setup, util, AddLayer, CQLinLayer, Layer, LayerConfig, LayerType, SoftmaxLayer};
+use crate::{basic_block::*, util, AddLayer, CQLinLayer, Layer, LayerConfig, LayerType, SoftmaxLayer};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ndarray::{ArrayD, IxDyn};
 use rand::rngs::StdRng;
+
+use self::ops::is_nonlinearity;
 
 pub struct Node {
   pub basic_block: usize,
   pub inputs: Vec<(i32, usize)>, //(node, output #)
 }
 
+pub struct CQLinSetup {
+  pub weights: ArrayD<Data>,
+  pub R: Vec<G1Affine>,
+  pub Q: Vec<G1Affine>,
+  pub S: Vec<G1Affine>,
+  pub P_R: Vec<G1Affine>,
+  pub L_V_i_x_n: Vec<G1Affine>,
+  pub L_V_i_x: Vec<G1Affine>,
+  pub L_H_i_x: Vec<G1Affine>,
+  pub M_x: G2Affine,
+}
+
+pub struct CQSetup {
+  pub table: ArrayD<Data>,
+  pub Q_i_x_1: Vec<Vec<G1Affine>>,
+  pub L_i_x_1: Vec<G1Affine>,
+  pub L_i_0_x_1: Vec<G1Affine>,
+  pub T_x_2: Vec<G2Affine>,
+}
+
+pub enum SetupType {
+  CQLin(CQLinSetup),
+  CQ(CQSetup),
+  None,
+}
+
+pub struct Setup {
+  pub weights: HashMap<String, SetupType>,
+  pub tables: HashMap<String, SetupType>,
+}
 pub struct Graph {
   pub layers: Vec<Box<dyn Layer>>,
   pub layer_configs: Vec<LayerConfig>,
@@ -44,22 +76,15 @@ impl Graph {
 
     let mut table_map: HashMap<String, ArrayD<Fr>> = HashMap::new();
     for i in 1..basic_blocks.len() {
-      let table = match (basic_blocks[i - 1].block_type(), basic_blocks[i].block_type()) {
-        (BasicBlockType::ChangeSF, BasicBlockType::CQ2)
-        | (BasicBlockType::Exp, BasicBlockType::CQ2)
-        | (BasicBlockType::Log, BasicBlockType::CQ2)
-        | (BasicBlockType::ReLU, BasicBlockType::CQ2)
-        | (BasicBlockType::Sqrt, BasicBlockType::CQ2) => {
-          if !table_map.contains_key(&basic_blocks[i].name()) {
-            Some(util::gen_cq_table(&basic_blocks[i - 1], table_offset, table_size))
-          } else {
-            None
+      if is_nonlinearity(basic_blocks[i - 1].block_type()) {
+        match basic_blocks[i].block_type() {
+          BasicBlockType::CQ2 => {
+            if !table_map.contains_key(&basic_blocks[i].name()) {
+              table_map.insert(basic_blocks[i].name(), util::gen_cq_table(&basic_blocks[i - 1], table_offset, table_size));
+            }
           }
-        }
-        _ => None,
-      };
-      if let Some(t) = table {
-        table_map.insert(basic_blocks[i].name(), t);
+          _ => panic!("Nonlinearity isn't followed by a lookup."),
+        };
       }
     }
 
@@ -94,11 +119,14 @@ impl Graph {
         .basic_blocks
         .iter()
         .map(|bb| {
-          let name = bb.weights_name();
-          if name.is_empty() {
-            empty
+          if bb.weights_name().is_ok() {
+            if let Some(s) = self.weights_map.get(&bb.weights_name().unwrap()) {
+              s
+            } else {
+              panic!("Weight is missing from setups");
+            }
           } else {
-            self.weights_map.get(&name).unwrap()
+            empty
           }
         })
         .collect();
@@ -111,7 +139,21 @@ impl Graph {
   }
 
   pub fn setup(&self, srs: &SRS) -> Setup {
-    Setup::new(&srs, &self.weights_map, &self.table_map)
+    let cqlin_bb = Box::new(CQLinBasicBlock {
+      weights_name: "".to_string(),
+    });
+    let weight_setups: HashMap<_, _> = self.weights_map.iter().map(|(k, v)| (k.clone(), cqlin_bb.setup(&srs, v))).collect();
+
+    let cq2_bb = Box::new(CQ2BasicBlock {
+      table_dict: HashMap::new(),
+      name: "".to_string(),
+    });
+    let table_setups: HashMap<_, _> = self.table_map.iter().map(|(k, v)| (k.clone(), cq2_bb.setup(&srs, v))).collect();
+
+    Setup {
+      weights: weight_setups,
+      tables: table_setups,
+    }
   }
 
   pub fn prove(
@@ -172,8 +214,28 @@ impl Graph {
           .collect();
 
         let layer_nodes = s.load_layer_nodes(&self.layer_configs[i], &self.basic_blocks);
-        let weights_dataenc: HashMap<_, _> = setups.weights.iter().map(|(k, v)| (k.clone(), v.weights.map(|x| DataEnc::new(srs, x)))).collect();
-        let table_dataenc: HashMap<_, _> = setups.tables.iter().map(|(k, v)| (k.clone(), v.table.map(|x| DataEnc::new(srs, x)))).collect();
+        let weights_dataenc: HashMap<_, _> = setups
+          .weights
+          .iter()
+          .map(|(k, v)| {
+            if let SetupType::CQLin(setup) = v {
+              (k.clone(), setup.weights.map(|x| DataEnc::new(srs, x)))
+            } else {
+              panic!("setups.weights has an incorrect SetupType")
+            }
+          })
+          .collect();
+        let table_dataenc: HashMap<_, _> = setups
+          .tables
+          .iter()
+          .map(|(k, v)| {
+            if let SetupType::CQ(setup) = v {
+              (k.clone(), setup.table.map(|x| DataEnc::new(srs, x)))
+            } else {
+              panic!("setups.tables has an incorrect SetupType")
+            }
+          })
+          .collect();
         s.verify(
           &mut &layer_nodes,
           srs,

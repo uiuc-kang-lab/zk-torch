@@ -3,7 +3,7 @@
 
 use super::{BasicBlock, BasicBlockType, Data, DataEnc, SRS};
 use crate::{
-  setup::{CQLinSetup, CQSetup},
+  graph::SetupType,
   util::{self, calc_pow},
 };
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -49,7 +49,7 @@ impl BasicBlock for PermuteBasicBlock {
   fn prove(
     &mut self,
     srs: &SRS,
-    _setup: &(Option<&CQLinSetup>, Option<&CQSetup>),
+    _setup: &SetupType,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,

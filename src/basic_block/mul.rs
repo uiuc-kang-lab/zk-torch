@@ -1,8 +1,5 @@
 use super::{BasicBlock, BasicBlockType, Data, DataEnc, SRS};
-use crate::{
-  setup::{CQLinSetup, CQSetup},
-  util,
-};
+use crate::{graph::SetupType, util};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
@@ -32,7 +29,7 @@ impl BasicBlock for MulConstBasicBlock {
   fn prove(
     &mut self,
     srs: &SRS,
-    _setup: &(Option<&CQLinSetup>, Option<&CQSetup>),
+    _setup: &SetupType,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
@@ -75,7 +72,7 @@ impl BasicBlock for MulScalarBasicBlock {
   fn prove(
     &mut self,
     srs: &SRS,
-    _setup: &(Option<&CQLinSetup>, Option<&CQSetup>),
+    _setup: &SetupType,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
@@ -132,7 +129,7 @@ impl BasicBlock for MulBasicBlock {
   fn prove(
     &mut self,
     srs: &SRS,
-    _setup: &(Option<&CQLinSetup>, Option<&CQSetup>),
+    _setup: &SetupType,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,

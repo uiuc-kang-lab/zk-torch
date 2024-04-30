@@ -1,29 +1,21 @@
 use crate::basic_block::*;
 use crate::convert_to_data;
+use crate::graph::SetupType;
 use crate::ptau;
-use crate::setup::CQLinSetup;
-use crate::setup::CQSetup;
-use crate::setup::Setup;
 use ark_bn254::{Fr, G1Affine, G2Affine};
 use ark_std::UniformRand;
 use ndarray::{arr0, concatenate, s, ArrayD, Axis, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use std::collections::HashMap;
 
-fn testBasicBlock<BB: BasicBlock>(
-  mut basic_block: BB,
-  srs: &SRS,
-  setup: &(Option<&CQLinSetup>, Option<&CQSetup>),
-  model: &ArrayD<Fr>,
-  inputs: &Vec<&ArrayD<Fr>>,
-) {
+fn testBasicBlock<BB: BasicBlock>(mut basic_block: BB, srs: &SRS, setup: &SetupType, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) {
   let mut rng = StdRng::from_entropy();
   let outputs = basic_block.run(model, inputs);
   let outputs: Vec<&ArrayD<Fr>> = outputs.iter().map(|x| x).collect();
   let mut model = &convert_to_data(srs, model);
-  model = if let Some(s) = setup.0 {
+  model = if let SetupType::CQLin(s) = setup {
     &s.weights
-  } else if let Some(s) = setup.1 {
+  } else if let SetupType::CQ(s) = setup {
     &s.table
   } else {
     model
@@ -64,7 +56,7 @@ fn testBasicBlocks() {
   let temp2 = b.view().into_shape(IxDyn(&[1, N])).unwrap();
   let ab = concatenate(Axis(0), &[temp1, temp2]).unwrap();
   let empty = ArrayD::zeros(IxDyn(&[0]));
-  let setup0 = (None, None);
+  let setup0 = SetupType::None;
   testBasicBlock(EqBasicBlock {}, srs, &setup0, &empty, &vec![&a, &a]);
   testBasicBlock(AddBasicBlock {}, srs, &setup0, &empty, &vec![&a, &b]);
   testBasicBlock(SubBasicBlock {}, srs, &setup0, &empty, &vec![&a, &b]);
@@ -76,53 +68,37 @@ fn testBasicBlocks() {
   testBasicBlock(SubBasicBlock {}, srs, &setup0, &empty, &vec![&a_1, &b]);
   testBasicBlock(SubBasicBlock {}, srs, &setup0, &empty, &vec![&b, &a_1]);
 
-  let table_map = HashMap::from([("test1".to_string(), a.clone()), ("test2".to_string(), ab.clone())]);
+  let cq_bb = CQBasicBlock {
+    table_dict: HashMap::new(),
+    name: "test1".to_string(),
+  };
+  let setup1 = cq_bb.setup(&srs, &a);
 
   let l: usize = 1 << 3;
   let m: usize = 1 << 2;
   let n: usize = 1 << 1;
   let c = ArrayD::from_shape_fn(IxDyn(&[m, n]), |_| Fr::rand(&mut rng));
   let weights_map = HashMap::from([("test3".to_string(), c.clone())]);
+  testBasicBlock(cq_bb, srs, &setup1, &a, &vec![&a_n]);
 
-  let setup = Setup::new(&srs, &weights_map, &table_map);
-
-  let setup1 = setup.tables.get(&"test1".to_string());
-  testBasicBlock(
-    CQBasicBlock {
-      table_dict: HashMap::new(),
-      name: "test1".to_string(),
-    },
-    srs,
-    &(None, setup1),
-    &a,
-    &vec![&a_n],
-  );
-  let setup2 = setup.tables.get(&"test2".to_string());
-  testBasicBlock(
-    CQ2BasicBlock {
-      table_dict: HashMap::new(),
-      name: "test2".to_string(),
-    },
-    srs,
-    &(None, setup2),
-    &ab,
-    &vec![&a_n, &b_n],
-  );
+  let cq2_bb = CQ2BasicBlock {
+    table_dict: HashMap::new(),
+    name: "test2".to_string(),
+  };
+  let setup2 = cq2_bb.setup(&srs, &ab);
+  testBasicBlock(cq2_bb, srs, &setup2, &ab, &vec![&a_n, &b_n]);
 
   let a = ArrayD::from_shape_fn(IxDyn(&[l, m]), |_| Fr::rand(&mut rng));
   let b = ArrayD::from_shape_fn(IxDyn(&[n, m]), |_| Fr::rand(&mut rng));
   testBasicBlock(MatMulBasicBlock {}, srs, &setup0, &empty, &vec![&a, &b]);
   testBasicBlock(SumBasicBlock {}, srs, &setup0, &empty, &vec![&a]);
-  let test3_setup = setup.weights.get(&"test3".to_string());
-  testBasicBlock(
-    CQLinBasicBlock {
-      weights_name: "test3".to_string(),
-    },
-    srs,
-    &(test3_setup, None),
-    &c,
-    &vec![&a],
-  );
+
+  let cqlin_bb = CQLinBasicBlock {
+    weights_name: "test3".to_string(),
+  };
+  let weight_setups: HashMap<_, _> = weights_map.iter().map(|(k, v)| (k.clone(), cqlin_bb.setup(&srs, v))).collect();
+  let setup3 = weight_setups.get(&"test3".to_string()).unwrap();
+  testBasicBlock(cqlin_bb, srs, &setup3, &c, &vec![&a]);
   let p1 = (vec![0], (0..l * m).collect::<Vec<_>>()); // Concatenate columns
   let p2 = (vec![0], (0..l * m).map(|i| (i % m) * l + (i / m)).collect::<Vec<_>>()); // Concatenate rows
   let p3 = ((0..m).map(|i| i * l).collect::<Vec<_>>(), (0..l).collect::<Vec<_>>()); // Transpose

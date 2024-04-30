@@ -3,8 +3,8 @@
 
 use super::{BasicBlock, BasicBlockType, Data, DataEnc, SRS};
 use crate::{
-  setup::{CQLinSetup, CQSetup},
-  util,
+  graph::{CQSetup, SetupType},
+  util::{self, convert_to_data},
 };
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
@@ -34,16 +34,61 @@ impl BasicBlock for CQ2BasicBlock {
     format!("CQ2({})", self.name)
   }
 
+  fn setup(&self, srs: &SRS, model: &ArrayD<Fr>) -> SetupType {
+    let data = convert_to_data(srs, model);
+    let table_len = data.len();
+    let table = data.view().into_shape(table_len).unwrap();
+    assert!(table.ndim() == 1 && table.len() == 2);
+
+    let N = table[0].raw.len();
+    let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
+    let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
+    let mut Q_i_x_1s: Vec<Vec<_>> = vec![];
+    let mut T_x_2 = vec![];
+    for i in 0..2 {
+      T_x_2.push((util::msm::<G2Projective>(&srs.X2A, &table[i].poly.coeffs) + srs.Y2P * table[i].r).into());
+      let mut temp = table[i].poly.coeffs[1..].to_vec();
+      temp.resize(N * 2 - 1, Fr::zero());
+      let mut temp2 = srs.X1P[..N].to_vec();
+      temp2.reverse();
+      let mut Q_i_x_1 = util::toeplitz_mul(domain_2N, &temp, &temp2);
+      util::fft_in_place(domain_N, &mut Q_i_x_1);
+      let temp = Fr::from(N as u32).inverse().unwrap();
+      let temp2 = domain_N.group_gen_inv().pow(&[(N - 1) as u64]);
+      Q_i_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x *= temp * temp2.pow(&[i as u64]));
+      Q_i_x_1s.push(Q_i_x_1.iter().map(|x| (*x).into()).collect());
+    }
+    let mut L_i_x_1 = srs.X1P[..N].to_vec();
+    util::ifft_in_place(domain_N, &mut L_i_x_1);
+    let mut L_i_0_x_1 = L_i_x_1.clone();
+    let temp = srs.X1P[N - 1] * Fr::from(N as u64).inverse().unwrap();
+    L_i_0_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x = *x * domain_N.group_gen_inv().pow(&[i as u64]) - temp);
+    let L_i_x_1 = L_i_x_1.iter().map(|x| (*x).into()).collect();
+    let L_i_0_x_1 = L_i_0_x_1.iter().map(|x| (*x).into()).collect();
+
+    SetupType::CQ(CQSetup {
+      table: data,
+      Q_i_x_1: Q_i_x_1s,
+      L_i_x_1,
+      L_i_0_x_1,
+      T_x_2,
+    })
+  }
+
   fn prove(
     &mut self,
     srs: &SRS,
-    setup: &(Option<&CQLinSetup>, Option<&CQSetup>),
+    setup: &SetupType,
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     assert!(inputs.len() == 2 && inputs[0].len() == 1 && inputs[1].len() == 1);
-    let setup = setup.1.unwrap();
+    let setup = if let SetupType::CQ(cq_setup) = setup {
+      cq_setup
+    } else {
+      panic!("CQ2 has an incorrect SetupType");
+    };
     let table = &setup.table;
     let N = table[0].raw.len();
     let inputs = vec![inputs[0].first().unwrap(), inputs[1].first().unwrap()];

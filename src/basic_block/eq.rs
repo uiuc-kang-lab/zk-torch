@@ -1,4 +1,4 @@
-use crate::setup::{CQLinSetup, CQSetup};
+use crate::graph::SetupType;
 
 use super::{BasicBlock, BasicBlockType, Data, DataEnc, SRS};
 use ark_bn254::{Bn254, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -20,7 +20,7 @@ impl BasicBlock for EqBasicBlock {
   fn prove(
     &mut self,
     srs: &SRS,
-    _setup: &(Option<&CQLinSetup>, Option<&CQSetup>),
+    _setup: &SetupType,
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,

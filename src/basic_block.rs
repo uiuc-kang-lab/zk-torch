@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 
-use crate::setup::{CQLinSetup, CQSetup};
+use crate::graph::SetupType;
 use crate::util;
 pub use add::AddBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -90,6 +90,7 @@ impl DataEnc {
   }
 }
 
+#[derive(Debug)]
 pub enum BasicBlockType {
   Add,
   ChangeSF,
@@ -125,8 +126,12 @@ pub trait BasicBlock {
     "".to_string()
   }
 
-  fn weights_name(&self) -> String {
-    "".to_string()
+  fn weights_name(&self) -> Result<String, String> {
+    Err(format!("{:?} does not use weights.", self.block_type()))
+  }
+
+  fn setup(&self, _srs: &SRS, _model: &ArrayD<Fr>) -> SetupType {
+    SetupType::None
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
@@ -136,7 +141,7 @@ pub trait BasicBlock {
   fn prove(
     &mut self,
     _srs: &SRS,
-    _setup: &(Option<&CQLinSetup>, Option<&CQSetup>),
+    _setup: &SetupType,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,

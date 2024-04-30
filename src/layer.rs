@@ -1,9 +1,9 @@
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 
-use crate::graph::Node;
+use crate::graph::{Node, Setup};
 use crate::util::convert_to_data;
-use crate::{basic_block::BasicBlock, setup::Setup};
+use crate::{basic_block::BasicBlock, graph::SetupType};
 pub use add::AddLayer;
 pub use cqlin::CQLinLayer;
 pub use softmax::SoftmaxLayer;
@@ -80,7 +80,17 @@ pub trait Layer {
 
         println!("proving {i} {:?}", n.basic_block);
         let bb = &mut basic_blocks[n.basic_block];
-        let setup = (setups.weights.get(&bb.weights_name()), setups.tables.get(&bb.name()));
+        let setup = if bb.weights_name().is_ok() {
+          if let Some(s) = setups.weights.get(&bb.weights_name().unwrap()) {
+            s
+          } else {
+            panic!("Weight is missing from setups");
+          }
+        } else if let Some(s) = setups.tables.get(&bb.name()) {
+          s
+        } else {
+          &SetupType::None
+        };
         bb.prove(srs, &setup, &inputs, outputs[i], rng)
       })
       .collect()
@@ -104,11 +114,14 @@ pub trait Layer {
       .map(|(i, n)| {
         let myInputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
         let bb = &basic_blocks[n.basic_block];
-        let setup = (weights.get(&bb.weights_name()), tables.get(&bb.name()));
         let empty = convert_to_data(&srs, &ArrayD::zeros(IxDyn(&[0]))).map(|x| DataEnc::new(srs, x));
-        let model = if let Some(s) = setup.0 {
-          s
-        } else if let Some(s) = setup.1 {
+        let model = if bb.weights_name().is_ok() {
+          if let Some(s) = weights.get(&bb.weights_name().unwrap()) {
+            s
+          } else {
+            panic!("Weight is missing from setups");
+          }
+        } else if let Some(s) = tables.get(&bb.name()) {
           s
         } else {
           &empty

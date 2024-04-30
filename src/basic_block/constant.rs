@@ -11,8 +11,8 @@ impl BasicBlock for ConstBasicBlock {
     format!("Constant-{}", self.name)
   }
 
-  fn weights_name(&self) -> String {
-    self.name.clone()
+  fn weights_name(&self) -> Result<String, String> {
+    Ok(self.name.clone())
   }
 
   fn run(&self, weights: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

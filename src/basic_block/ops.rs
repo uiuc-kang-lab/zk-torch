@@ -4,6 +4,13 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 
+pub fn is_nonlinearity(block_type: BasicBlockType) -> bool {
+  match block_type {
+    BasicBlockType::ChangeSF | BasicBlockType::Exp | BasicBlockType::Log | BasicBlockType::ReLU | BasicBlockType::Sqrt => true,
+    _ => false,
+  }
+}
+
 macro_rules! make_basic_block {
   (
     $name:ident,
