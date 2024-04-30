@@ -119,13 +119,14 @@ pub trait Layer {
           if let Some(s) = weights.get(&bb.weights_name().unwrap()) {
             s
           } else {
-            panic!("Weight is missing from setups");
+            panic!("Weight is missing from weights DataEnc map");
           }
         } else if let Some(s) = tables.get(&bb.name()) {
           s
         } else {
           &empty
         };
+        println!("verifying {i} {:?}", n.basic_block);
         bb.verify(srs, model, &myInputs, outputs[i], proofs[i], rng)
       })
       .collect()
