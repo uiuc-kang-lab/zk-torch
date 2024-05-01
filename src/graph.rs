@@ -113,7 +113,6 @@ impl Graph {
             inputs[*k]
           } else {
             let output_in_layer = self.layers[*j as usize].layer_output_node(&self.layer_configs[*j as usize]);
-            println!("output_in_layer: {:?}", output_in_layer);
             &(outputs[*j as usize][output_in_layer.0][output_in_layer.1])
           }
         })
