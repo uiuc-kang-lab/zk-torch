@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{basic_block::*, util, AddLayer, CQLinLayer, Layer, LayerConfig, LayerType, SoftmaxLayer};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -73,6 +73,9 @@ impl Graph {
     for (i, layer) in layers.iter().enumerate() {
       basic_blocks.append(&mut layer.consume_basic_block(&configs[i]));
     }
+    // Remove duplicates but keep order
+    let mut seen = HashSet::new();
+    basic_blocks.retain(|x| seen.insert(x.name()));
 
     let mut table_map: HashMap<String, ArrayD<Fr>> = HashMap::new();
     for i in 1..basic_blocks.len() {
@@ -110,6 +113,7 @@ impl Graph {
             inputs[*k]
           } else {
             let output_in_layer = self.layers[*j as usize].layer_output_node(&self.layer_configs[*j as usize]);
+            println!("output_in_layer: {:?}", output_in_layer);
             &(outputs[*j as usize][output_in_layer.0][output_in_layer.1])
           }
         })

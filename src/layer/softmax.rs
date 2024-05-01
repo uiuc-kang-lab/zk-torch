@@ -67,6 +67,6 @@ impl Layer for SoftmaxLayer {
   }
 
   fn layer_output_node(&self, config: &LayerConfig) -> (usize, usize) {
-    (10, 0)
+    (8, 0)
   }
 }
