@@ -44,10 +44,17 @@ fn main() {
     weights_names: vec![],
   };
 
+  // create layer 2: an Add layer
+  let add_config = LayerConfig {
+    layer_type: LayerType::Add,
+    input_params: HashMap::new(),
+    weights_names: vec![],
+  };
+
   let mut graph = Graph::new(
-    vec![cqlin_config, softmax_config],
+    vec![cqlin_config, softmax_config, add_config],
     weights,
-    vec![vec![(-1, 0)], vec![(0, 0)]],
+    vec![vec![(-1, 0)], vec![(0, 0)], vec![(-1, 1), (1, 0)]],
     -(1 << 5),
     1 << 6,
   );
@@ -57,8 +64,10 @@ fn main() {
   let input: Vec<_> = (0..n).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
   let input = ArrayD::from_shape_vec(vec![1, n], input).unwrap();
 
+  let adder_input = ArrayD::from_shape_vec(vec![m], vec![Fr::from(1); m]).unwrap();
+
   //Run:
-  let inputs = vec![&input];
+  let inputs = vec![&input, &adder_input];
 
   let outputs = graph.run(&inputs);
   let outputs: Vec<Vec<Vec<&ArrayD<Fr>>>> = outputs.iter().map(|output| output.iter().map(|o| o.iter().map(|x| x).collect()).collect()).collect();

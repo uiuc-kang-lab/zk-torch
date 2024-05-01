@@ -53,6 +53,7 @@ pub struct SRS {
   pub Y2P: G2Projective,
 }
 
+#[derive(Clone)]
 pub struct Data {
   pub raw: Vec<Fr>,
   pub poly: DensePolynomial<Fr>,
@@ -76,6 +77,7 @@ impl Data {
   }
 }
 
+#[derive(Clone)]
 pub struct DataEnc {
   pub len: usize,
   pub g1: G1Affine,
