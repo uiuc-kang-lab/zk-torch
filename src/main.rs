@@ -1,7 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use ark_bn254::Fr;
-use ark_bn254::{G1Affine, G2Affine};
+use ark_bn254::{Fr, G1Affine, G2Affine};
 use basic_block::*;
 use graph::{Graph, Node};
 use ndarray::{ArrayD, IxDyn};
@@ -11,12 +10,14 @@ use std::collections::HashMap;
 use util::convert_to_data;
 mod basic_block;
 mod graph;
+mod onnx;
 mod ptau;
 #[cfg(test)]
 mod tests;
 mod util;
 
 fn main() {
+  let _ = onnx::load_file("sample.onnx");
   let srs = &ptau::load_file("challenge", 7);
   let mut graph = Graph {
     basic_blocks: vec![
@@ -38,6 +39,7 @@ fn main() {
         inputs: vec![(0, 0), (1, 0)],
       },
     ],
+    outputs: vec![],
   };
 
   const m: usize = 1 << 4;

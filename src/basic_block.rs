@@ -82,7 +82,7 @@ impl DataEnc {
     };
   }
 }
-pub trait BasicBlock {
+pub trait BasicBlock: std::fmt::Debug {
   fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     vec![]
   }

@@ -10,6 +10,7 @@ use ndarray::{ArrayD, Ix2};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 
+#[derive(Debug)]
 pub struct CQLinBasicBlock;
 // input is rows of A, model is rows of B, outputs are rows of C
 impl BasicBlock for CQLinBasicBlock {

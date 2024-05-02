@@ -3,6 +3,7 @@ use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ndarray::{arr0, azip, ArrayD, IxDyn};
 use rand::rngs::StdRng;
 
+#[derive(Debug)]
 pub struct AddBasicBlock;
 impl BasicBlock for AddBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

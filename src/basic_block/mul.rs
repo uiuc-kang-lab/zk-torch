@@ -6,6 +6,7 @@ use ark_std::{ops::Mul, ops::Sub, UniformRand};
 use ndarray::{azip, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
 
+#[derive(Debug)]
 pub struct MulConstBasicBlock {
   pub c: usize,
 }
@@ -42,6 +43,7 @@ impl BasicBlock for MulConstBasicBlock {
     ]]
   }
 }
+#[derive(Debug)]
 pub struct MulScalarBasicBlock;
 impl BasicBlock for MulScalarBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
@@ -86,6 +88,7 @@ impl BasicBlock for MulScalarBasicBlock {
     checks
   }
 }
+#[derive(Debug)]
 pub struct MulBasicBlock;
 impl BasicBlock for MulBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

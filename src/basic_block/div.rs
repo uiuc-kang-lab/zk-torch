@@ -3,6 +3,7 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::{arr1, ArrayD};
 
+#[derive(Debug)]
 pub struct DivScalarBasicBlock {
   pub output_SF: usize,
 }

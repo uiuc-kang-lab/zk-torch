@@ -9,6 +9,7 @@ use ark_std::{UniformRand, Zero};
 use ndarray::{arr0, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
 
+#[derive(Debug)]
 pub struct SumBasicBlock;
 impl BasicBlock for SumBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

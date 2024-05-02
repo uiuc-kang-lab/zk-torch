@@ -9,6 +9,7 @@ use ark_std::{ops::Mul, ops::Sub, UniformRand, Zero};
 use ndarray::{Array, ArrayD, Axis};
 use rand::{rngs::StdRng, SeedableRng};
 
+#[derive(Debug)]
 pub struct PermuteBasicBlock {
   pub permutation: (Vec<usize>, Vec<usize>),
 }

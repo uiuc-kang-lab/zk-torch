@@ -14,6 +14,7 @@ use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
 
+#[derive(Debug)]
 pub struct CQBasicBlock {
   pub table_dict: HashMap<Fr, usize>,
 }

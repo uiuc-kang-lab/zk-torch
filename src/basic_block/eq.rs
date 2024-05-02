@@ -3,6 +3,7 @@ use ark_bn254::{G1Affine, G1Projective, G2Affine, G2Projective};
 use ndarray::ArrayD;
 use rand::rngs::StdRng;
 
+#[derive(Debug)]
 pub struct EqBasicBlock;
 impl BasicBlock for EqBasicBlock {
   fn prove(

@@ -8,6 +8,7 @@ macro_rules! make_basic_block {
     $name:ident,
     $operation:block
   ) => {
+    #[derive(Debug)]
     pub struct $name {
       pub input_SF: usize,
       pub output_SF: usize,

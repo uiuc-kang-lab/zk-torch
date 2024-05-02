@@ -9,6 +9,7 @@ use ark_std::{ops::Mul, ops::Sub, UniformRand, Zero};
 use ndarray::{ArrayD, Ix2};
 use rand::{rngs::StdRng, SeedableRng};
 
+#[derive(Debug)]
 pub struct MatMulBasicBlock;
 impl BasicBlock for MatMulBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

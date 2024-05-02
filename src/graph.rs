@@ -6,14 +6,17 @@ use ark_std::Zero;
 use ndarray::ArrayD;
 use rand::rngs::StdRng;
 
+#[derive(Debug)]
 pub struct Node {
   pub basic_block: usize,
   pub inputs: Vec<(i32, usize)>, //(node, output #)
 }
 
+#[derive(Debug)]
 pub struct Graph {
   pub basic_blocks: Vec<Box<dyn BasicBlock>>,
   pub nodes: Vec<Node>,
+  pub outputs: Vec<(i32, usize)>,
 }
 
 impl Graph {

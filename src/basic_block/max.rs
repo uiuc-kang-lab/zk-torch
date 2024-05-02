@@ -3,6 +3,7 @@ use ark_bn254::Fr;
 use ark_std::Zero;
 use ndarray::{arr0, ArrayD};
 
+#[derive(Debug)]
 pub struct MaxBasicBlock;
 impl BasicBlock for MaxBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
