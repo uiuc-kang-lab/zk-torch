@@ -3,15 +3,12 @@ use ark_bn254::Fr;
 use ark_std::Zero;
 use ndarray::{arr0, ArrayD};
 
+#[derive(Debug)]
 pub struct MaxBasicBlock;
 
 impl BasicBlock for MaxBasicBlock {
   fn block_type(&self) -> BasicBlockType {
     BasicBlockType::Max
-  }
-
-  fn name(&self) -> String {
-    "Max".to_string()
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

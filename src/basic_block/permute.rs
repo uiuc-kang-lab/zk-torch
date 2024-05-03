@@ -14,6 +14,7 @@ use ark_std::{ops::Mul, ops::Sub, One, UniformRand, Zero};
 use ndarray::{Array, ArrayD, Axis, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 
+#[derive(Debug)]
 pub struct PermuteBasicBlock {
   pub permutation: (Vec<usize>, Vec<usize>),
 }
@@ -28,11 +29,6 @@ pub struct PermuteBasicBlock {
 impl BasicBlock for PermuteBasicBlock {
   fn block_type(&self) -> BasicBlockType {
     BasicBlockType::Permute
-  }
-
-  fn name(&self) -> String {
-    // concat self.permutation to string
-    format!("Permute({:?},{:?})", self.permutation.0, self.permutation.1)
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

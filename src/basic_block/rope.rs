@@ -2,6 +2,7 @@ use super::{BasicBlock, BasicBlockType};
 use ark_bn254::Fr;
 use ndarray::{arr1, ArrayD};
 
+#[derive(Debug)]
 pub struct RoPEBasicBlock {
   pub token_i: usize,
   pub output_SF: usize,
@@ -10,10 +11,6 @@ pub struct RoPEBasicBlock {
 impl BasicBlock for RoPEBasicBlock {
   fn block_type(&self) -> BasicBlockType {
     BasicBlockType::RoPE
-  }
-
-  fn name(&self) -> String {
-    format!("RoPE[token_i: {}, output_SF: {}]", self.token_i, self.output_SF)
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

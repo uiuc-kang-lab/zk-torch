@@ -11,15 +11,12 @@ use ark_std::{UniformRand, Zero};
 use ndarray::{arr0, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
 
+#[derive(Debug)]
 pub struct SumBasicBlock;
 
 impl BasicBlock for SumBasicBlock {
   fn block_type(&self) -> BasicBlockType {
     BasicBlockType::Sum
-  }
-
-  fn name(&self) -> String {
-    "Sum".to_string()
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

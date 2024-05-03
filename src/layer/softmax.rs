@@ -7,14 +7,9 @@ use std::collections::HashMap;
 pub struct SoftmaxLayer;
 
 impl Layer for SoftmaxLayer {
-  fn load_layer_nodes(&self, config: &LayerConfig, basic_blocks: &Vec<Box<dyn BasicBlock>>) -> Vec<Node> {
-    let basic_block_map: HashMap<&Box<dyn BasicBlock>, usize> = basic_blocks.iter().enumerate().map(|(i, b)| (b, i)).collect();
-    let used_blocks: Vec<Box<dyn BasicBlock>> = self.consume_basic_block(config);
-
-    let nodes: Vec<usize> = used_blocks.iter().map(|b| *basic_block_map.get(b).unwrap()).collect();
-
+  fn layer_inputs(&self) -> Vec<Vec<(i32, usize)>> {
     // TODO: we need to handle axes from config later
-    let inputs = vec![
+    vec![
       vec![(-1, 0)],         // max
       vec![(-1, 0), (0, 0)], // sub
       vec![(1, 0)],          // exp
@@ -27,11 +22,7 @@ impl Layer for SoftmaxLayer {
       vec![(-1, 0), (8, 0)], // sub
       vec![(9, 0)],          // exp
       vec![(9, 0), (10, 0)], // cq2
-    ];
-
-    let layer = nodes.iter().zip(inputs).map(|(x, y)| Node { basic_block: *x, inputs: y }).collect();
-
-    layer
+    ]
   }
 
   fn consume_basic_block(&self, config: &LayerConfig) -> Vec<Box<dyn BasicBlock>> {

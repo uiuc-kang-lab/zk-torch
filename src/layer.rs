@@ -33,8 +33,19 @@ pub struct LayerConfig {
 }
 
 pub trait Layer {
+  fn layer_inputs(&self) -> Vec<Vec<(i32, usize)>> {
+    vec![]
+  }
+
   fn load_layer_nodes(&self, config: &LayerConfig, basic_blocks: &Vec<Box<dyn BasicBlock>>) -> Vec<Node> {
-    vec![] // vec of nodes
+    let basic_block_map: HashMap<&Box<dyn BasicBlock>, usize> = basic_blocks.iter().enumerate().map(|(i, b)| (b, i)).collect();
+    let used_blocks: Vec<Box<dyn BasicBlock>> = self.consume_basic_block(config);
+
+    let nodes: Vec<usize> = used_blocks.iter().map(|b| *basic_block_map.get(b).unwrap()).collect();
+
+    let inputs = self.layer_inputs();
+
+    nodes.iter().zip(inputs).map(|(x, y)| Node { basic_block: *x, inputs: y }).collect()
   }
 
   fn consume_basic_block(&self, config: &LayerConfig) -> Vec<Box<dyn BasicBlock>> {
@@ -58,7 +69,7 @@ pub trait Layer {
       let inputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
       outputs[i] = basic_blocks[n.basic_block].run(&weights[n.basic_block], &inputs);
     });
-    return outputs;
+    outputs
   }
 
   fn prove(

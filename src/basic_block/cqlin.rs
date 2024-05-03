@@ -15,6 +15,7 @@ use ndarray::{ArrayD, Ix2};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 
+#[derive(Debug)]
 pub struct CQLinBasicBlock {
   pub weights_name: String,
 }
@@ -23,10 +24,6 @@ pub struct CQLinBasicBlock {
 impl BasicBlock for CQLinBasicBlock {
   fn block_type(&self) -> BasicBlockType {
     BasicBlockType::CQLin
-  }
-
-  fn name(&self) -> String {
-    format!("CQLin-{}", self.weights_name)
   }
 
   fn weights_name(&self) -> Result<String, String> {

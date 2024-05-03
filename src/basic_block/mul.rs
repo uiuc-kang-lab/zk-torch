@@ -7,6 +7,7 @@ use ark_std::{ops::Mul, ops::Sub, UniformRand};
 use ndarray::{azip, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
 
+#[derive(Debug)]
 pub struct MulConstBasicBlock {
   pub c: usize,
 }
@@ -14,11 +15,6 @@ pub struct MulConstBasicBlock {
 impl BasicBlock for MulConstBasicBlock {
   fn block_type(&self) -> BasicBlockType {
     BasicBlockType::MulConst
-  }
-
-  fn name(&self) -> String {
-    // concat "Mul" and self.c
-    format!("Mul[c: {}]", self.c)
   }
 
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
@@ -53,15 +49,12 @@ impl BasicBlock for MulConstBasicBlock {
   }
 }
 
+#[derive(Debug)]
 pub struct MulScalarBasicBlock;
 
 impl BasicBlock for MulScalarBasicBlock {
   fn block_type(&self) -> BasicBlockType {
     BasicBlockType::MulScalar
-  }
-
-  fn name(&self) -> String {
-    "MulScalar".to_string()
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
@@ -108,15 +101,12 @@ impl BasicBlock for MulScalarBasicBlock {
   }
 }
 
+#[derive(Debug)]
 pub struct MulBasicBlock;
 
 impl BasicBlock for MulBasicBlock {
   fn block_type(&self) -> BasicBlockType {
     BasicBlockType::Mul
-  }
-
-  fn name(&self) -> String {
-    "Mul".to_string()
   }
 
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

@@ -6,15 +6,12 @@ use ark_ec::pairing::Pairing;
 use ndarray::ArrayD;
 use rand::rngs::StdRng;
 
+#[derive(Debug)]
 pub struct EqBasicBlock;
 
 impl BasicBlock for EqBasicBlock {
   fn block_type(&self) -> BasicBlockType {
     BasicBlockType::Eq
-  }
-
-  fn name(&self) -> String {
-    "Eq".to_string()
   }
 
   fn prove(

@@ -19,6 +19,7 @@ use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
 
+#[derive(Debug)]
 pub struct CQ2BasicBlock {
   pub table_dict: HashMap<(Fr, Fr), usize>,
   pub name: String, // we put non-linear function name here, such as "ReLU" and "Exp"

@@ -2,15 +2,12 @@ use super::{BasicBlock, BasicBlockType};
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 
+#[derive(Debug)]
 pub struct ConstBasicBlock {
   pub name: String,
 }
 
 impl BasicBlock for ConstBasicBlock {
-  fn name(&self) -> String {
-    format!("Constant-{}", self.name)
-  }
-
   fn weights_name(&self) -> Result<String, String> {
     Ok(self.name.clone())
   }

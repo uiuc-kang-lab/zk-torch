@@ -15,15 +15,12 @@ use ark_std::{ops::Mul, ops::Sub, One, UniformRand, Zero};
 use ndarray::{ArrayD, Ix2};
 use rand::{rngs::StdRng, SeedableRng};
 
+#[derive(Debug)]
 pub struct MatMulBasicBlock;
 
 impl BasicBlock for MatMulBasicBlock {
   fn block_type(&self) -> BasicBlockType {
     BasicBlockType::MatMul
-  }
-
-  fn name(&self) -> String {
-    "MatMul".to_string()
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

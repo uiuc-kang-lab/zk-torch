@@ -3,6 +3,7 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::{arr1, ArrayD};
 
+#[derive(Debug)]
 pub struct DivScalarBasicBlock {
   pub output_SF: usize,
 }
@@ -10,11 +11,6 @@ pub struct DivScalarBasicBlock {
 impl BasicBlock for DivScalarBasicBlock {
   fn block_type(&self) -> BasicBlockType {
     BasicBlockType::Div
-  }
-
-  fn name(&self) -> String {
-    // concat "DivScalar" and self.output_SF
-    format!("DivScalar[output_SF: {}]", self.output_SF)
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

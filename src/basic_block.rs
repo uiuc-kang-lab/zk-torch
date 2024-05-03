@@ -117,13 +117,13 @@ pub enum BasicBlockType {
   Unsqueeze,
 }
 
-pub trait BasicBlock {
+pub trait BasicBlock: std::fmt::Debug {
   fn block_type(&self) -> BasicBlockType {
     BasicBlockType::Constant
   }
 
   fn name(&self) -> String {
-    "".to_string()
+    format!("{self:?}")
   }
 
   fn weights_name(&self) -> Result<String, String> {

@@ -6,15 +6,12 @@ use ndarray::{ArrayD, Axis};
 // no prove and verify for squeeze and unsqueeze
 
 // currently, we only support squeeze the first axis
+#[derive(Debug)]
 pub struct SqueezeBasicBlock;
 
 impl BasicBlock for SqueezeBasicBlock {
   fn block_type(&self) -> BasicBlockType {
     BasicBlockType::Squeeze
-  }
-
-  fn name(&self) -> String {
-    "Squeeze".to_string()
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
@@ -27,15 +24,12 @@ impl BasicBlock for SqueezeBasicBlock {
 }
 
 // currently, we only support unsqueeze the first axis
+#[derive(Debug)]
 pub struct UnsqueezeBasicBlock;
 
 impl BasicBlock for UnsqueezeBasicBlock {
   fn block_type(&self) -> BasicBlockType {
     BasicBlockType::Unsqueeze
-  }
-
-  fn name(&self) -> String {
-    "Unsqueeze".to_string()
   }
 
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

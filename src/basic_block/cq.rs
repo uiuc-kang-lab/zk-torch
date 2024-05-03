@@ -18,6 +18,7 @@ use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
 
+#[derive(Debug)]
 pub struct CQBasicBlock {
   pub table_dict: HashMap<Fr, usize>,
   pub name: String, // we put function name here, such as "Range: 0.."

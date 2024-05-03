@@ -17,6 +17,7 @@ macro_rules! make_basic_block {
     $block_name:ident,
     $operation:block
   ) => {
+    #[derive(Debug)]
     pub struct $block_name {
       pub input_SF: usize,
       pub output_SF: usize,
@@ -25,11 +26,6 @@ macro_rules! make_basic_block {
     impl BasicBlock for $block_name {
       fn block_type(&self) -> BasicBlockType {
         BasicBlockType::$name
-      }
-
-      fn name(&self) -> String {
-        // concat stringify!($name) and self.input_SF and self.output_SF
-        format!("{}[input_SF: {}, output_SF: {}]", stringify!($name), self.input_SF, self.output_SF)
       }
 
       fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

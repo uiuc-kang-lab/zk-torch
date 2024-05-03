@@ -6,15 +6,12 @@ use ark_ec::pairing::Pairing;
 use ndarray::{azip, s, ArrayD, IxDyn};
 use rand::rngs::StdRng;
 
+#[derive(Debug)]
 pub struct SubBasicBlock;
 
 impl BasicBlock for SubBasicBlock {
   fn block_type(&self) -> BasicBlockType {
     BasicBlockType::Sub
-  }
-
-  fn name(&self) -> String {
-    "Sub".to_string()
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
