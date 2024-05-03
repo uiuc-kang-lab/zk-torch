@@ -4,6 +4,7 @@ use crate::graph::Node;
 use crate::{CQLinBasicBlock, SqueezeBasicBlock};
 use std::collections::HashMap;
 
+// Only used for testing purposes
 pub struct CQLinLayer;
 
 impl Layer for CQLinLayer {

@@ -143,27 +143,3 @@ pub trait Layer {
       .collect()
   }
 }
-
-pub struct CustomLayer {
-  pub nodes: Vec<usize>,
-  pub inputs: Vec<Vec<(i32, usize)>>,
-  pub output_node: (usize, usize),
-}
-
-impl Layer for CustomLayer {
-  fn load_layer_nodes(&self, config: &LayerConfig, basic_blocks: &Vec<Box<dyn BasicBlock>>) -> Vec<Node> {
-    self
-      .nodes
-      .iter()
-      .zip(&self.inputs)
-      .map(|(x, y)| Node {
-        basic_block: *x,
-        inputs: y.to_vec(),
-      })
-      .collect()
-  }
-
-  fn layer_output_node(&self, config: &LayerConfig) -> (usize, usize) {
-    self.output_node
-  }
-}
