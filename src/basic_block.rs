@@ -15,7 +15,7 @@ pub use matmul::MatMulBasicBlock;
 pub use max::MaxBasicBlock;
 pub use mul::{MulBasicBlock, MulConstBasicBlock, MulScalarBasicBlock};
 use ndarray::{ArrayD, IxDyn};
-pub use ops::{ExpBasicBlock, LogBasicBlock, ReLUBasicBlock, SqrtBasicBlock};
+pub use ops::*;
 pub use permute::PermuteBasicBlock;
 use rand::{rngs::StdRng, SeedableRng};
 pub use rope::RoPEBasicBlock;

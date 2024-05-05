@@ -13,7 +13,7 @@ impl BasicBlock for DivScalarBasicBlock {
     let SF = self.output_SF as i32;
     let mut div = vec![];
     let mut rem = vec![];
-    let y = util::fr_to_int(*inputs[1].first().unwrap());
+    let y = util::fr_to_int(inputs[1][0]);
     assert!(y > 0);
     for x in inputs[0].iter() {
       let x = util::fr_to_int(*x);

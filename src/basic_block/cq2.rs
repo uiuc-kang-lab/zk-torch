@@ -67,7 +67,7 @@ impl BasicBlock for CQ2BasicBlock {
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     assert!(inputs.len() == 2 && inputs[0].len() == 1 && inputs[1].len() == 1);
     let N = model[0].raw.len();
-    let inputs = vec![inputs[0].first().unwrap(), inputs[1].first().unwrap()];
+    let inputs = vec![&inputs[0][0], &inputs[1][0]];
     assert!(inputs[0].raw.len() == inputs[1].raw.len());
     let n = inputs[0].raw.len();
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
@@ -169,7 +169,7 @@ impl BasicBlock for CQ2BasicBlock {
     rng: &mut StdRng,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
-    let inputs = vec![inputs[0].first().unwrap(), inputs[1].first().unwrap()];
+    let inputs = vec![&inputs[0][0], &inputs[1][0]];
     let N = model[0].len;
     let n = inputs[0].len;
     let alpha = Fr::rand(rng);

@@ -44,19 +44,36 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
         outputs: vec![(0, 0)],
       }),
       "MatMul" => Ok(Graph {
-        basic_blocks: vec![Box::new(MatMulBasicBlock {})],
-        nodes: vec![Node {
-          basic_block: 0,
-          inputs: vec![(-1, 0), (-2, 0)],
-        }],
-        outputs: vec![(0, 0)],
+        basic_blocks: vec![
+          Box::new(MatMulBasicBlock {}),
+          Box::new(ChangeSFBasicBlock { input_SF: 6, output_SF: 3 }),
+          Box::new(CQ2BasicBlock {
+            table_dict: HashMap::new(),
+            setup: Some((Box::new(ChangeSFBasicBlock { input_SF: 6, output_SF: 3 }), -(1 << 5), 1 << 6)),
+          }),
+        ],
+        nodes: vec![
+          Node {
+            basic_block: 0,
+            inputs: vec![(-1, 0), (-2, 0)],
+          },
+          Node {
+            basic_block: 1,
+            inputs: vec![(0, 0)],
+          },
+          Node {
+            basic_block: 2,
+            inputs: vec![(0, 0), (1, 0)],
+          },
+        ],
+        outputs: vec![(1, 0)],
       }),
       "Relu" => Ok(Graph {
         basic_blocks: vec![
           Box::new(ReLUBasicBlock { input_SF: 3, output_SF: 3 }),
           Box::new(CQ2BasicBlock {
             table_dict: HashMap::new(),
-            setup: Some((Box::new(ReLUBasicBlock { input_SF: 3, output_SF: 3 }), -(1 << 3), 1 << 4)),
+            setup: Some((Box::new(ReLUBasicBlock { input_SF: 3, output_SF: 3 }), -(1 << 5), 1 << 6)),
           }),
         ],
         nodes: vec![
@@ -116,7 +133,6 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
   }
 
   println!("{graph:?}");
-  println!("{:?}", setups.len());
 
   (graph, setups)
 }

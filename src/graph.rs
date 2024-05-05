@@ -6,7 +6,7 @@ use ark_std::Zero;
 use ndarray::ArrayD;
 use rand::rngs::StdRng;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Node {
   pub basic_block: usize,
   pub inputs: Vec<(i32, usize)>, //(node, output #)

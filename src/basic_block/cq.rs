@@ -25,7 +25,7 @@ impl BasicBlock for CQBasicBlock {
   }
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
     assert!(model.len() == 1);
-    let model = model.first().unwrap();
+    let model = &model[0];
     let N = model.raw.len();
     let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
     let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
@@ -59,8 +59,8 @@ impl BasicBlock for CQBasicBlock {
     rng: &mut StdRng,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     assert!(inputs.len() == 1 && inputs[0].len() == 1);
-    let model = model.first().unwrap();
-    let input = inputs[0].first().unwrap();
+    let model = &model[0];
+    let input = &inputs[0][0];
     let N = model.raw.len();
     let n = input.raw.len();
     assert!(n <= N);
@@ -141,10 +141,8 @@ impl BasicBlock for CQBasicBlock {
     rng: &mut StdRng,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
-    let input = inputs[0].first().unwrap();
-    let model = model.first().unwrap();
-    let N = model.len;
-    let n = input.len;
+    let N = model[0].len;
+    let n = inputs[0][0].len;
     let [m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC, C1, C2, C3, C4, C5] = proof.0[..] else {
       panic!("Wrong proof format")
     };
@@ -161,7 +159,7 @@ impl BasicBlock for CQBasicBlock {
     ]);
 
     // Check T_x_2 is the G2 equivalent of the model
-    checks.push(vec![(model.g1, srs.X2A[0]), (srs.X1A[0], -T_x_2)]);
+    checks.push(vec![(model[0].g1, srs.X2A[0]), (srs.X1A[0], -T_x_2)]);
 
     // Check A(x) - A(0) is divisible by x
     checks.push(vec![((A_x - A_zero).into(), srs.X2A[0]), (-A_zero_div, srs.X2A[1]), (-C2, srs.Y2A)]);
@@ -175,7 +173,7 @@ impl BasicBlock for CQBasicBlock {
     ]);
 
     // Check f_x_2 is the G2 equivalent of the input
-    checks.push(vec![(input.g1, srs.X2A[0]), (srs.X1A[0], -f_x_2)]);
+    checks.push(vec![(inputs[0][0].g1, srs.X2A[0]), (srs.X1A[0], -f_x_2)]);
 
     // Assume B(0) = A(0)*N/n (which assumes ∑A=∑B)
     let B_0: G1Affine = (A_zero * (Fr::from(N as u32) * Fr::from(n as u32).inverse().unwrap())).into();

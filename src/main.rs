@@ -17,11 +17,10 @@ mod util;
 fn main() {
   let srs = &ptau::load_file("challenge", 7);
   let (mut graph, models) = onnx::load_file("sample.onnx");
-  graph.nodes = graph.nodes[..5].to_vec(); //TODO:remove
 
   const n: usize = 1 << 2;
   let input: Vec<_> = (0..n).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
-  let input = ArrayD::from_shape_vec(vec![1, n], input).unwrap();
+  let input = ArrayD::from_shape_vec(vec![n], input).unwrap();
 
   //Run:
   let inputs = vec![&input];

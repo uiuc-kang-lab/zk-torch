@@ -1,32 +1,32 @@
 use super::{BasicBlock, Data, DataEnc, PairingCheck, SRS};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ndarray::{arr0, azip, ArrayD, IxDyn};
+use ndarray::{arr1, azip, ArrayD, IxDyn};
 use rand::rngs::StdRng;
 
 #[derive(Debug)]
 pub struct SubBasicBlock;
 impl BasicBlock for SubBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    assert!(inputs.len() == 2 && inputs[0].ndim() <= 1 && inputs[1].ndim() <= 1);
+    assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[1].ndim() == 1);
     let mut r = ArrayD::zeros(IxDyn(&[std::cmp::max(inputs[0].len(), inputs[1].len())]));
     if inputs[0].len() == 1 {
-      azip!((r in &mut r, &x in inputs[1]) *r = *inputs[0].first().unwrap() - x);
+      azip!((r in &mut r, &x in inputs[1]) *r = x - inputs[0][0]);
     } else if inputs[1].len() == 1 {
-      azip!((r in &mut r, &x in inputs[0]) *r = x - *inputs[1].first().unwrap());
+      azip!((r in &mut r, &x in inputs[0]) *r = x - inputs[1][0]);
     } else {
       azip!((r in &mut r, &x in inputs[0], &y in inputs[1]) *r = x - y);
     }
     vec![r]
   }
   fn encodeOutputs(&self, _srs: &SRS, _model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
-    let a = inputs[0].first().unwrap();
-    let b = inputs[1].first().unwrap();
-    vec![arr0(Data {
+    let a = &inputs[0][0];
+    let b = &inputs[1][0];
+    vec![arr1(&[Data {
       raw: outputs[0].clone().into_raw_vec(),
       poly: (&a.poly) - (&b.poly),
       g1: a.g1 - b.g1,
       r: a.r - b.r,
-    })
+    }])
     .into_dyn()]
   }
   fn verify(
@@ -38,11 +38,8 @@ impl BasicBlock for SubBasicBlock {
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
   ) -> Vec<PairingCheck> {
-    let a = inputs[0].first().unwrap();
-    let b = inputs[1].first().unwrap();
-    let c = outputs[0].first().unwrap();
     // Verify f(x)-g(x)=h(x)
-    assert!(a.g1 - b.g1 == c.g1);
+    assert!(inputs[0][0].g1 - inputs[1][0].g1 == outputs[0][0].g1);
     vec![]
   }
 }
