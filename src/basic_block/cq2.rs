@@ -17,8 +17,16 @@ use std::collections::HashMap;
 #[derive(Debug)]
 pub struct CQ2BasicBlock {
   pub table_dict: HashMap<(Fr, Fr), usize>,
+  pub setup: Option<(Box<dyn BasicBlock>, i32, usize)>,
 }
 impl BasicBlock for CQ2BasicBlock {
+  fn genModel(&self) -> ArrayD<Fr> {
+    util::gen_cq_table(
+      &(self.setup.as_ref().unwrap().0),
+      self.setup.as_ref().unwrap().1,
+      self.setup.as_ref().unwrap().2,
+    )
+  }
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
     assert!(model.ndim() == 1 && model.len() == 2);
     let N = model[0].raw.len();

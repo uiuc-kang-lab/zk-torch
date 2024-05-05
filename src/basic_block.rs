@@ -14,7 +14,7 @@ pub use eq::EqBasicBlock;
 pub use matmul::MatMulBasicBlock;
 pub use max::MaxBasicBlock;
 pub use mul::{MulBasicBlock, MulConstBasicBlock, MulScalarBasicBlock};
-use ndarray::ArrayD;
+use ndarray::{ArrayD, IxDyn};
 pub use ops::{ExpBasicBlock, LogBasicBlock, ReLUBasicBlock, SqrtBasicBlock};
 pub use permute::PermuteBasicBlock;
 use rand::{rngs::StdRng, SeedableRng};
@@ -83,6 +83,10 @@ impl DataEnc {
   }
 }
 pub trait BasicBlock: std::fmt::Debug {
+  fn genModel(&self) -> ArrayD<Fr> {
+    ArrayD::zeros(IxDyn(&[0]))
+  }
+
   fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     vec![]
   }

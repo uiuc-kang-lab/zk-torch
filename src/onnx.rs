@@ -1,14 +1,14 @@
 use crate::basic_block::*;
 use crate::graph::*;
-use crate::util;
-use ark_bn254::{Fr, G1Affine, G2Affine};
-use ndarray::{arr1, ArrayD, IxDyn};
+use ark_bn254::Fr;
+use ndarray::ArrayD;
 use std::collections::HashMap;
-//use tract_onnx::model::TensorPlusPath;
-use tract_onnx::prelude::{Framework, Tensor};
+use tract_onnx::prelude::Framework;
+use tract_onnx::tensor::load_tensor;
 
 pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
-  let onnx_graph = tract_onnx::onnx().proto_model_for_path(filename).unwrap().graph.unwrap();
+  let onnx = tract_onnx::onnx();
+  let onnx_graph = onnx.proto_model_for_path(filename).unwrap().graph.unwrap();
 
   let mut graph = Graph {
     basic_blocks: vec![],
@@ -17,28 +17,24 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
   };
   let mut basic_blocks_idx: HashMap<String, usize> = HashMap::new(); //BasicBlock to graph.basic_blocks index
   let mut outputs_idx: HashMap<String, Vec<(i32, usize)>> = HashMap::new(); //Graph node name to graph.nodes outputs
-                                                                            //let mut setups = vec![];
+  let mut setups = vec![];
 
-  for node in onnx_graph.initializer {
-    let name = node.name.clone();
-    /*let tensor: Tensor = (TensorPlusPath {
-      tensor: &node,
-      model_path: &"",
-    })
-    .try_into()
-    .unwrap();
+  for tensor in onnx_graph.initializer {
+    let name = tensor.name.clone();
+    let tensor = load_tensor(&*onnx.provider, &tensor, None).unwrap();
     let tensor = tensor.into_array::<f32>().unwrap();
     let tensor = tensor.map(|x| Fr::from((*x * ((1 << 3) as f32)).round() as i32));
     outputs_idx.insert(name, vec![(graph.basic_blocks.len() as i32, 0)]);
+    graph.nodes.push(Node {
+      basic_block: graph.basic_blocks.len(),
+      inputs: vec![],
+    });
     graph.basic_blocks.push(Box::new(ConstBasicBlock {}));
-    setups.push(tensor);*/
-    outputs_idx.insert(name, vec![(graph.basic_blocks.len() as i32, 0)]);
-    graph.basic_blocks.push(Box::new(ConstBasicBlock {}));
+    setups.push(tensor);
   }
-  let empty_closure = || ArrayD::<Fr>::zeros(IxDyn(&[0]));
   for node in onnx_graph.node {
     let op = node.op_type.as_str();
-    let local_graph = match op {
+    let mut local_graph = match op {
       "Add" => Ok(Graph {
         basic_blocks: vec![Box::new(AddBasicBlock {})],
         nodes: vec![Node {
@@ -58,7 +54,10 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
       "Relu" => Ok(Graph {
         basic_blocks: vec![
           Box::new(ReLUBasicBlock { input_SF: 3, output_SF: 3 }),
-          Box::new(CQ2BasicBlock { table_dict: HashMap::new() }),
+          Box::new(CQ2BasicBlock {
+            table_dict: HashMap::new(),
+            setup: Some((Box::new(ReLUBasicBlock { input_SF: 3, output_SF: 3 }), -(1 << 3), 1 << 4)),
+          }),
         ],
         nodes: vec![
           Node {
@@ -77,12 +76,15 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
     .unwrap();
 
     let mut local_block_idx = vec![];
-    for basic_block in local_graph.basic_blocks.iter() {
+    let temp = local_graph.basic_blocks;
+    local_graph.basic_blocks = vec![];
+    for basic_block in temp.into_iter() {
       let name = format!("{basic_block:?}");
       let idx = *basic_blocks_idx.entry(name).or_insert(graph.basic_blocks.len());
       local_block_idx.push(idx);
       if idx == graph.basic_blocks.len() {
-        //graph.basic_blocks.push(*basic_block);
+        setups.push(basic_block.genModel());
+        graph.basic_blocks.push(basic_block);
       }
     }
     let start_idx = graph.nodes.len() as i32;
@@ -114,6 +116,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
   }
 
   println!("{graph:?}");
+  println!("{:?}", setups.len());
 
-  (graph, vec![])
+  (graph, setups)
 }

@@ -9,7 +9,7 @@ use ark_std::{
   ops::{Mul, Sub},
   One, UniformRand, Zero,
 };
-use ndarray::ArrayD;
+use ndarray::{Array1, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -17,8 +17,12 @@ use std::collections::HashMap;
 #[derive(Debug)]
 pub struct CQBasicBlock {
   pub table_dict: HashMap<Fr, usize>,
+  pub setup: Option<(i32, usize)>,
 }
 impl BasicBlock for CQBasicBlock {
+  fn genModel(&self) -> ArrayD<Fr> {
+    Array1::from_iter(self.setup.unwrap().0..self.setup.unwrap().0 + (self.setup.unwrap().1 as i32)).map(|x| Fr::from(*x)).into_dyn()
+  }
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
     assert!(model.len() == 1);
     let model = model.first().unwrap();

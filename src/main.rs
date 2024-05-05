@@ -2,11 +2,9 @@
 #![allow(non_upper_case_globals)]
 use ark_bn254::{Fr, G1Affine, G2Affine};
 use basic_block::*;
-use graph::{Graph, Node};
-use ndarray::{ArrayD, IxDyn};
+use ndarray::ArrayD;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rayon::prelude::*;
-use std::collections::HashMap;
 use util::convert_to_data;
 mod basic_block;
 mod graph;
@@ -17,43 +15,17 @@ mod tests;
 mod util;
 
 fn main() {
-  let _ = onnx::load_file("sample.onnx");
   let srs = &ptau::load_file("challenge", 7);
-  let mut graph = Graph {
-    basic_blocks: vec![
-      Box::new(CQLinBasicBlock),
-      Box::new(ReLUBasicBlock { input_SF: 1, output_SF: 1 }),
-      Box::new(CQ2BasicBlock { table_dict: HashMap::new() }),
-    ],
-    nodes: vec![
-      Node {
-        basic_block: 0,
-        inputs: vec![(-1, 0)],
-      },
-      Node {
-        basic_block: 1,
-        inputs: vec![(0, 0)],
-      },
-      Node {
-        basic_block: 2,
-        inputs: vec![(0, 0), (1, 0)],
-      },
-    ],
-    outputs: vec![],
-  };
+  let (mut graph, models) = onnx::load_file("sample.onnx");
+  graph.nodes = graph.nodes[..5].to_vec(); //TODO:remove
 
-  const m: usize = 1 << 4;
   const n: usize = 1 << 2;
-  let matrix: Vec<_> = (0..n * m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-2..2))).collect();
-  let matrix = ArrayD::from_shape_vec(vec![n, m], matrix).unwrap();
   let input: Vec<_> = (0..n).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
   let input = ArrayD::from_shape_vec(vec![1, n], input).unwrap();
 
   //Run:
   let inputs = vec![&input];
-  let empty = ArrayD::zeros(IxDyn(&[0]));
-  let relu_cq_table = util::gen_cq_table(&graph.basic_blocks[1], -(1 << 5), 1 << 6);
-  let models = vec![&matrix, &empty, &relu_cq_table];
+  let models = models.iter().map(|x| x).collect();
   let outputs = graph.run(&inputs, &models);
   let outputs: Vec<Vec<&ArrayD<Fr>>> = outputs.iter().map(|output| output.iter().map(|x| x).collect()).collect();
   let outputs: Vec<&Vec<&ArrayD<Fr>>> = outputs.iter().map(|output| output).collect();
