@@ -69,10 +69,7 @@ fn main() {
   //Prove:
   let inputs: Vec<ArrayD<Data>> = inputs.iter().map(|input| convert_to_data(srs, input)).collect();
   let inputs: Vec<&ArrayD<Data>> = inputs.iter().map(|input| input).collect();
-  let outputs: Vec<Vec<Vec<ArrayD<Data>>>> = outputs
-    .iter()
-    .map(|outputs| outputs.iter().map(|output| output.iter().map(|o| convert_to_data(srs, o)).collect()).collect())
-    .collect();
+  let outputs: Vec<Vec<Vec<ArrayD<Data>>>> = graph.encodeOutputs(srs, &inputs, &outputs);
   let outputs: Vec<Vec<Vec<&ArrayD<Data>>>> =
     outputs.iter().map(|outputs| outputs.iter().map(|output| output.iter().map(|x| x).collect()).collect()).collect();
   let outputs: Vec<Vec<&Vec<&ArrayD<Data>>>> = outputs.iter().map(|outputs| outputs.iter().map(|x| x).collect()).collect();

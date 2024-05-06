@@ -58,30 +58,62 @@ pub trait Layer {
 
   fn run(
     &self,
-    nodes: &Vec<Node>,
     inputs: &Vec<&ArrayD<Fr>>,
-    weights: &Vec<&ArrayD<Fr>>,
+    weights_map: &HashMap<String, ArrayD<Fr>>,
+    layer_config: &LayerConfig,
     basic_blocks: &Vec<Box<dyn BasicBlock>>,
   ) -> Vec<Vec<ArrayD<Fr>>> {
+    let nodes = self.load_layer_nodes(layer_config, basic_blocks);
     let mut outputs = vec![vec![]; nodes.len()];
+    let empty = &ArrayD::zeros(IxDyn(&[0]));
     nodes.iter().enumerate().for_each(|(i, n)| {
       println!("running {i} {:?}", n.basic_block);
+      let bb = &basic_blocks[n.basic_block];
       let inputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
-      outputs[i] = basic_blocks[n.basic_block].run(&weights[n.basic_block], &inputs);
+      let weight = if bb.weights_name().is_ok() {
+        if let Some(s) = weights_map.get(&bb.weights_name().unwrap()) {
+          s
+        } else {
+          panic!("Weight is missing from setups");
+        }
+      } else {
+        empty
+      };
+      outputs[i] = basic_blocks[n.basic_block].run(&weight, &inputs);
     });
+
     outputs
+  }
+
+  fn encodeOutputs(
+    &self,
+    srs: &SRS,
+    inputs: &Vec<&ArrayD<Data>>,
+    outputs: &Vec<Vec<&ArrayD<Fr>>>,
+    layer_config: &LayerConfig,
+    basic_blocks: &Vec<Box<dyn BasicBlock>>,
+  ) -> Vec<Vec<ArrayD<Data>>> {
+    let nodes = self.load_layer_nodes(&layer_config, &basic_blocks);
+    let mut outputsEnc = vec![vec![]; nodes.len()];
+    nodes.iter().enumerate().for_each(|(i, n)| {
+      println!("running {i} {:?}", n.basic_block);
+      let inputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputsEnc[*j as usize][*k]) }).collect();
+      outputsEnc[i] = basic_blocks[n.basic_block].encodeOutputs(&srs, &inputs, &outputs[i]);
+    });
+    outputsEnc
   }
 
   fn prove(
     &self,
-    nodes: &mut &Vec<Node>,
     srs: &SRS,
     setups: &Setup,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&Vec<&ArrayD<Data>>>,
+    layer_config: &LayerConfig,
     basic_blocks: &mut Vec<Box<dyn BasicBlock>>,
     rng: &mut StdRng,
   ) -> Vec<(Vec<G1Projective>, Vec<G2Projective>)> {
+    let nodes = self.load_layer_nodes(layer_config, basic_blocks);
     nodes
       .iter()
       .enumerate()
@@ -109,16 +141,17 @@ pub trait Layer {
 
   fn verify(
     &self,
-    nodes: &Vec<Node>,
     srs: &SRS,
     weights: &HashMap<String, ArrayD<DataEnc>>,
     tables: &HashMap<String, ArrayD<DataEnc>>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&Vec<&ArrayD<DataEnc>>>,
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>)>,
+    layer_config: &LayerConfig,
     basic_blocks: &Vec<Box<dyn BasicBlock>>,
     rng: &mut StdRng,
-  ) {
+  ) -> Vec<PairingCheck> {
+    let nodes = self.load_layer_nodes(layer_config, basic_blocks);
     nodes
       .iter()
       .enumerate()
@@ -140,6 +173,7 @@ pub trait Layer {
         println!("verifying {i} {:?}", n.basic_block);
         bb.verify(srs, model, &myInputs, outputs[i], proofs[i], rng)
       })
+      .flatten()
       .collect()
   }
 }

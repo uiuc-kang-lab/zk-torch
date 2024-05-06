@@ -1,13 +1,13 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
-use super::{BasicBlock, BasicBlockType, Data, DataEnc, SRS};
+use super::{BasicBlock, Data, DataEnc, PairingCheck, SRS};
 use crate::{
   graph::{CQSetup, SetupType},
-  util::{self, convert_to_data},
+  util::convert_to_data,
 };
+use crate::{util, BasicBlockType};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ec::pairing::Pairing;
 use ark_ff::Field;
 use ark_poly::{evaluations::univariate::Evaluations, univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{
@@ -193,7 +193,8 @@ impl BasicBlock for CQ2BasicBlock {
     _outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
-  ) {
+  ) -> Vec<PairingCheck> {
+    let mut checks = Vec::new();
     let inputs = vec![inputs[0].first().unwrap(), inputs[1].first().unwrap()];
     let N = model[0].len;
     let n = inputs[0].len;
@@ -202,47 +203,45 @@ impl BasicBlock for CQ2BasicBlock {
       panic!("Wrong proof format")
     };
     let [T_x_2, f_x_2] = proof.1[..] else { panic!("Wrong proof format") };
-    let agg_input = inputs[0].g1 + (inputs[1].g1 * alpha);
-    let agg_model = model[0].g1 + (model[1].g1 * alpha);
+    let agg_input = (inputs[0].g1 + (inputs[1].g1 * alpha)).into();
+    let agg_model = (model[0].g1 + (model[1].g1 * alpha)).into();
 
     let beta = Fr::rand(rng);
 
     // Check A(x) (A_i = m_i/(t_i+beta))
-    let lhs = Bn254::pairing(A_x, T_x_2) + Bn254::pairing(A_x * beta - m_x, srs.X2A[0]);
-    let rhs = Bn254::pairing(A_Q_x, srs.X2A[N] - srs.X2A[0]) + Bn254::pairing(C1, srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![
+      (A_x, T_x_2),
+      ((A_x * beta - m_x).into(), srs.X2A[0]),
+      (-A_Q_x, (srs.X2A[N] - srs.X2A[0]).into()),
+      (-C1, srs.Y2A),
+    ]);
 
     // Check T_x_2 is the G2 equivalent of the model
-    let lhs = Bn254::pairing(agg_model, srs.X2A[0]);
-    let rhs = Bn254::pairing(srs.X1A[0], T_x_2);
-    assert!(lhs == rhs);
+    checks.push(vec![(agg_model, srs.X2A[0]), (srs.X1A[0], -T_x_2)]);
 
     // Check A(x) - A(0) is divisible by x
-    let lhs = Bn254::pairing(A_x - A_zero, srs.X2A[0]);
-    let rhs = Bn254::pairing(A_zero_div, srs.X2A[1]) + Bn254::pairing(C2, srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![((A_x - A_zero).into(), srs.X2A[0]), (-A_zero_div, srs.X2A[1]), (-C2, srs.Y2A)]);
 
     // Check B(x) (B_i = 1/(f_i+beta))
-    let lhs = Bn254::pairing(B_x, f_x_2) + Bn254::pairing(B_x * beta - srs.X1A[0], srs.X2A[0]);
-    let rhs = Bn254::pairing(B_Q_x, srs.X2A[n] - srs.X2A[0]) + Bn254::pairing(C3, srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![
+      (B_x, f_x_2),
+      ((B_x * beta - srs.X1A[0]).into(), srs.X2A[0]),
+      (-B_Q_x, (srs.X2A[n] - srs.X2A[0]).into()),
+      (-C3, srs.Y2A),
+    ]);
 
     // Check f_x_2 is the G2 equivalent of the input
-    let lhs = Bn254::pairing(agg_input, srs.X2A[0]);
-    let rhs = Bn254::pairing(srs.X1A[0], f_x_2);
-    assert!(lhs == rhs);
+    checks.push(vec![(agg_input, srs.X2A[0]), (srs.X1A[0], -f_x_2)]);
 
     // Assume B(0) = A(0)*N/n (which assumes ∑A=∑B)
     let B_0: G1Affine = (A_zero * (Fr::from(N as u32) * Fr::from(n as u32).inverse().unwrap())).into();
 
     // Check B(x) - B(0) is divisible by x
-    let lhs = Bn254::pairing(B_x - B_0, srs.X2A[0]);
-    let rhs = Bn254::pairing(B_zero_div, srs.X2A[1]) + Bn254::pairing(C4, srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![((B_x - B_0).into(), srs.X2A[0]), (-B_zero_div, srs.X2A[1]), (-C4, srs.Y2A)]);
 
     // Degree check B
-    let lhs = Bn254::pairing(B_x, srs.X2A[N - n]);
-    let rhs = Bn254::pairing(B_DC, srs.X2A[0]) + Bn254::pairing(C5, srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![(B_x, srs.X2A[N - n]), (-B_DC, srs.X2A[0]), (-C5, srs.Y2A)]);
+
+    checks
   }
 }

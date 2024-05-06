@@ -52,7 +52,9 @@ pub struct SRS {
   pub Y1P: G1Projective,
   pub Y2P: G2Projective,
 }
+pub type PairingCheck = Vec<(G1Affine, G2Affine)>;
 
+#[derive(Clone)]
 pub struct Data {
   pub raw: Vec<Fr>,
   pub poly: DensePolynomial<Fr>,
@@ -138,6 +140,16 @@ pub trait BasicBlock: std::fmt::Debug {
     vec![]
   }
 
+  // This function encodes the outputs of the BasicBlock into Data objects.
+  // It defaults to running Data::new() on the last dimension of the outputs which runs an FFT and an MSM.
+  // But for certain basic blocks such as add and reshape, this can be done much faster, and it should be overriden in these cases.
+  fn encodeOutputs(&self, srs: &SRS, _inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
+    outputs.iter().map(|x| util::convert_to_data(srs, x)).collect()
+  }
+
+  // The subsequent setup/prove/verify functions run on encoded Data objects (vector commitments).
+  // This reduces computation because the Data objects can be encoded once at the beginning and then reused for these functions.
+
   fn prove(
     &mut self,
     _srs: &SRS,
@@ -157,8 +169,8 @@ pub trait BasicBlock: std::fmt::Debug {
     _outputs: &Vec<&ArrayD<DataEnc>>,
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
-  ) {
-    ()
+  ) -> Vec<PairingCheck> {
+    vec![]
   }
 }
 

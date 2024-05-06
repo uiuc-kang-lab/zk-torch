@@ -1,9 +1,9 @@
 use crate::graph::SetupType;
 
-use super::{BasicBlock, BasicBlockType, Data, DataEnc, SRS};
-use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use super::{BasicBlock, BasicBlockType, Data, DataEnc, PairingCheck, SRS};
+use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::Pairing;
-use ndarray::{azip, s, ArrayD, IxDyn};
+use ndarray::{arr0, azip, s, ArrayD, IxDyn};
 use rand::rngs::StdRng;
 
 #[derive(Debug)]
@@ -27,37 +27,32 @@ impl BasicBlock for SubBasicBlock {
     vec![r]
   }
 
-  fn prove(
-    &mut self,
-    srs: &SRS,
-    _setup: &SetupType,
-    inputs: &Vec<&ArrayD<Data>>,
-    outputs: &Vec<&ArrayD<Data>>,
-    _rng: &mut StdRng,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>) {
+  fn encodeOutputs(&self, _srs: &SRS, inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
     let a = inputs[0].first().unwrap();
     let b = inputs[1].first().unwrap();
-    let c = outputs[0].first().unwrap();
-    // Blinding
-    let C = srs.X1P[0] * (a.r - b.r - c.r);
-    (vec![C], Vec::new())
+    vec![arr0(Data {
+      raw: outputs[0].clone().into_raw_vec(),
+      poly: (&a.poly) - (&b.poly),
+      g1: a.g1 - b.g1,
+      r: a.r - b.r,
+    })
+    .into_dyn()]
   }
 
   fn verify(
     &self,
-    srs: &SRS,
+    _srs: &SRS,
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    proof: (&Vec<G1Affine>, &Vec<G2Affine>),
+    _proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
-  ) {
+  ) -> Vec<PairingCheck> {
     let a = inputs[0].first().unwrap();
     let b = inputs[1].first().unwrap();
     let c = outputs[0].first().unwrap();
     // Verify f(x)-g(x)=h(x)
-    let lhs = Bn254::pairing(a.g1 - b.g1, srs.X2A[0]);
-    let rhs = Bn254::pairing(c.g1, srs.X2A[0]) + Bn254::pairing(proof.0[0], srs.Y2A);
-    assert!(lhs == rhs);
+    assert!(a.g1 - b.g1 == c.g1);
+    vec![]
   }
 }

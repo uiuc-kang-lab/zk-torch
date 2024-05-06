@@ -1,11 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::{basic_block::*, util, AddLayer, CQLinLayer, Layer, LayerConfig, LayerType, SoftmaxLayer};
-use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ndarray::{ArrayD, IxDyn};
-use rand::rngs::StdRng;
-
 use self::ops::is_nonlinearity;
+use crate::{basic_block::*, util, AddLayer, CQLinLayer, Layer, LayerConfig, LayerType, SoftmaxLayer};
+use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_ec::pairing::{Pairing, PairingOutput};
+use ark_std::Zero;
+use ndarray::ArrayD;
+use rand::rngs::StdRng;
 
 pub struct Node {
   pub basic_block: usize,
@@ -118,25 +119,7 @@ impl Graph {
         })
         .collect();
 
-      let empty = &ArrayD::zeros(IxDyn(&[0]));
-      let basic_block_weights: Vec<_> = self
-        .basic_blocks
-        .iter()
-        .map(|bb| {
-          if bb.weights_name().is_ok() {
-            if let Some(s) = self.weights_map.get(&bb.weights_name().unwrap()) {
-              s
-            } else {
-              panic!("Weight is missing from setups");
-            }
-          } else {
-            empty
-          }
-        })
-        .collect();
-
-      let layer_nodes = s.load_layer_nodes(&self.layer_configs[i], &self.basic_blocks);
-      outputs[i] = s.run(&layer_nodes, &myInputs, &basic_block_weights, &self.basic_blocks);
+      outputs[i] = s.run(&myInputs, &self.weights_map, &self.layer_configs[i], &self.basic_blocks);
     });
 
     return outputs;
@@ -158,6 +141,26 @@ impl Graph {
       weights: weight_setups,
       tables: table_setups,
     }
+  }
+
+  pub fn encodeOutputs(&self, srs: &SRS, inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<Vec<Vec<&ArrayD<Fr>>>>) -> Vec<Vec<Vec<ArrayD<Data>>>> {
+    let mut outputsEnc: Vec<Vec<Vec<ArrayD<Data>>>> = vec![vec![]; self.layers.len()];
+    self.layers.iter().enumerate().for_each(|(i, s)| {
+      let myInputs = self.layer_inputs[i]
+        .iter()
+        .map(|(j, k)| {
+          if *j < 0 {
+            inputs[*k]
+          } else {
+            let output_in_layer = self.layers[*j as usize].layer_output_node(&self.layer_configs[*j as usize]);
+            &(outputsEnc[*j as usize][output_in_layer.0][output_in_layer.1])
+          }
+        })
+        .collect();
+
+      outputsEnc[i] = s.encodeOutputs(&srs, &myInputs, &outputs[i], &self.layer_configs[i], &self.basic_blocks);
+    });
+    outputsEnc
   }
 
   pub fn prove(
@@ -185,8 +188,7 @@ impl Graph {
           })
           .collect();
 
-        let layer_nodes = s.load_layer_nodes(&self.layer_configs[i], &self.basic_blocks);
-        s.prove(&mut &layer_nodes, srs, &setups, &inputs, outputs[i], &mut self.basic_blocks, rng)
+        s.prove(srs, setups, &inputs, outputs[i], &self.layer_configs[i], &mut self.basic_blocks, rng)
       })
       .collect()
   }
@@ -200,7 +202,29 @@ impl Graph {
     proofs: &Vec<&Vec<(&Vec<G1Affine>, &Vec<G2Affine>)>>,
     rng: &mut StdRng,
   ) {
-    self
+    let weights_dataenc: HashMap<_, _> = setups
+      .weights
+      .iter()
+      .map(|(k, v)| {
+        if let SetupType::CQLin(setup) = v {
+          (k.clone(), setup.weights.map(|x| DataEnc::new(srs, x)))
+        } else {
+          panic!("setups.weights has an incorrect SetupType")
+        }
+      })
+      .collect();
+    let table_dataenc: HashMap<_, _> = setups
+      .tables
+      .iter()
+      .map(|(k, v)| {
+        if let SetupType::CQ(setup) = v {
+          (k.clone(), setup.table.map(|x| DataEnc::new(srs, x)))
+        } else {
+          panic!("setups.tables has an incorrect SetupType")
+        }
+      })
+      .collect();
+    let pairings: Vec<Vec<PairingCheck>> = self
       .layers
       .iter()
       .enumerate()
@@ -216,42 +240,20 @@ impl Graph {
             }
           })
           .collect();
-
-        let layer_nodes = s.load_layer_nodes(&self.layer_configs[i], &self.basic_blocks);
-        let weights_dataenc: HashMap<_, _> = setups
-          .weights
-          .iter()
-          .map(|(k, v)| {
-            if let SetupType::CQLin(setup) = v {
-              (k.clone(), setup.weights.map(|x| DataEnc::new(srs, x)))
-            } else {
-              panic!("setups.weights has an incorrect SetupType")
-            }
-          })
-          .collect();
-        let table_dataenc: HashMap<_, _> = setups
-          .tables
-          .iter()
-          .map(|(k, v)| {
-            if let SetupType::CQ(setup) = v {
-              (k.clone(), setup.table.map(|x| DataEnc::new(srs, x)))
-            } else {
-              panic!("setups.tables has an incorrect SetupType")
-            }
-          })
-          .collect();
         s.verify(
-          &mut &layer_nodes,
           srs,
           &weights_dataenc,
           &table_dataenc,
           &inputs,
           outputs[i],
           proofs[i],
+          &self.layer_configs[i],
           &self.basic_blocks,
           rng,
         )
       })
-      .collect()
+      .collect();
+    let pairings = util::combine_pairing_checks(&pairings.iter().flatten().collect());
+    assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
   }
 }

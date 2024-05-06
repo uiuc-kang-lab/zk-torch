@@ -1,16 +1,14 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-
-use super::{BasicBlock, BasicBlockType, Data, DataEnc, SRS};
+use super::{BasicBlock, BasicBlockType, Data, DataEnc, PairingCheck, SRS};
 use crate::{
   graph::{CQLinSetup, SetupType},
   util::{self, calc_pow, convert_to_data},
 };
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ec::pairing::Pairing;
 use ark_ff::Field;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain, Polynomial};
-use ark_std::{One, UniformRand, Zero};
+use ark_std::{UniformRand, Zero};
 use ndarray::{ArrayD, Ix2};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
@@ -235,7 +233,8 @@ impl BasicBlock for CQLinBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
-  ) {
+  ) -> Vec<PairingCheck> {
+    let mut checks = Vec::new();
     let l = inputs[0].len();
     let m = model.len();
     let n = model[0].len;
@@ -256,38 +255,38 @@ impl BasicBlock for CQLinBasicBlock {
 
     // Calculate flat_C
     let temp: Vec<_> = (0..l).map(|i| outputs[0][i].g1).collect();
-    let flat_C_g1 = util::msm::<G1Projective>(&temp, &alpha_pow);
+    let flat_C_g1 = util::msm::<G1Projective>(&temp, &alpha_pow).into();
 
     // Check A(x) M(x) = Z(X) Q(X) + R(X)
-    let lhs = Bn254::pairing(A_x, M_x);
-    let rhs = Bn254::pairing(Q_x, srs.X2A[m * n] - srs.X2A[0]) + Bn254::pairing(R_x, srs.X2A[0]) + Bn254::pairing(C1, srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![
+      (A_x, M_x),
+      (-Q_x, (srs.X2A[m * n] - srs.X2A[0]).into()),
+      (-R_x, srs.X2A[0]),
+      (-C1, srs.Y2A),
+    ]);
 
     // Check R(X) - 1/m g(X) = S(X) X^n
-    let temp: G1Affine = (flat_C_g1 * Fr::from(m as u64).inverse().unwrap()).into();
-    let lhs = Bn254::pairing(R_x - temp, srs.X2A[0]);
-    let rhs = Bn254::pairing(S_x, srs.X2A[n]) + Bn254::pairing(C2, srs.Y2A);
-    assert!(lhs == rhs);
+    let temp: G1Projective = flat_C_g1 * Fr::from(m as u64).inverse().unwrap();
+    let temp: G1Affine = temp.into();
+    checks.push(vec![((R_x - temp).into(), srs.X2A[0]), (-S_x, srs.X2A[n]), (-C2, srs.Y2A)]);
 
     // n degree-check for g
-    let lhs = Bn254::pairing(flat_C_g1, srs.X2A[N - n]);
-    let rhs = Bn254::pairing(P_x, srs.X2A[0]) + Bn254::pairing(C3, srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![(flat_C_g1, srs.X2A[N - n]), (-P_x, srs.X2A[0]), (-C3, srs.Y2A)]);
 
     // mn degree-check for R
-    let lhs = Bn254::pairing(R_x, srs.X2A[N - m * n]);
-    let rhs = Bn254::pairing(P_R_x, srs.X2A[0]) + Bn254::pairing(C4, srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![(R_x, srs.X2A[N - m * n]), (-P_R_x, srs.X2A[0]), (-C4, srs.Y2A)]);
 
     // Checks A(gamma) = f(gamma^n)
     let gamma = Fr::rand(rng);
     let gamma_n = gamma.pow(&[n as u64]);
-    let lhs = Bn254::pairing(flat_A_g1 - z + pi * gamma_n, srs.X2A[0]);
-    let rhs = Bn254::pairing(pi, srs.X2A[1]) + Bn254::pairing(C5, srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![
+      ((flat_A_g1 - z + pi * gamma_n).into(), srs.X2A[0]),
+      (-pi, srs.X2A[1]),
+      (-C5, srs.Y2A),
+    ]);
 
-    let lhs = Bn254::pairing(A_x - z + pi_1 * gamma_n, srs.X2A[0]);
-    let rhs = Bn254::pairing(pi_1, srs.X2A[n]) + Bn254::pairing(C6, srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![((A_x - z + pi_1 * gamma_n).into(), srs.X2A[0]), (-pi_1, srs.X2A[n]), (-C6, srs.Y2A)]);
+
+    checks
   }
 }

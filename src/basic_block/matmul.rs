@@ -1,17 +1,15 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-
-use super::{BasicBlock, Data, DataEnc, SRS};
+use super::{BasicBlock, Data, DataEnc, PairingCheck, SRS};
 use crate::{
   graph::SetupType,
   util::{self, calc_pow},
   BasicBlockType,
 };
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ec::pairing::Pairing;
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
-use ark_std::{ops::Mul, ops::Sub, One, UniformRand, Zero};
+use ark_std::{ops::Mul, ops::Sub, UniformRand, Zero};
 use ndarray::{ArrayD, Ix2};
 use rand::{rngs::StdRng, SeedableRng};
 
@@ -132,7 +130,8 @@ impl BasicBlock for MatMulBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
-  ) {
+  ) -> Vec<PairingCheck> {
+    let mut checks = Vec::new();
     let l = inputs[0].len();
     let m = inputs[0][0].len;
     let n = inputs[1].len();
@@ -152,42 +151,52 @@ impl BasicBlock for MatMulBasicBlock {
 
     // Calculate flat_A
     let temp: Vec<_> = (0..l).map(|i| inputs[0][i].g1).collect();
-    let flat_A_g1 = util::msm::<G1Projective>(&temp, &alpha_pow);
+    let flat_A_g1 = util::msm::<G1Projective>(&temp, &alpha_pow).into();
 
     // Calculate flat_B
     let temp: Vec<_> = (0..n).map(|i| inputs[1][i].g1).collect();
-    let flat_B_g1 = util::msm::<G1Projective>(&temp, &beta_pow);
+    let flat_B_g1 = util::msm::<G1Projective>(&temp, &beta_pow).into();
 
     // Calculate flat_C
     let temp: Vec<_> = (0..l).map(|i| outputs[0][i].g1).collect();
-    let flat_C_g1 = util::msm::<G1Projective>(&temp, &alpha_pow);
+    let flat_C_g1 = util::msm::<G1Projective>(&temp, &alpha_pow).into();
 
     // Check left(x) (left_i = flat_A_i * flat_B_i)
-    let lhs = Bn254::pairing(flat_A_g1, flat_B_g2) - Bn254::pairing(left_x, srs.X2A[0]);
-    let rhs = Bn254::pairing(left_Q_x, srs.X2A[m] - srs.X2A[0]) + Bn254::pairing(corr1, srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![
+      (flat_A_g1, flat_B_g2),
+      (-left_x, srs.X2A[0]),
+      (-left_Q_x, (srs.X2A[m] - srs.X2A[0]).into()),
+      (-corr1, srs.Y2A),
+    ]);
 
     // Check flat_B_g2
-    let lhs = Bn254::pairing(flat_B_g1, srs.X2A[0]);
-    let rhs = Bn254::pairing(srs.X1A[0], flat_B_g2);
-    assert!(lhs == rhs);
+    checks.push(vec![(flat_B_g1, srs.X2A[0]), (srs.X1A[0], -flat_B_g2)]);
 
     // Check left(x) - left(0) is divisible by x
-    let lhs = Bn254::pairing(left_x - left_zero, srs.X2A[0]);
-    let rhs = Bn254::pairing(left_zero_div, srs.X2A[1]) + Bn254::pairing(corr2, srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![
+      ((left_x - left_zero).into(), srs.X2A[0]),
+      (-left_zero_div, srs.X2A[1]),
+      (-corr2, srs.Y2A),
+    ]);
 
     // Check right(x) (right_i = flat_C_i * beta_pow_i)
-    let lhs = Bn254::pairing(flat_C_g1, beta_pow_g2) - Bn254::pairing(right_x, srs.X2A[0]);
-    let rhs = Bn254::pairing(right_Q_x, srs.X2A[n] - srs.X2A[0]) + Bn254::pairing(corr3, srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![
+      (flat_C_g1, beta_pow_g2),
+      (-right_x, srs.X2A[0]),
+      (-right_Q_x, (srs.X2A[n] - srs.X2A[0]).into()),
+      (-corr3, srs.Y2A),
+    ]);
 
     // Assume right(0) = left(0)*n/m (which assumes ∑left=∑right)
     let right_zero: G1Affine = (left_zero * (Fr::from(m as u32) * Fr::from(n as u32).inverse().unwrap())).into();
 
     //check right(x) - right(0) is divisible by x
-    let lhs = Bn254::pairing(right_x - right_zero, srs.X2A[0]);
-    let rhs = Bn254::pairing(right_zero_div, srs.X2A[1]) + Bn254::pairing(corr4, srs.Y2A);
-    assert!(lhs == rhs);
+    checks.push(vec![
+      ((right_x - right_zero).into(), srs.X2A[0]),
+      (-right_zero_div, srs.X2A[1]),
+      (-corr4, srs.Y2A),
+    ]);
+
+    checks
   }
 }
