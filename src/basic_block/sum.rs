@@ -14,8 +14,8 @@ use rand::{rngs::StdRng, SeedableRng};
 pub struct SumBasicBlock;
 
 impl BasicBlock for SumBasicBlock {
-  fn block_type(&self) -> BasicBlockType {
-    BasicBlockType::Sum
+  fn block_type(&self) -> Result<BasicBlockType, String> {
+    Ok(BasicBlockType::Sum)
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

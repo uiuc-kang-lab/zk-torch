@@ -12,8 +12,8 @@ pub struct MulConstBasicBlock {
 }
 
 impl BasicBlock for MulConstBasicBlock {
-  fn block_type(&self) -> BasicBlockType {
-    BasicBlockType::MulConst
+  fn block_type(&self) -> Result<BasicBlockType, String> {
+    Ok(BasicBlockType::MulConst)
   }
 
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
@@ -54,8 +54,8 @@ impl BasicBlock for MulConstBasicBlock {
 pub struct MulScalarBasicBlock;
 
 impl BasicBlock for MulScalarBasicBlock {
-  fn block_type(&self) -> BasicBlockType {
-    BasicBlockType::MulScalar
+  fn block_type(&self) -> Result<BasicBlockType, String> {
+    Ok(BasicBlockType::MulScalar)
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
@@ -106,8 +106,8 @@ impl BasicBlock for MulScalarBasicBlock {
 pub struct MulBasicBlock;
 
 impl BasicBlock for MulBasicBlock {
-  fn block_type(&self) -> BasicBlockType {
-    BasicBlockType::Mul
+  fn block_type(&self) -> Result<BasicBlockType, String> {
+    Ok(BasicBlockType::Mul)
   }
 
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

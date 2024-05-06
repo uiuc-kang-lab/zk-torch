@@ -80,8 +80,8 @@ impl Graph {
 
     let mut table_map: HashMap<String, ArrayD<Fr>> = HashMap::new();
     for i in 1..basic_blocks.len() {
-      if is_nonlinearity(basic_blocks[i - 1].block_type()) {
-        match basic_blocks[i].block_type() {
+      if is_nonlinearity(basic_blocks[i - 1].block_type().unwrap()) {
+        match basic_blocks[i].block_type().unwrap() {
           BasicBlockType::CQ2 => {
             if !table_map.contains_key(&basic_blocks[i].name()) {
               table_map.insert(basic_blocks[i].name(), util::gen_cq_table(&basic_blocks[i - 1], table_offset, table_size));

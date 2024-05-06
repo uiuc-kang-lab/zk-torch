@@ -7,8 +7,8 @@ use ndarray::{arr0, ArrayD};
 pub struct MaxBasicBlock;
 
 impl BasicBlock for MaxBasicBlock {
-  fn block_type(&self) -> BasicBlockType {
-    BasicBlockType::Max
+  fn block_type(&self) -> Result<BasicBlockType, String> {
+    Ok(BasicBlockType::Max)
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

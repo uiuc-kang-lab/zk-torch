@@ -25,8 +25,8 @@ pub struct PermuteBasicBlock {
 // Where A is in the input matrix, B is the output matrix, and p is the permutation
 // In order to do a matrix transpose, we set p_0[i]=ni and p_1[i]=i
 impl BasicBlock for PermuteBasicBlock {
-  fn block_type(&self) -> BasicBlockType {
-    BasicBlockType::Permute
+  fn block_type(&self) -> Result<BasicBlockType, String> {
+    Ok(BasicBlockType::Permute)
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

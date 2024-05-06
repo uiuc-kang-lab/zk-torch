@@ -20,8 +20,8 @@ pub struct CQLinBasicBlock {
 
 // input is rows of A, model is rows of B, outputs are rows of C
 impl BasicBlock for CQLinBasicBlock {
-  fn block_type(&self) -> BasicBlockType {
-    BasicBlockType::CQLin
+  fn block_type(&self) -> Result<BasicBlockType, String> {
+    Ok(BasicBlockType::CQLin)
   }
 
   fn weights_name(&self) -> Result<String, String> {

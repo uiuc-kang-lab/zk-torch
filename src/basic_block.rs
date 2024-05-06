@@ -120,8 +120,8 @@ pub enum BasicBlockType {
 }
 
 pub trait BasicBlock: std::fmt::Debug {
-  fn block_type(&self) -> BasicBlockType {
-    BasicBlockType::Constant
+  fn block_type(&self) -> Result<BasicBlockType, String> {
+    Err("Basic block does not implement block_type()".to_string())
   }
 
   fn name(&self) -> String {

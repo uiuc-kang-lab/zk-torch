@@ -10,8 +10,8 @@ use rand::rngs::StdRng;
 pub struct SubBasicBlock;
 
 impl BasicBlock for SubBasicBlock {
-  fn block_type(&self) -> BasicBlockType {
-    BasicBlockType::Sub
+  fn block_type(&self) -> Result<BasicBlockType, String> {
+    Ok(BasicBlockType::Sub)
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

@@ -26,12 +26,11 @@ pub struct CQ2BasicBlock {
 }
 
 impl BasicBlock for CQ2BasicBlock {
-  fn block_type(&self) -> BasicBlockType {
-    BasicBlockType::CQ2
+  fn block_type(&self) -> Result<BasicBlockType, String> {
+    Ok(BasicBlockType::CQ2)
   }
 
   fn name(&self) -> String {
-    // concat "CQ2" with self.name
     format!("CQ2({})", self.name)
   }
 

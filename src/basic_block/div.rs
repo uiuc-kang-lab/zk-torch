@@ -9,8 +9,8 @@ pub struct DivScalarBasicBlock {
 }
 
 impl BasicBlock for DivScalarBasicBlock {
-  fn block_type(&self) -> BasicBlockType {
-    BasicBlockType::Div
+  fn block_type(&self) -> Result<BasicBlockType, String> {
+    Ok(BasicBlockType::Div)
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

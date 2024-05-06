@@ -24,8 +24,8 @@ macro_rules! make_basic_block {
     }
 
     impl BasicBlock for $block_name {
-      fn block_type(&self) -> BasicBlockType {
-        BasicBlockType::$name
+      fn block_type(&self) -> Result<BasicBlockType, String> {
+        Ok(BasicBlockType::$name)
       }
 
       fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

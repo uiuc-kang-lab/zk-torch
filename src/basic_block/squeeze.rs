@@ -10,8 +10,8 @@ use ndarray::{ArrayD, Axis};
 pub struct SqueezeBasicBlock;
 
 impl BasicBlock for SqueezeBasicBlock {
-  fn block_type(&self) -> BasicBlockType {
-    BasicBlockType::Squeeze
+  fn block_type(&self) -> Result<BasicBlockType, String> {
+    Ok(BasicBlockType::Squeeze)
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
@@ -28,8 +28,8 @@ impl BasicBlock for SqueezeBasicBlock {
 pub struct UnsqueezeBasicBlock;
 
 impl BasicBlock for UnsqueezeBasicBlock {
-  fn block_type(&self) -> BasicBlockType {
-    BasicBlockType::Unsqueeze
+  fn block_type(&self) -> Result<BasicBlockType, String> {
+    Ok(BasicBlockType::Unsqueeze)
   }
 
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

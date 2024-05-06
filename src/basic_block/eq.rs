@@ -9,8 +9,8 @@ use rand::rngs::StdRng;
 pub struct EqBasicBlock;
 
 impl BasicBlock for EqBasicBlock {
-  fn block_type(&self) -> BasicBlockType {
-    BasicBlockType::Eq
+  fn block_type(&self) -> Result<BasicBlockType, String> {
+    Ok(BasicBlockType::Eq)
   }
 
   fn prove(

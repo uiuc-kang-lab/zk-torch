@@ -8,6 +8,10 @@ pub struct ConstBasicBlock {
 }
 
 impl BasicBlock for ConstBasicBlock {
+  fn block_type(&self) -> Result<BasicBlockType, String> {
+    Ok(BasicBlockType::Constant)
+  }
+
   fn weights_name(&self) -> Result<String, String> {
     Ok(self.name.clone())
   }

@@ -25,8 +25,8 @@ pub struct CQBasicBlock {
 }
 
 impl BasicBlock for CQBasicBlock {
-  fn block_type(&self) -> BasicBlockType {
-    BasicBlockType::CQ
+  fn block_type(&self) -> Result<BasicBlockType, String> {
+    Ok(BasicBlockType::CQ)
   }
 
   fn name(&self) -> String {

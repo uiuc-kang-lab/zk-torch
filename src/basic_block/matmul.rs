@@ -17,8 +17,8 @@ use rand::{rngs::StdRng, SeedableRng};
 pub struct MatMulBasicBlock;
 
 impl BasicBlock for MatMulBasicBlock {
-  fn block_type(&self) -> BasicBlockType {
-    BasicBlockType::MatMul
+  fn block_type(&self) -> Result<BasicBlockType, String> {
+    Ok(BasicBlockType::MatMul)
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {

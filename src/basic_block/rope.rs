@@ -9,8 +9,8 @@ pub struct RoPEBasicBlock {
 }
 
 impl BasicBlock for RoPEBasicBlock {
-  fn block_type(&self) -> BasicBlockType {
-    BasicBlockType::RoPE
+  fn block_type(&self) -> Result<BasicBlockType, String> {
+    Ok(BasicBlockType::RoPE)
   }
 
   fn run(&self, _weights: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
