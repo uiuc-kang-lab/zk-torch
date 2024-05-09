@@ -1,5 +1,6 @@
 use crate::basic_block::*;
 use crate::graph::*;
+use crate::layer;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 use std::collections::HashMap;
@@ -35,59 +36,9 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
   for node in onnx_graph.node {
     let op = node.op_type.as_str();
     let mut local_graph = match op {
-      "Add" => Ok(Graph {
-        basic_blocks: vec![Box::new(AddBasicBlock {})],
-        nodes: vec![Node {
-          basic_block: 0,
-          inputs: vec![(-1, 0), (-2, 0)],
-        }],
-        outputs: vec![(0, 0)],
-      }),
-      "MatMul" => Ok(Graph {
-        basic_blocks: vec![
-          Box::new(MatMulBasicBlock {}),
-          Box::new(ChangeSFBasicBlock { input_SF: 6, output_SF: 3 }),
-          Box::new(CQ2BasicBlock {
-            table_dict: HashMap::new(),
-            setup: Some((Box::new(ChangeSFBasicBlock { input_SF: 6, output_SF: 3 }), -(1 << 5), 1 << 6)),
-          }),
-        ],
-        nodes: vec![
-          Node {
-            basic_block: 0,
-            inputs: vec![(-1, 0), (-2, 0)],
-          },
-          Node {
-            basic_block: 1,
-            inputs: vec![(0, 0)],
-          },
-          Node {
-            basic_block: 2,
-            inputs: vec![(0, 0), (1, 0)],
-          },
-        ],
-        outputs: vec![(1, 0)],
-      }),
-      "Relu" => Ok(Graph {
-        basic_blocks: vec![
-          Box::new(ReLUBasicBlock { input_SF: 3, output_SF: 3 }),
-          Box::new(CQ2BasicBlock {
-            table_dict: HashMap::new(),
-            setup: Some((Box::new(ReLUBasicBlock { input_SF: 3, output_SF: 3 }), -(1 << 5), 1 << 6)),
-          }),
-        ],
-        nodes: vec![
-          Node {
-            basic_block: 0,
-            inputs: vec![(-1, 0)],
-          },
-          Node {
-            basic_block: 1,
-            inputs: vec![(-1, 0), (0, 0)],
-          },
-        ],
-        outputs: vec![(0, 0)],
-      }),
+      "Add" => Ok(layer::add::graph()),
+      "MatMul" => Ok(layer::matmul::graph()),
+      "Relu" => Ok(layer::relu::graph()),
       _ => Err(format!("Unsupported onnx operation: {op}")),
     }
     .unwrap();

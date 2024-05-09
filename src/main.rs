@@ -8,6 +8,7 @@ use rayon::prelude::*;
 use util::convert_to_data;
 mod basic_block;
 mod graph;
+mod layer;
 mod onnx;
 mod ptau;
 #[cfg(test)]
