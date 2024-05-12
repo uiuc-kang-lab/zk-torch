@@ -1,6 +1,7 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer;
+use crate::layer::Layer;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 use std::collections::HashMap;
@@ -36,9 +37,9 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
   for node in onnx_graph.node {
     let op = node.op_type.as_str();
     let mut local_graph = match op {
-      "Add" => Ok(layer::add::graph()),
-      "MatMul" => Ok(layer::matmul::graph()),
-      "Relu" => Ok(layer::relu::graph()),
+      "Add" => Ok(layer::add::AddLayer::graph()),
+      "MatMul" => Ok(layer::matmul::MatMulLayer::graph()),
+      "Relu" => Ok(layer::relu::ReLULayer::graph()),
       _ => Err(format!("Unsupported onnx operation: {op}")),
     }
     .unwrap();
