@@ -86,4 +86,22 @@ impl Graph {
     let pairings = util::combine_pairing_checks(&pairings.iter().flatten().collect());
     assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
   }
+  pub fn new() -> Self {
+    Graph {
+      basic_blocks: vec![],
+      nodes: vec![],
+      outputs: vec![],
+    }
+  }
+  pub fn addBB(&mut self, basic_block: Box<dyn BasicBlock>) -> usize {
+    self.basic_blocks.push(basic_block);
+    self.basic_blocks.len() - 1
+  }
+  pub fn addNode(&mut self, basic_block: usize, inputs: Vec<(i32, usize)>) -> i32 {
+    self.nodes.push(Node {
+      basic_block: basic_block,
+      inputs: inputs,
+    });
+    (self.nodes.len() - 1) as i32
+  }
 }

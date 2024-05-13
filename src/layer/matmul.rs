@@ -6,30 +6,17 @@ use std::collections::HashMap;
 pub struct MatMulLayer;
 impl Layer for MatMulLayer {
   fn graph() -> Graph {
-    Graph {
-      basic_blocks: vec![
-        Box::new(MatMulBasicBlock {}),
-        Box::new(ChangeSFBasicBlock { input_SF: 6, output_SF: 3 }),
-        Box::new(CQ2BasicBlock {
-          table_dict: HashMap::new(),
-          setup: Some((Box::new(ChangeSFBasicBlock { input_SF: 6, output_SF: 3 }), -(1 << 5), 1 << 6)),
-        }),
-      ],
-      nodes: vec![
-        Node {
-          basic_block: 0,
-          inputs: vec![(-1, 0), (-2, 0)],
-        },
-        Node {
-          basic_block: 1,
-          inputs: vec![(0, 0)],
-        },
-        Node {
-          basic_block: 2,
-          inputs: vec![(0, 0), (1, 0)],
-        },
-      ],
-      outputs: vec![(1, 0)],
-    }
+    let mut graph = Graph::new();
+    let matmul = graph.addBB(Box::new(MatMulBasicBlock {}));
+    let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock { input_SF: 6, output_SF: 3 }));
+    let change_SF_check = graph.addBB(Box::new(CQ2BasicBlock {
+      table_dict: HashMap::new(),
+      setup: Some((Box::new(ChangeSFBasicBlock { input_SF: 6, output_SF: 3 }), -(1 << 5), 1 << 6)),
+    }));
+    let matmul_output = graph.addNode(matmul, vec![(-1, 0), (-2, 0)]);
+    let change_SF_output = graph.addNode(change_SF, vec![(matmul_output, 0)]);
+    let _ = graph.addNode(change_SF_check, vec![(matmul_output, 0), (change_SF_output, 0)]);
+    graph.outputs.push((change_SF_output, 0));
+    graph
   }
 }
