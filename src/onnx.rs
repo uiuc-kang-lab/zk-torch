@@ -31,6 +31,8 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
       basic_block: graph.basic_blocks.len(),
       inputs: vec![],
     });
+    // We are currently have a ConstBasicBlock followed by a MatMulBasicBlock.
+    // In the future, we can prune the Graph so that this is replaced by one CQLinBasicBlock.
     graph.basic_blocks.push(Box::new(ConstBasicBlock {}));
     setups.push(tensor);
   }
