@@ -1,5 +1,5 @@
 #![allow(unused_imports)]
-use crate::{util, util::ark_de, util::ark_se};
+use crate::util::{self, ark_de, ark_se};
 pub use add::AddBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::univariate::DensePolynomial;

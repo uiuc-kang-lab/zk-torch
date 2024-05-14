@@ -2,6 +2,7 @@ use crate::basic_block::*;
 use crate::util;
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::{Pairing, PairingOutput};
+use ark_serialize::CanonicalSerialize;
 use ark_std::Zero;
 use ndarray::ArrayD;
 use rand::rngs::StdRng;
@@ -57,14 +58,22 @@ impl Graph {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&Vec<&ArrayD<Data>>>,
     rng: &mut StdRng,
-  ) -> Vec<(Vec<G1Projective>, Vec<G2Projective>)> {
+  ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>)> {
     self
       .nodes
       .iter()
       .enumerate()
       .map(|(i, n)| {
         let myInputs: Vec<&ArrayD<Data>> = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
-        self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &myInputs, outputs[i], rng)
+        let proof = self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &myInputs, outputs[i], rng);
+        let proof: (Vec<G1Affine>, Vec<G2Affine>) = (
+          proof.0.iter().map(|x| (*x).into()).collect(),
+          proof.1.iter().map(|x| (*x).into()).collect(),
+        );
+        let mut bytes = Vec::new();
+        proof.serialize_uncompressed(&mut bytes).unwrap();
+        util::add_randomness(rng, bytes);
+        proof
       })
       .collect()
   }
@@ -84,7 +93,12 @@ impl Graph {
       .enumerate()
       .map(|(i, n)| {
         let myInputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
-        self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng)
+        let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng);
+        let mut bytes = Vec::new();
+        let temp: (Vec<G1Affine>, Vec<G2Affine>) = (proofs[i].0.clone(), proofs[i].1.clone());
+        temp.serialize_uncompressed(&mut bytes).unwrap();
+        util::add_randomness(rng, bytes);
+        pairings
       })
       .collect();
     let pairings = util::combine_pairing_checks(&pairings.iter().flatten().collect());

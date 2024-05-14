@@ -68,8 +68,6 @@ fn prove(srs: &SRS, graph: &mut Graph, models: Vec<ArrayD<Fr>>) {
 
   //Prove:
   let proofs = graph.prove(srs, &setups, &models, &inputs, &outputs, &mut rng);
-  let proofs: Vec<(Vec<G1Affine>, Vec<G2Affine>)> =
-    proofs.iter().map(|x| (x.0.iter().map(|y| (*y).into()).collect(), x.1.iter().map(|y| (*y).into()).collect())).collect();
   proofs.serialize_uncompressed(File::create("proofs").unwrap()).unwrap();
 }
 
