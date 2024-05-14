@@ -7,6 +7,7 @@ use ark_ec::AffineRepr;
 use ark_ec::{ScalarMul, VariableBaseMSM};
 use ark_ff::PrimeField;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{UniformRand, Zero};
 use ndarray::{arr1, concatenate, Array1, ArrayD, Axis, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
@@ -102,6 +103,24 @@ pub fn toeplitz_mul<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvalu
   let mut r = circulant_mul(domain, &m2, &temp2);
   r.resize(n, G::zero());
   r
+}
+
+pub fn ark_se<S, A: CanonicalSerialize>(a: &A, s: S) -> Result<S::Ok, S::Error>
+where
+  S: serde::Serializer,
+{
+  let mut bytes = vec![];
+  a.serialize_compressed(&mut bytes).map_err(serde::ser::Error::custom)?;
+  s.serialize_bytes(&bytes)
+}
+
+pub fn ark_de<'de, D, A: CanonicalDeserialize>(data: D) -> Result<A, D::Error>
+where
+  D: serde::de::Deserializer<'de>,
+{
+  let s: Vec<u8> = serde::de::Deserialize::deserialize(data)?;
+  let a = A::deserialize_compressed_unchecked(s.as_slice());
+  a.map_err(serde::de::Error::custom)
 }
 
 pub fn msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {

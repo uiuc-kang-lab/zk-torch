@@ -1,10 +1,15 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
+use crate::graph::Graph;
 use ark_bn254::{Fr, G1Affine, G2Affine};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use basic_block::*;
-use ndarray::ArrayD;
+use ndarray::{arr1, ArrayD};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rayon::prelude::*;
+use sha3::{Digest, Keccak256};
+use std::fs::{self, File};
+use std::io::Read;
 use util::convert_to_data;
 mod basic_block;
 mod graph;
@@ -15,52 +20,93 @@ mod ptau;
 mod tests;
 mod util;
 
-fn main() {
-  let srs = &ptau::load_file("challenge", 7);
-  let (mut graph, models) = onnx::load_file("sample.onnx");
-
-  const n: usize = 1 << 2;
-  let input: Vec<_> = (0..n).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
-  let input = ArrayD::from_shape_vec(vec![n], input).unwrap();
-
+fn prove(srs: &SRS, graph: &mut Graph, models: Vec<ArrayD<Fr>>) {
   //Run:
+  let input: Vec<_> = (0..4).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
+  let input = arr1(&input).into_dyn();
   let inputs = vec![&input];
   let models = models.iter().map(|x| x).collect();
   let outputs = graph.run(&inputs, &models);
-  let outputs: Vec<Vec<&ArrayD<Fr>>> = outputs.iter().map(|output| output.iter().map(|x| x).collect()).collect();
-  let outputs: Vec<&Vec<&ArrayD<Fr>>> = outputs.iter().map(|output| output).collect();
 
   //Setup:
   let models: Vec<ArrayD<Data>> = models.iter().map(|model| convert_to_data(srs, model)).collect();
   let models: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
   let setups = graph.setup(srs, &models);
-  //Converting to affine
+
+  //Encode Data:
   let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>)> =
     setups.iter().map(|x| (x.0.iter().map(|y| (*y).into()).collect(), x.1.iter().map(|y| (*y).into()).collect())).collect();
   let setups = setups.iter().map(|x| (&x.0, &x.1)).collect();
-
-  //Prove:
+  let modelsEnc: Vec<ArrayD<DataEnc>> = models.iter().map(|model| (**model).map(|x| DataEnc::new(srs, x))).collect();
   let inputs: Vec<ArrayD<Data>> = inputs.iter().map(|input| convert_to_data(srs, input)).collect();
   let inputs: Vec<&ArrayD<Data>> = inputs.iter().map(|input| input).collect();
+  let inputsEnc: Vec<ArrayD<DataEnc>> = inputs.iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect();
+  let outputs: Vec<Vec<&ArrayD<Fr>>> = outputs.iter().map(|output| output.iter().map(|x| x).collect()).collect();
+  let outputs: Vec<&Vec<&ArrayD<Fr>>> = outputs.iter().map(|output| output).collect();
   let outputs: Vec<Vec<ArrayD<Data>>> = graph.encodeOutputs(srs, &models, &inputs, &outputs);
   let outputs: Vec<Vec<&ArrayD<Data>>> = outputs.iter().map(|outputs| outputs.iter().map(|x| x).collect()).collect();
   let outputs: Vec<&Vec<&ArrayD<Data>>> = outputs.iter().map(|x| x).collect();
-  let mut rng = StdRng::from_entropy();
-  let mut rng2 = rng.clone();
+  let outputsEnc: Vec<Vec<ArrayD<DataEnc>>> =
+    outputs.iter().map(|output| (**output).iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect()).collect();
+
+  //Save files:
+  let modelsEncBytes = bincode::serialize(&modelsEnc).unwrap();
+  let inputsEncBytes = bincode::serialize(&inputsEnc).unwrap();
+  let outputsEncBytes = bincode::serialize(&outputsEnc).unwrap();
+  fs::write("modelsEnc", &modelsEncBytes).unwrap();
+  fs::write("inputsEnc", &inputsEncBytes).unwrap();
+  fs::write("outputsEnc", &outputsEncBytes).unwrap();
+
+  //Fiat-Shamir:
+  let mut hasher = Keccak256::new();
+  hasher.update(modelsEncBytes);
+  hasher.update(inputsEncBytes);
+  hasher.update(outputsEncBytes);
+  let mut buf = [0u8; 32];
+  hasher.finalize_into((&mut buf).into());
+  let mut rng = StdRng::from_seed(buf);
+
+  //Prove:
   let proofs = graph.prove(srs, &setups, &models, &inputs, &outputs, &mut rng);
-  //Converting to affine
   let proofs: Vec<(Vec<G1Affine>, Vec<G2Affine>)> =
     proofs.iter().map(|x| (x.0.iter().map(|y| (*y).into()).collect(), x.1.iter().map(|y| (*y).into()).collect())).collect();
+  proofs.serialize_uncompressed(File::create("proofs").unwrap()).unwrap();
+}
+
+fn verify(srs: &SRS, graph: &Graph) {
+  //Read Files:
+  let proofs = Vec::<(Vec<G1Affine>, Vec<G2Affine>)>::deserialize_uncompressed_unchecked(File::open("proofs").unwrap()).unwrap();
   let proofs = proofs.iter().map(|x| (&x.0, &x.1)).collect();
+  let mut modelsEncBytes = Vec::new();
+  File::open("modelsEnc").unwrap().read_to_end(&mut modelsEncBytes).unwrap();
+  let modelsEnc: Vec<ArrayD<DataEnc>> = bincode::deserialize(&modelsEncBytes).unwrap();
+  let modelsEnc: Vec<&ArrayD<DataEnc>> = modelsEnc.iter().map(|model| model).collect();
+  let mut inputsEncBytes = Vec::new();
+  File::open("inputsEnc").unwrap().read_to_end(&mut inputsEncBytes).unwrap();
+  let inputsEnc: Vec<ArrayD<DataEnc>> = bincode::deserialize(&inputsEncBytes).unwrap();
+  let inputsEnc: Vec<&ArrayD<DataEnc>> = inputsEnc.iter().map(|input| input).collect();
+  let mut outputsEncBytes = Vec::new();
+  File::open("outputsEnc").unwrap().read_to_end(&mut outputsEncBytes).unwrap();
+  let outputsEnc: Vec<Vec<ArrayD<DataEnc>>> = bincode::deserialize(&outputsEncBytes).unwrap();
+  let outputsEnc: Vec<Vec<&ArrayD<DataEnc>>> = outputsEnc.iter().map(|output| output.iter().map(|x| x).collect()).collect();
+  let outputsEnc: Vec<&Vec<&ArrayD<DataEnc>>> = outputsEnc.iter().map(|x| x).collect();
+
+  //Fiat-Shamir:
+  let mut hasher = Keccak256::new();
+  hasher.update(modelsEncBytes);
+  hasher.update(inputsEncBytes);
+  hasher.update(outputsEncBytes);
+  let mut buf = [0u8; 32];
+  hasher.finalize_into((&mut buf).into());
+  let mut rng = StdRng::from_seed(buf);
 
   //Verify:
-  let models: Vec<ArrayD<DataEnc>> = models.iter().map(|model| (**model).map(|x| DataEnc::new(srs, x))).collect();
-  let models: Vec<&ArrayD<DataEnc>> = models.iter().map(|model| model).collect();
-  let inputs: Vec<ArrayD<DataEnc>> = inputs.iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect();
-  let inputs: Vec<&ArrayD<DataEnc>> = inputs.iter().map(|input| input).collect();
-  let outputs: Vec<Vec<ArrayD<DataEnc>>> =
-    outputs.iter().map(|output| (**output).iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect()).collect();
-  let outputs: Vec<Vec<&ArrayD<DataEnc>>> = outputs.iter().map(|output| output.iter().map(|x| x).collect()).collect();
-  let outputs: Vec<&Vec<&ArrayD<DataEnc>>> = outputs.iter().map(|x| x).collect();
-  graph.verify(srs, &models, &inputs, &outputs, &proofs, &mut rng2);
+  graph.verify(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng);
+}
+
+fn main() {
+  let srs = &ptau::load_file("challenge", 7);
+  let (mut graph, models) = onnx::load_file("sample.onnx");
+  prove(&srs, &mut graph, models);
+  verify(&srs, &graph);
 }

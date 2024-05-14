@@ -1,9 +1,10 @@
 #![allow(unused_imports)]
-use crate::util;
+use crate::{util, util::ark_de, util::ark_se};
 pub use add::AddBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::univariate::DensePolynomial;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
 pub use constant::ConstBasicBlock;
 pub use cq::CQBasicBlock;
@@ -19,6 +20,7 @@ pub use ops::*;
 pub use permute::PermuteBasicBlock;
 use rand::{rngs::StdRng, SeedableRng};
 pub use rope::RoPEBasicBlock;
+use serde::{Deserialize, Serialize};
 pub use sub::SubBasicBlock;
 pub use sum::SumBasicBlock;
 pub mod add;
@@ -50,11 +52,15 @@ pub struct SRS {
 
 pub type PairingCheck = Vec<(G1Affine, G2Affine)>;
 
-#[derive(Clone)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Data {
+  #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
   pub raw: Vec<Fr>,
+  #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
   pub poly: DensePolynomial<Fr>,
+  #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
   pub g1: G1Projective,
+  #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
   pub r: Fr,
 }
 
@@ -74,8 +80,10 @@ impl Data {
   }
 }
 
+#[derive(Clone, Deserialize, Serialize)]
 pub struct DataEnc {
   pub len: usize,
+  #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
   pub g1: G1Affine,
 }
 
