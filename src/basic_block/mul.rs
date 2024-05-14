@@ -10,11 +10,13 @@ use rand::{rngs::StdRng, SeedableRng};
 pub struct MulConstBasicBlock {
   pub c: usize,
 }
+
 impl BasicBlock for MulConstBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1 && inputs[0].ndim() == 1);
     vec![inputs[0].map(|x| *x * Fr::from(self.c as u32))]
   }
+
   fn prove(
     &mut self,
     srs: &SRS,
@@ -27,6 +29,7 @@ impl BasicBlock for MulConstBasicBlock {
     let C = srs.X1P[0] * (Fr::from(self.c as u32) * inputs[0][0].r - outputs[0][0].r);
     return (vec![C], vec![]);
   }
+
   fn verify(
     &self,
     srs: &SRS,
@@ -43,6 +46,7 @@ impl BasicBlock for MulConstBasicBlock {
     ]]
   }
 }
+
 #[derive(Debug)]
 pub struct MulScalarBasicBlock;
 impl BasicBlock for MulScalarBasicBlock {
@@ -89,6 +93,7 @@ impl BasicBlock for MulScalarBasicBlock {
     checks
   }
 }
+
 #[derive(Debug)]
 pub struct MulBasicBlock;
 impl BasicBlock for MulBasicBlock {

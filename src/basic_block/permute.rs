@@ -13,6 +13,7 @@ use rand::{rngs::StdRng, SeedableRng};
 pub struct PermuteBasicBlock {
   pub permutation: (Vec<usize>, Vec<usize>),
 }
+
 // Permute elements of a 2d matrix into another 2d matrix
 // This is proven via this equation:
 // [alpha^0,alpha^1,alpha^2,...] A [alpha^0,alpha^n,alpha^(2n),...]^T
@@ -31,6 +32,7 @@ impl BasicBlock for PermuteBasicBlock {
     })
     .into_dyn()]
   }
+
   fn prove(
     &mut self,
     srs: &SRS,
@@ -116,6 +118,7 @@ impl BasicBlock for PermuteBasicBlock {
 
     return (proof, vec![]);
   }
+
   fn verify(
     &self,
     srs: &SRS,

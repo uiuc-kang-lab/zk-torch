@@ -20,6 +20,7 @@ impl BasicBlock for EqBasicBlock {
     let C = srs.X1P[0] * (inputs[0][0].r - inputs[1][0].r);
     (vec![C], Vec::new())
   }
+
   fn verify(
     &self,
     srs: &SRS,

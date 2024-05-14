@@ -29,6 +29,7 @@ impl Graph {
     });
     return outputs;
   }
+
   pub fn encodeOutputs(
     &self,
     srs: &SRS,
@@ -43,9 +44,11 @@ impl Graph {
     });
     return outputsEnc;
   }
+
   pub fn setup(&self, srs: &SRS, models: &Vec<&ArrayD<Data>>) -> Vec<(Vec<G1Projective>, Vec<G2Projective>)> {
     self.basic_blocks.iter().zip(models.iter()).map(|(b, m)| b.setup(srs, *m)).collect()
   }
+
   pub fn prove(
     &mut self,
     srs: &SRS,
@@ -65,6 +68,7 @@ impl Graph {
       })
       .collect()
   }
+
   pub fn verify(
     &self,
     srs: &SRS,
@@ -86,6 +90,7 @@ impl Graph {
     let pairings = util::combine_pairing_checks(&pairings.iter().flatten().collect());
     assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
   }
+
   pub fn new() -> Self {
     Graph {
       basic_blocks: vec![],
@@ -93,10 +98,12 @@ impl Graph {
       outputs: vec![],
     }
   }
+
   pub fn addBB(&mut self, basic_block: Box<dyn BasicBlock>) -> usize {
     self.basic_blocks.push(basic_block);
     self.basic_blocks.len() - 1
   }
+
   pub fn addNode(&mut self, basic_block: usize, inputs: Vec<(i32, usize)>) -> i32 {
     self.nodes.push(Node {
       basic_block: basic_block,

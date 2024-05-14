@@ -7,6 +7,7 @@ use ndarray::{arr1, ArrayD};
 pub struct DivScalarBasicBlock {
   pub output_SF: usize,
 }
+
 impl BasicBlock for DivScalarBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[1].len() == 1);

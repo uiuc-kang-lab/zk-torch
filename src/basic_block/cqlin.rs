@@ -22,6 +22,7 @@ impl BasicBlock for CQLinBasicBlock {
     );
     vec![b.dot(&a).into_dyn()]
   }
+
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
     let m = model.len();
     let n = model[0].raw.len();
@@ -101,6 +102,7 @@ impl BasicBlock for CQLinBasicBlock {
     setup.append(&mut L_H_i_x);
     (setup, vec![M_x.into()])
   }
+
   fn prove(
     &mut self,
     srs: &SRS,
@@ -191,6 +193,7 @@ impl BasicBlock for CQLinBasicBlock {
 
     return (proof, vec![M_x_2]);
   }
+
   fn verify(
     &self,
     srs: &SRS,

@@ -47,7 +47,9 @@ pub struct SRS {
   pub Y1P: G1Projective,
   pub Y2P: G2Projective,
 }
+
 pub type PairingCheck = Vec<(G1Affine, G2Affine)>;
+
 #[derive(Clone)]
 pub struct Data {
   pub raw: Vec<Fr>,
@@ -55,6 +57,7 @@ pub struct Data {
   pub g1: G1Projective,
   pub r: Fr,
 }
+
 impl Data {
   pub fn new(srs: &SRS, raw: &[Fr]) -> Data {
     let N = raw.len();
@@ -70,10 +73,12 @@ impl Data {
     };
   }
 }
+
 pub struct DataEnc {
   pub len: usize,
   pub g1: G1Affine,
 }
+
 impl DataEnc {
   pub fn new(srs: &SRS, data: &Data) -> DataEnc {
     return DataEnc {
@@ -82,6 +87,7 @@ impl DataEnc {
     };
   }
 }
+
 pub trait BasicBlock: std::fmt::Debug {
   fn genModel(&self) -> ArrayD<Fr> {
     ArrayD::zeros(IxDyn(&[0]))

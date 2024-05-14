@@ -18,6 +18,7 @@ impl BasicBlock for SubBasicBlock {
     }
     vec![r]
   }
+
   fn encodeOutputs(&self, _srs: &SRS, _model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
     let a = &inputs[0][0];
     let b = &inputs[1][0];
@@ -29,6 +30,7 @@ impl BasicBlock for SubBasicBlock {
     }])
     .into_dyn()]
   }
+
   fn verify(
     &self,
     _srs: &SRS,

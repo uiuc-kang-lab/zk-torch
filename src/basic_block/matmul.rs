@@ -28,6 +28,7 @@ impl BasicBlock for MatMulBasicBlock {
       vec![a.dot(&b.t()).into_dyn()]
     }
   }
+
   fn prove(
     &mut self,
     srs: &SRS,
@@ -120,6 +121,7 @@ impl BasicBlock for MatMulBasicBlock {
 
     return (proof, vec![flat_B_g2]);
   }
+
   fn verify(
     &self,
     srs: &SRS,
