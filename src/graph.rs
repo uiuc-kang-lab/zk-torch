@@ -10,7 +10,7 @@ use rand::rngs::StdRng;
 #[derive(Debug)]
 pub struct Node {
   pub basic_block: usize,
-  pub inputs: Vec<(i32, usize)>, //(node, output #)
+  pub inputs: Vec<(i32, usize)>, // (node, output #)
 }
 
 #[derive(Debug)]

@@ -106,6 +106,9 @@ pub fn toeplitz_mul<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvalu
   r
 }
 
+// For serialization, ArrayD uses serde while G1Affine uses ark_serialize.
+// In order to bridge between the two, the following code snippet is used:
+// https://github.com/arkworks-rs/algebra/issues/178#issuecomment-1413219278
 pub fn ark_se<S, A: CanonicalSerialize>(a: &A, s: S) -> Result<S::Ok, S::Error>
 where
   S: serde::Serializer,

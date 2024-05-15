@@ -21,19 +21,19 @@ mod tests;
 mod util;
 
 fn prove(srs: &SRS, graph: &mut Graph, models: Vec<ArrayD<Fr>>) {
-  //Run:
+  // Run:
   let input: Vec<_> = (0..4).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
   let input = arr1(&input).into_dyn();
   let inputs = vec![&input];
   let models = models.iter().map(|x| x).collect();
   let outputs = graph.run(&inputs, &models);
 
-  //Setup:
+  // Setup:
   let models: Vec<ArrayD<Data>> = models.iter().map(|model| convert_to_data(srs, model)).collect();
   let models: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
   let setups = graph.setup(srs, &models);
 
-  //Encode Data:
+  // Encode Data:
   let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>)> =
     setups.iter().map(|x| (x.0.iter().map(|y| (*y).into()).collect(), x.1.iter().map(|y| (*y).into()).collect())).collect();
   let setups = setups.iter().map(|x| (&x.0, &x.1)).collect();
@@ -49,7 +49,7 @@ fn prove(srs: &SRS, graph: &mut Graph, models: Vec<ArrayD<Fr>>) {
   let outputsEnc: Vec<Vec<ArrayD<DataEnc>>> =
     outputs.iter().map(|output| (**output).iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect()).collect();
 
-  //Save files:
+  // Save files:
   let modelsEncBytes = bincode::serialize(&modelsEnc).unwrap();
   let inputsEncBytes = bincode::serialize(&inputsEnc).unwrap();
   let outputsEncBytes = bincode::serialize(&outputsEnc).unwrap();
@@ -57,7 +57,7 @@ fn prove(srs: &SRS, graph: &mut Graph, models: Vec<ArrayD<Fr>>) {
   fs::write("inputsEnc", &inputsEncBytes).unwrap();
   fs::write("outputsEnc", &outputsEncBytes).unwrap();
 
-  //Fiat-Shamir:
+  // Fiat-Shamir:
   let mut hasher = Keccak256::new();
   hasher.update(modelsEncBytes);
   hasher.update(inputsEncBytes);
@@ -66,13 +66,13 @@ fn prove(srs: &SRS, graph: &mut Graph, models: Vec<ArrayD<Fr>>) {
   hasher.finalize_into((&mut buf).into());
   let mut rng = StdRng::from_seed(buf);
 
-  //Prove:
+  // Prove:
   let proofs = graph.prove(srs, &setups, &models, &inputs, &outputs, &mut rng);
   proofs.serialize_uncompressed(File::create("proofs").unwrap()).unwrap();
 }
 
 fn verify(srs: &SRS, graph: &Graph) {
-  //Read Files:
+  // Read Files:
   let proofs = Vec::<(Vec<G1Affine>, Vec<G2Affine>)>::deserialize_uncompressed_unchecked(File::open("proofs").unwrap()).unwrap();
   let proofs = proofs.iter().map(|x| (&x.0, &x.1)).collect();
   let mut modelsEncBytes = Vec::new();
@@ -89,7 +89,7 @@ fn verify(srs: &SRS, graph: &Graph) {
   let outputsEnc: Vec<Vec<&ArrayD<DataEnc>>> = outputsEnc.iter().map(|output| output.iter().map(|x| x).collect()).collect();
   let outputsEnc: Vec<&Vec<&ArrayD<DataEnc>>> = outputsEnc.iter().map(|x| x).collect();
 
-  //Fiat-Shamir:
+  // Fiat-Shamir:
   let mut hasher = Keccak256::new();
   hasher.update(modelsEncBytes);
   hasher.update(inputsEncBytes);
@@ -98,7 +98,7 @@ fn verify(srs: &SRS, graph: &Graph) {
   hasher.finalize_into((&mut buf).into());
   let mut rng = StdRng::from_seed(buf);
 
-  //Verify:
+  // Verify:
   graph.verify(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng);
 }
 

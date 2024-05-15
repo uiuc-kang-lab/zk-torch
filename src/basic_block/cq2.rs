@@ -76,7 +76,7 @@ impl BasicBlock for CQ2BasicBlock {
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let alpha = Fr::rand(rng);
     let agg_input: Vec<_> = inputs[0].raw.iter().zip(inputs[1].raw.iter()).map(|(x, y)| *x + *y * alpha).collect();
-    let mut agg_input = Data::new(srs, &agg_input); //Unnecessary msm
+    let mut agg_input = Data::new(srs, &agg_input); // Unnecessary msm
     agg_input.r = inputs[0].r + inputs[1].r * alpha;
     let agg_model_g1 = model[0].g1 + model[1].g1 * alpha;
     let agg_model_r = model[0].r + model[1].r * alpha;

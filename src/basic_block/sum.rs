@@ -40,7 +40,7 @@ impl BasicBlock for SumBasicBlock {
     }
     let input_poly = DensePolynomial {
       coeffs: domain_m.ifft(&input_raw),
-    }; //sum poly?
+    }; // sum poly?
 
     let mut rng2 = StdRng::from_entropy();
     let zero_div_r = Fr::rand(&mut rng2);

@@ -17,8 +17,8 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
     nodes: vec![],
     outputs: vec![],
   };
-  let mut basic_blocks_idx: HashMap<String, usize> = HashMap::new(); //BasicBlock to graph.basic_blocks index
-  let mut outputs_idx: HashMap<String, Vec<(i32, usize)>> = HashMap::new(); //Graph node name to graph.nodes outputs
+  let mut basic_blocks_idx: HashMap<String, usize> = HashMap::new(); // BasicBlock to graph.basic_blocks index
+  let mut outputs_idx: HashMap<String, Vec<(i32, usize)>> = HashMap::new(); // Graph node name to graph.nodes outputs
   let mut setups = vec![];
 
   for tensor in onnx_graph.initializer {

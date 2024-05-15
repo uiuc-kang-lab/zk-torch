@@ -189,7 +189,7 @@ impl BasicBlock for PermuteBasicBlock {
     // Assume right(0) = left(0)*m/m2 (which assumes ∑left=∑right)
     let right_zero: G1Affine = (left_zero * (Fr::from(m as u32) * Fr::from(m2 as u32).inverse().unwrap())).into();
 
-    //check right(x) - right(0) is divisible by x
+    // check right(x) - right(0) is divisible by x
     checks.push(vec![
       ((right_x - right_zero).into(), srs.X2A[0]),
       (-right_zero_div, srs.X2A[1]),

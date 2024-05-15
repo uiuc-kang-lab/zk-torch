@@ -47,9 +47,9 @@ impl BasicBlock for MatMulBasicBlock {
     let beta = Fr::rand(rng);
 
     let alpha_pow = calc_pow(alpha, l);
-    let alpha_pow = Data::new(srs, &alpha_pow); //r is ignored (unnecessary msm)
+    let alpha_pow = Data::new(srs, &alpha_pow); // r is ignored (unnecessary msm)
     let beta_pow = calc_pow(beta, n);
-    let beta_pow = Data::new(srs, &beta_pow); //r is ignored
+    let beta_pow = Data::new(srs, &beta_pow); // r is ignored
 
     let mut flat_A = vec![Fr::zero(); m];
     let mut flat_A_r = Fr::zero();
@@ -144,8 +144,8 @@ impl BasicBlock for MatMulBasicBlock {
     let alpha = Fr::rand(rng);
     let beta = Fr::rand(rng);
 
-    let alpha_pow = calc_pow(alpha, l); //r is ignored
-    let beta_pow = calc_pow(beta, n); //r is ignored
+    let alpha_pow = calc_pow(alpha, l); // r is ignored
+    let beta_pow = calc_pow(beta, n); // r is ignored
     let beta_pow_coeff = domain_n.ifft(&beta_pow);
     let beta_pow_g2: G2Affine = util::msm::<G2Projective>(&srs.X2A, &beta_pow_coeff).into();
 
@@ -190,7 +190,7 @@ impl BasicBlock for MatMulBasicBlock {
     // Assume right(0) = left(0)*n/m (which assumes ∑left=∑right)
     let right_zero: G1Affine = (left_zero * (Fr::from(m as u32) * Fr::from(n as u32).inverse().unwrap())).into();
 
-    //check right(x) - right(0) is divisible by x
+    // check right(x) - right(0) is divisible by x
     checks.push(vec![
       ((right_x - right_zero).into(), srs.X2A[0]),
       (-right_zero_div, srs.X2A[1]),

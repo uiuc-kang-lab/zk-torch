@@ -91,7 +91,7 @@ impl BasicBlock for CQLinBasicBlock {
     let mut temp = temp[m..].to_vec();
     util::fft_in_place(domain_m, &mut temp);
     let mut Q: Vec<_> = (0..m).into_par_iter().map(|i| temp[i] * domain_m.element(i) * m_inv).collect();
-    let M_x = (0..m).into_par_iter().map(|i| (0..n).map(|j| U2[i][j] * model[i].raw[j]).sum::<G2Projective>()).sum::<G2Projective>(); //TODO: Change to msm
+    let M_x = (0..m).into_par_iter().map(|i| (0..n).map(|j| U2[i][j] * model[i].raw[j]).sum::<G2Projective>()).sum::<G2Projective>(); // TODO: Change to msm
 
     let mut setup = R;
     setup.append(&mut Q);
@@ -120,7 +120,7 @@ impl BasicBlock for CQLinBasicBlock {
     let alpha = Fr::rand(rng);
 
     let alpha_pow = calc_pow(alpha, l);
-    let alpha_pow = Data::new(srs, &alpha_pow); //r is ignored (unnecessary msm)
+    let alpha_pow = Data::new(srs, &alpha_pow); // r is ignored (unnecessary msm)
 
     let mut flat_A = vec![Fr::zero(); m];
     let mut flat_A_r = Fr::zero();
