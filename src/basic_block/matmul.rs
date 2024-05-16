@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util::{self, calc_pow};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
@@ -37,20 +37,34 @@ impl BasicBlock for MatMulBasicBlock {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
-    _cache: &mut ProveVerifyCache,
+    cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     let l = inputs[0].len();
     let m = inputs[0][0].raw.len();
     let n = inputs[1].len();
     let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
-    let alpha = Fr::rand(rng);
-    let beta = Fr::rand(rng);
+    let CacheValues::Fr(alpha) = cache.entry("matmul_alpha".to_owned()).or_insert_with(|| CacheValues::Fr(Fr::rand(rng))) else {
+      panic!("Cache type error")
+    };
+    let alpha = alpha.clone();
+    let CacheValues::Fr(beta) = cache.entry("matmul_beta".to_owned()).or_insert_with(|| CacheValues::Fr(Fr::rand(rng))) else {
+      panic!("Cache type error")
+    };
+    let beta = beta.clone();
 
-    let alpha_pow = calc_pow(alpha, l);
-    let alpha_pow = Data::new(srs, &alpha_pow); // r is ignored (unnecessary msm)
-    let beta_pow = calc_pow(beta, n);
-    let beta_pow = Data::new(srs, &beta_pow); // r is ignored
+    let CacheValues::Data(alpha_pow) =
+      cache.entry(format!("matmul_alpha_msm_{l}")).or_insert_with(|| CacheValues::Data(Data::new(srs, &calc_pow(alpha, l))))
+    else {
+      panic!("Cache type error")
+    };
+    let alpha_pow = alpha_pow.clone();
+    let CacheValues::Data(beta_pow) =
+      cache.entry(format!("matmul_beta_msm_{n}")).or_insert_with(|| CacheValues::Data(Data::new(srs, &calc_pow(beta, n))))
+    else {
+      panic!("Cache type error")
+    };
+    let beta_pow = beta_pow.clone();
 
     let mut flat_A = vec![Fr::zero(); m];
     let mut flat_A_r = Fr::zero();
@@ -135,7 +149,7 @@ impl BasicBlock for MatMulBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
-    _cache: &mut ProveVerifyCache,
+    cache: &mut ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let l = inputs[0].len();
@@ -147,13 +161,24 @@ impl BasicBlock for MatMulBasicBlock {
     };
     let flat_B_g2 = proof.1[0];
 
-    let alpha = Fr::rand(rng);
-    let beta = Fr::rand(rng);
+    let CacheValues::Fr(alpha) = cache.entry("matmul_alpha".to_owned()).or_insert_with(|| CacheValues::Fr(Fr::rand(rng))) else {
+      panic!("Cache type error")
+    };
+    let alpha = alpha.clone();
+    let CacheValues::Fr(beta) = cache.entry("matmul_beta".to_owned()).or_insert_with(|| CacheValues::Fr(Fr::rand(rng))) else {
+      panic!("Cache type error")
+    };
+    let beta = beta.clone();
 
-    let alpha_pow = calc_pow(alpha, l); // r is ignored
-    let beta_pow = calc_pow(beta, n); // r is ignored
-    let beta_pow_coeff = domain_n.ifft(&beta_pow);
-    let beta_pow_g2: G2Affine = util::msm::<G2Projective>(&srs.X2A, &beta_pow_coeff).into();
+    let alpha_pow = calc_pow(alpha, l);
+    let beta_pow = calc_pow(beta, n);
+    let CacheValues::G2(beta_pow_g2) = cache
+      .entry(format!("matmul_beta_msm_g2_{n}"))
+      .or_insert_with(|| CacheValues::G2(util::msm::<G2Projective>(&srs.X2A, &domain_n.ifft(&beta_pow)).into()))
+    else {
+      panic!("Cache type error")
+    };
+    let beta_pow_g2 = beta_pow_g2.clone();
 
     // Calculate flat_A
     let temp: Vec<_> = (0..l).map(|i| inputs[0][i].g1).collect();

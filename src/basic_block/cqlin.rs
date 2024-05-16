@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util::{self, calc_pow};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
@@ -111,17 +111,24 @@ impl BasicBlock for CQLinBasicBlock {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
-    _cache: &mut ProveVerifyCache,
+    cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     let l = inputs[0].len();
     let m = model.len();
     let n = model[0].raw.len();
     let N = srs.X2P.len() - 1;
     let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
-    let alpha = Fr::rand(rng);
+    let CacheValues::Fr(alpha) = cache.entry("cqlin_alpha".to_owned()).or_insert_with(|| CacheValues::Fr(Fr::rand(rng))) else {
+      panic!("Cache type error")
+    };
+    let alpha = alpha.clone();
 
-    let alpha_pow = calc_pow(alpha, l);
-    let alpha_pow = Data::new(srs, &alpha_pow); // r is ignored (unnecessary msm)
+    let CacheValues::Data(alpha_pow) =
+      cache.entry(format!("cqlin_alpha_msm_{l}")).or_insert_with(|| CacheValues::Data(Data::new(srs, &calc_pow(alpha, l))))
+    else {
+      panic!("Cache type error")
+    };
+    let alpha_pow = alpha_pow.clone();
 
     let mut flat_A = vec![Fr::zero(); m];
     let mut flat_A_r = Fr::zero();
@@ -203,7 +210,7 @@ impl BasicBlock for CQLinBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
-    _cache: &mut ProveVerifyCache,
+    cache: &mut ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let l = inputs[0].len();
@@ -217,7 +224,10 @@ impl BasicBlock for CQLinBasicBlock {
 
     let [M_x] = proof.1[..] else { panic!("Wrong proof format") };
 
-    let alpha = Fr::rand(rng);
+    let CacheValues::Fr(alpha) = cache.entry("cqlin_alpha".to_owned()).or_insert_with(|| CacheValues::Fr(Fr::rand(rng))) else {
+      panic!("Cache type error")
+    };
+    let alpha = alpha.clone();
     let alpha_pow = calc_pow(alpha, l);
 
     // Calculate flat_A

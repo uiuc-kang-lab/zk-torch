@@ -198,8 +198,8 @@ pub fn combine_pairing_checks(checks: &Vec<&PairingCheck>) -> (Vec<G1Affine>, Ve
   let mut curr = gamma;
   for check in checks.iter() {
     for pairing in check.iter() {
-      A.entry(pairing.0).or_insert(HashSet::new()).insert((pairing.1, curr));
-      B.entry(pairing.1).or_insert(HashSet::new()).insert((pairing.0, curr));
+      A.entry(pairing.0).or_insert_with(|| HashSet::new()).insert((pairing.1, curr));
+      B.entry(pairing.1).or_insert_with(|| HashSet::new()).insert((pairing.0, curr));
     }
     curr *= gamma;
   }

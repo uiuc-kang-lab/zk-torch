@@ -87,7 +87,8 @@ impl BasicBlock for CQ2BasicBlock {
     let L_i_x_1 = &setup.0[2 * N..3 * N];
     let L_i_0_x_1 = &setup.0[3 * N..];
 
-    let CacheValues::CQ2TableDict(table_dict) = cache.entry(format!("{:p}_table_dict", self)).or_insert(CacheValues::CQ2TableDict(HashMap::new()))
+    let CacheValues::CQ2TableDict(table_dict) =
+      cache.entry(format!("cq2_table_dict_{:p}", self)).or_insert_with(|| CacheValues::CQ2TableDict(HashMap::new()))
     else {
       panic!("Cache type error")
     };

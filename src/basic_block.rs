@@ -50,14 +50,14 @@ pub struct SRS {
   pub Y2P: G2Projective,
 }
 
-// During proofs and verifications, a cache is used to prevent recomputation across basic blocks / proofs.
+// During proofs and verifications, a cache is used to prevent recomputation.
 // These are the types of the elements in the cache.
 pub enum CacheValues {
   CQTableDict(HashMap<Fr, usize>),
   CQ2TableDict(HashMap<(Fr, Fr), usize>),
-  FieldElem(Fr),
-  G1Elem(G1Affine),
-  G2Elem(G2Affine),
+  Fr(Fr),
+  Data(Data),
+  G2(G2Affine),
 }
 pub type ProveVerifyCache = HashMap<String, CacheValues>;
 
