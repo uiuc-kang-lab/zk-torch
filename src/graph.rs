@@ -6,6 +6,7 @@ use ark_serialize::CanonicalSerialize;
 use ark_std::Zero;
 use ndarray::ArrayD;
 use rand::rngs::StdRng;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Node {
@@ -59,13 +60,14 @@ impl Graph {
     outputs: &Vec<&Vec<&ArrayD<Data>>>,
     rng: &mut StdRng,
   ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>)> {
+    let mut cache = HashMap::new();
     self
       .nodes
       .iter()
       .enumerate()
       .map(|(i, n)| {
         let myInputs: Vec<&ArrayD<Data>> = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
-        let proof = self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &myInputs, outputs[i], rng);
+        let proof = self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &myInputs, outputs[i], rng, &mut cache);
         let proof: (Vec<G1Affine>, Vec<G2Affine>) = (
           proof.0.iter().map(|x| (*x).into()).collect(),
           proof.1.iter().map(|x| (*x).into()).collect(),
@@ -87,13 +89,14 @@ impl Graph {
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>)>,
     rng: &mut StdRng,
   ) {
+    let mut cache = HashMap::new();
     let pairings: Vec<Vec<PairingCheck>> = self
       .nodes
       .iter()
       .enumerate()
       .map(|(i, n)| {
         let myInputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
-        let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng);
+        let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, &mut cache);
         let mut bytes = Vec::new();
         let temp: (Vec<G1Affine>, Vec<G2Affine>) = (proofs[i].0.clone(), proofs[i].1.clone());
         temp.serialize_uncompressed(&mut bytes).unwrap();

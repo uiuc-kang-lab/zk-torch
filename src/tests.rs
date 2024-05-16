@@ -24,7 +24,8 @@ fn testBasicBlock<BB: BasicBlock>(mut basic_block: BB, srs: &SRS, model: &ArrayD
   let outputs: Vec<ArrayD<Data>> = basic_block.encodeOutputs(srs, &model, &inputs, &outputs);
   let outputs: Vec<&ArrayD<Data>> = outputs.iter().map(|output| output).collect();
   let mut rng2 = rng.clone();
-  let proof = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng);
+  let mut cache = HashMap::new();
+  let proof = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng, &mut cache);
   let proof: (Vec<G1Affine>, Vec<G2Affine>) = (
     proof.0.iter().map(|y| (*y).into()).collect(),
     proof.1.iter().map(|y| (*y).into()).collect(),
@@ -35,7 +36,8 @@ fn testBasicBlock<BB: BasicBlock>(mut basic_block: BB, srs: &SRS, model: &ArrayD
   let inputs: Vec<&ArrayD<DataEnc>> = inputs.iter().map(|input| input).collect();
   let outputs: Vec<ArrayD<DataEnc>> = outputs.iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect();
   let outputs: Vec<&ArrayD<DataEnc>> = outputs.iter().map(|output| output).collect();
-  let pairings = basic_block.verify(srs, &model, &inputs, &outputs, proof, &mut rng2);
+  let mut cache = HashMap::new();
+  let pairings = basic_block.verify(srs, &model, &inputs, &outputs, proof, &mut rng2, &mut cache);
   let pairings = pairings.iter().map(|x| x).collect();
   let pairings = util::combine_pairing_checks(&pairings);
   assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
@@ -66,24 +68,8 @@ fn testBasicBlocks() {
   testBasicBlock(AddBasicBlock {}, srs, &empty, &vec![&b, &a_1]);
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a_1, &b]);
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&b, &a_1]);
-  testBasicBlock(
-    CQBasicBlock {
-      table_dict: HashMap::new(),
-      setup: None,
-    },
-    srs,
-    &a,
-    &vec![&a_n],
-  );
-  testBasicBlock(
-    CQ2BasicBlock {
-      table_dict: HashMap::new(),
-      setup: None,
-    },
-    srs,
-    &ab,
-    &vec![&a_n, &b_n],
-  );
+  testBasicBlock(CQBasicBlock { setup: None }, srs, &a, &vec![&a_n]);
+  testBasicBlock(CQ2BasicBlock { setup: None }, srs, &ab, &vec![&a_n, &b_n]);
 
   let l: usize = 1 << 3;
   let m: usize = 1 << 2;

@@ -2,8 +2,7 @@
 use crate::util::{self, ark_de, ark_se};
 pub use add::AddBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_poly::univariate::DensePolynomial;
-use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
+use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
 pub use constant::ConstBasicBlock;
@@ -21,6 +20,7 @@ pub use permute::PermuteBasicBlock;
 use rand::{rngs::StdRng, SeedableRng};
 pub use rope::RoPEBasicBlock;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 pub use sub::SubBasicBlock;
 pub use sum::SumBasicBlock;
 pub mod add;
@@ -50,6 +50,17 @@ pub struct SRS {
   pub Y2P: G2Projective,
 }
 
+// During proofs and verifications, a cache is used to prevent recomputation across basic blocks / proofs.
+// These are the types of the elements in the cache.
+pub enum CacheValues {
+  CQTableDict(HashMap<Fr, usize>),
+  CQ2TableDict(HashMap<(Fr, Fr), usize>),
+  FieldElem(Fr),
+  G1Elem(G1Affine),
+  G2Elem(G2Affine),
+}
+pub type ProveVerifyCache = HashMap<String, CacheValues>;
+
 pub type PairingCheck = Vec<(G1Affine, G2Affine)>;
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -68,7 +79,7 @@ impl Data {
   pub fn new(srs: &SRS, raw: &[Fr]) -> Data {
     let N = raw.len();
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
-    let f = DensePolynomial { coeffs: domain.ifft(&raw) };
+    let f = DensePolynomial::from_coefficients_vec(domain.ifft(&raw));
     let fx = util::msm::<G1Projective>(&srs.X1A, &f.coeffs);
     let mut rng = StdRng::from_entropy();
     return Data {
@@ -126,6 +137,7 @@ pub trait BasicBlock: std::fmt::Debug {
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
+    _cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     (Vec::new(), Vec::new())
   }
@@ -138,6 +150,7 @@ pub trait BasicBlock: std::fmt::Debug {
     _outputs: &Vec<&ArrayD<DataEnc>>,
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
+    _cache: &mut ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     vec![]
   }

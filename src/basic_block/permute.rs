@@ -1,10 +1,10 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{BasicBlock, Data, DataEnc, PairingCheck, SRS};
+use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util::{self, calc_pow};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
-use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
+use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{ops::Mul, ops::Sub, UniformRand, Zero};
 use ndarray::{Array, ArrayD, Axis};
 use rand::{rngs::StdRng, SeedableRng};
@@ -41,6 +41,7 @@ impl BasicBlock for PermuteBasicBlock {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
+    _cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     let alpha = Fr::rand(rng);
     let (input, output) = (inputs[0], outputs[0]);
@@ -84,24 +85,28 @@ impl BasicBlock for PermuteBasicBlock {
 
     // Calculate Left
     let left_raw: Vec<Fr> = (0..m).map(|i| flat_L.raw[i] * alpha_pow[i * n]).collect();
-    let left_poly = DensePolynomial {
-      coeffs: domain_m.ifft(&left_raw),
-    };
+    let left_poly = DensePolynomial::from_coefficients_vec(domain_m.ifft(&left_raw));
     let left_x = util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs);
     let left_Q_poly = flat_L.poly.mul(&b.poly).sub(&left_poly).divide_by_vanishing_poly(domain_m).unwrap().0;
     let left_Q_x = util::msm::<G1Projective>(&srs.X1A, &left_Q_poly.coeffs);
     let left_zero = srs.X1A[0] * (Fr::from(m as u32).inverse().unwrap() * left_raw.iter().sum::<Fr>());
-    let left_zero_div = util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs[1..]);
+    let left_zero_div = if left_poly.is_zero() {
+      G1Projective::zero()
+    } else {
+      util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs[1..])
+    };
 
     // Calculate Right
     let right_raw: Vec<Fr> = (0..m2).map(|i| flat_R.raw[i] * alpha_pow[self.permutation.1[i]]).collect();
-    let right_poly = DensePolynomial {
-      coeffs: domain_m2.ifft(&right_raw),
-    };
+    let right_poly = DensePolynomial::from_coefficients_vec(domain_m2.ifft(&right_raw));
     let right_x = util::msm::<G1Projective>(&srs.X1A, &right_poly.coeffs);
     let right_Q_poly = flat_R.poly.mul(&d.poly).sub(&right_poly).divide_by_vanishing_poly(domain_m2).unwrap().0;
     let right_Q_x = util::msm::<G1Projective>(&srs.X1A, &right_Q_poly.coeffs);
-    let right_zero_div = util::msm::<G1Projective>(&srs.X1A, &right_poly.coeffs[1..]);
+    let right_zero_div = if right_poly.is_zero() {
+      G1Projective::zero()
+    } else {
+      util::msm::<G1Projective>(&srs.X1A, &right_poly.coeffs[1..])
+    };
 
     // Blinding
     let mut rng2 = StdRng::from_entropy();
@@ -127,6 +132,7 @@ impl BasicBlock for PermuteBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
+    _cache: &mut ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let alpha = Fr::rand(rng);

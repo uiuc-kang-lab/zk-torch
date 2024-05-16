@@ -1,4 +1,4 @@
-use super::{BasicBlock, Data, DataEnc, PairingCheck, SRS};
+use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
@@ -25,6 +25,7 @@ impl BasicBlock for MulConstBasicBlock {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
+    _cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     let C = srs.X1P[0] * (Fr::from(self.c as u32) * inputs[0][0].r - outputs[0][0].r);
     return (vec![C], vec![]);
@@ -38,6 +39,7 @@ impl BasicBlock for MulConstBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
+    _cache: &mut ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     vec![vec![
       (inputs[0][0].g1, (srs.X2P[0] * Fr::from(self.c as u32)).into()),
@@ -62,6 +64,7 @@ impl BasicBlock for MulScalarBasicBlock {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
+    _cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     let inp0 = &inputs[0][0];
     let inp1 = &inputs[1][0];
@@ -78,6 +81,7 @@ impl BasicBlock for MulScalarBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
+    _cache: &mut ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     // Verify f(x)*g(x)=h(x)
@@ -111,6 +115,7 @@ impl BasicBlock for MulBasicBlock {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
+    _cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     let inp0 = &inputs[0][0];
     let inp1 = &inputs[1][0];
@@ -135,6 +140,7 @@ impl BasicBlock for MulBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
+    _cache: &mut ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = vec![];
     // Verify f(x)*g(x)-h(x)=z(x)t(x)

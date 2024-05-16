@@ -1,10 +1,10 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{BasicBlock, Data, DataEnc, PairingCheck, SRS};
+use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
-use ark_poly::{evaluations::univariate::Evaluations, univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
+use ark_poly::{evaluations::univariate::Evaluations, univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{
   ops::{Mul, Sub},
   One, UniformRand, Zero,
@@ -16,7 +16,6 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct CQ2BasicBlock {
-  pub table_dict: HashMap<(Fr, Fr), usize>,
   pub setup: Option<(Box<dyn BasicBlock>, i32, usize)>,
 }
 
@@ -67,6 +66,7 @@ impl BasicBlock for CQ2BasicBlock {
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
+    cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     assert!(inputs.len() == 2 && inputs[0].len() == 1 && inputs[1].len() == 1);
     let N = model[0].raw.len();
@@ -87,9 +87,13 @@ impl BasicBlock for CQ2BasicBlock {
     let L_i_x_1 = &setup.0[2 * N..3 * N];
     let L_i_0_x_1 = &setup.0[3 * N..];
 
-    if self.table_dict.len() == 0 {
+    let CacheValues::CQ2TableDict(table_dict) = cache.entry(format!("{:p}_table_dict", self)).or_insert(CacheValues::CQ2TableDict(HashMap::new()))
+    else {
+      panic!("Cache type error")
+    };
+    if table_dict.len() == 0 {
       for i in 0..N {
-        self.table_dict.insert((model[0].raw[i], model[1].raw[i]), i);
+        table_dict.insert((model[0].raw[i], model[1].raw[i]), i);
       }
     }
 
@@ -97,10 +101,10 @@ impl BasicBlock for CQ2BasicBlock {
     let mut m_i = HashMap::new();
     for x in inputs[0].raw.iter().zip(inputs[1].raw.iter()) {
       let temp = (*x.0, *x.1);
-      if !self.table_dict.contains_key(&temp) {
+      if !table_dict.contains_key(&temp) {
         println!("{:?}", temp);
       }
-      m_i.entry(self.table_dict.get(&temp).unwrap()).and_modify(|y| *y += 1).or_insert(1);
+      m_i.entry(table_dict.get(&temp).unwrap()).and_modify(|y| *y += 1).or_insert(1);
     }
     let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = m_i.iter().map(|(i, y)| (L_i_x_1[**i], Fr::from(*y as u32))).unzip();
     let m_x = util::msm::<G1Projective>(&temp, &temp2);
@@ -130,14 +134,18 @@ impl BasicBlock for CQ2BasicBlock {
     let B_i: Vec<Fr> = agg_input.raw.iter().map(|x| (*x + beta).inverse().unwrap()).collect();
     let B_poly = Evaluations::from_vec_and_domain(B_i.clone(), domain_n).interpolate();
     let B_Q_poly = B_poly
-      .mul(&(agg_input.poly.clone() + (DensePolynomial { coeffs: vec![beta] })))
-      .sub(&DensePolynomial { coeffs: vec![Fr::one()] })
+      .mul(&(agg_input.poly.clone() + (DensePolynomial::from_coefficients_vec(vec![beta]))))
+      .sub(&DensePolynomial::from_coefficients_vec(vec![Fr::one()]))
       .divide_by_vanishing_poly(domain_n)
       .unwrap()
       .0;
     let B_x = util::msm::<G1Projective>(&srs.X1A, &B_poly.coeffs);
     let B_Q_x = util::msm::<G1Projective>(&srs.X1A, &B_Q_poly.coeffs);
-    let B_zero_div = util::msm::<G1Projective>(&srs.X1A, &B_poly.coeffs[1..]);
+    let B_zero_div = if B_poly.is_zero() {
+      G1Projective::zero()
+    } else {
+      util::msm::<G1Projective>(&srs.X1A, &B_poly.coeffs[1..])
+    };
     let B_DC = util::msm::<G1Projective>(&srs.X1A[N - n..], &B_poly.coeffs);
 
     let f_x_2 = util::msm::<G2Projective>(&srs.X2A, &agg_input.poly.coeffs) + srs.Y2P * agg_input.r;
@@ -171,6 +179,7 @@ impl BasicBlock for CQ2BasicBlock {
     _outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
+    _cache: &mut ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let inputs = vec![&inputs[0][0], &inputs[1][0]];

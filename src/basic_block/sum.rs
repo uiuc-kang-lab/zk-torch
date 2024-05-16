@@ -1,10 +1,10 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{BasicBlock, Data, DataEnc, PairingCheck, SRS};
+use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
-use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
+use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{UniformRand, Zero};
 use ndarray::{arr1, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
@@ -25,6 +25,7 @@ impl BasicBlock for SumBasicBlock {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
+    _cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     let input = inputs[0];
     let l = input.len();
@@ -38,13 +39,15 @@ impl BasicBlock for SumBasicBlock {
       }
       input_r += input[i].r;
     }
-    let input_poly = DensePolynomial {
-      coeffs: domain_m.ifft(&input_raw),
-    }; // sum poly?
+    let input_poly = DensePolynomial::from_coefficients_vec(domain_m.ifft(&input_raw)); // sum poly?
 
     let mut rng2 = StdRng::from_entropy();
     let zero_div_r = Fr::rand(&mut rng2);
-    let zero_div = util::msm::<G1Projective>(&srs.X1A, &input_poly.coeffs[1..]) + srs.Y1P * zero_div_r;
+    let zero_div = if input_poly.is_zero() {
+      G1Projective::zero()
+    } else {
+      util::msm::<G1Projective>(&srs.X1A, &input_poly.coeffs[1..])
+    } + srs.Y1P * zero_div_r;
     let C = -srs.X1P[1] * zero_div_r + srs.X1P[0] * (input_r - outputs[0][0].r * Fr::from(m as u32).inverse().unwrap());
     return (vec![zero_div, C], vec![]);
   }
@@ -57,6 +60,7 @@ impl BasicBlock for SumBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
+    _cache: &mut ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let m = inputs[0][0].len;
     let [zero_div, C] = proof.0[..] else { panic!("Wrong proof format") };
