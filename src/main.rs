@@ -4,9 +4,8 @@ use crate::graph::Graph;
 use ark_bn254::{Fr, G1Affine, G2Affine};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use basic_block::*;
-use ndarray::{arr1, ArrayD};
+use ndarray::ArrayD;
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use rayon::prelude::*;
 use sha3::{Digest, Keccak256};
 use std::fs::{self, File};
 use std::io::Read;
@@ -20,13 +19,9 @@ mod ptau;
 mod tests;
 mod util;
 
-fn prove(srs: &SRS, graph: &mut Graph, models: Vec<ArrayD<Fr>>) {
+fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&ArrayD<Fr>>) {
   // Run:
-  let input: Vec<_> = (0..4).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::from(rng.gen_range(-4..4))).collect();
-  let input = arr1(&input).into_dyn();
-  let inputs = vec![&input];
-  let models = models.iter().map(|x| x).collect();
-  let outputs = graph.run(&inputs, &models);
+  let outputs = graph.run(inputs, models);
 
   // Setup:
   let models: Vec<ArrayD<Data>> = models.iter().map(|model| convert_to_data(srs, model)).collect();
@@ -105,6 +100,11 @@ fn verify(srs: &SRS, graph: &Graph) {
 fn main() {
   let srs = &ptau::load_file("challenge", 7);
   let (mut graph, models) = onnx::load_file("sample.onnx");
-  prove(&srs, &mut graph, models);
+  let mut rng = StdRng::from_entropy();
+  let input: Vec<Fr> = (0..32).map(|_| Fr::from(rng.gen_range(-4..4))).collect();
+  let input = ArrayD::from_shape_vec(vec![4, 2, 4], input).unwrap();
+  let inputs = vec![&input];
+  let models = models.iter().map(|x| x).collect();
+  prove(&srs, &inputs, &mut graph, &models);
   verify(&srs, &graph);
 }
