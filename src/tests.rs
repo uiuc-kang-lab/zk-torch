@@ -4,7 +4,7 @@ use ark_bn254::{Bn254, Fr, G1Affine, G2Affine};
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_std::UniformRand;
 use ark_std::Zero;
-use ndarray::{arr1, concatenate, s, ArrayD, Axis, IxDyn};
+use ndarray::{arr0, concatenate, s, ArrayD, Axis, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use std::collections::HashMap;
 
@@ -51,7 +51,7 @@ fn testBasicBlocks() {
   let n: usize = 1 << 3;
   let a = ArrayD::from_shape_fn(IxDyn(&[N]), |_| Fr::rand(&mut rng));
   let a_n = a.slice(s![..n]).to_owned().into_dyn();
-  let a_1 = arr1(&[a[0]]).into_dyn();
+  let a_0 = arr0(a[0]).into_dyn();
   let b = ArrayD::from_shape_fn(IxDyn(&[N]), |_| Fr::rand(&mut rng));
   let b_n = b.slice(s![..n]).to_owned().into_dyn();
   let temp1 = a.view().into_shape(IxDyn(&[1, N])).unwrap();
@@ -63,11 +63,11 @@ fn testBasicBlocks() {
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a, &b]);
   testBasicBlock(MulBasicBlock {}, srs, &empty, &vec![&a, &b]);
   testBasicBlock(MulConstBasicBlock { c: 12345 }, srs, &empty, &vec![&a]);
-  testBasicBlock(MulScalarBasicBlock {}, srs, &empty, &vec![&a, &a_1]);
-  testBasicBlock(AddBasicBlock {}, srs, &empty, &vec![&a_1, &b]);
-  testBasicBlock(AddBasicBlock {}, srs, &empty, &vec![&b, &a_1]);
-  testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a_1, &b]);
-  testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&b, &a_1]);
+  testBasicBlock(MulScalarBasicBlock {}, srs, &empty, &vec![&a, &a_0]);
+  testBasicBlock(AddBasicBlock {}, srs, &empty, &vec![&a_0, &b]);
+  testBasicBlock(AddBasicBlock {}, srs, &empty, &vec![&b, &a_0]);
+  testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a_0, &b]);
+  testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&b, &a_0]);
   testBasicBlock(CQBasicBlock { setup: None }, srs, &a, &vec![&a_n]);
   testBasicBlock(CQ2BasicBlock { setup: None }, srs, &ab, &vec![&a_n, &b_n]);
 

@@ -9,7 +9,7 @@ use ark_ff::PrimeField;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{UniformRand, Zero};
-use ndarray::{arr1, concatenate, Array1, ArrayD, Axis, IxDyn};
+use ndarray::{arr0, concatenate, Array1, ArrayD, Axis, IxDyn};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use rayon::prelude::*;
 use sha3::{Digest, Keccak256};
@@ -177,11 +177,8 @@ pub fn calc_pow(alpha: Fr, n: usize) -> Vec<Fr> {
 }
 
 pub fn convert_to_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
-  if a.ndim() == 0 {
-    return arr1(&[Data::new(srs, a.view().as_slice().unwrap())]).into_dyn();
-  }
-  if a.ndim() == 1 {
-    return arr1(&[Data::new(srs, a.as_slice().unwrap())]).into_dyn();
+  if a.ndim() <= 1 {
+    return arr0(Data::new(srs, a.view().as_slice().unwrap())).into_dyn();
   }
   a.map_axis(Axis(a.ndim() - 1), |r| Data::new(srs, r.as_slice().unwrap()))
 }

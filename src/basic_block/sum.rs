@@ -48,7 +48,7 @@ impl BasicBlock for SumBasicBlock {
     } else {
       util::msm::<G1Projective>(&srs.X1A, &input_poly.coeffs[1..])
     } + srs.Y1P * zero_div_r;
-    let C = -srs.X1P[1] * zero_div_r + srs.X1P[0] * (input_r - outputs[0][0].r * Fr::from(m as u32).inverse().unwrap());
+    let C = -srs.X1P[1] * zero_div_r + srs.X1P[0] * (input_r - outputs[0].first().unwrap().r * Fr::from(m as u32).inverse().unwrap());
     return (vec![zero_div, C], vec![]);
   }
 
@@ -66,7 +66,7 @@ impl BasicBlock for SumBasicBlock {
     let [zero_div, C] = proof.0[..] else { panic!("Wrong proof format") };
 
     let input: G1Projective = inputs[0].iter().map(|x| x.g1).sum();
-    let zero = outputs[0][0].g1 * Fr::from(m as u32).inverse().unwrap();
+    let zero = outputs[0].first().unwrap().g1 * Fr::from(m as u32).inverse().unwrap();
 
     vec![vec![((input - zero).into(), srs.X2A[0]), (-zero_div, srs.X2A[1]), (-C, srs.Y2A)]]
   }

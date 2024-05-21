@@ -41,6 +41,7 @@ impl Graph {
   ) -> Vec<Vec<ArrayD<Data>>> {
     let mut outputsEnc = vec![vec![]; self.nodes.len()];
     self.nodes.iter().enumerate().for_each(|(i, n)| {
+      println!("encoding {i} {:?}", n.basic_block);
       let myInputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputsEnc[*j as usize][*k]) }).collect();
       outputsEnc[i] = self.basic_blocks[n.basic_block].encodeOutputs(srs, &models[n.basic_block], &myInputs, outputs[i]);
     });
@@ -66,6 +67,7 @@ impl Graph {
       .iter()
       .enumerate()
       .map(|(i, n)| {
+        println!("proving {i} {:?}", n.basic_block);
         let myInputs: Vec<&ArrayD<Data>> = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
         let proof = self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &myInputs, outputs[i], rng, &mut cache);
         let proof: (Vec<G1Affine>, Vec<G2Affine>) = (
@@ -95,6 +97,7 @@ impl Graph {
       .iter()
       .enumerate()
       .map(|(i, n)| {
+        println!("verifying {i} {:?}", n.basic_block);
         let myInputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
         let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, &mut cache);
         let mut bytes = Vec::new();

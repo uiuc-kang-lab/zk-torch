@@ -16,9 +16,9 @@ impl BasicBlock for EqBasicBlock {
     _rng: &mut StdRng,
     _cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
-    assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[1].ndim() == 1);
+    assert!(inputs.len() == 2 && inputs[0].ndim() <= 1 && inputs[1].ndim() <= 1);
     // Blinding
-    let C = srs.X1P[0] * (inputs[0][0].r - inputs[1][0].r);
+    let C = srs.X1P[0] * (inputs[0].first().unwrap().r - inputs[1].first().unwrap().r);
     (vec![C], Vec::new())
   }
 
@@ -34,8 +34,8 @@ impl BasicBlock for EqBasicBlock {
   ) -> Vec<PairingCheck> {
     // Verify f(x)+g(x)=h(x)
     vec![vec![
-      (inputs[0][0].g1, srs.X2A[0]),
-      (-inputs[1][0].g1, srs.X2A[0]),
+      (inputs[0].first().unwrap().g1, srs.X2A[0]),
+      (-inputs[1].first().unwrap().g1, srs.X2A[0]),
       (-proof.0[0], srs.Y2A),
     ]]
   }

@@ -27,7 +27,7 @@ impl BasicBlock for MulConstBasicBlock {
     _rng: &mut StdRng,
     _cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
-    let C = srs.X1P[0] * (Fr::from(self.c as u32) * inputs[0][0].r - outputs[0][0].r);
+    let C = srs.X1P[0] * (Fr::from(self.c as u32) * inputs[0].first().unwrap().r - outputs[0].first().unwrap().r);
     return (vec![C], vec![]);
   }
 
@@ -42,8 +42,8 @@ impl BasicBlock for MulConstBasicBlock {
     _cache: &mut ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     vec![vec![
-      (inputs[0][0].g1, (srs.X2P[0] * Fr::from(self.c as u32)).into()),
-      (-outputs[0][0].g1, srs.X2A[0]),
+      (inputs[0].first().unwrap().g1, (srs.X2P[0] * Fr::from(self.c as u32)).into()),
+      (-outputs[0].first().unwrap().g1, srs.X2A[0]),
       (-proof.0[0], srs.Y2A),
     ]]
   }
@@ -54,7 +54,7 @@ pub struct MulScalarBasicBlock;
 impl BasicBlock for MulScalarBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[1].len() == 1);
-    vec![inputs[0].map(|x| *x * inputs[1][0])]
+    vec![inputs[0].map(|x| *x * inputs[1].first().unwrap())]
   }
   fn prove(
     &mut self,
@@ -66,9 +66,9 @@ impl BasicBlock for MulScalarBasicBlock {
     _rng: &mut StdRng,
     _cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
-    let inp0 = &inputs[0][0];
-    let inp1 = &inputs[1][0];
-    let out = &outputs[0][0];
+    let inp0 = &inputs[0].first().unwrap();
+    let inp1 = &inputs[1].first().unwrap();
+    let out = &outputs[0].first().unwrap();
     let gx2 = srs.X2P[0] * inp1.raw[0] + srs.Y2P * inp1.r;
     let C = inp0.g1 * inp1.r + inp1.g1 * inp0.r + srs.Y1P * (inp0.r * inp1.r) - srs.X1P[0] * out.r;
     return (vec![C], vec![gx2]);
@@ -86,13 +86,13 @@ impl BasicBlock for MulScalarBasicBlock {
     let mut checks = Vec::new();
     // Verify f(x)*g(x)=h(x)
     checks.push(vec![
-      (inputs[0][0].g1, proof.1[0]),
-      (-outputs[0][0].g1, srs.X2A[0]),
+      (inputs[0].first().unwrap().g1, proof.1[0]),
+      (-outputs[0].first().unwrap().g1, srs.X2A[0]),
       (-proof.0[0], srs.Y2A),
     ]);
 
     // Verify gx2
-    checks.push(vec![(inputs[1][0].g1, srs.X2A[0]), (srs.X1A[0], -proof.1[0])]);
+    checks.push(vec![(inputs[1].first().unwrap().g1, srs.X2A[0]), (srs.X1A[0], -proof.1[0])]);
 
     checks
   }
@@ -117,9 +117,9 @@ impl BasicBlock for MulBasicBlock {
     _rng: &mut StdRng,
     _cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
-    let inp0 = &inputs[0][0];
-    let inp1 = &inputs[1][0];
-    let out = &outputs[0][0];
+    let inp0 = &inputs[0].first().unwrap();
+    let inp1 = &inputs[1].first().unwrap();
+    let out = &outputs[0].first().unwrap();
     let N = inp0.raw.len();
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
     let gx2 = util::msm::<G2Projective>(&srs.X2A, &inp1.poly.coeffs) + srs.Y2P * inp1.r;
@@ -145,13 +145,13 @@ impl BasicBlock for MulBasicBlock {
     let mut checks = vec![];
     // Verify f(x)*g(x)-h(x)=z(x)t(x)
     checks.push(vec![
-      (inputs[0][0].g1, proof.1[0]),
-      (-outputs[0][0].g1, srs.X2A[0]),
-      (-proof.0[0], (srs.X2A[inputs[0][0].len] - srs.X2A[0]).into()),
+      (inputs[0].first().unwrap().g1, proof.1[0]),
+      (-outputs[0].first().unwrap().g1, srs.X2A[0]),
+      (-proof.0[0], (srs.X2A[inputs[0].first().unwrap().len] - srs.X2A[0]).into()),
       (-proof.0[1], srs.Y2A),
     ]);
     // Verify gx2
-    checks.push(vec![(inputs[1][0].g1, srs.X2A[0]), (srs.X1A[0], -proof.1[0])]);
+    checks.push(vec![(inputs[1].first().unwrap().g1, srs.X2A[0]), (srs.X1A[0], -proof.1[0])]);
     checks
   }
 }

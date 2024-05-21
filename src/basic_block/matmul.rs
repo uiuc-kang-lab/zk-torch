@@ -9,6 +9,14 @@ use ark_std::{ops::Mul, ops::Sub, UniformRand, Zero};
 use ndarray::{ArrayD, Ix1, Ix2, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 
+fn index<'a, T>(A: &'a ArrayD<T>, i: usize) -> &T {
+  if i == 0 {
+    A.first().unwrap()
+  } else {
+    &A[i]
+  }
+}
+
 #[derive(Debug)]
 pub struct MatMulBasicBlock;
 impl BasicBlock for MatMulBasicBlock {
@@ -40,7 +48,7 @@ impl BasicBlock for MatMulBasicBlock {
     cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     let l = inputs[0].len();
-    let m = inputs[0][0].raw.len();
+    let m = inputs[0].first().unwrap().raw.len();
     let n = inputs[1].len();
     let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
@@ -70,9 +78,9 @@ impl BasicBlock for MatMulBasicBlock {
     let mut flat_A_r = Fr::zero();
     for i in 0..l {
       for j in 0..m {
-        flat_A[j] += inputs[0][i].raw[j] * alpha_pow.raw[i];
+        flat_A[j] += index(inputs[0], i).raw[j] * alpha_pow.raw[i];
       }
-      flat_A_r += inputs[0][i].r * alpha_pow.raw[i];
+      flat_A_r += index(inputs[0], i).r * alpha_pow.raw[i];
     }
     let mut flat_A = Data::new(srs, &flat_A);
     flat_A.r = flat_A_r;
@@ -92,9 +100,9 @@ impl BasicBlock for MatMulBasicBlock {
     let mut flat_C_r = Fr::zero();
     for i in 0..l {
       for j in 0..n {
-        flat_C[j] += outputs[0][i].raw[j] * alpha_pow.raw[i];
+        flat_C[j] += index(outputs[0], i).raw[j] * alpha_pow.raw[i];
       }
-      flat_C_r += outputs[0][i].r * alpha_pow.raw[i];
+      flat_C_r += index(outputs[0], i).r * alpha_pow.raw[i];
     }
     let mut flat_C = Data::new(srs, &flat_C);
     flat_C.r = flat_C_r;
@@ -153,7 +161,7 @@ impl BasicBlock for MatMulBasicBlock {
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let l = inputs[0].len();
-    let m = inputs[0][0].len;
+    let m = inputs[0].first().unwrap().len;
     let n = inputs[1].len();
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let [left_x, left_Q_x, left_zero, left_zero_div, right_x, right_Q_x, right_zero_div, corr1, corr2, corr3, corr4] = proof.0[..] else {
@@ -181,7 +189,7 @@ impl BasicBlock for MatMulBasicBlock {
     let beta_pow_g2 = beta_pow_g2.clone();
 
     // Calculate flat_A
-    let temp: Vec<_> = (0..l).map(|i| inputs[0][i].g1).collect();
+    let temp: Vec<_> = (0..l).map(|i| index(inputs[0], i).g1).collect();
     let flat_A_g1 = util::msm::<G1Projective>(&temp, &alpha_pow).into();
 
     // Calculate flat_B
@@ -189,7 +197,7 @@ impl BasicBlock for MatMulBasicBlock {
     let flat_B_g1 = util::msm::<G1Projective>(&temp, &beta_pow).into();
 
     // Calculate flat_C
-    let temp: Vec<_> = (0..l).map(|i| outputs[0][i].g1).collect();
+    let temp: Vec<_> = (0..l).map(|i| index(outputs[0], i).g1).collect();
     let flat_C_g1 = util::msm::<G1Projective>(&temp, &alpha_pow).into();
 
     // Check left(x) (left_i = flat_A_i * flat_B_i)
