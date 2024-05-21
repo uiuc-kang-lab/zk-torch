@@ -55,7 +55,7 @@ pub struct SRS {
 pub enum CacheValues {
   CQTableDict(HashMap<Fr, usize>),
   CQ2TableDict(HashMap<(Fr, Fr), usize>),
-  Fr(Fr),
+  RLCRandom(Fr),
   Data(Data),
   G2(G2Affine),
 }

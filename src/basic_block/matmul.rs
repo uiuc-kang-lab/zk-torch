@@ -44,11 +44,11 @@ impl BasicBlock for MatMulBasicBlock {
     let n = inputs[1].len();
     let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
-    let CacheValues::Fr(alpha) = cache.entry("matmul_alpha".to_owned()).or_insert_with(|| CacheValues::Fr(Fr::rand(rng))) else {
+    let CacheValues::RLCRandom(alpha) = cache.entry("matmul_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
       panic!("Cache type error")
     };
     let alpha = alpha.clone();
-    let CacheValues::Fr(beta) = cache.entry("matmul_beta".to_owned()).or_insert_with(|| CacheValues::Fr(Fr::rand(rng))) else {
+    let CacheValues::RLCRandom(beta) = cache.entry("matmul_beta".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
       panic!("Cache type error")
     };
     let beta = beta.clone();
@@ -161,11 +161,11 @@ impl BasicBlock for MatMulBasicBlock {
     };
     let flat_B_g2 = proof.1[0];
 
-    let CacheValues::Fr(alpha) = cache.entry("matmul_alpha".to_owned()).or_insert_with(|| CacheValues::Fr(Fr::rand(rng))) else {
+    let CacheValues::RLCRandom(alpha) = cache.entry("matmul_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
       panic!("Cache type error")
     };
     let alpha = alpha.clone();
-    let CacheValues::Fr(beta) = cache.entry("matmul_beta".to_owned()).or_insert_with(|| CacheValues::Fr(Fr::rand(rng))) else {
+    let CacheValues::RLCRandom(beta) = cache.entry("matmul_beta".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
       panic!("Cache type error")
     };
     let beta = beta.clone();

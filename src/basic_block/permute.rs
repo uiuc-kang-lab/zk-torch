@@ -43,7 +43,7 @@ impl BasicBlock for PermuteBasicBlock {
     rng: &mut StdRng,
     cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
-    let CacheValues::Fr(alpha) = cache.entry("permute_alpha".to_owned()).or_insert_with(|| CacheValues::Fr(Fr::rand(rng))) else {
+    let CacheValues::RLCRandom(alpha) = cache.entry("permute_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
       panic!("Cache type error")
     };
     let alpha = alpha.clone();
@@ -154,7 +154,7 @@ impl BasicBlock for PermuteBasicBlock {
     cache: &mut ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
-    let CacheValues::Fr(alpha) = cache.entry("permute_alpha".to_owned()).or_insert_with(|| CacheValues::Fr(Fr::rand(rng))) else {
+    let CacheValues::RLCRandom(alpha) = cache.entry("permute_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
       panic!("Cache type error")
     };
     let alpha = alpha.clone();

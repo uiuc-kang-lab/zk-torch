@@ -118,7 +118,7 @@ impl BasicBlock for CQLinBasicBlock {
     let n = model[0].raw.len();
     let N = srs.X2P.len() - 1;
     let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
-    let CacheValues::Fr(alpha) = cache.entry("cqlin_alpha".to_owned()).or_insert_with(|| CacheValues::Fr(Fr::rand(rng))) else {
+    let CacheValues::RLCRandom(alpha) = cache.entry("cqlin_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
       panic!("Cache type error")
     };
     let alpha = alpha.clone();
@@ -224,7 +224,7 @@ impl BasicBlock for CQLinBasicBlock {
 
     let [M_x] = proof.1[..] else { panic!("Wrong proof format") };
 
-    let CacheValues::Fr(alpha) = cache.entry("cqlin_alpha".to_owned()).or_insert_with(|| CacheValues::Fr(Fr::rand(rng))) else {
+    let CacheValues::RLCRandom(alpha) = cache.entry("cqlin_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
       panic!("Cache type error")
     };
     let alpha = alpha.clone();
