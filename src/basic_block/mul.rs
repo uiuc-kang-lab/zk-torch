@@ -1,7 +1,7 @@
 use super::{BasicBlock, Data, DataEnc, PairingCheck, SRS};
 use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
+use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{ops::Mul, ops::Sub, UniformRand};
 use ndarray::{azip, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
@@ -20,14 +20,14 @@ impl BasicBlock for MulConstBasicBlock {
   fn prove(
     &mut self,
     srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     _model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>) {
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let C = srs.X1P[0] * (Fr::from(self.c as u32) * inputs[0][0].r - outputs[0][0].r);
-    return (vec![C], vec![]);
+    return (vec![C], vec![], Vec::new());
   }
 
   fn verify(
@@ -36,7 +36,7 @@ impl BasicBlock for MulConstBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    proof: (&Vec<G1Affine>, &Vec<G2Affine>),
+    proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
   ) -> Vec<PairingCheck> {
     vec![vec![
@@ -57,18 +57,18 @@ impl BasicBlock for MulScalarBasicBlock {
   fn prove(
     &mut self,
     srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     _model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>) {
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let inp0 = &inputs[0][0];
     let inp1 = &inputs[1][0];
     let out = &outputs[0][0];
     let gx2 = srs.X2P[0] * inp1.raw[0] + srs.Y2P * inp1.r;
     let C = inp0.g1 * inp1.r + inp1.g1 * inp0.r + srs.Y1P * (inp0.r * inp1.r) - srs.X1P[0] * out.r;
-    return (vec![C], vec![gx2]);
+    return (vec![C], vec![gx2], Vec::new());
   }
   fn verify(
     &self,
@@ -76,7 +76,7 @@ impl BasicBlock for MulScalarBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    proof: (&Vec<G1Affine>, &Vec<G2Affine>),
+    proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
@@ -106,12 +106,12 @@ impl BasicBlock for MulBasicBlock {
   fn prove(
     &mut self,
     srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     _model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>) {
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let inp0 = &inputs[0][0];
     let inp1 = &inputs[1][0];
     let out = &outputs[0][0];
@@ -125,7 +125,7 @@ impl BasicBlock for MulBasicBlock {
     let r = Fr::rand(&mut rng);
     let tx = util::msm::<G1Projective>(&srs.X1A, &t.coeffs) + srs.Y1P * r;
     let C = (inp0.g1 * inp1.r) + (inp1.g1 * inp0.r) + (srs.Y1P * (inp0.r * inp1.r)) - (srs.X1P[0] * out.r) - ((srs.X1P[N] - srs.X1P[0]) * r);
-    return (vec![tx, C], vec![gx2]);
+    return (vec![tx, C], vec![gx2], Vec::new());
   }
   fn verify(
     &self,
@@ -133,7 +133,7 @@ impl BasicBlock for MulBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    proof: (&Vec<G1Affine>, &Vec<G2Affine>),
+    proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
   ) -> Vec<PairingCheck> {
     let mut checks = vec![];

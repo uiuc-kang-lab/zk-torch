@@ -29,7 +29,7 @@ impl BasicBlock for CQ2BasicBlock {
     )
   }
 
-  fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
+  fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     assert!(model.ndim() == 1 && model.len() == 2);
     let N = model[0].raw.len();
     let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
@@ -56,18 +56,18 @@ impl BasicBlock for CQ2BasicBlock {
     L_i_0_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x = *x * domain_N.group_gen_inv().pow(&[i as u64]) - temp);
     setup.extend(L_i_x_1);
     setup.extend(L_i_0_x_1);
-    return (setup, setup2);
+    return (setup, setup2, Vec::new());
   }
 
   fn prove(
     &mut self,
     srs: &SRS,
-    setup: (&Vec<G1Affine>, &Vec<G2Affine>),
+    setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>) {
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     assert!(inputs.len() == 2 && inputs[0].len() == 1 && inputs[1].len() == 1);
     let N = model[0].raw.len();
     let inputs = vec![&inputs[0][0], &inputs[1][0]];
@@ -160,7 +160,7 @@ impl BasicBlock for CQ2BasicBlock {
     ];
     proof.append(&mut C);
 
-    return (proof, vec![(setup.1[0] + setup.1[1] * alpha).into(), f_x_2]);
+    return (proof, vec![(setup.1[0] + setup.1[1] * alpha).into(), f_x_2], Vec::new());
   }
 
   fn verify(
@@ -169,7 +169,7 @@ impl BasicBlock for CQ2BasicBlock {
     model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     _outputs: &Vec<&ArrayD<DataEnc>>,
-    proof: (&Vec<G1Affine>, &Vec<G2Affine>),
+    proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();

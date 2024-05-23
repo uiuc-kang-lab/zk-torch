@@ -2,6 +2,7 @@
 #![allow(non_upper_case_globals)]
 use crate::graph::Graph;
 use ark_bn254::{Fr, G1Affine, G2Affine};
+use ark_poly::univariate::DensePolynomial;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use basic_block::*;
 use ndarray::{arr1, ArrayD};
@@ -34,9 +35,17 @@ fn prove(srs: &SRS, graph: &mut Graph, models: Vec<ArrayD<Fr>>) {
   let setups = graph.setup(srs, &models);
 
   // Encode Data:
-  let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>)> =
-    setups.iter().map(|x| (x.0.iter().map(|y| (*y).into()).collect(), x.1.iter().map(|y| (*y).into()).collect())).collect();
-  let setups = setups.iter().map(|x| (&x.0, &x.1)).collect();
+  let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>)> = setups
+    .iter()
+    .map(|x| {
+      (
+        x.0.iter().map(|y| (*y).into()).collect(),
+        x.1.iter().map(|y| (*y).into()).collect(),
+        x.2.iter().map(|y| (y.clone())).collect(),
+      )
+    })
+    .collect();
+  let setups = setups.iter().map(|x| (&x.0, &x.1, &x.2)).collect();
   let modelsEnc: Vec<ArrayD<DataEnc>> = models.iter().map(|model| (**model).map(|x| DataEnc::new(srs, x))).collect();
   let inputs: Vec<ArrayD<Data>> = inputs.iter().map(|input| convert_to_data(srs, input)).collect();
   let inputs: Vec<&ArrayD<Data>> = inputs.iter().map(|input| input).collect();
@@ -73,8 +82,8 @@ fn prove(srs: &SRS, graph: &mut Graph, models: Vec<ArrayD<Fr>>) {
 
 fn verify(srs: &SRS, graph: &Graph) {
   // Read Files:
-  let proofs = Vec::<(Vec<G1Affine>, Vec<G2Affine>)>::deserialize_uncompressed_unchecked(File::open("proofs").unwrap()).unwrap();
-  let proofs = proofs.iter().map(|x| (&x.0, &x.1)).collect();
+  let proofs = Vec::<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)>::deserialize_uncompressed_unchecked(File::open("proofs").unwrap()).unwrap();
+  let proofs = proofs.iter().map(|x| (&x.0, &x.1, &x.2)).collect();
   let mut modelsEncBytes = Vec::new();
   File::open("modelsEnc").unwrap().read_to_end(&mut modelsEncBytes).unwrap();
   let modelsEnc: Vec<ArrayD<DataEnc>> = bincode::deserialize(&modelsEncBytes).unwrap();

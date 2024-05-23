@@ -4,7 +4,7 @@ use super::{BasicBlock, Data, DataEnc, PairingCheck, SRS};
 use crate::util::{self, calc_pow};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
-use ark_poly::{EvaluationDomain, GeneralEvaluationDomain, Polynomial};
+use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain, Polynomial};
 use ark_std::{UniformRand, Zero};
 use ndarray::{ArrayD, Ix2};
 use rand::{rngs::StdRng, SeedableRng};
@@ -23,7 +23,7 @@ impl BasicBlock for CQLinBasicBlock {
     vec![b.dot(&a).into_dyn()]
   }
 
-  fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
+  fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     let m = model.len();
     let n = model[0].raw.len();
     let N = srs.X2P.len() - 1;
@@ -100,18 +100,18 @@ impl BasicBlock for CQLinBasicBlock {
     setup.append(&mut L_V_i_x_n);
     setup.append(&mut L_V_i_x);
     setup.append(&mut L_H_i_x);
-    (setup, vec![M_x.into()])
+    (setup, vec![M_x.into()], Vec::new())
   }
 
   fn prove(
     &mut self,
     srs: &SRS,
-    setup: (&Vec<G1Affine>, &Vec<G2Affine>),
+    setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>) {
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let l = inputs[0].len();
     let m = model.len();
     let n = model[0].raw.len();
@@ -191,7 +191,7 @@ impl BasicBlock for CQLinBasicBlock {
     // G2 blinding for M
     let M_x_2 = (setup.1[0] + srs.Y2P * r[8]).into();
 
-    return (proof, vec![M_x_2]);
+    return (proof, vec![M_x_2], Vec::new());
   }
 
   fn verify(
@@ -200,7 +200,7 @@ impl BasicBlock for CQLinBasicBlock {
     model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    proof: (&Vec<G1Affine>, &Vec<G2Affine>),
+    proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();

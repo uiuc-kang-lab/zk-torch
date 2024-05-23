@@ -25,6 +25,7 @@ pub use sub::SubBasicBlock;
 pub use sum::SumBasicBlock;
 pub mod add;
 pub mod constant;
+pub mod copy_constraint;
 pub mod cq;
 pub mod cq2;
 pub mod cqlin;
@@ -114,20 +115,20 @@ pub trait BasicBlock: std::fmt::Debug {
 
   // The subsequent setup/prove/verify functions run on encoded Data objects (vector commitments).
   // This reduces computation because the Data objects can be encoded once at the beginning and then reused for these functions.
-  fn setup(&self, _srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
-    (Vec::new(), Vec::new())
+  fn setup(&self, _srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+    (Vec::new(), Vec::new(), Vec::new())
   }
 
   fn prove(
     &mut self,
     _srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>) {
-    (Vec::new(), Vec::new())
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    (Vec::new(), Vec::new(), Vec::new())
   }
 
   fn verify(
@@ -136,7 +137,7 @@ pub trait BasicBlock: std::fmt::Debug {
     _model: &ArrayD<DataEnc>,
     _inputs: &Vec<&ArrayD<DataEnc>>,
     _outputs: &Vec<&ArrayD<DataEnc>>,
-    _proof: (&Vec<G1Affine>, &Vec<G2Affine>),
+    _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
   ) -> Vec<PairingCheck> {
     vec![]

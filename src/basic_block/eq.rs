@@ -1,5 +1,6 @@
 use super::{BasicBlock, Data, DataEnc, PairingCheck, SRS};
-use ark_bn254::{G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_poly::univariate::DensePolynomial;
 use ndarray::ArrayD;
 use rand::rngs::StdRng;
 
@@ -9,16 +10,16 @@ impl BasicBlock for EqBasicBlock {
   fn prove(
     &mut self,
     srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     _model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>) {
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[1].ndim() == 1);
     // Blinding
     let C = srs.X1P[0] * (inputs[0][0].r - inputs[1][0].r);
-    (vec![C], Vec::new())
+    (vec![C], Vec::new(), Vec::new())
   }
 
   fn verify(
@@ -27,7 +28,7 @@ impl BasicBlock for EqBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     _outputs: &Vec<&ArrayD<DataEnc>>,
-    proof: (&Vec<G1Affine>, &Vec<G2Affine>),
+    proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
   ) -> Vec<PairingCheck> {
     // Verify f(x)+g(x)=h(x)

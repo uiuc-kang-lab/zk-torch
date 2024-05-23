@@ -36,12 +36,12 @@ impl BasicBlock for PermuteBasicBlock {
   fn prove(
     &mut self,
     srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     _model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>) {
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let alpha = Fr::rand(rng);
     let (input, output) = (inputs[0], outputs[0]);
 
@@ -116,7 +116,7 @@ impl BasicBlock for PermuteBasicBlock {
     ];
     proof.append(&mut corr);
 
-    return (proof, vec![]);
+    return (proof, vec![], Vec::new());
   }
 
   fn verify(
@@ -125,7 +125,7 @@ impl BasicBlock for PermuteBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    proof: (&Vec<G1Affine>, &Vec<G2Affine>),
+    proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();

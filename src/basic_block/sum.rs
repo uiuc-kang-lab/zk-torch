@@ -20,12 +20,12 @@ impl BasicBlock for SumBasicBlock {
   fn prove(
     &mut self,
     srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     _model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>) {
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let input = inputs[0];
     let l = input.len();
     let m = input[0].raw.len();
@@ -46,7 +46,7 @@ impl BasicBlock for SumBasicBlock {
     let zero_div_r = Fr::rand(&mut rng2);
     let zero_div = util::msm::<G1Projective>(&srs.X1A, &input_poly.coeffs[1..]) + srs.Y1P * zero_div_r;
     let C = -srs.X1P[1] * zero_div_r + srs.X1P[0] * (input_r - outputs[0][0].r * Fr::from(m as u32).inverse().unwrap());
-    return (vec![zero_div, C], vec![]);
+    return (vec![zero_div, C], vec![], Vec::new());
   }
 
   fn verify(
@@ -55,7 +55,7 @@ impl BasicBlock for SumBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    proof: (&Vec<G1Affine>, &Vec<G2Affine>),
+    proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
   ) -> Vec<PairingCheck> {
     let m = inputs[0][0].len;
