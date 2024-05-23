@@ -2,10 +2,12 @@ use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
 use crate::util;
+use ark_bn254::Fr;
+use ndarray::ArrayD;
 
 pub struct MatMulLayer;
 impl Layer for MatMulLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let matmul = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(MatMulBasicBlock {}),
@@ -14,7 +16,7 @@ impl Layer for MatMulLayer {
     let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock { input_SF: 6, output_SF: 3 }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
-        setup: Some((Box::new(ChangeSFBasicBlock { input_SF: 6, output_SF: 3 }), -(1 << 5), 1 << 6)),
+        setup: Some((Box::new(ChangeSFBasicBlock { input_SF: 6, output_SF: 3 }), -(1 << 8), 1 << 9)),
       }),
       N: 1,
     }));

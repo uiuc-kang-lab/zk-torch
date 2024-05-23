@@ -1,18 +1,16 @@
 use crate::basic_block::*;
 use crate::graph::*;
-use crate::layer;
 use crate::layer::*;
 use crate::util;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 use std::collections::HashMap;
-use tract_onnx::pb::tensor_proto::DataType;
 use tract_onnx::prelude::{DatumType, Framework};
 use tract_onnx::tensor::load_tensor;
 
-const SF: usize = 32;
-const SF_LOG: usize = 5;
-const SF_FLOAT: f32 = 32f32;
+pub const SF: usize = 32;
+pub const SF_LOG: usize = 5;
+pub const SF_FLOAT: f32 = 32f32;
 
 pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
   let onnx = tract_onnx::onnx();
@@ -50,13 +48,14 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
   let mut setups = vec![];
 
   let mut idx = 0;
-  let constants = onnx_graph.initializer.iter().take(10).map(|tensor| (tensor.name.clone(), tensor)).chain(
+  let constants = onnx_graph.initializer.iter().map(|tensor| (tensor.name.clone(), tensor)).chain(
     onnx_graph
       .node
       .iter()
       .filter(|node| node.op_type == "Constant")
       .map(|node| (node.output[0].clone(), node.attribute[0].t.as_ref().unwrap())),
   );
+  let mut constants_hashmap = HashMap::new();
   for (name, tensor) in constants {
     let tensor = load_tensor(&*onnx.provider, tensor, None).unwrap();
     let tensor = match tensor.datum_type() {
@@ -73,7 +72,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
     .unwrap();
     shapes.insert(name.clone(), tensor.shape().to_vec());
     let tensor = util::pad(&tensor);
-    outputs_idx.insert(name, vec![(graph.basic_blocks.len() as i32, 0)]);
+    outputs_idx.insert(name.clone(), vec![(graph.basic_blocks.len() as i32, 0)]);
     graph.nodes.push(Node {
       basic_block: graph.basic_blocks.len(),
       inputs: vec![],
@@ -82,20 +81,24 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
     // In the future, we can prune the Graph so that this is replaced by one CQLinBasicBlock.
     graph.basic_blocks.push(Box::new(ConstBasicBlock {}));
     setups.push(tensor);
+    constants_hashmap.insert(name, idx);
     idx += 1;
   }
 
-  let sizes: Vec<Option<Vec<(Vec<usize>, Vec<usize>)>>> = vec![None; onnx_graph.node.len()];
-  for node in onnx_graph.node.iter().filter(|node| node.op_type.as_str() != "Constant").take(5) {
+  for node in onnx_graph.node.iter().filter(|node| node.op_type.as_str() != "Constant") {
     let op = node.op_type.as_str();
+    println!("{:?}", op);
     let input_shapes: Vec<_> = node.input.iter().map(|x| &shapes[x]).collect();
+    let my_constants = node.input.iter().map(|x| constants_hashmap.get(x).map(|&y| &setups[y])).collect();
     let (mut local_graph, output_shapes) = match op {
-      "Add" => Ok(AddLayer::graph(&input_shapes)),
-      "Sub" => Ok(SubLayer::graph(&input_shapes)),
-      "MatMul" => Ok(MatMulLayer::graph(&input_shapes)),
-      "Relu" => Ok(ReLULayer::graph(&input_shapes)),
-      "Gather" => Ok(GatherLayer::graph(&input_shapes)),
-      "ReduceMean" => Ok(ReduceMeanLayer::graph(&input_shapes)),
+      "Add" => Ok(AddLayer::graph(&input_shapes, &my_constants)),
+      "Sub" => Ok(SubLayer::graph(&input_shapes, &my_constants)),
+      "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &my_constants)),
+      "Relu" => Ok(ReLULayer::graph(&input_shapes, &my_constants)),
+      "Gather" => Ok(GatherLayer::graph(&input_shapes, &my_constants)),
+      "ReduceMean" => Ok(ReduceMeanLayer::graph(&input_shapes, &my_constants)),
+      "Pow" => Ok(PowLayer::graph(&input_shapes, &my_constants)),
+      "Sqrt" => Ok(SqrtLayer::graph(&input_shapes, &my_constants)),
       _ => Err(format!("Unsupported onnx operation: {op}")),
     }
     .unwrap();

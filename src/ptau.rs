@@ -2,7 +2,6 @@ use crate::basic_block::*;
 use ark_bn254::{Fq, Fq2, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::PrimeField;
 use rayon::prelude::*;
-use std::fs;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 
