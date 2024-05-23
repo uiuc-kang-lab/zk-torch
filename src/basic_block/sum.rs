@@ -29,7 +29,6 @@ impl BasicBlock for SumBasicBlock {
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     let input = inputs[0].first().unwrap();
     let m = input.raw.len();
-    let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
 
     let mut rng2 = StdRng::from_entropy();
     let zero_div_r = Fr::rand(&mut rng2);

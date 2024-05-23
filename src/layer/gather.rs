@@ -23,7 +23,7 @@ impl BasicBlock for GatherBasicBlock {
 
 pub struct GatherLayer;
 impl Layer for GatherLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let gather = graph.addBB(Box::new(GatherBasicBlock {}));
     let output = graph.addNode(gather, vec![(-1, 0), (-2, 0)]);

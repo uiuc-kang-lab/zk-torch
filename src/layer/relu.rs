@@ -1,10 +1,12 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
+use ark_bn254::Fr;
+use ndarray::ArrayD;
 
 pub struct ReLULayer;
 impl Layer for ReLULayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let relu = graph.addBB(Box::new(ReLUBasicBlock { input_SF: 3, output_SF: 3 }));
     let relu_check = graph.addBB(Box::new(RepeaterBasicBlock {
