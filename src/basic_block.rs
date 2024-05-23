@@ -4,13 +4,14 @@ pub use add::AddBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::UniformRand;
+use ark_std::{UniformRand, Zero};
 pub use constant::ConstBasicBlock;
 pub use cq::CQBasicBlock;
 pub use cq2::CQ2BasicBlock;
 pub use cqlin::CQLinBasicBlock;
-pub use div::DivScalarBasicBlock;
+pub use div::{DivConstBasicBlock, DivScalarBasicBlock};
 pub use eq::EqBasicBlock;
+use icicle_bn254::curve::G1Affine as IG1A;
 pub use matmul::MatMulBasicBlock;
 pub use max::MaxBasicBlock;
 pub use mul::{MulBasicBlock, MulConstBasicBlock, MulScalarBasicBlock};
@@ -50,6 +51,7 @@ pub struct SRS {
   pub Y2A: G2Affine,
   pub Y1P: G1Projective,
   pub Y2P: G2Projective,
+  pub IX1A: Vec<IG1A>,
 }
 
 // During proofs and verifications, a cache is used to prevent recomputation.
@@ -65,7 +67,7 @@ pub type ProveVerifyCache = HashMap<String, CacheValues>;
 
 pub type PairingCheck = Vec<(G1Affine, G2Affine)>;
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct Data {
   #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
   pub raw: Vec<Fr>,
@@ -82,7 +84,13 @@ impl Data {
     let N = raw.len();
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
     let f = DensePolynomial::from_coefficients_vec(domain.ifft(&raw));
-    let fx = util::msm::<G1Projective>(&srs.X1A, &f.coeffs);
+    let fx = if f.is_zero() {
+      G1Projective::zero()
+    } else if N < 32 {
+      util::msm(&srs.X1A, &f.coeffs)
+    } else {
+      util::msm_gpu_g1(&srs.IX1A, &f.coeffs)
+    };
     let mut rng = StdRng::from_entropy();
     return Data {
       raw: raw.to_vec(),
@@ -93,7 +101,7 @@ impl Data {
   }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct DataEnc {
   pub len: usize,
   #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]

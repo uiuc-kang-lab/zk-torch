@@ -6,6 +6,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use basic_block::*;
 use ndarray::ArrayD;
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use rayon::prelude::*;
 use sha3::{Digest, Keccak256};
 use std::fs::{self, File};
 use std::io::Read;
@@ -24,7 +25,14 @@ fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&
   let outputs = graph.run(inputs, models);
 
   // Setup:
-  let models: Vec<ArrayD<Data>> = models.iter().map(|model| convert_to_data(srs, model)).collect();
+  let models: Vec<ArrayD<Data>> = models
+    .par_iter()
+    .enumerate()
+    .map(|(i, model)| {
+      println!("encode model {:?} {:?}", i, model.shape());
+      convert_to_data(srs, model)
+    })
+    .collect();
   let models: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
   let setups = graph.setup(srs, &models);
 
@@ -98,11 +106,11 @@ fn verify(srs: &SRS, graph: &Graph) {
 }
 
 fn main() {
-  let srs = &ptau::load_file("challenge", 7);
-  let (mut graph, models) = onnx::load_file("sample.onnx");
+  let srs = &ptau::load_file("/home/arigf2/project/challenge_0085", 28, 22);
+  let (mut graph, models) = onnx::load_file("distilbert_Opset16.onnx");
   let mut rng = StdRng::from_entropy();
-  let input: Vec<Fr> = (0..32).map(|_| Fr::from(rng.gen_range(-4..4))).collect();
-  let input = ArrayD::from_shape_vec(vec![4, 2, 4], input).unwrap();
+  let input: Vec<Fr> = (0..128).map(|_| Fr::from(rng.gen_range(0..30522))).collect();
+  let input = ArrayD::from_shape_vec(vec![1, 128], input).unwrap();
   let inputs = vec![&input];
   let models = models.iter().map(|x| x).collect();
   prove(&srs, &inputs, &mut graph, &models);

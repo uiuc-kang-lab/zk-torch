@@ -9,7 +9,10 @@ use ark_ff::PrimeField;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{UniformRand, Zero};
-use ndarray::{arr0, concatenate, Array1, ArrayD, Axis, IxDyn};
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, ScalarField};
+use icicle_core::traits::ArkConvertible;
+use icicle_cuda_runtime::memory::HostOrDeviceSlice;
+use ndarray::{arr0, concatenate, Array1, ArrayD, Axis, IxDyn, SliceInfo, SliceInfoElem};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use rayon::prelude::*;
 use sha3::{Digest, Keccak256};
@@ -152,6 +155,22 @@ pub fn msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {
   return a_chunks.zip(b_chunks).map(|(x, y)| -> P { VariableBaseMSM::msm_unchecked(&x, &y) }).sum();
 }
 
+pub fn msm_gpu_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>) -> G1Projective {
+  let size = ark_std::cmp::min(points.len(), scalars.len());
+  if size < 32 {
+    let points: Vec<_> = points.iter().map(|x| x.to_ark()).collect();
+    return msm(&points, scalars);
+  }
+  let cfg = icicle_core::msm::MSMConfig::default();
+  let points = HostOrDeviceSlice::on_host(points[..size].to_vec());
+  let scalars = scalars[..size].par_iter().map(|x| ScalarField::from_ark(*x)).collect();
+  let scalars = HostOrDeviceSlice::on_host(scalars);
+  let results = vec![IG1P::zero(); 1];
+  let mut results: HostOrDeviceSlice<'_, IG1P> = HostOrDeviceSlice::on_host(results);
+  icicle_core::msm::msm(&scalars, &points, &cfg, &mut results).unwrap();
+  results.as_slice()[0].to_ark()
+}
+
 pub fn gen_cq_table(basic_block: &Box<dyn BasicBlock>, offset: i32, size: usize) -> ArrayD<Fr> {
   let range = Array1::from_shape_fn(size, |i| Fr::from(i as u32) + Fr::from(offset)).into_dyn();
   let result = &(**basic_block).run(&ArrayD::zeros(IxDyn(&[0])), &vec![&range])[0];
@@ -180,7 +199,16 @@ pub fn convert_to_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
   if a.ndim() <= 1 {
     return arr0(Data::new(srs, a.view().as_slice().unwrap())).into_dyn();
   }
-  a.map_axis(Axis(a.ndim() - 1), |r| Data::new(srs, r.as_slice().unwrap()))
+  let mut a = a.map_axis(Axis(a.ndim() - 1), |r| Data {
+    raw: r.as_slice().unwrap().to_vec(),
+    poly: ark_poly::polynomial::univariate::DensePolynomial::zero(),
+    r: Fr::zero(),
+    g1: G1Projective::zero(),
+  });
+  a.par_map_inplace(|x| {
+    *x = Data::new(srs, &x.raw);
+  });
+  a
 }
 
 pub fn combine_pairing_checks(checks: &Vec<&PairingCheck>) -> (Vec<G1Affine>, Vec<G2Affine>) {
@@ -252,4 +280,31 @@ pub fn combine_pairing_checks(checks: &Vec<&PairingCheck>) -> (Vec<G1Affine>, Ve
   assert!(ATree.is_empty() && B.is_empty() && BTree.is_empty());
   println!("{:?}", res.0.len());
   res
+}
+
+pub fn broadcastDims(dims: &Vec<&Vec<usize>>, N: usize) -> Vec<usize> {
+  let len = dims.iter().map(|x| x.len()).max().unwrap();
+  (0..len - N)
+    .map(|i| dims.iter().map(|dim| if dim.len() >= len - i { dim[i + dim.len() - len] } else { 1 }).max().unwrap())
+    .collect()
+}
+
+fn next_pow(n: u32) -> u32 {
+  let mut v = n;
+  v -= 1;
+  v |= v >> 1;
+  v |= v >> 2;
+  v |= v >> 4;
+  v |= v >> 8;
+  v |= v >> 16;
+  v += 1;
+  v
+}
+
+pub fn pad<T: Clone + ark_std::Zero>(a: &ArrayD<T>) -> ArrayD<T> {
+  let mut new = ArrayD::zeros(a.shape().iter().map(|x| next_pow(*x as u32) as usize).collect::<Vec<_>>());
+  let slice = a.shape().iter().map(|x| ndarray::Slice::new(0, Some(*x as isize), 1).into()).collect::<Vec<SliceInfoElem>>();
+  let sliceInfo: SliceInfo<_, IxDyn, IxDyn> = SliceInfo::try_from(&slice[..]).unwrap();
+  new.slice_mut(sliceInfo).assign(a);
+  new
 }
