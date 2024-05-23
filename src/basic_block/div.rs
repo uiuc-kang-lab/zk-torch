@@ -30,3 +30,18 @@ impl BasicBlock for DivScalarBasicBlock {
     vec![arr1(&div).into_dyn(), arr1(&rem).into_dyn()]
   }
 }
+
+#[derive(Debug)]
+pub struct DivConstBasicBlock {
+  pub c: f32,
+}
+impl BasicBlock for DivConstBasicBlock {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    assert!(inputs.len() == 1);
+    vec![inputs[0].map(|x| {
+      let mut x = util::fr_to_int(*x) as f32;
+      x /= self.c;
+      Fr::from(x.round() as i32)
+    })]
+  }
+}

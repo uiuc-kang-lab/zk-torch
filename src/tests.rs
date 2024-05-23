@@ -45,7 +45,7 @@ fn testBasicBlock<BB: BasicBlock>(mut basic_block: BB, srs: &SRS, model: &ArrayD
 
 #[test]
 fn testBasicBlocks() {
-  let srs = &ptau::load_file("challenge", 7);
+  let srs = &ptau::load_file("challenge", 7, 7);
   let mut rng = StdRng::from_entropy();
   let N: usize = 1 << 6;
   let n: usize = 1 << 3;
@@ -70,6 +70,7 @@ fn testBasicBlocks() {
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&b, &a_0]);
   testBasicBlock(CQBasicBlock { setup: None }, srs, &a, &vec![&a_n]);
   testBasicBlock(CQ2BasicBlock { setup: None }, srs, &ab, &vec![&a_n, &b_n]);
+  testBasicBlock(SumBasicBlock {}, srs, &empty, &vec![&a]);
 
   let l: usize = 1 << 3;
   let m: usize = 1 << 2;
@@ -78,7 +79,6 @@ fn testBasicBlocks() {
   let b = ArrayD::from_shape_fn(IxDyn(&[n, m]), |_| Fr::rand(&mut rng));
   let c = ArrayD::from_shape_fn(IxDyn(&[m, n]), |_| Fr::rand(&mut rng));
   testBasicBlock(MatMulBasicBlock {}, srs, &empty, &vec![&a, &b]);
-  testBasicBlock(SumBasicBlock {}, srs, &empty, &vec![&a]);
   testBasicBlock(CQLinBasicBlock {}, srs, &c, &vec![&a]);
   let p1 = (vec![0], (0..l * m).collect::<Vec<_>>()); // Concatenate columns
   let p2 = (vec![0], (0..l * m).map(|i| (i % m) * l + (i / m)).collect::<Vec<_>>()); // Concatenate rows
