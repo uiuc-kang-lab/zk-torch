@@ -4,7 +4,7 @@ use crate::layer::Layer;
 
 pub struct ReLULayer;
 impl Layer for ReLULayer {
-  fn graph() -> Graph {
+  fn graph(input_shapes: &Vec<&Vec<usize>>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let relu = graph.addBB(Box::new(ReLUBasicBlock { input_SF: 3, output_SF: 3 }));
     let relu_check = graph.addBB(Box::new(RepeaterBasicBlock {
@@ -16,6 +16,6 @@ impl Layer for ReLULayer {
     let relu_output = graph.addNode(relu, vec![(-1, 0)]);
     let _ = graph.addNode(relu_check, vec![(-1, 0), (relu_output, 0)]);
     graph.outputs.push((relu_output, 0));
-    graph
+    (graph, vec![input_shapes[0].clone()])
   }
 }

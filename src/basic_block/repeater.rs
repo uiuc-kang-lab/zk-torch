@@ -10,17 +10,16 @@ pub struct RepeaterBasicBlock {
   pub N: usize,
 }
 
-fn broadcastN<T1: Clone, T2: Clone>(
+fn broadcastN<T1: Clone + std::fmt::Debug, T2: Clone + std::fmt::Debug>(
   inputs: &Vec<&ArrayD<T1>>,
   outputs: Option<&Vec<&ArrayD<T2>>>,
   N: usize,
 ) -> ArrayD<(Vec<ArrayD<T1>>, Option<Vec<ArrayD<T2>>>)> {
   // Broadcast inputs to a shared larger dimension
   let dims: Vec<_> = inputs.iter().map(|input| input.shape().to_vec()).collect();
-  let len = dims.iter().map(|x| x.len()).max().unwrap();
-  let superDim: Vec<_> = (0..len - N)
-    .map(|i| dims.iter().map(|dim| if dim.len() >= len - i { dim[i + dim.len() - len] } else { 1 }).max().unwrap())
-    .collect();
+  let dims_ptr = dims.iter().map(|x| x).collect();
+  let superDim = util::broadcastDims(&dims_ptr, N);
+  let len = superDim.len() + N;
   let broadcasted: Vec<_> = inputs
     .iter()
     .zip(dims)

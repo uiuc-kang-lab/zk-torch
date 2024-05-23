@@ -13,7 +13,7 @@ use rand::{rngs::StdRng, SeedableRng};
 pub struct SumBasicBlock;
 impl BasicBlock for SumBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    assert!(inputs.len() == 1 && inputs[0].ndim() == 2);
+    assert!(inputs.len() == 1 && inputs[0].ndim() == 1);
     vec![arr1(&[inputs[0].iter().sum::<Fr>()]).into_dyn()]
   }
 
@@ -27,28 +27,18 @@ impl BasicBlock for SumBasicBlock {
     _rng: &mut StdRng,
     _cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
-    let input = inputs[0];
-    let l = input.len();
-    let m = input[0].raw.len();
+    let input = inputs[0].first().unwrap();
+    let m = input.raw.len();
     let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
-    let mut input_raw = vec![Fr::zero(); m];
-    let mut input_r = Fr::zero();
-    for i in 0..l {
-      for j in 0..m {
-        input_raw[j] += input[i].raw[j];
-      }
-      input_r += input[i].r;
-    }
-    let input_poly = DensePolynomial::from_coefficients_vec(domain_m.ifft(&input_raw)); // sum poly?
 
     let mut rng2 = StdRng::from_entropy();
     let zero_div_r = Fr::rand(&mut rng2);
-    let zero_div = if input_poly.is_zero() {
+    let zero_div = if input.poly.is_zero() {
       G1Projective::zero()
     } else {
-      util::msm::<G1Projective>(&srs.X1A, &input_poly.coeffs[1..])
+      util::msm::<G1Projective>(&srs.X1A, &input.poly.coeffs[1..])
     } + srs.Y1P * zero_div_r;
-    let C = -srs.X1P[1] * zero_div_r + srs.X1P[0] * (input_r - outputs[0].first().unwrap().r * Fr::from(m as u32).inverse().unwrap());
+    let C = -srs.X1P[1] * zero_div_r + srs.X1P[0] * (input.r - outputs[0].first().unwrap().r * Fr::from(m as u32).inverse().unwrap());
     return (vec![zero_div, C], vec![]);
   }
 
@@ -62,12 +52,13 @@ impl BasicBlock for SumBasicBlock {
     _rng: &mut StdRng,
     _cache: &mut ProveVerifyCache,
   ) -> Vec<PairingCheck> {
-    let m = inputs[0][0].len;
+    let input = inputs[0].first().unwrap();
+    let m = input.len;
     let [zero_div, C] = proof.0[..] else { panic!("Wrong proof format") };
 
-    let input: G1Projective = inputs[0].iter().map(|x| x.g1).sum();
     let zero = outputs[0].first().unwrap().g1 * Fr::from(m as u32).inverse().unwrap();
+    let input_g1: G1Projective = input.g1.into();
 
-    vec![vec![((input - zero).into(), srs.X2A[0]), (-zero_div, srs.X2A[1]), (-C, srs.Y2A)]]
+    vec![vec![((input_g1 - zero).into(), srs.X2A[0]), (-zero_div, srs.X2A[1]), (-C, srs.Y2A)]]
   }
 }
