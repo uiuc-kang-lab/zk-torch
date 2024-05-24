@@ -99,6 +99,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
       "Pow" => Ok(PowLayer::graph(&input_shapes, &my_constants)),
       "Div" => Ok(DivLayer::graph(&input_shapes, &my_constants)),
       "Sqrt" => Ok(SqrtLayer::graph(&input_shapes, &my_constants)),
+      "Reshape" => Ok(ReshapeLayer::graph(&input_shapes, &my_constants)),
       _ => Err(format!("Unsupported onnx operation: {op}")),
     }
     .unwrap();

@@ -107,7 +107,7 @@ fn verify(srs: &SRS, graph: &Graph) {
 
 fn main() {
   let srs = &ptau::load_file("challenge14", 14, 14);
-  let (mut graph, models) = onnx::load_file("sample_div.onnx");
+  let (mut graph, models) = onnx::load_file("sample_reshape.onnx");
   let mut rng = StdRng::from_entropy();
   let input: Vec<Fr> = (0..32).map(|_| Fr::from(rng.gen_range(-4..4))).collect();
   let input = ArrayD::from_shape_vec(vec![4, 2, 4], input).unwrap();

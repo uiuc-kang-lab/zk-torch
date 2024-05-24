@@ -11,7 +11,7 @@ impl Layer for ReLULayer {
     let relu = graph.addBB(Box::new(ReLUBasicBlock { input_SF: 3, output_SF: 3 }));
     let relu_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
-        setup: Some((Box::new(ReLUBasicBlock { input_SF: 3, output_SF: 3 }), -(1 << 5), 1 << 6)),
+        setup: Some((Box::new(ReLUBasicBlock { input_SF: 3, output_SF: 3 }), -(1 << 6), 1 << 7)),
       }),
       N: 1,
     }));
