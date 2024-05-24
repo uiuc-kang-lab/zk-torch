@@ -1,11 +1,13 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
-use crate::util;
+use ark_bn254::Fr;
+use ndarray::ArrayD;
+use tract_onnx::pb::AttributeProto;
 
 pub struct ReduceMeanLayer;
 impl Layer for ReduceMeanLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let sum = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(SumBasicBlock {}),
@@ -20,8 +22,8 @@ impl Layer for ReduceMeanLayer {
           Box::new(DivConstBasicBlock {
             c: input_shapes[0][input_shapes[0].len() - 1] as f32,
           }),
-          -(1 << 13),
-          1 << 14,
+          -(1 << 14),
+          1 << 15,
         )),
       }),
       N: 1,
@@ -31,6 +33,8 @@ impl Layer for ReduceMeanLayer {
     let _ = graph.addNode(div_check, vec![(sum_output, 0), (div_output, 0)]);
     graph.outputs.push((div_output, 0));
 
-    (graph, vec![input_shapes[0][..input_shapes[0].len() - 1].to_vec()])
+    let mut outputShape = input_shapes[0].clone();
+    outputShape[input_shapes[0].len() - 1] = 1;
+    (graph, vec![outputShape])
   }
 }

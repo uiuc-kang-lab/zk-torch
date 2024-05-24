@@ -9,7 +9,7 @@ impl BasicBlock for AddBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 2 && inputs[0].ndim() <= 1 && inputs[1].ndim() <= 1);
     let mut r = ArrayD::zeros(IxDyn(&[std::cmp::max(inputs[0].len(), inputs[1].len())]));
-    if inputs[0].len() == 1 {
+    if inputs[0].len() == 1 && inputs[1].ndim() > 0 {
       azip!((r in &mut r, &x in inputs[1]) *r = x + inputs[0].first().unwrap());
     } else if inputs[1].len() == 1 {
       azip!((r in &mut r, &x in inputs[0]) *r = x + inputs[1].first().unwrap());
