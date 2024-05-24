@@ -51,7 +51,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
     local_graph.basic_blocks = vec![];
     for basic_block in temp.into_iter() {
       let name = format!("{basic_block:?}");
-      let idx = *basic_blocks_idx.entry(name).or_insert(graph.basic_blocks.len());
+      let idx = *basic_blocks_idx.entry(name).or_insert_with(|| graph.basic_blocks.len());
       local_block_idx.push(idx);
       if idx == graph.basic_blocks.len() {
         setups.push(basic_block.genModel());

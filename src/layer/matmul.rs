@@ -1,7 +1,6 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
-use std::collections::HashMap;
 
 pub struct MatMulLayer;
 impl Layer for MatMulLayer {
@@ -10,7 +9,6 @@ impl Layer for MatMulLayer {
     let matmul = graph.addBB(Box::new(MatMulBasicBlock {}));
     let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock { input_SF: 6, output_SF: 3 }));
     let change_SF_check = graph.addBB(Box::new(CQ2BasicBlock {
-      table_dict: HashMap::new(),
       setup: Some((Box::new(ChangeSFBasicBlock { input_SF: 6, output_SF: 3 }), -(1 << 5), 1 << 6)),
     }));
     let matmul_output = graph.addNode(matmul, vec![(-1, 0), (-2, 0)]);

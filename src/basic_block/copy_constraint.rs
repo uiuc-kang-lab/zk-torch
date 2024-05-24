@@ -3,7 +3,7 @@
 use super::{BasicBlock, Data, DataEnc, SRS};
 use crate::{
   util::{self, calc_pow},
-  PairingCheck,
+  PairingCheck, ProveVerifyCache,
 };
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::{pairing::Pairing, AffineRepr};
@@ -179,6 +179,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
+    _cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let input = inputs[0];
     let output = outputs[0];
@@ -315,6 +316,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
+    _cache: &mut ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let input = inputs[0].first().unwrap();

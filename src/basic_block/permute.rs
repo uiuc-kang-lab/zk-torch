@@ -1,10 +1,10 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{BasicBlock, Data, DataEnc, PairingCheck, SRS};
+use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util::{self, calc_pow};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
-use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
+use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{ops::Mul, ops::Sub, UniformRand, Zero};
 use ndarray::{Array, ArrayD, Axis};
 use rand::{rngs::StdRng, SeedableRng};
@@ -41,8 +41,12 @@ impl BasicBlock for PermuteBasicBlock {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
+    cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
-    let alpha = Fr::rand(rng);
+    let CacheValues::RLCRandom(alpha) = cache.entry("permute_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
+      panic!("Cache type error")
+    };
+    let alpha = alpha.clone();
     let (input, output) = (inputs[0], outputs[0]);
 
     // n rows, m columns in input
@@ -55,10 +59,26 @@ impl BasicBlock for PermuteBasicBlock {
     let domain_m2 = GeneralEvaluationDomain::<Fr>::new(m2).unwrap();
 
     let alpha_pow = calc_pow(alpha, n * m);
-    let b: Vec<_> = (0..m).map(|i| alpha_pow[i * n]).collect();
-    let b = Data::new(srs, &b);
-    let d: Vec<_> = (0..m2).map(|i| alpha_pow[self.permutation.1[i]]).collect();
-    let d = Data::new(srs, &d);
+
+    let CacheValues::Data(b) = cache.entry(format!("permute_b_msm_{m}_{n}")).or_insert_with(|| {
+      CacheValues::Data({
+        let b: Vec<_> = (0..m).map(|i| alpha_pow[i * n]).collect();
+        Data::new(srs, &b)
+      })
+    }) else {
+      panic!("Cache type error")
+    };
+    let b = b.clone();
+
+    let CacheValues::Data(d) = cache.entry(format!("permute_d_msm_{self:p}")).or_insert_with(|| {
+      CacheValues::Data({
+        let d: Vec<_> = (0..m2).map(|i| alpha_pow[self.permutation.1[i]]).collect();
+        Data::new(srs, &d)
+      })
+    }) else {
+      panic!("Cache type error")
+    };
+    let d = d.clone();
 
     let mut flat_L = vec![Fr::zero(); m];
     let mut flat_L_r = Fr::zero();
@@ -84,24 +104,28 @@ impl BasicBlock for PermuteBasicBlock {
 
     // Calculate Left
     let left_raw: Vec<Fr> = (0..m).map(|i| flat_L.raw[i] * alpha_pow[i * n]).collect();
-    let left_poly = DensePolynomial {
-      coeffs: domain_m.ifft(&left_raw),
-    };
+    let left_poly = DensePolynomial::from_coefficients_vec(domain_m.ifft(&left_raw));
     let left_x = util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs);
     let left_Q_poly = flat_L.poly.mul(&b.poly).sub(&left_poly).divide_by_vanishing_poly(domain_m).unwrap().0;
     let left_Q_x = util::msm::<G1Projective>(&srs.X1A, &left_Q_poly.coeffs);
     let left_zero = srs.X1A[0] * (Fr::from(m as u32).inverse().unwrap() * left_raw.iter().sum::<Fr>());
-    let left_zero_div = util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs[1..]);
+    let left_zero_div = if left_poly.is_zero() {
+      G1Projective::zero()
+    } else {
+      util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs[1..])
+    };
 
     // Calculate Right
     let right_raw: Vec<Fr> = (0..m2).map(|i| flat_R.raw[i] * alpha_pow[self.permutation.1[i]]).collect();
-    let right_poly = DensePolynomial {
-      coeffs: domain_m2.ifft(&right_raw),
-    };
+    let right_poly = DensePolynomial::from_coefficients_vec(domain_m2.ifft(&right_raw));
     let right_x = util::msm::<G1Projective>(&srs.X1A, &right_poly.coeffs);
     let right_Q_poly = flat_R.poly.mul(&d.poly).sub(&right_poly).divide_by_vanishing_poly(domain_m2).unwrap().0;
     let right_Q_x = util::msm::<G1Projective>(&srs.X1A, &right_Q_poly.coeffs);
-    let right_zero_div = util::msm::<G1Projective>(&srs.X1A, &right_poly.coeffs[1..]);
+    let right_zero_div = if right_poly.is_zero() {
+      G1Projective::zero()
+    } else {
+      util::msm::<G1Projective>(&srs.X1A, &right_poly.coeffs[1..])
+    };
 
     // Blinding
     let mut rng2 = StdRng::from_entropy();
@@ -127,9 +151,13 @@ impl BasicBlock for PermuteBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
+    cache: &mut ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
-    let alpha = Fr::rand(rng);
+    let CacheValues::RLCRandom(alpha) = cache.entry("permute_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
+      panic!("Cache type error")
+    };
+    let alpha = alpha.clone();
     let (input, output) = (inputs[0], outputs[0]);
 
     // n rows, m columns in input
@@ -150,10 +178,21 @@ impl BasicBlock for PermuteBasicBlock {
     let c: Vec<_> = (0..n2).map(|i| alpha_pow[self.permutation.0[i]]).collect();
     let d: Vec<_> = (0..m2).map(|i| alpha_pow[self.permutation.1[i]]).collect();
 
-    let b_coeff = domain_m.ifft(&b);
-    let b_g2: G2Affine = util::msm::<G2Projective>(&srs.X2A, &b_coeff).into();
-    let d_coeff = domain_m2.ifft(&d);
-    let d_g2: G2Affine = util::msm::<G2Projective>(&srs.X2A, &d_coeff).into();
+    let CacheValues::G2(b_g2) = cache
+      .entry(format!("permute_b_msm_g2_{m}_{n}"))
+      .or_insert_with(|| CacheValues::G2(util::msm::<G2Projective>(&srs.X2A, &domain_m.ifft(&b)).into()))
+    else {
+      panic!("Cache type error")
+    };
+    let b_g2 = b_g2.clone();
+
+    let CacheValues::G2(d_g2) = cache
+      .entry(format!("permute_d_msm_g2_{self:p}"))
+      .or_insert_with(|| CacheValues::G2(util::msm::<G2Projective>(&srs.X2A, &domain_m2.ifft(&d)).into()))
+    else {
+      panic!("Cache type error")
+    };
+    let d_g2 = d_g2.clone();
 
     // Calculate flat_L
     let temp: Vec<_> = (0..n).map(|i| input[i].g1).collect();
