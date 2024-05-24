@@ -97,7 +97,7 @@ impl Graph {
         let myInputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
         let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng);
         let mut bytes = Vec::new();
-        let temp: (Vec<G1Affine>, Vec<G2Affine>) = (proofs[i].0.clone(), proofs[i].1.clone());
+        let temp: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (proofs[i].0.clone(), proofs[i].1.clone(), proofs[i].2.clone());
         temp.serialize_uncompressed(&mut bytes).unwrap();
         util::add_randomness(rng, bytes);
         pairings
