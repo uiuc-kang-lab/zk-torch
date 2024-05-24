@@ -19,11 +19,13 @@ pub use ops::*;
 pub use permute::PermuteBasicBlock;
 use rand::{rngs::StdRng, SeedableRng};
 pub use repeater::RepeaterBasicBlock;
+pub use reshape::ReshapeBasicBlock;
 pub use rope::RoPEBasicBlock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 pub use sub::SubBasicBlock;
 pub use sum::SumBasicBlock;
+pub use transpose::TransposeBasicBlock;
 pub mod add;
 pub mod constant;
 pub mod cq;
@@ -37,9 +39,11 @@ pub mod mul;
 pub mod ops;
 pub mod permute;
 pub mod repeater;
+pub mod reshape;
 pub mod rope;
 pub mod sub;
 pub mod sum;
+pub mod transpose;
 
 pub struct SRS {
   pub X1A: Vec<G1Affine>,
@@ -97,7 +101,7 @@ impl Data {
   }
 }
 
-#[derive(Clone, Deserialize, Serialize, Debug)]
+#[derive(Clone, Deserialize, Serialize, Debug, PartialEq)]
 pub struct DataEnc {
   pub len: usize,
   #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]

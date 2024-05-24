@@ -1,7 +1,6 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
-use crate::util;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 
