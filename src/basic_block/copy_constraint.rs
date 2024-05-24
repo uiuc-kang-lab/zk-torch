@@ -67,7 +67,7 @@ fn construct_ssig_coeffs(idxs: &[(usize, usize)], partitions: &HashMap<usize, Ve
 pub struct CopyConstraintBasicBlock {
   pub permutation: ArrayD<IxDyn>,
   pub partitions: HashMap<usize, Vec<usize>>,
-  pub input_dim: IxDyn, // last dim
+  pub input_dim: IxDyn,
   pub output_dim: IxDyn,
 }
 
