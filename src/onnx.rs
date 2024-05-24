@@ -87,7 +87,6 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
 
   for node in onnx_graph.node.iter().filter(|node| node.op_type.as_str() != "Constant") {
     let op = node.op_type.as_str();
-    println!("{:?}", op);
     let input_shapes: Vec<_> = node.input.iter().map(|x| &shapes[x]).collect();
     let my_constants = node.input.iter().map(|x| constants_hashmap.get(x).map(|&y| &setups[y])).collect();
     let (mut local_graph, output_shapes) = match op {
@@ -98,6 +97,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
       "Gather" => Ok(GatherLayer::graph(&input_shapes, &my_constants)),
       "ReduceMean" => Ok(ReduceMeanLayer::graph(&input_shapes, &my_constants)),
       "Pow" => Ok(PowLayer::graph(&input_shapes, &my_constants)),
+      "Div" => Ok(DivLayer::graph(&input_shapes, &my_constants)),
       "Sqrt" => Ok(SqrtLayer::graph(&input_shapes, &my_constants)),
       _ => Err(format!("Unsupported onnx operation: {op}")),
     }

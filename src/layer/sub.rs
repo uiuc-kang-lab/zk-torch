@@ -15,6 +15,6 @@ impl Layer for SubLayer {
     }));
     let add_output = graph.addNode(add, vec![(-1, 0), (-2, 0)]);
     graph.outputs.push((add_output, 0));
-    (graph, vec![util::broadcastDims(input_shapes, 1)])
+    (graph, vec![util::broadcastDims(input_shapes, 0)])
   }
 }
