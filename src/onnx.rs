@@ -89,17 +89,19 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
     let op = node.op_type.as_str();
     let input_shapes: Vec<_> = node.input.iter().map(|x| &shapes[x]).collect();
     let my_constants = node.input.iter().map(|x| constants_hashmap.get(x).map(|&y| &setups[y])).collect();
+    let my_attributes = node.attribute.iter().map(|x| x).collect();
     let (mut local_graph, output_shapes) = match op {
-      "Add" => Ok(AddLayer::graph(&input_shapes, &my_constants)),
-      "Sub" => Ok(SubLayer::graph(&input_shapes, &my_constants)),
-      "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &my_constants)),
-      "Relu" => Ok(ReLULayer::graph(&input_shapes, &my_constants)),
-      "Gather" => Ok(GatherLayer::graph(&input_shapes, &my_constants)),
-      "ReduceMean" => Ok(ReduceMeanLayer::graph(&input_shapes, &my_constants)),
-      "Pow" => Ok(PowLayer::graph(&input_shapes, &my_constants)),
-      "Div" => Ok(DivLayer::graph(&input_shapes, &my_constants)),
-      "Sqrt" => Ok(SqrtLayer::graph(&input_shapes, &my_constants)),
-      "Reshape" => Ok(ReshapeLayer::graph(&input_shapes, &my_constants)),
+      "Add" => Ok(AddLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Sub" => Ok(SubLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Relu" => Ok(ReLULayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Gather" => Ok(GatherLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "ReduceMean" => Ok(ReduceMeanLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Pow" => Ok(PowLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Div" => Ok(DivLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Sqrt" => Ok(SqrtLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Reshape" => Ok(ReshapeLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Transpose" => Ok(TransposeLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       _ => Err(format!("Unsupported onnx operation: {op}")),
     }
     .unwrap();

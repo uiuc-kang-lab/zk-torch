@@ -3,10 +3,11 @@ use crate::graph::*;
 use crate::layer::Layer;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
+use tract_onnx::pb::AttributeProto;
 
 pub struct SqrtLayer;
 impl Layer for SqrtLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let sqrt = graph.addBB(Box::new(SqrtBasicBlock { input_SF: 3, output_SF: 3 }));
     let sqrt_check = graph.addBB(Box::new(RepeaterBasicBlock {

@@ -3,10 +3,11 @@ use crate::graph::*;
 use crate::layer::Layer;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
+use tract_onnx::pb::AttributeProto;
 
 pub struct ReduceMeanLayer;
 impl Layer for ReduceMeanLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let sum = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(SumBasicBlock {}),

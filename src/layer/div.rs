@@ -4,10 +4,11 @@ use crate::layer::Layer;
 use crate::onnx;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
+use tract_onnx::pb::AttributeProto;
 
 pub struct DivLayer;
 impl Layer for DivLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
     assert!(input_shapes[1][input_shapes[1].len() - 1] == 1);
     let mut graph = Graph::new();
     let div = graph.addBB(Box::new(RepeaterBasicBlock {
