@@ -11,6 +11,7 @@ use ark_ff::Field;
 use ark_poly::{
   evaluations::univariate::Evaluations, univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain, Polynomial,
 };
+use ark_serialize::CanonicalSerialize;
 use ark_std::{
   ops::{Add, Mul, Sub},
   One, UniformRand, Zero,
@@ -192,6 +193,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let N = input_len;
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
 
+    // Round 1: quotients
     let beta = Fr::rand(rng);
     let gamma = Fr::rand(rng);
 
@@ -245,6 +247,16 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let Q = lhs.sub(&rhs).divide_by_vanishing_poly(domain).unwrap();
     let Q_x = util::msm::<G1Projective>(&srs.X1A, &Q.0.coeffs);
 
+    // Round 2: openings
+    // Fiat-Shamir
+    let mut bytes = Vec::new();
+    let mut rng2 = StdRng::from_entropy();
+    let mut r: Vec<_> = (0..3).map(|_| Fr::rand(&mut rng2)).collect();
+    let proof = vec![Z_x, L0Z_Q_x, Q_x];
+    let mut proof: Vec<_> = proof.iter().enumerate().map(|(i, x)| (*x) + srs.Y1P * r[i]).collect();
+    proof.serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+
     // Multipoint opening argument for Z over omega * a
     let omega = domain.group_gen();
     let a = Fr::rand(rng);
@@ -289,7 +301,9 @@ impl BasicBlock for CopyConstraintBasicBlock {
 
     // Blinding
     let mut rng2 = StdRng::from_entropy();
-    let r: Vec<_> = (0..6).map(|_| Fr::rand(&mut rng2)).collect();
+    let mut r1: Vec<_> = (0..3).map(|_| Fr::rand(&mut rng2)).collect();
+    proof.append(&mut vec![q1_Q_x, Z_Q_x, r_Q_x].iter().enumerate().map(|(i, x)| (*x) + srs.Y1P * r1[i]).collect());
+    r.append(&mut r1);
     let opening_r: Fr = inputs[0].iter().chain(outputs[0].iter()).enumerate().map(|(i, x)| x.r * bs[ssig_polys.len() + i]).sum();
     let mut C: Vec<G1Projective> = vec![
       setup.0[0] * r[0] - (srs.X1P[N] - srs.X1P[0]) * r[1],
@@ -297,8 +311,6 @@ impl BasicBlock for CopyConstraintBasicBlock {
       srs.X1P[0] * opening_r - (srs.X1P[1] - (srs.X1P[0] * a)) * r[3],
       srs.X1P[0] * r[0] - (srs.X1P[1] - (srs.X1P[0] * a * omega)) * r[4],
     ];
-    let proof: Vec<G1Projective> = vec![Z_x, L0Z_Q_x, Q_x, q1_Q_x, Z_Q_x, r_Q_x];
-    let mut proof: Vec<_> = proof.iter().enumerate().map(|(i, x)| (*x) + srs.Y1P * r[i]).collect();
     proof.append(&mut C);
     let mut s_1s = setup.0[1..].iter().map(|x| Into::<G1Projective>::into(*x)).collect();
     proof.append(&mut s_1s);
@@ -324,11 +336,6 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
     let omega = domain.group_gen();
 
-    let beta = Fr::rand(rng);
-    let gamma = Fr::rand(rng);
-    let a = Fr::rand(rng);
-    let b = Fr::rand(rng);
-
     let [Z_x, L0Z_Q_x, Q_x, q1_Q_x, Z_Q_x, r_Q_x, C1, C2, C3, C4, sid_x] = proof.0[..11] else {
       panic!("Wrong proof format")
     };
@@ -340,6 +347,17 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let sid_a = q1_evals[0];
     let ssig_as = &q1_evals[1..ssig_xs.len() + 1];
     let fj_as = &q1_evals[ssig_xs.len() + 1..];
+
+    // Round 1 randomness
+    let beta = Fr::rand(rng);
+    let gamma = Fr::rand(rng);
+
+    // Round 2 randomness
+    let mut bytes = Vec::new();
+    vec![Z_x, L0Z_Q_x, Q_x].serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+    let a = Fr::rand(rng);
+    let b = Fr::rand(rng);
 
     // Check L0(x)(Z(x) - 1) = V(x)Q(x)
     checks.push(vec![
