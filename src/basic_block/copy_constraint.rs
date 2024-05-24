@@ -28,6 +28,10 @@ use std::{
 fn flat_index(shape: &IxDyn, idx: &IxDyn, N: usize) -> usize {
   assert!(shape.ndim() == idx.ndim());
   let mut product = vec![];
+  // If inputs and outputs do not have the same last dimension, then the one
+  // with the smaller dimension will have had their polynomials constructed from
+  // a smaller evaluation domain. This indexing enables the smaller dimension's
+  // roots of unity evaluation values to line up to the larger one.
   let spacing = N / shape[shape.ndim() - 1];
   for d in 0..shape.ndim() {
     if d == 0 {
@@ -40,9 +44,10 @@ fn flat_index(shape: &IxDyn, idx: &IxDyn, N: usize) -> usize {
   idx.as_array_view().iter().enumerate().fold(0, |sum, (i, x)| *x * product[i] + sum)
 }
 
+// Construct S_sigma_j polynomial evals over N-th roots of unity
 // If is_input, idxs is [(flat_idx of the input index, 0)]. Otherwise,
 // idxs is [(flat_idx of the output, flat_idx of the permuted input idx)]
-fn construct_ssig_coeffs(idxs: &[(usize, usize)], partitions: &HashMap<usize, Vec<usize>>, is_input: bool) -> Vec<Fr> {
+fn construct_ssig(idxs: &[(usize, usize)], N: usize, last_dim: usize, partitions: &HashMap<usize, Vec<usize>>, is_input: bool) -> Vec<Fr> {
   idxs
     .iter()
     .flat_map(|(idx, perm_idx)| {
@@ -56,9 +61,10 @@ fn construct_ssig_coeffs(idxs: &[(usize, usize)], partitions: &HashMap<usize, Ve
         }
       };
       let sigma = sigma.unwrap();
-      let ssig = Fr::from(sigma as i32);
-
-      vec![ssig]
+      let mut ssig = vec![Fr::from(sigma as i32)];
+      let mut padding: Vec<_> = (1..N / last_dim).map(|i| Fr::from((i + *idx) as i32)).collect();
+      ssig.append(&mut padding);
+      ssig
     })
     .collect()
 }
@@ -67,7 +73,6 @@ fn construct_ssig_coeffs(idxs: &[(usize, usize)], partitions: &HashMap<usize, Ve
 #[derive(Debug)]
 pub struct CopyConstraintBasicBlock {
   pub permutation: ArrayD<IxDyn>,
-  pub partitions: HashMap<usize, Vec<usize>>,
   pub input_dim: IxDyn,
   pub output_dim: IxDyn,
 }
@@ -76,34 +81,13 @@ impl BasicBlock for CopyConstraintBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1);
     assert!(Dim(self.permutation.shape()) == self.output_dim);
-
-    // The basic block inputs and outputs will be scaled to the same degree,
-    // meaning that the last dimensions will be the same.
-    // permutation will correspond to the actual padded dimensions for the
-    // intput and output, so we need to adjust the input and output indices
-    // to correspond to permutation and fill in the output values that are
-    // not part of the actual permutation
-    let last_inp_dim = self.input_dim[self.input_dim.ndim() - 1];
-    let last_outp_dim = self.output_dim[self.output_dim.ndim() - 1];
-    let N = max(self.input_dim[self.input_dim.ndim() - 1], self.output_dim[self.output_dim.ndim() - 1]);
-    let mut outp_shape = self.permutation.shape().to_vec().clone();
-    outp_shape[last_outp_dim - 1] = N;
-    vec![ArrayD::from_shape_fn(outp_shape, |i| {
-      let mut outp_idx = i.clone();
-      outp_idx[self.output_dim.ndim() - 1] = outp_idx[self.output_dim.ndim() - 1] * last_outp_dim / N;
-
-      if i[i.ndim() - 1] % (N / last_outp_dim) == 0 {
-        let mut inp_idx = self.permutation[&outp_idx].clone();
-        inp_idx[self.input_dim.ndim() - 1] = inp_idx[self.input_dim.ndim() - 1] * N / last_inp_dim;
-        inputs[0][&self.permutation[outp_idx]]
-      } else {
-        Fr::zero()
-      }
-    })]
+    vec![ArrayD::from_shape_fn(self.permutation.shape(), |i| inputs[0][&self.permutation[i]])]
   }
 
   fn setup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
-    let N = max(self.input_dim[self.input_dim.ndim() - 1], self.output_dim.ndim() - 1);
+    let last_inp_dim = self.input_dim[self.input_dim.ndim() - 1];
+    let last_outp_dim = self.output_dim[self.output_dim.ndim() - 1];
+    let N = max(last_inp_dim, last_outp_dim);
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
     let mut L_i_x_1 = srs.X1P[..N].to_vec();
     util::ifft_in_place(domain, &mut L_i_x_1);
@@ -119,8 +103,9 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let flat_outp_idxs = ArrayD::from_shape_vec(self.output_dim.clone(), flat_outp_idxs).unwrap();
     // Indices of the input which are in each position of the permutation
     let flat_perm_idxs = self.permutation.map(|i| flat_index(&self.input_dim, i, N));
-    let mut partitions = HashMap::new();
 
+    // Create partitions
+    let mut partitions = HashMap::new();
     for i in indices(self.input_dim.clone()).into_iter() {
       let idx = flat_index(&self.input_dim, &i, N);
       partitions.entry(idx).or_insert_with(|| Vec::from([idx]));
@@ -131,19 +116,20 @@ impl BasicBlock for CopyConstraintBasicBlock {
       partitions.entry(perm_idx).or_insert_with(|| Vec::from([perm_idx])).push(out_idx);
     }
 
+    // Calculate S_ID
     let sid: Vec<_> = (0..N).map(|x| Fr::from(x as i32)).collect();
     let sid_poly = DensePolynomial::from_coefficients_vec(domain.ifft(&sid));
     let sid_x = util::msm::<G1Projective>(&srs.X1A, &sid_poly.coeffs);
 
+    // Calculate S_sigma_js
     let inp_idxs: ArrayD<usize> = ArrayD::from_shape_fn(self.input_dim.clone(), |i| flat_index(&self.input_dim, &i, N));
     let mut inp_arr = ArrayD::from_elem(self.input_dim.clone(), (0, 0));
     Zip::from(&mut inp_arr).and(&inp_idxs).for_each(|r, &a| {
       *r = (a, 0 as usize);
     });
-
     let mut ssig: Vec<Vec<Fr>> = inp_arr
       .map_axis(Axis(self.input_dim.ndim() - 1), |x| {
-        construct_ssig_coeffs(x.as_slice().unwrap(), &partitions, true)
+        construct_ssig(x.as_slice().unwrap(), N, last_inp_dim, &partitions, true)
       })
       .into_iter()
       .collect();
@@ -156,7 +142,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     ssig.append(
       &mut outp_arr
         .map_axis(Axis(self.output_dim.ndim() - 1), |x| {
-          construct_ssig_coeffs(x.as_slice().unwrap(), &partitions, false)
+          construct_ssig(x.as_slice().unwrap(), N, last_outp_dim, &partitions, false)
         })
         .into_iter()
         .collect(),
@@ -165,7 +151,6 @@ impl BasicBlock for CopyConstraintBasicBlock {
 
     let mut proof_0 = vec![L_i_x_1[0], sid_x];
     proof_0.append(&mut ssig_polys.iter().map(|x| util::msm::<G1Projective>(&srs.X1A, &x.coeffs)).collect());
-
     let mut proof_2 = vec![sid_poly];
     proof_2.append(&mut ssig_polys);
 
@@ -187,16 +172,14 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let input_len = input.first().unwrap().raw.len();
     let output_len = output.first().unwrap().raw.len();
 
-    // Assumes that the input and output degrees are the same. To do this,
-    // we can permute the one with a smaller degree
-    assert!(input_len == output_len);
-    let N = input_len;
+    let N = max(input_len, output_len);
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
 
     // Round 1: quotients
     let beta = Fr::rand(rng);
     let gamma = Fr::rand(rng);
 
+    // Calculate fjs
     let fj_polys: Vec<_> = inputs[0].iter().chain(outputs[0].iter()).map(|x| &x.poly).collect();
     let sid_poly = &setup.2[0];
     let ssig_polys = &setup.2[1..];
@@ -212,12 +195,13 @@ impl BasicBlock for CopyConstraintBasicBlock {
       })
       .collect();
 
+    // Calculate gjs
     let gj1_polys: Vec<_> = fj_polys.iter().enumerate().map(|(i, x)| &ssig_polys[i].mul(&beta_poly) + *x + gamma_poly.clone()).collect();
 
     let f1_poly = fj1_polys.iter().fold(DensePolynomial::from_coefficients_vec(vec![Fr::one()]), |acc, x| acc.mul(x));
-
     let g1_poly = gj1_polys.iter().fold(DensePolynomial::from_coefficients_vec(vec![Fr::one()]), |acc, x| acc.mul(x));
 
+    // Calculate Z
     let mut Z = vec![Fr::zero(); N];
     Z[0] = Fr::one();
     for i in 1..N {
@@ -227,7 +211,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let Z_poly = DensePolynomial::from_coefficients_vec(domain.ifft(&Z));
     let Z_x = util::msm::<G1Projective>(&srs.X1A, &Z_poly.coeffs);
 
-    // Quotient for L0(X)(Z(X)-1) = 0
+    // Calculate quotient for L0(X)(Z(X)-1) = 0
     let mut L0_evals = vec![Fr::zero(); N];
     L0_evals[0] = Fr::one();
     let L0_poly = DensePolynomial {
@@ -238,7 +222,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let L0Z_Q = L0Z_poly.divide_by_vanishing_poly(domain).unwrap();
     let L0Z_Q_x = util::msm::<G1Projective>(&srs.X1A, &L0Z_Q.0.coeffs);
 
-    // Quotient for Z(x)f'(x) = Z(gx)g'(x)
+    // Calculate quotient for Z(x)f'(x) = Z(gx)g'(x)
     let Zg_poly = DensePolynomial {
       coeffs: Z_poly.coeffs.iter().enumerate().map(|(i, x)| x * &domain.element(i)).collect(),
     };
@@ -257,7 +241,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     proof.serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
 
-    // Multipoint opening argument for Z over omega * a
+    // Calculate opening argument for Z over omega * a
     let omega = domain.group_gen();
     let a = Fr::rand(rng);
     let Z_ga = Z_poly.evaluate(&(omega * a));
@@ -269,10 +253,10 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let Z_Q: DensePolynomial<_> = &temp / &Z_V;
     let Z_Q_x = util::msm::<G1Projective>(&srs.X1A, &Z_Q.coeffs);
 
+    // Calculate opening quotient for Z(x)f'(x) = Z(gx)g'(x) check
     let fj_poly_iter = fj_polys.iter().map(|x| *x);
     let mut q1_evals: Vec<Fr> = once(sid_poly).chain(ssig_polys.iter()).chain(fj_poly_iter.clone()).map(|p| p.evaluate(&a)).collect();
 
-    // Opening quotient for Z(x)f'(x) = Z(gx)g'(x) check
     let f1_a = f1_poly.evaluate(&a);
     let ssig_as = &q1_evals[1..ssig_polys.len() + 1];
     let fj_as = &q1_evals[ssig_polys.len() + 1..];
@@ -289,7 +273,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let r_Q = &(&(&lhs - &rhs) - &v) / &q1_V;
     let r_Q_x = util::msm::<G1Projective>(&srs.X1A, &r_Q.coeffs);
 
-    // Opening argument for fjs, sid, ssigs over a
+    // Calculate opening argument for fjs, sid, ssigs over a
     let b = Fr::rand(rng);
     let bs = calc_pow(b, ssig_polys.len() + fj_polys.len());
     let q1_poly: DensePolynomial<Fr> = ssig_polys.iter().chain(fj_poly_iter).enumerate().fold(sid_poly.clone(), |acc, (i, p)| acc + p.mul(bs[i]));
@@ -331,8 +315,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     _cache: &mut ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
-    let input = inputs[0].first().unwrap();
-    let N = input.len;
+    let N = max(inputs[0].first().unwrap().len, outputs[0].first().unwrap().len);
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
     let omega = domain.group_gen();
 

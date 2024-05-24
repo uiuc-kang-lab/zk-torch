@@ -3,14 +3,11 @@ use crate::{convert_to_data, ptau, util};
 use ark_bn254::{Bn254, Fr, G1Affine, G2Affine};
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_poly::univariate::DensePolynomial;
-use ark_std::One;
 use ark_std::UniformRand;
 use ark_std::Zero;
 use ndarray::{arr1, concatenate, s, ArrayD, Axis, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use std::collections::HashMap;
-
-use self::copy_constraint::CopyConstraintBasicBlock;
 
 fn testBasicBlock<BB: BasicBlock>(mut basic_block: BB, srs: &SRS, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) {
   let mut rng = StdRng::from_entropy();
@@ -98,10 +95,10 @@ fn testBasicBlocks() {
 fn test_copy_constraint() {
   let srs = &ptau::load_file("challenge", 7);
   let empty = ArrayD::zeros(IxDyn(&[0]));
+  // output dim padding
   testBasicBlock(
     CopyConstraintBasicBlock {
-      permutation: ArrayD::from_shape_vec(vec![2, 2], vec![IxDyn(&[1, 1]), IxDyn(&[1, 0]), IxDyn(&[0, 1]), IxDyn(&[0, 0])]).unwrap(),
-      partitions: HashMap::new(),
+      permutation: ArrayD::from_shape_vec(vec![2, 2], vec![IxDyn(&[1, 1]), IxDyn(&[1, 0]), IxDyn(&[1, 0]), IxDyn(&[0, 0])]).unwrap(),
       input_dim: IxDyn(&[2, 2]),
       output_dim: IxDyn(&[2, 2]),
     },
@@ -109,11 +106,20 @@ fn test_copy_constraint() {
     &empty,
     &vec![&ArrayD::from_shape_vec(vec![2, 2], (1..5).map(|x| Fr::from(x)).collect()).unwrap()],
   );
+  // 2d -> 3d
   testBasicBlock(
     CopyConstraintBasicBlock {
       permutation: ArrayD::from_shape_vec(
-        vec![2, 2, 2],
+        vec![2, 2, 4],
         vec![
+          IxDyn(&[1, 1]),
+          IxDyn(&[2, 0]),
+          IxDyn(&[3, 1]),
+          IxDyn(&[0, 0]),
+          IxDyn(&[1, 1]),
+          IxDyn(&[2, 0]),
+          IxDyn(&[3, 1]),
+          IxDyn(&[0, 0]),
           IxDyn(&[1, 1]),
           IxDyn(&[2, 0]),
           IxDyn(&[3, 1]),
@@ -125,14 +131,14 @@ fn test_copy_constraint() {
         ],
       )
       .unwrap(),
-      partitions: HashMap::new(),
       input_dim: IxDyn(&[4, 2]),
-      output_dim: IxDyn(&[2, 2, 2]),
+      output_dim: IxDyn(&[2, 2, 4]),
     },
     srs,
     &empty,
     &vec![&ArrayD::from_shape_vec(vec![4, 2], (1..9).map(|x| Fr::from(x)).collect()).unwrap()],
   );
+  // 3d -> 2d
   testBasicBlock(
     CopyConstraintBasicBlock {
       permutation: ArrayD::from_shape_vec(
@@ -149,12 +155,11 @@ fn test_copy_constraint() {
         ],
       )
       .unwrap(),
-      partitions: HashMap::new(),
-      input_dim: IxDyn(&[2, 2, 2]),
+      input_dim: IxDyn(&[2, 2, 4]),
       output_dim: IxDyn(&[4, 2]),
     },
     srs,
     &empty,
-    &vec![&ArrayD::from_shape_vec(vec![2, 2, 2], (1..9).map(|x| Fr::from(x)).collect()).unwrap()],
+    &vec![&ArrayD::from_shape_vec(vec![2, 2, 4], (1..17).map(|x| Fr::from(x)).collect()).unwrap()],
   );
 }
