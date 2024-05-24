@@ -47,7 +47,7 @@ fn flat_index(shape: &IxDyn, idx: &IxDyn, N: usize) -> usize {
 // Construct S_sigma_j polynomial evals over N-th roots of unity
 // which encodes the permutation function
 // In a copy-constraint, the permutation should form a cycle for all elements
-// that should be the same.
+// that should be the same over inputs and outputs.
 // If is_input, idxs is [(flat_idx of the input index, 0)]. Otherwise,
 // idxs is [(flat_idx of the output, flat_idx of the permuted input idx)]
 fn construct_ssig(idxs: &[(usize, usize)], N: usize, last_dim: usize, partitions: &HashMap<usize, Vec<usize>>, is_input: bool) -> Vec<Fr> {
@@ -65,7 +65,7 @@ fn construct_ssig(idxs: &[(usize, usize)], N: usize, last_dim: usize, partitions
       };
       let sigma = sigma.unwrap();
       let mut ssig = vec![Fr::from(sigma as i32)];
-      // Permute filler elements to themselves
+      // Permute each filler element to itself
       let mut padding: Vec<_> = (1..N / last_dim).map(|i| Fr::from((i + *idx) as i32)).collect();
       ssig.append(&mut padding);
       ssig
