@@ -1,22 +1,24 @@
 use crate::graph::Graph;
 pub use add::AddLayer;
 use ark_bn254::Fr;
+pub use div::DivLayer;
 pub use gather::GatherLayer;
 pub use matmul::MatMulLayer;
 use ndarray::ArrayD;
 pub use pow::PowLayer;
 pub use reducemean::ReduceMeanLayer;
 pub use relu::ReLULayer;
-pub use sub::SubLayer;
 pub use sqrt::SqrtLayer;
+pub use sub::SubLayer;
 
 pub mod add;
+pub mod div;
 pub mod gather;
 pub mod matmul;
 pub mod pow;
-pub mod sqrt;
 pub mod reducemean;
 pub mod relu;
+pub mod sqrt;
 pub mod sub;
 
 pub trait Layer {

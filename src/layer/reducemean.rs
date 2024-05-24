@@ -21,8 +21,8 @@ impl Layer for ReduceMeanLayer {
           Box::new(DivConstBasicBlock {
             c: input_shapes[0][input_shapes[0].len() - 1] as f32,
           }),
-          -(1 << 13),
-          1 << 14,
+          -(1 << 12),
+          1 << 13,
         )),
       }),
       N: 1,
@@ -32,6 +32,8 @@ impl Layer for ReduceMeanLayer {
     let _ = graph.addNode(div_check, vec![(sum_output, 0), (div_output, 0)]);
     graph.outputs.push((div_output, 0));
 
-    (graph, vec![input_shapes[0][..input_shapes[0].len() - 1].to_vec()])
+    let mut outputShape = input_shapes[0].clone();
+    outputShape[input_shapes[0].len() - 1] = 1;
+    (graph, vec![outputShape])
   }
 }
