@@ -92,6 +92,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
     let my_attributes = node.attribute.iter().map(|x| x).collect();
     let (mut local_graph, output_shapes) = match op {
       "Add" => Ok(AddLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Mul" => Ok(MulLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Sub" => Ok(SubLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Relu" => Ok(ReLULayer::graph(&input_shapes, &my_constants, &my_attributes)),
