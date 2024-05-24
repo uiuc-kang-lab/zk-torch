@@ -3,10 +3,11 @@ use crate::graph::*;
 use crate::layer::Layer;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
+use tract_onnx::pb::AttributeProto;
 
 pub struct PowLayer;
 impl Layer for PowLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     assert!(constants[1].unwrap().first().unwrap() == &Fr::from(2 * crate::onnx::SF as u32));
     let mul = graph.addBB(Box::new(RepeaterBasicBlock {
