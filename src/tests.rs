@@ -5,7 +5,7 @@ use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_poly::univariate::DensePolynomial;
 use ark_std::UniformRand;
 use ark_std::Zero;
-use ndarray::{arr1, concatenate, s, ArrayD, Axis, IxDyn};
+use ndarray::{arr0, concatenate, s, ArrayD, Axis, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use std::collections::HashMap;
 
@@ -48,13 +48,13 @@ fn testBasicBlock<BB: BasicBlock>(mut basic_block: BB, srs: &SRS, model: &ArrayD
 
 #[test]
 fn testBasicBlocks() {
-  let srs = &ptau::load_file("challenge", 7);
+  let srs = &ptau::load_file("challenge", 7, 7);
   let mut rng = StdRng::from_entropy();
   let N: usize = 1 << 6;
   let n: usize = 1 << 3;
   let a = ArrayD::from_shape_fn(IxDyn(&[N]), |_| Fr::rand(&mut rng));
   let a_n = a.slice(s![..n]).to_owned().into_dyn();
-  let a_1 = arr1(&[a[0]]).into_dyn();
+  let a_0 = arr0(a[0]).into_dyn();
   let b = ArrayD::from_shape_fn(IxDyn(&[N]), |_| Fr::rand(&mut rng));
   let b_n = b.slice(s![..n]).to_owned().into_dyn();
   let temp1 = a.view().into_shape(IxDyn(&[1, N])).unwrap();
@@ -66,13 +66,14 @@ fn testBasicBlocks() {
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a, &b]);
   testBasicBlock(MulBasicBlock {}, srs, &empty, &vec![&a, &b]);
   testBasicBlock(MulConstBasicBlock { c: 12345 }, srs, &empty, &vec![&a]);
-  testBasicBlock(MulScalarBasicBlock {}, srs, &empty, &vec![&a, &a_1]);
-  testBasicBlock(AddBasicBlock {}, srs, &empty, &vec![&a_1, &b]);
-  testBasicBlock(AddBasicBlock {}, srs, &empty, &vec![&b, &a_1]);
-  testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a_1, &b]);
-  testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&b, &a_1]);
+  testBasicBlock(MulScalarBasicBlock {}, srs, &empty, &vec![&a, &a_0]);
+  testBasicBlock(AddBasicBlock {}, srs, &empty, &vec![&a_0, &b]);
+  testBasicBlock(AddBasicBlock {}, srs, &empty, &vec![&b, &a_0]);
+  testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a_0, &b]);
+  testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&b, &a_0]);
   testBasicBlock(CQBasicBlock { setup: None }, srs, &a, &vec![&a_n]);
   testBasicBlock(CQ2BasicBlock { setup: None }, srs, &ab, &vec![&a_n, &b_n]);
+  testBasicBlock(SumBasicBlock {}, srs, &empty, &vec![&a]);
 
   let l: usize = 1 << 3;
   let m: usize = 1 << 2;
@@ -81,7 +82,6 @@ fn testBasicBlocks() {
   let b = ArrayD::from_shape_fn(IxDyn(&[n, m]), |_| Fr::rand(&mut rng));
   let c = ArrayD::from_shape_fn(IxDyn(&[m, n]), |_| Fr::rand(&mut rng));
   testBasicBlock(MatMulBasicBlock {}, srs, &empty, &vec![&a, &b]);
-  testBasicBlock(SumBasicBlock {}, srs, &empty, &vec![&a]);
   testBasicBlock(CQLinBasicBlock {}, srs, &c, &vec![&a]);
   let p1 = (vec![0], (0..l * m).collect::<Vec<_>>()); // Concatenate columns
   let p2 = (vec![0], (0..l * m).map(|i| (i % m) * l + (i / m)).collect::<Vec<_>>()); // Concatenate rows
@@ -93,7 +93,7 @@ fn testBasicBlocks() {
 
 #[test]
 fn test_copy_constraint() {
-  let srs = &ptau::load_file("challenge", 7);
+  let srs = &ptau::load_file("challenge", 7, 7);
   let empty = ArrayD::zeros(IxDyn(&[0]));
   // output dim padding
   testBasicBlock(

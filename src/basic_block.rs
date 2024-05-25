@@ -4,13 +4,13 @@ pub use add::AddBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::UniformRand;
+use ark_std::{UniformRand, Zero};
 pub use constant::ConstBasicBlock;
 pub use copy_constraint::CopyConstraintBasicBlock;
 pub use cq::CQBasicBlock;
 pub use cq2::CQ2BasicBlock;
 pub use cqlin::CQLinBasicBlock;
-pub use div::DivScalarBasicBlock;
+pub use div::{DivConstBasicBlock, DivScalarBasicBlock};
 pub use eq::EqBasicBlock;
 pub use matmul::MatMulBasicBlock;
 pub use max::MaxBasicBlock;
@@ -19,11 +19,14 @@ use ndarray::{ArrayD, IxDyn};
 pub use ops::*;
 pub use permute::PermuteBasicBlock;
 use rand::{rngs::StdRng, SeedableRng};
+pub use repeater::RepeaterBasicBlock;
+pub use reshape::ReshapeBasicBlock;
 pub use rope::RoPEBasicBlock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 pub use sub::SubBasicBlock;
 pub use sum::SumBasicBlock;
+pub use transpose::TransposeBasicBlock;
 pub mod add;
 pub mod constant;
 pub mod copy_constraint;
@@ -37,9 +40,12 @@ pub mod max;
 pub mod mul;
 pub mod ops;
 pub mod permute;
+pub mod repeater;
+pub mod reshape;
 pub mod rope;
 pub mod sub;
 pub mod sum;
+pub mod transpose;
 
 pub struct SRS {
   pub X1A: Vec<G1Affine>,
@@ -65,7 +71,7 @@ pub type ProveVerifyCache = HashMap<String, CacheValues>;
 
 pub type PairingCheck = Vec<(G1Affine, G2Affine)>;
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct Data {
   #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
   pub raw: Vec<Fr>,
@@ -82,7 +88,11 @@ impl Data {
     let N = raw.len();
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
     let f = DensePolynomial::from_coefficients_vec(domain.ifft(&raw));
-    let fx = util::msm::<G1Projective>(&srs.X1A, &f.coeffs);
+    let fx = if f.is_zero() {
+      G1Projective::zero()
+    } else {
+      util::msm(&srs.X1A, &f.coeffs)
+    };
     let mut rng = StdRng::from_entropy();
     return Data {
       raw: raw.to_vec(),
@@ -93,7 +103,7 @@ impl Data {
   }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, Debug, PartialEq)]
 pub struct DataEnc {
   pub len: usize,
   #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
