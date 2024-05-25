@@ -289,7 +289,7 @@ pub fn broadcastDims(dims: &Vec<&Vec<usize>>, N: usize) -> Vec<usize> {
     .collect()
 }
 
-fn next_pow(n: u32) -> u32 {
+pub fn next_pow(n: u32) -> u32 {
   let mut v = n;
   v -= 1;
   v |= v >> 1;

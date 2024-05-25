@@ -12,7 +12,13 @@ impl Layer for ReshapeLayer {
     let mut graph = Graph::new();
 
     let startShape = input_shapes[0];
-    let endShape: Vec<_> = constants[1].unwrap().as_slice().unwrap().iter().map(|x| util::fr_to_int(*x) as usize).filter(|x| *x != 0).collect();
+    let mut endShape: Vec<_> = constants[1].unwrap().as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).filter(|x| *x != 0).collect();
+    if let Some(i) = endShape.iter().position(|&x|x==-1){
+      let a = input_shapes[0].iter().fold(1, |x,&y| x * y) as i32;
+      let b = endShape.iter().fold(-1, |x,&y| x * y);
+      endShape[i] = a/b;
+    }
+    let endShape:Vec<_> = endShape.iter().map(|&x|x as usize).collect();
 
     if startShape.last() == endShape.last() {
       let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: endShape.clone() }));
@@ -25,6 +31,7 @@ impl Layer for ReshapeLayer {
       let mut intermediateShape = endShape[..n - 2].to_vec();
       intermediateShape.push(1);
       intermediateShape.push(*startShape.last().unwrap());
+      intermediateShape.iter_mut().for_each(|x|*x = util::next_pow(*x as u32) as usize);
       let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: intermediateShape }));
       let permutation = ((0..a).map(|x| x * b).collect(), (0..b).collect());
       let permute = graph.addBB(Box::new(RepeaterBasicBlock {
@@ -43,7 +50,8 @@ impl Layer for ReshapeLayer {
         basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
         N: 2,
       }));
-      let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: endShape.clone() }));
+      let intermediateShape = endShape.iter().map(|&x|util::next_pow(x as u32) as usize).collect();
+      let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: intermediateShape }));
       let intermediate = graph.addNode(permute, vec![(-1, 0)]);
       let output = graph.addNode(reshape, vec![(intermediate, 0)]);
       graph.outputs.push((output, 0));
