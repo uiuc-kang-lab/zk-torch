@@ -1,17 +1,30 @@
-#![allow(non_snake_case)]
-#![allow(non_upper_case_globals)]
-use crate::graph::Graph;
-use ark_bn254::{Fr, G1Affine, G2Affine};
+use ark_ff::BigInt;
+use ark_ff::BigInteger;
+use ark_ff::One;
+use ark_ff::Zero;
 use ark_poly::univariate::DensePolynomial;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use basic_block::*;
+use layer::conv::splat_input;
 use ndarray::ArrayD;
-use rand::{rngs::StdRng, Rng, SeedableRng};
-use rayon::prelude::*;
-use sha3::{Digest, Keccak256};
-use std::fs::{self, File};
-use std::io::Read;
-use util::convert_to_data;
+use ndarray::Dim;
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use std::{cmp::min, collections::HashMap, time::Instant};
+
+use ark_bn254::{
+  g1::{G1_GENERATOR_X, G1_GENERATOR_Y},
+  g2::{G2_GENERATOR_X, G2_GENERATOR_Y},
+  Fr, G1Affine, G1Projective, G2Affine, G2Projective,
+};
+use ark_ec::AffineRepr;
+use ark_std::UniformRand;
+use basic_block::*;
+use ndarray::{Array, IxDyn};
+use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
+
+use crate::basic_block::*;
+use crate::layer::conv::out_hw;
+use crate::layer::conv::splat_weights;
+use crate::util::*;
+
 mod basic_block;
 mod graph;
 mod layer;
@@ -21,107 +34,424 @@ mod ptau;
 mod tests;
 mod util;
 
-fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&ArrayD<Fr>>) {
-  // Run:
-  let outputs = graph.run(inputs, models);
+// fn generate_srs(N: usize) -> (Vec<G1Affine>, Vec<G2Affine>) {
+//   let mut srs = (vec![G1Affine::generator(); N], vec![G2Affine::generator(); N + 1]);
+//   let mut rng = StdRng::from_entropy();
+//   let x = Fr::rand(&mut rng);
+//   let mut xp = x;
+//   for i in 1..N {
+//     srs.0[i] = (srs.0[i] * xp).into();
+//     xp *= x;
+//   }
+//   xp = x;
+//   for i in 1..N + 1 {
+//     srs.1[i] = (srs.1[i] * xp).into();
+//     xp *= x;
+//   }
+//   (srs.0, srs.1)
+// }
 
-  // Setup:
-  let models: Vec<ArrayD<Data>> = models
-    .par_iter()
-    .enumerate()
-    .map(|(i, model)| {
-      println!("encode model {:?} {:?}", i, model.shape());
-      convert_to_data(srs, model)
-    })
-    .collect();
-  let models: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
-  let setups = graph.setup(srs, &models);
-
-  // Encode Data:
-  let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>)> = setups
-    .iter()
-    .map(|x| {
-      (
-        x.0.iter().map(|y| (*y).into()).collect(),
-        x.1.iter().map(|y| (*y).into()).collect(),
-        x.2.iter().map(|y| (y.clone())).collect(),
-      )
-    })
-    .collect();
-  let setups = setups.iter().map(|x| (&x.0, &x.1, &x.2)).collect();
-  let modelsEnc: Vec<ArrayD<DataEnc>> = models.iter().map(|model| (**model).map(|x| DataEnc::new(srs, x))).collect();
+fn testBasicBlock<BB: BasicBlock>(mut basic_block: BB, srs: &SRS, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) {
+  let mut rng = StdRng::from_entropy();
+  let outputs = basic_block.run(model, inputs);
+  let outputs: Vec<&ArrayD<Fr>> = outputs.iter().map(|x| x).collect();
+  let model = convert_to_data(srs, model);
+  let setup = basic_block.setup(srs, &model);
+  let setup: (Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>) = (
+    setup.0.iter().map(|y| (*y).into()).collect(),
+    setup.1.iter().map(|y| (*y).into()).collect(),
+    setup.2.iter().map(|y| (y.clone())).collect(),
+  );
+  let setup = (&setup.0, &setup.1, &setup.2);
   let inputs: Vec<ArrayD<Data>> = inputs.iter().map(|input| convert_to_data(srs, input)).collect();
   let inputs: Vec<&ArrayD<Data>> = inputs.iter().map(|input| input).collect();
-  let inputsEnc: Vec<ArrayD<DataEnc>> = inputs.iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect();
-  let outputs: Vec<Vec<&ArrayD<Fr>>> = outputs.iter().map(|output| output.iter().map(|x| x).collect()).collect();
-  let outputs: Vec<&Vec<&ArrayD<Fr>>> = outputs.iter().map(|output| output).collect();
-  let outputs: Vec<Vec<ArrayD<Data>>> = graph.encodeOutputs(srs, &models, &inputs, &outputs);
-  let outputs: Vec<Vec<&ArrayD<Data>>> = outputs.iter().map(|outputs| outputs.iter().map(|x| x).collect()).collect();
-  let outputs: Vec<&Vec<&ArrayD<Data>>> = outputs.iter().map(|x| x).collect();
-  let outputsEnc: Vec<Vec<ArrayD<DataEnc>>> =
-    outputs.iter().map(|output| (**output).iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect()).collect();
-
-  // Save files:
-  let modelsEncBytes = bincode::serialize(&modelsEnc).unwrap();
-  let inputsEncBytes = bincode::serialize(&inputsEnc).unwrap();
-  let outputsEncBytes = bincode::serialize(&outputsEnc).unwrap();
-  fs::write("modelsEnc", &modelsEncBytes).unwrap();
-  fs::write("inputsEnc", &inputsEncBytes).unwrap();
-  fs::write("outputsEnc", &outputsEncBytes).unwrap();
-
-  // Fiat-Shamir:
-  let mut hasher = Keccak256::new();
-  hasher.update(modelsEncBytes);
-  hasher.update(inputsEncBytes);
-  hasher.update(outputsEncBytes);
-  let mut buf = [0u8; 32];
-  hasher.finalize_into((&mut buf).into());
-  let mut rng = StdRng::from_seed(buf);
-
-  // Prove:
-  let proofs = graph.prove(srs, &setups, &models, &inputs, &outputs, &mut rng);
-  proofs.serialize_uncompressed(File::create("proofs").unwrap()).unwrap();
+  let outputs: Vec<ArrayD<Data>> = basic_block.encodeOutputs(srs, &model, &inputs, &outputs);
+  let outputs: Vec<&ArrayD<Data>> = outputs.iter().map(|output| output).collect();
+  let mut rng2 = rng.clone();
+  let mut cache = HashMap::new();
+  let proof = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng, &mut cache);
+  // let mut rng2 = rng.clone();
+  let start = Instant::now();
+  let proof = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng, &mut cache);
+  let prove_duration = start.elapsed();
+  println!("prove duration: {:?}", prove_duration);
+  // let proof: (Vec<G1Affine>, Vec<G2Affine>) = (
+  //   proof.0.iter().map(|y| (*y).into()).collect(),
+  //   proof.1.iter().map(|y| (*y).into()).collect(),
+  // );
+  // let proof = (&proof.0, &proof.1);
+  // let model: Vec<_> = model.iter().map(|x| DataEnc::new(srs, x)).collect();
+  // let model = model.iter().map(|x| x).collect();
+  // let inputs: Vec<_> = inputs.iter().map(|x| DataEnc::new(srs, x)).collect();
+  // let inputs = inputs.iter().map(|x| x).collect();
+  // let outputs: Vec<_> = outputs.iter().map(|x| DataEnc::new(srs, x)).collect();
+  // let outputs = outputs.iter().map(|x| x).collect();
+  // basic_block.verify(srs, &model, &inputs, &outputs, proof, &mut rng2);
 }
 
-fn verify(srs: &SRS, graph: &Graph) {
-  // Read Files:
-  let proofs = Vec::<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)>::deserialize_uncompressed_unchecked(File::open("proofs").unwrap()).unwrap();
-  let proofs = proofs.iter().map(|x| (&x.0, &x.1, &x.2)).collect();
-  let mut modelsEncBytes = Vec::new();
-  File::open("modelsEnc").unwrap().read_to_end(&mut modelsEncBytes).unwrap();
-  let modelsEnc: Vec<ArrayD<DataEnc>> = bincode::deserialize(&modelsEncBytes).unwrap();
-  let modelsEnc: Vec<&ArrayD<DataEnc>> = modelsEnc.iter().map(|model| model).collect();
-  let mut inputsEncBytes = Vec::new();
-  File::open("inputsEnc").unwrap().read_to_end(&mut inputsEncBytes).unwrap();
-  let inputsEnc: Vec<ArrayD<DataEnc>> = bincode::deserialize(&inputsEncBytes).unwrap();
-  let inputsEnc: Vec<&ArrayD<DataEnc>> = inputsEnc.iter().map(|input| input).collect();
-  let mut outputsEncBytes = Vec::new();
-  File::open("outputsEnc").unwrap().read_to_end(&mut outputsEncBytes).unwrap();
-  let outputsEnc: Vec<Vec<ArrayD<DataEnc>>> = bincode::deserialize(&outputsEncBytes).unwrap();
-  let outputsEnc: Vec<Vec<&ArrayD<DataEnc>>> = outputsEnc.iter().map(|output| output.iter().map(|x| x).collect()).collect();
-  let outputsEnc: Vec<&Vec<&ArrayD<DataEnc>>> = outputsEnc.iter().map(|x| x).collect();
-
-  // Fiat-Shamir:
-  let mut hasher = Keccak256::new();
-  hasher.update(modelsEncBytes);
-  hasher.update(inputsEncBytes);
-  hasher.update(outputsEncBytes);
-  let mut buf = [0u8; 32];
-  hasher.finalize_into((&mut buf).into());
-  let mut rng = StdRng::from_seed(buf);
-
-  // Verify:
-  graph.verify(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng);
+fn cq_bench(srs: &SRS) {
+  let t = CQ_DIM;
+  let a: Vec<_> = (0..t).into_par_iter().map(|i| Fr::from(i as u32)).collect();
+  let a = ArrayD::from_shape_vec(IxDyn(&[t]), a).unwrap();
+  let input: Vec<_> = (0..t)
+    .into_par_iter()
+    .map_init(rand::thread_rng, |rng, _| {
+      let r = rng.gen_range(0..t);
+      Fr::from(r as u32)
+    })
+    .collect();
+  let input = ArrayD::from_shape_vec(IxDyn(&[t]), input).unwrap();
+  testBasicBlock(CQBasicBlock { setup: None }, srs, &a, &vec![&input]);
 }
+
+fn conv_bench(srs: &SRS) {
+  let mut rng = StdRng::from_entropy();
+  let empty = ArrayD::zeros(IxDyn(&[0]));
+  for i in 0..CONV_INPUTS.len() {
+    let weights_dim = WEIGHTS_DIMS[i];
+    let ci = weights_dim[1];
+    let ch = weights_dim[2];
+    let cw = weights_dim[3];
+    let inputs = ArrayD::from_shape_fn(Dim(IxDyn(&CONV_INPUTS[i])), |_| Fr::from(rng.gen_range(-4..4)));
+    let permutation = splat_input(&CONV_INPUTS[i].to_vec(), &STRIDES[i].to_vec(), &PADS[i].to_vec(), ci, ch, cw);
+    let output_dim = permutation.dim();
+    let output_dim2 = permutation.dim();
+    println!("copy constraint: {:?} -> {:?}", inputs.dim(), output_dim);
+    testBasicBlock(
+      CopyConstraintBasicBlock {
+        permutation,
+        input_dim: inputs.dim(),
+        output_dim,
+      },
+      srs,
+      &empty,
+      &vec![&inputs],
+    );
+
+    let splat_inputs = ArrayD::from_shape_fn(output_dim2, |_| Fr::from(rng.gen_range(-4..4)));
+    let weights = ArrayD::from_shape_fn(Dim(IxDyn(&WEIGHTS_DIMS[i])), |_| Fr::from(rng.gen_range(-4..4)));
+    let splat_weights = splat_weights(&weights);
+    println!("cqlin: {:?} x {:?}", splat_inputs.dim(), splat_weights.dim());
+    testBasicBlock(CQLinBasicBlock {}, srs, &splat_weights, &vec![&splat_inputs]);
+
+    let bias = ArrayD::from_shape_fn(Dim(IxDyn(&[splat_weights.shape()[1]])), |_| Fr::from(rng.gen_range(-4..4)));
+    let inputs = ArrayD::from_shape_fn(Dim(IxDyn(&[splat_inputs.shape()[0], splat_weights.shape()[1]])), |_| {
+      Fr::from(rng.gen_range(-4..4))
+    });
+    println!("add: {:?} x {:?}", inputs.dim(), bias.dim());
+    testBasicBlock(
+      RepeaterBasicBlock {
+        basic_block: Box::new(AddBasicBlock {}),
+        N: 1,
+      },
+      srs,
+      &empty,
+      &vec![&inputs, &bias],
+    );
+
+    let padding = vec![[0, 0], [0, 0], [PADS[i][0], PADS[i][2]], [PADS[i][1], PADS[i][3]]];
+    let (oh, ow) = out_hw(
+      CONV_INPUTS[i][2],
+      CONV_INPUTS[i][3],
+      STRIDES[i][0],
+      STRIDES[i][1],
+      WEIGHTS_DIMS[i][2],
+      WEIGHTS_DIMS[i][3],
+      &padding,
+    );
+    let permutation = ArrayD::from_shape_fn(IxDyn(&[1, bias.shape()[0], oh, ow]), |_| IxDyn(&[0, 0]));
+    let (m, n) = (oh.next_power_of_two(), ow.next_power_of_two());
+    let padding = vec![[0, 0], [0, 0], [0, m - permutation.shape()[2]], [0, n - permutation.shape()[3]]];
+    let permutation = layer::conv::pad(&permutation, &padding, &IxDyn(&[0, 0]));
+    let output_dim = permutation.dim();
+    println!("copy constraint: {:?} -> {:?}", inputs.dim(), output_dim);
+    testBasicBlock(
+      CopyConstraintBasicBlock {
+        permutation,
+        input_dim: inputs.dim(),
+        output_dim,
+      },
+      srs,
+      &empty,
+      &vec![&inputs],
+    );
+  }
+}
+
+const CONV_INPUTS: [[usize; 4]; 52] = [
+  [1, 4, 256, 256],
+  [1, 32, 128, 128],
+  [1, 32, 128, 128],
+  [1, 16, 128, 128],
+  [1, 128, 128, 128],
+  [1, 128, 64, 64],
+  [1, 32, 64, 64],
+  [1, 256, 64, 64],
+  [1, 256, 64, 64],
+  [1, 32, 64, 64],
+  [1, 256, 64, 64],
+  [1, 256, 32, 32],
+  [1, 32, 32, 32],
+  [1, 256, 32, 32],
+  [1, 256, 32, 32],
+  [1, 32, 32, 32],
+  [1, 256, 32, 32],
+  [1, 256, 32, 32],
+  [1, 32, 32, 32],
+  [1, 256, 32, 32],
+  [1, 256, 16, 16],
+  [1, 64, 16, 16],
+  [1, 256, 32, 32],
+  [1, 512, 32, 32],
+  [1, 64, 16, 16],
+  [1, 512, 16, 16],
+  [1, 512, 16, 16],
+  [1, 64, 16, 16],
+  [1, 512, 16, 16],
+  [1, 512, 16, 16],
+  [1, 64, 16, 16],
+  [1, 512, 16, 16],
+  [1, 512, 16, 16],
+  [1, 128, 16, 16],
+  [1, 1024, 16, 16],
+  [1, 1024, 16, 16],
+  [1, 128, 16, 16],
+  [1, 1024, 16, 16],
+  [1, 1024, 16, 16],
+  [1, 128, 16, 16],
+  [1, 1024, 16, 16],
+  [1, 1024, 8, 8],
+  [1, 256, 8, 8],
+  [1, 1024, 8, 8],
+  [1, 1024, 8, 8],
+  [1, 256, 8, 8],
+  [1, 1024, 8, 8],
+  [1, 1024, 8, 8],
+  [1, 256, 8, 8],
+  [1, 1024, 8, 8],
+  [1, 1024, 8, 8],
+  [1, 512, 8, 8],
+  // [1, 3, 8, 8],
+];
+
+const WEIGHTS_DIMS: [[usize; 4]; 52] = [
+  [32, 3, 3, 3],
+  [32, 1, 3, 3],
+  [16, 32, 1, 1],
+  [96, 16, 1, 1],
+  [96, 1, 3, 3],
+  [24, 96, 1, 1],
+  [144, 24, 1, 1],
+  [144, 1, 3, 3],
+  [24, 144, 1, 1],
+  [144, 24, 1, 1],
+  [144, 1, 3, 3],
+  [32, 144, 1, 1],
+  [192, 32, 1, 1],
+  [192, 1, 3, 3],
+  [32, 192, 1, 1],
+  [192, 32, 1, 1],
+  [192, 1, 3, 3],
+  [32, 192, 1, 1],
+  [192, 32, 1, 1],
+  [192, 1, 3, 3],
+  [64, 192, 1, 1],
+  [384, 64, 1, 1],
+  [384, 1, 3, 3],
+  [64, 384, 1, 1],
+  [384, 64, 1, 1],
+  [384, 1, 3, 3],
+  [64, 384, 1, 1],
+  [384, 64, 1, 1],
+  [384, 1, 3, 3],
+  [64, 384, 1, 1],
+  [384, 64, 1, 1],
+  [384, 1, 3, 3],
+  [96, 384, 1, 1],
+  [576, 96, 1, 1],
+  [576, 1, 3, 3],
+  [96, 576, 1, 1],
+  [576, 96, 1, 1],
+  [576, 1, 3, 3],
+  [96, 576, 1, 1],
+  [576, 96, 1, 1],
+  [576, 1, 3, 3],
+  [160, 576, 1, 1],
+  [960, 160, 1, 1],
+  [960, 1, 3, 3],
+  [160, 960, 1, 1],
+  [960, 160, 1, 1],
+  [960, 1, 3, 3],
+  [160, 960, 1, 1],
+  [960, 160, 1, 1],
+  [960, 1, 3, 3],
+  [320, 960, 1, 1],
+  [1280, 320, 1, 1],
+];
+
+const PADS: [[usize; 4]; 52] = [
+  [0, 0, 1, 1],
+  [1, 1, 1, 1],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [1, 1, 1, 1],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [1, 1, 1, 1],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [1, 1, 1, 1],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [1, 1, 1, 1],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [1, 1, 1, 1],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [1, 1, 1, 1],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [1, 1, 1, 1],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [1, 1, 1, 1],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [1, 1, 1, 1],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [1, 1, 1, 1],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [1, 1, 1, 1],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [1, 1, 1, 1],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+];
+
+const STRIDES: [[usize; 2]; 52] = [
+  [2, 2],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [2, 2],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [2, 2],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [2, 2],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [2, 2],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+  [1, 1],
+];
+
+const MUL_DIMS: [(usize, usize, usize, usize); 8] = [
+  (16384, 64, 64, 1),
+  (4096, 1024, 64, 6),
+  (1024, 1024, 128, 2),
+  (1024, 2048, 128, 6),
+  (64, 2048, 256, 2),
+  (256, 4096, 256, 10),
+  (64, 4096, 512, 2),
+  (64, 8192, 512, 4),
+  // (1, 8, 8, 1),
+  // (1, 16, 16, 1),
+  // (1, 32, 32, 1),
+  // (1, 64, 64, 1),
+  // (1, 128, 128, 1),
+  // (1, 256, 256, 1),
+  // (1, 512, 512, 1),
+  // (1, 1024, 1024, 1),
+];
+
+const CQ_DIM: usize = 65536;
+
+// const PLOOKUP_DIMS: [(usize, usize); 4] = [
+//   (1048575, 1), // 128 x 128 x 64
+//   (262143, 5),  // 64 x 64 x 64
+//   (131071, 4),
+//   (65535, 4),
+//   // (32768, 3),
+// ];
+
+// fn matmul_bench(srs: &SRS) {
+//   for n in MUL_DIMS {
+//     println!("{:?}", n);
+//     let l = n.0;
+//     let m = n.1;
+//     let n = n.2;
+//     let mut matrix: Vec<Vec<Fr>> = vec![];
+//     for _ in 0..m {
+//       matrix.push((0..n).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect());
+//     }
+//     let matrix: Vec<_> = matrix.iter().map(|x| x).collect();
+//     let mut inputs: Vec<Vec<Fr>> = vec![];
+//     for _ in 0..l {
+//       inputs.push((0..m).into_par_iter().map_init(rand::thread_rng, |rng, _| Fr::rand(rng)).collect());
+//     }
+//     let inputs: Vec<_> = inputs.iter().map(|x| x).collect();
+//     testBasicBlock(CQLinBasicBlock {}, &srs, &matrix, &inputs);
+//   }
+// }
 
 fn main() {
-  let srs = &ptau::load_file("challenge14", 14, 14);
-  let (mut graph, models) = onnx::load_file("sample_transpose.onnx");
-  let mut rng = StdRng::from_entropy();
-  let input: Vec<Fr> = (0..64).map(|_| Fr::from(rng.gen_range(-4..4))).collect();
-  let input = ArrayD::from_shape_vec(vec![8, 2, 4], input).unwrap();
-  let inputs = vec![&input];
-  let models = models.iter().map(|x| x).collect();
-  prove(&srs, &inputs, &mut graph, &models);
-  verify(&srs, &graph);
+  let srs = ptau::load_file("powersOfTau28_hez_final_20.ptau", 20, 20);
+
+  // matmul_bench(&srs);
+  conv_bench(&srs);
+  // cq_bench(&srs);
 }

@@ -1,5 +1,6 @@
 #![allow(dead_code)]
-use crate::{BasicBlock, Data, PairingCheck, SRS};
+use crate::basic_block::Data;
+use crate::{BasicBlock, PairingCheck, SRS};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::models::short_weierstrass::SWCurveConfig;
 use ark_ec::short_weierstrass::Affine;
@@ -270,7 +271,7 @@ pub fn broadcastDims(dims: &Vec<&Vec<usize>>, N: usize) -> Vec<usize> {
     .collect()
 }
 
-fn next_pow(n: u32) -> u32 {
+pub fn next_pow(n: u32) -> u32 {
   let mut v = n;
   v -= 1;
   v |= v >> 1;

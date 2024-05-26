@@ -16,6 +16,7 @@ use tract_onnx::pb::AttributeProto;
 pub use transpose::TransposeLayer;
 
 pub mod add;
+pub mod conv;
 pub mod div;
 pub mod gather;
 pub mod matmul;
