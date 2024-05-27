@@ -8,6 +8,7 @@ pub struct SubBasicBlock;
 impl BasicBlock for SubBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 2 && inputs[0].ndim() <= 1 && inputs[1].ndim() <= 1);
+    println!("sub inputs {:?}",inputs);
     let mut r = ArrayD::zeros(IxDyn(&[std::cmp::max(inputs[0].len(), inputs[1].len())]));
     if inputs[0].len() == 1 {
       azip!((r in &mut r, &y in inputs[1]) *r = *inputs[0].first().unwrap() - y);
@@ -16,6 +17,7 @@ impl BasicBlock for SubBasicBlock {
     } else {
       azip!((r in &mut r, &x in inputs[0], &y in inputs[1]) *r = x - y);
     }
+    println!("sub outputs {:?}",r);
     vec![r]
   }
 

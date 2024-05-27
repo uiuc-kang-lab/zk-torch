@@ -106,12 +106,14 @@ fn verify(srs: &SRS, graph: &Graph) {
 }
 
 fn main() {
-  let srs = &ptau::load_file("/home/arigf2/project/challenge_0085", 28, 22);
+  let srs = &ptau::load_file("/home/arigf2/project/challenge_0085", 28, 26);
   let (mut graph, models) = onnx::load_file("distilbert_Opset16.onnx");
   let mut rng = StdRng::from_entropy();
-  let input: Vec<Fr> = (0..128).map(|_| Fr::from(rng.gen_range(0..30522))).collect();
-  let input = ArrayD::from_shape_vec(vec![1, 128], input).unwrap();
-  let inputs = vec![&input];
+  let input1: Vec<Fr> = (0..128).map(|_| Fr::from(rng.gen_range(0..30522))).collect();
+  let input1 = ArrayD::from_shape_vec(vec![1,128], input1).unwrap();
+  let input2: Vec<Fr> = (0..128).map(|_| Fr::from(rng.gen_range(0..2))).collect();
+  let input2 = ArrayD::from_shape_vec(vec![1,128], input2).unwrap();
+  let inputs = vec![&input1, &input2];
   let models = models.iter().map(|x| x).collect();
   prove(&srs, &inputs, &mut graph, &models);
   verify(&srs, &graph);

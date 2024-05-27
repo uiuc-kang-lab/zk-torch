@@ -26,7 +26,7 @@ impl Graph {
     let mut outputs = vec![vec![]; self.nodes.len()];
     self.nodes.iter().enumerate().for_each(|(i, n)| {
       println!("running {i} {:?}", self.basic_blocks[n.basic_block]);
-      let myInputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
+      let myInputs = n.inputs.iter().map(|&(j, k)| if j < 0 { inputs[k + (-j-1) as usize] } else { &(outputs[j as usize][k]) }).collect();
       outputs[i] = self.basic_blocks[n.basic_block].run(&models[n.basic_block], &myInputs);
     });
     return outputs;

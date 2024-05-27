@@ -20,6 +20,26 @@ pub struct CQ2BasicBlock {
 }
 
 impl BasicBlock for CQ2BasicBlock {
+
+  //TESTER
+  /*fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    let N = model.shape()[1];
+    println!("N:{N}");
+    let mut table_dict = HashMap::new();
+    if table_dict.len() == 0 {
+      for i in 0..N {
+        table_dict.insert((model[[0,i]], model[[1,i]]), i);
+      }
+    }
+    for x in inputs[0].iter().zip(inputs[1].iter()) {
+      let temp = (*x.0, *x.1);
+      assert!(table_dict.contains_key(&temp));
+    }
+    vec![]
+  }*/
+  //TESTER
+
+
   fn genModel(&self) -> ArrayD<Fr> {
     util::gen_cq_table(
       &(self.setup.as_ref().unwrap().0),

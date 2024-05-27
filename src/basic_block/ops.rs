@@ -41,3 +41,4 @@ make_basic_block!(ReLUBasicBlock, {
 });
 make_basic_block!(SqrtBasicBlock, { |x: f32| { x.sqrt() } });
 make_basic_block!(ChangeSFBasicBlock, { |x: f32| { x } });
+make_basic_block!(ErfBasicBlock, { |x: f32| { util::erf(x) } });

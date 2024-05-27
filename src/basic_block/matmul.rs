@@ -21,6 +21,7 @@ fn index<'a, T>(A: &'a ArrayD<T>, i: usize) -> &T {
 pub struct MatMulBasicBlock;
 impl BasicBlock for MatMulBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    println!("{:?} {:?}",inputs[0].shape(),inputs[1].shape());
     assert!(
       inputs.len() == 2
         && inputs[1].ndim() == 2

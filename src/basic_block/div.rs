@@ -11,6 +11,7 @@ pub struct DivScalarBasicBlock {
 impl BasicBlock for DivScalarBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[1].len() == 1);
+    println!("div inputs {:?}",inputs);
     let SF = self.output_SF as i32;
     let mut div = vec![];
     let mut rem = vec![];

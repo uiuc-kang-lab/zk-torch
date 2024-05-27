@@ -1,4 +1,5 @@
 use crate::basic_block::*;
+use crate::onnx;
 use crate::graph::*;
 use crate::layer::Layer;
 use crate::util;
@@ -14,14 +15,18 @@ impl Layer for MulLayer {
       basic_block: Box::new(MulBasicBlock {}),
       N: 1,
     }));
-    let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock { input_SF: 6, output_SF: 3 }));
+    let mul_scalar = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(MulScalarBasicBlock {}),
+      N: 1,
+    }));
+    let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock { input_SF: onnx::SF_LOG * 2, output_SF: onnx::SF_LOG }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
-        setup: Some((Box::new(ChangeSFBasicBlock { input_SF: 6, output_SF: 3 }), -(1 << 13), 1 << 14)),
+        setup: Some((Box::new(ChangeSFBasicBlock { input_SF: onnx::SF_LOG * 2, output_SF: onnx::SF_LOG }), onnx::CQ_RANGE_LOWER, onnx::CQ_RANGE)),
       }),
       N: 1,
     }));
-    let mul_output = graph.addNode(mul, vec![(-1, 0), (-2, 0)]);
+    let mul_output = graph.addNode(if input_shapes[1].len()==0{mul_scalar}else{mul}, vec![(-1, 0), (-2, 0)]);
     let change_SF_output = graph.addNode(change_SF, vec![(mul_output, 0)]);
     let _ = graph.addNode(change_SF_check, vec![(mul_output, 0), (change_SF_output, 0)]);
     graph.outputs.push((change_SF_output, 0));

@@ -19,6 +19,7 @@ impl Layer for ReshapeLayer {
       endShape[i] = a/b;
     }
     let endShape:Vec<_> = endShape.iter().map(|&x|x as usize).collect();
+    println!("final shape: {:?}",endShape);
 
     if startShape.last() == endShape.last() {
       let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: endShape.clone() }));
@@ -26,13 +27,14 @@ impl Layer for ReshapeLayer {
       graph.outputs.push((output, 0));
     } else if startShape.last() > endShape.last() {
       let n = endShape.len();
-      let (a, b) = (endShape[n - 2], endShape[n - 1]);
+      let (mut a, mut b) = (endShape[n - 2], endShape[n - 1]);
       assert!(*startShape.last().unwrap() == a * b);
       let mut intermediateShape = endShape[..n - 2].to_vec();
       intermediateShape.push(1);
       intermediateShape.push(*startShape.last().unwrap());
       intermediateShape.iter_mut().for_each(|x|*x = util::next_pow(*x as u32) as usize);
       let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: intermediateShape }));
+      (a,b)=(util::next_pow(a as u32) as usize,util::next_pow( b as u32) as usize);
       let permutation = ((0..a).map(|x| x * b).collect(), (0..b).collect());
       let permute = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
@@ -43,8 +45,9 @@ impl Layer for ReshapeLayer {
       graph.outputs.push((output, 0));
     } else {
       let n = startShape.len();
-      let (a, b) = (startShape[n - 2], startShape[n - 1]);
+      let (mut a, mut b) = (startShape[n - 2], startShape[n - 1]);
       assert!(*endShape.last().unwrap() == a * b);
+      (a,b)=(util::next_pow(a as u32) as usize,util::next_pow( b as u32) as usize);
       let permutation = (vec![0], (0..a * b).collect());
       let permute = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
