@@ -1,6 +1,7 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
+use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
@@ -10,18 +11,39 @@ pub struct MatMulLayer;
 impl Layer for MatMulLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
+    let n = input_shapes[1].len();
+    let (mut a, mut b) = (input_shapes[1][n - 2], input_shapes[1][n - 1]);
+    a = util::next_pow(a as u32) as usize;
+    b = util::next_pow(b as u32) as usize;
+    let permutation = ((0..b).map(|x| x * a).collect(), (0..a).collect());
+
+    let transpose = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
+      N: 2,
+    }));
     let matmul = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(MatMulBasicBlock {}),
       N: 2,
     }));
-    let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock { input_SF: 6, output_SF: 3 }));
+    let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
+      input_SF: onnx::SF_LOG * 2,
+      output_SF: onnx::SF_LOG,
+    }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
-        setup: Some((Box::new(ChangeSFBasicBlock { input_SF: 6, output_SF: 3 }), -(1 << 10), 1 << 11)),
+        setup: Some((
+          Box::new(ChangeSFBasicBlock {
+            input_SF: onnx::SF_LOG * 2,
+            output_SF: onnx::SF_LOG,
+          }),
+          onnx::CQ_RANGE_LOWER,
+          onnx::CQ_RANGE,
+        )),
       }),
       N: 1,
     }));
-    let matmul_output = graph.addNode(matmul, vec![(-1, 0), (-2, 0)]);
+    let transpose_output = graph.addNode(transpose, vec![(-2, 0)]);
+    let matmul_output = graph.addNode(matmul, vec![(-1, 0), (transpose_output, 0)]);
     let change_SF_output = graph.addNode(change_SF, vec![(matmul_output, 0)]);
     let _ = graph.addNode(change_SF_check, vec![(matmul_output, 0), (change_SF_output, 0)]);
     graph.outputs.push((change_SF_output, 0));

@@ -56,6 +56,7 @@ impl BasicBlock for MulScalarBasicBlock {
     assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[1].len() == 1);
     vec![inputs[0].map(|x| *x * inputs[1].first().unwrap())]
   }
+
   fn prove(
     &mut self,
     srs: &SRS,
@@ -73,6 +74,7 @@ impl BasicBlock for MulScalarBasicBlock {
     let C = inp0.g1 * inp1.r + inp1.g1 * inp0.r + srs.Y1P * (inp0.r * inp1.r) - srs.X1P[0] * out.r;
     return (vec![C], vec![gx2]);
   }
+
   fn verify(
     &self,
     srs: &SRS,
@@ -107,6 +109,7 @@ impl BasicBlock for MulBasicBlock {
     azip!((r in &mut r, &x in inputs[0], &y in inputs[1]) *r = x * y);
     vec![r]
   }
+
   fn prove(
     &mut self,
     srs: &SRS,
@@ -132,6 +135,7 @@ impl BasicBlock for MulBasicBlock {
     let C = (inp0.g1 * inp1.r) + (inp1.g1 * inp0.r) + (srs.Y1P * (inp0.r * inp1.r)) - (srs.X1P[0] * out.r) - ((srs.X1P[N] - srs.X1P[0]) * r);
     return (vec![tx, C], vec![gx2]);
   }
+
   fn verify(
     &self,
     srs: &SRS,

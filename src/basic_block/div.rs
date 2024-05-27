@@ -35,6 +35,7 @@ impl BasicBlock for DivScalarBasicBlock {
 pub struct DivConstBasicBlock {
   pub c: f32,
 }
+
 impl BasicBlock for DivConstBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1);
