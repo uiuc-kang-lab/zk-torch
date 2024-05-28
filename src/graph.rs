@@ -31,6 +31,8 @@ impl Graph {
         .iter()
         .map(|&(j, k)| {
           if j < 0 {
+            // We currently support two types of indexing for the inputs, one is (-1,0),(-1,1),(-1,2),...
+            // and the other is (-1,0),(-2,0),(-3,0),... In the future we will make this more standardized.
             inputs[k + (-j - 1) as usize]
           } else {
             &(outputs[j as usize][k])
