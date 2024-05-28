@@ -106,6 +106,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
       "Add" => Ok(AddLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Mul" => Ok(MulLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Cast" => Ok(CastLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Concat" => Ok(ConcatLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Sub" => Ok(SubLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Relu" => Ok(ReLULayer::graph(&input_shapes, &my_constants, &my_attributes)),
@@ -121,6 +122,8 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
       "Where" => Ok(WhereLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Expand" => Ok(ExpandLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Softmax" => Ok(SoftmaxLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Squeeze" => Ok(SqueezeLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Unsqueeze" => Ok(UnsqueezeLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Erf" => Ok(ErfLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       _ => Err(format!("Unsupported onnx operation: {op}")),
     }

@@ -2,3 +2,8 @@ target
 Cargo.lock
 .DS_Store
 *.swp
+inputsEnc
+modelsEnc
+outputsEnc
+proofs
+*.onnx
