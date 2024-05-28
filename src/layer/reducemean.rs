@@ -1,6 +1,7 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
+use crate::onnx;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;
@@ -22,8 +23,8 @@ impl Layer for ReduceMeanLayer {
           Box::new(DivConstBasicBlock {
             c: input_shapes[0][input_shapes[0].len() - 1] as f32,
           }),
-          -(1 << 12),
-          1 << 13,
+          onnx::CQ_RANGE_LOWER,
+          onnx::CQ_RANGE,
         )),
       }),
       N: 1,

@@ -3,14 +3,16 @@ use crate::graph::*;
 use crate::layer::*;
 use crate::util;
 use ark_bn254::Fr;
-use ndarray::ArrayD;
+use ndarray::{arr1, ArrayD};
 use std::collections::HashMap;
 use tract_onnx::prelude::{DatumType, Framework};
 use tract_onnx::tensor::load_tensor;
 
-pub const SF: usize = 32;
-pub const SF_LOG: usize = 5;
-pub const SF_FLOAT: f32 = 32f32;
+pub const SF_LOG: usize = 3; //9
+pub const SF: usize = 1 << SF_LOG;
+pub const SF_FLOAT: f32 = (1 << SF_LOG) as f32;
+pub const CQ_RANGE: usize = 1 << 6; //12
+pub const CQ_RANGE_LOWER: i32 = -(1 << 5);
 
 pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
   let onnx = tract_onnx::onnx();
@@ -61,7 +63,16 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
     let tensor = match tensor.datum_type() {
       DatumType::F32 => {
         let tensor = tensor.into_array::<f32>().unwrap();
-        Ok(tensor.map(|x| Fr::from((*x * SF_FLOAT).round() as i32)))
+        Ok(tensor.map(|x| {
+          let mut y = (*x * SF_FLOAT).round();
+          if y < -(1 << 15) as f32 {
+            y = -(1 << 15) as f32;
+          }
+          if y > (1 << 15) as f32 {
+            y = (1 << 15) as f32;
+          }
+          Fr::from(y as i32)
+        }))
       }
       DatumType::I64 => {
         let tensor = tensor.into_array::<i64>().unwrap();
@@ -84,15 +95,17 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
     constants_hashmap.insert(name, idx);
     idx += 1;
   }
+  let mut passed_constants = HashMap::new();
 
   for node in onnx_graph.node.iter().filter(|node| node.op_type.as_str() != "Constant") {
     let op = node.op_type.as_str();
     let input_shapes: Vec<_> = node.input.iter().map(|x| &shapes[x]).collect();
-    let my_constants = node.input.iter().map(|x| constants_hashmap.get(x).map(|&y| &setups[y])).collect();
+    let my_constants = node.input.iter().map(|x| passed_constants.get(x).or(constants_hashmap.get(x).map(|&y| &setups[y]))).collect();
     let my_attributes = node.attribute.iter().map(|x| x).collect();
     let (mut local_graph, output_shapes) = match op {
       "Add" => Ok(AddLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Mul" => Ok(MulLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Cast" => Ok(CastLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Sub" => Ok(SubLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Relu" => Ok(ReLULayer::graph(&input_shapes, &my_constants, &my_attributes)),
@@ -103,9 +116,24 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
       "Sqrt" => Ok(SqrtLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Reshape" => Ok(ReshapeLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Transpose" => Ok(TransposeLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Shape" => Ok(ShapeLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Equal" => Ok(EqualLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Where" => Ok(WhereLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Expand" => Ok(ExpandLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Softmax" => Ok(SoftmaxLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Erf" => Ok(ErfLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       _ => Err(format!("Unsupported onnx operation: {op}")),
     }
     .unwrap();
+
+    if my_constants.iter().all(|&x| x.is_some()) {
+      let my_inputs: Vec<_> = my_constants.iter().map(|&x| x.unwrap().clone()).collect();
+      let my_inputs = my_inputs.iter().map(|x| x).collect();
+      let outputs = local_graph.run(&my_inputs, &vec![&arr1(&[]).into_dyn(); local_graph.basic_blocks.len()]);
+      node.output.iter().zip(local_graph.outputs.iter()).for_each(|(output_str, &(nodeX, nodeY))| {
+        passed_constants.insert(output_str, outputs[nodeX as usize][nodeY].clone());
+      });
+    }
 
     let mut local_block_idx = vec![];
     let temp = local_graph.basic_blocks;
@@ -120,7 +148,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
       }
     }
     let start_idx = graph.nodes.len() as i32;
-    for local_node in local_graph.nodes {
+    for local_node in local_graph.nodes.iter() {
       graph.nodes.push(Node {
         basic_block: local_block_idx[local_node.basic_block],
         inputs: local_node
@@ -145,6 +173,12 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
       node.output[0].clone(),
       local_graph.outputs.iter().map(|(x, y)| (start_idx + x, *y)).collect(),
     );
+    if op == "Shape" {
+      passed_constants.insert(
+        &node.output[0],
+        arr1(&input_shapes[0].iter().map(|&x| Fr::from(x as i32)).collect::<Vec<_>>()).into_dyn(),
+      );
+    }
     node.output.iter().zip(output_shapes).for_each(|(output, shape)| {
       shapes.insert(output.clone(), shape);
     });

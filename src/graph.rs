@@ -27,7 +27,19 @@ impl Graph {
     let mut outputs = vec![vec![]; self.nodes.len()];
     self.nodes.iter().enumerate().for_each(|(i, n)| {
       println!("running {i} {:?}", self.basic_blocks[n.basic_block]);
-      let myInputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
+      let myInputs = n
+        .inputs
+        .iter()
+        .map(|&(j, k)| {
+          if j < 0 {
+            // We currently support two types of indexing for the inputs, one is (-1,0),(-1,1),(-1,2),...
+            // and the other is (-1,0),(-2,0),(-3,0),... In the future we will make this more standardized.
+            inputs[k + (-j - 1) as usize]
+          } else {
+            &(outputs[j as usize][k])
+          }
+        })
+        .collect();
       outputs[i] = self.basic_blocks[n.basic_block].run(&models[n.basic_block], &myInputs);
     });
     return outputs;

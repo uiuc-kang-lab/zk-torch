@@ -1,0 +1,27 @@
+use crate::basic_block::*;
+use crate::graph::*;
+use crate::layer::Layer;
+use ark_bn254::Fr;
+use ndarray::{arr1, ArrayD};
+use tract_onnx::pb::AttributeProto;
+
+#[derive(Debug)]
+pub struct ShapeBasicBlock;
+impl BasicBlock for ShapeBasicBlock {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    let shape: Vec<_> = inputs[0].shape().iter().map(|&x| Fr::from(x as i32)).collect();
+    let shape = arr1(&shape).into_dyn();
+    vec![shape]
+  }
+}
+
+pub struct ShapeLayer;
+impl Layer for ShapeLayer {
+  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+    let mut graph = Graph::new();
+    let shape = graph.addBB(Box::new(ShapeBasicBlock {}));
+    let shape_output = graph.addNode(shape, vec![(-1, 0)]);
+    graph.outputs.push((shape_output, 0));
+    (graph, vec![vec![input_shapes[0].len()]])
+  }
+}
