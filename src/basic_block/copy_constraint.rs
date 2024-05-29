@@ -26,7 +26,7 @@ use std::{
 };
 
 fn flat_index(shape: &IxDyn, idx: &Option<IxDyn>, N: usize) -> Option<usize> {
-  // assert!(*idx == None || shape.ndim() == *(idx.unwrap()).ndim());
+  assert!(*idx == None || shape.ndim() == idx.as_ref().unwrap().ndim());
   let mut product = vec![];
   // If inputs and outputs do not have the same last dimension, then the one
   // with the smaller dimension will have had their polynomials constructed from
@@ -161,7 +161,6 @@ impl BasicBlock for CopyConstraintBasicBlock {
       .collect();
 
     let mut outp_arr = ArrayD::from_elem(self.output_dim.clone(), (0, None));
-    // let outp_idxs: ArrayD<usize> = ArrayD::from_shape_fn(self.output_dim.clone(), |i| flat_index(&self.output_dim, &Some(i), N).unwrap() + offset);
     Zip::from(&mut outp_arr).and(&flat_outp_idxs).and(&self.permutation).for_each(|r, &a, b| {
       *r = (a, flat_index(&self.input_dim, b, N));
     });
