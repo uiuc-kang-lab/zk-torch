@@ -25,23 +25,27 @@ use std::{
   iter::{once, repeat},
 };
 
-fn flat_index(shape: &IxDyn, idx: &IxDyn, N: usize) -> usize {
-  assert!(shape.ndim() == idx.ndim());
+fn flat_index(shape: &IxDyn, idx: &Option<IxDyn>, N: usize) -> Option<usize> {
+  // assert!(*idx == None || shape.ndim() == *(idx.unwrap()).ndim());
   let mut product = vec![];
   // If inputs and outputs do not have the same last dimension, then the one
   // with the smaller dimension will have had their polynomials constructed from
   // a smaller evaluation domain. This indexing enables the smaller dimension's
   // roots of unity evaluation values to line up to the larger one.
-  let spacing = N / shape[shape.ndim() - 1];
-  for d in 0..shape.ndim() {
-    if d == 0 {
-      product.push(spacing);
-    } else {
-      product.push(product[d - 1] * shape[shape.ndim() - d]);
+  if let Some(j) = idx {
+    let spacing = N / shape[shape.ndim() - 1];
+    for d in 0..shape.ndim() {
+      if d == 0 {
+        product.push(spacing);
+      } else {
+        product.push(product[d - 1] * shape[shape.ndim() - d]);
+      }
     }
+    product = product.into_iter().rev().collect();
+    j.as_array_view().iter().enumerate().fold(Some(0), |sum, (i, x)| Some(*x * product[i] + sum.unwrap()))
+  } else {
+    None
   }
-  product = product.into_iter().rev().collect();
-  idx.as_array_view().iter().enumerate().fold(0, |sum, (i, x)| *x * product[i] + sum)
 }
 
 // Construct S_sigma_j polynomial evals over N-th roots of unity
@@ -50,11 +54,17 @@ fn flat_index(shape: &IxDyn, idx: &IxDyn, N: usize) -> usize {
 // that should be the same over inputs and outputs.
 // If is_input, idxs is [(flat_idx of the input index, 0)]. Otherwise,
 // idxs is [(flat_idx of the output, flat_idx of the permuted input idx)]
-fn construct_ssig(idxs: &[(usize, usize)], N: usize, last_dim: usize, partitions: &HashMap<usize, Vec<usize>>, is_input: bool) -> Vec<Fr> {
+fn construct_ssig(
+  idxs: &[(usize, Option<usize>)],
+  N: usize,
+  last_dim: usize,
+  partitions: &HashMap<Option<usize>, Vec<usize>>,
+  is_input: bool,
+) -> Vec<Fr> {
   idxs
     .iter()
     .flat_map(|(idx, perm_idx)| {
-      let inp_idx = if is_input { idx } else { perm_idx };
+      let inp_idx = if is_input { Some(*idx) } else { *perm_idx };
       let sigma = {
         let partition = partitions.get(&inp_idx).ok_or_else(|| format!("Key {:?} not found in the partition", inp_idx)).unwrap();
         if let Some(pos) = partition.iter().position(|x| *x == *idx) {
@@ -76,16 +86,22 @@ fn construct_ssig(idxs: &[(usize, usize)], N: usize, last_dim: usize, partitions
 // Permutation has the same shape as the output, and each index stores the index of the input array it equals to
 #[derive(Debug)]
 pub struct CopyConstraintBasicBlock {
-  pub permutation: ArrayD<IxDyn>,
+  pub permutation: ArrayD<Option<IxDyn>>,
   pub input_dim: IxDyn,
   pub output_dim: IxDyn,
 }
 
 impl BasicBlock for CopyConstraintBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    assert!(inputs.len() == 1);
-    assert!(Dim(self.permutation.shape()) == self.output_dim);
-    vec![ArrayD::from_shape_fn(self.permutation.shape(), |i| inputs[0][&self.permutation[i]])]
+    assert!(inputs.len() == 1 && inputs[0].dim() == self.input_dim);
+    assert!(self.permutation.dim() == self.output_dim);
+    vec![ArrayD::from_shape_fn(self.permutation.shape(), |i| {
+      if let Some(idx) = &self.permutation[i] {
+        inputs[0][idx]
+      } else {
+        Fr::zero()
+      }
+    })]
   }
 
   fn setup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
@@ -103,7 +119,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let mut input_dim = self.input_dim.as_array_view().to_vec().clone();
     input_dim[self.input_dim.ndim() - 1] = N;
     let offset: usize = input_dim.iter().product();
-    let flat_outp_idxs = self.permutation.indexed_iter().map(|(i, _)| flat_index(&self.output_dim, &i, N) + offset).collect();
+    let flat_outp_idxs = self.permutation.indexed_iter().map(|(i, _)| flat_index(&self.output_dim, &Some(i), N).unwrap() + offset).collect();
     let flat_outp_idxs = ArrayD::from_shape_vec(self.output_dim.clone(), flat_outp_idxs).unwrap();
     // Indices of the input which are in each position of the permutation
     let flat_perm_idxs = self.permutation.map(|i| flat_index(&self.input_dim, i, N));
@@ -111,13 +127,19 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // Create partitions
     let mut partitions = HashMap::new();
     for i in indices(self.input_dim.clone()).into_iter() {
-      let idx = flat_index(&self.input_dim, &i, N);
-      partitions.entry(idx).or_insert_with(|| Vec::from([idx]));
+      let idx = flat_index(&self.input_dim, &Some(i), N);
+      partitions.entry(idx).or_insert_with(|| Vec::from([idx.unwrap()]));
     }
-    for (i, _) in flat_outp_idxs.indexed_iter() {
-      let out_idx = flat_outp_idxs[&i];
-      let perm_idx = flat_perm_idxs[&i];
-      partitions.entry(perm_idx).or_insert_with(|| Vec::from([perm_idx])).push(out_idx);
+    let mut pad = vec![];
+    for (i, out_idx) in flat_outp_idxs.indexed_iter() {
+      if let Some(perm_idx) = flat_perm_idxs[&i] {
+        partitions.entry(Some(perm_idx)).or_insert_with(|| Vec::from([perm_idx])).push(*out_idx);
+      } else {
+        pad.push(*out_idx);
+      }
+    }
+    if pad.len() > 0 {
+      partitions.insert(None, pad);
     }
 
     // Calculate S_ID
@@ -126,10 +148,10 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let sid_x = util::msm::<G1Projective>(&srs.X1A, &sid_poly.coeffs);
 
     // Calculate S_sigma_js
-    let inp_idxs: ArrayD<usize> = ArrayD::from_shape_fn(self.input_dim.clone(), |i| flat_index(&self.input_dim, &i, N));
-    let mut inp_arr = ArrayD::from_elem(self.input_dim.clone(), (0, 0));
+    let inp_idxs: ArrayD<usize> = ArrayD::from_shape_fn(self.input_dim.clone(), |i| flat_index(&self.input_dim, &Some(i), N).unwrap());
+    let mut inp_arr = ArrayD::from_elem(self.input_dim.clone(), (0, None));
     Zip::from(&mut inp_arr).and(&inp_idxs).for_each(|r, &a| {
-      *r = (a, 0 as usize);
+      *r = (a, None);
     });
     let mut ssig: Vec<Vec<Fr>> = inp_arr
       .map_axis(Axis(self.input_dim.ndim() - 1), |x| {
@@ -138,10 +160,10 @@ impl BasicBlock for CopyConstraintBasicBlock {
       .into_iter()
       .collect();
 
-    let mut outp_arr = ArrayD::from_elem(self.output_dim.clone(), (0, 0));
-    let outp_idxs: ArrayD<usize> = ArrayD::from_shape_fn(self.output_dim.clone(), |i| flat_index(&self.output_dim, &i, N) + offset);
-    Zip::from(&mut outp_arr).and(&outp_idxs).and(&self.permutation).for_each(|r, &a, b| {
-      *r = (a, flat_index(&self.input_dim, &b, N));
+    let mut outp_arr = ArrayD::from_elem(self.output_dim.clone(), (0, None));
+    // let outp_idxs: ArrayD<usize> = ArrayD::from_shape_fn(self.output_dim.clone(), |i| flat_index(&self.output_dim, &Some(i), N).unwrap() + offset);
+    Zip::from(&mut outp_arr).and(&flat_outp_idxs).and(&self.permutation).for_each(|r, &a, b| {
+      *r = (a, flat_index(&self.input_dim, b, N));
     });
     ssig.append(
       &mut outp_arr

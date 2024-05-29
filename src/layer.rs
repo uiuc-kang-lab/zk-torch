@@ -2,6 +2,7 @@ use crate::graph::Graph;
 pub use add::AddLayer;
 use ark_bn254::Fr;
 pub use cast::CastLayer;
+pub use conv::ConvLayer;
 pub use div::DivLayer;
 pub use equal::EqualLayer;
 pub use erf::ErfLayer;
@@ -24,6 +25,7 @@ pub use transpose::TransposeLayer;
 
 pub mod add;
 pub mod cast;
+pub mod conv;
 pub mod div;
 pub mod equal;
 pub mod erf;

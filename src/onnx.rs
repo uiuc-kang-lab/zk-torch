@@ -95,6 +95,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
     constants_hashmap.insert(name, idx);
     idx += 1;
   }
+  println!("graph: {:?}", graph);
   let mut passed_constants = HashMap::new();
 
   for node in onnx_graph.node.iter().filter(|node| node.op_type.as_str() != "Constant") {
@@ -122,6 +123,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
       "Expand" => Ok(ExpandLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Softmax" => Ok(SoftmaxLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Erf" => Ok(ErfLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Conv" => Ok(ConvLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       _ => Err(format!("Unsupported onnx operation: {op}")),
     }
     .unwrap();
