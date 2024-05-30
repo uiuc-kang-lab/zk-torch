@@ -50,7 +50,7 @@ impl BasicBlock for ConcatBasicBlock {
     assert!(outputs[0].shape()[0] == inputs.len());
     for i in 0..inputs.len() {
       inputs[i].iter().zip(outputs[0].index_axis(Axis(self.axis), i).iter()).for_each(|(input, output)| {
-        assert!(input.g1 == output.g1);
+        assert!(input== output);
       });      
     }
     vec![]
