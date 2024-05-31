@@ -1,5 +1,6 @@
 #![allow(unused_imports)]
 use crate::util::{self, ark_de, ark_se};
+use rayon::prelude::*;
 pub use add::AddBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
@@ -12,7 +13,7 @@ pub use cqlin::CQLinBasicBlock;
 pub use div::{DivConstBasicBlock, DivScalarBasicBlock};
 pub use eq::EqBasicBlock;
 pub use id::IdBasicBlock;
-use icicle_bn254::curve::G1Affine as IG1A;
+use icicle_bn254::curve::{G1Affine as IG1A, G2Affine as IG2A};
 pub use matmul::MatMulBasicBlock;
 pub use max::MaxBasicBlock;
 pub use mul::{MulBasicBlock, MulConstBasicBlock, MulScalarBasicBlock};
@@ -58,6 +59,7 @@ pub struct SRS {
   pub Y1P: G1Projective,
   pub Y2P: G2Projective,
   pub IX1A: Vec<IG1A>,
+  pub IX2A: Vec<IG2A>,
 }
 
 // During proofs and verifications, a cache is used to prevent recomputation.
@@ -95,7 +97,7 @@ impl Data {
     } else if N < 32 {
       util::msm(&srs.X1A, &f.coeffs)
     } else {
-      util::msm_gpu_g1(&srs.IX1A, &f.coeffs)
+      util::gpu_msm_g1(&srs.IX1A, &f.coeffs)
     };
     let mut rng = StdRng::from_entropy();
     return Data {
@@ -123,7 +125,7 @@ impl DataEnc {
   }
 }
 
-pub trait BasicBlock: std::fmt::Debug {
+pub trait BasicBlock: std::fmt::Debug + Send + Sync{
   fn genModel(&self) -> ArrayD<Fr> {
     ArrayD::zeros(IxDyn(&[0]))
   }
@@ -136,7 +138,7 @@ pub trait BasicBlock: std::fmt::Debug {
   // It defaults to running Data::new() on the last dimension of the outputs which runs an FFT and an MSM.
   // But for certain basic blocks such as add and reshape, this can be done much faster, and it should be overriden in these cases.
   fn encodeOutputs(&self, srs: &SRS, _model: &ArrayD<Data>, _inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
-    outputs.iter().map(|x| util::convert_to_data(srs, x)).collect()
+    outputs.par_iter().map(|x| util::convert_to_data(srs, x)).collect()
   }
 
   // The subsequent setup/prove/verify functions run on encoded Data objects (vector commitments).

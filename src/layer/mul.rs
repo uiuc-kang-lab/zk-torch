@@ -22,7 +22,7 @@ impl Layer for MulLayer {
     let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock { input_SF: onnx::SF_LOG * 2, output_SF: onnx::SF_LOG }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
-        setup: Some((Box::new(ChangeSFBasicBlock { input_SF: onnx::SF_LOG * 2, output_SF: onnx::SF_LOG }), onnx::CQ_RANGE_LOWER, onnx::CQ_RANGE)),
+        setup: Some((Box::new(ChangeSFBasicBlock { input_SF: onnx::SF_LOG * 2, output_SF: onnx::SF_LOG }), onnx::CQ_RANGE_LOWER, onnx::CQ_RANGE, 1)),
       }),
       N: 1,
     }));

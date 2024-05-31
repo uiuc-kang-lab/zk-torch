@@ -13,7 +13,7 @@ impl BasicBlock for GatherBasicBlock {
     let mut v = Vec::new();
     inputs[1].for_each(|x| {
       let idx = util::fr_to_int(*x) as usize;
-      println!("{:?} {:?}",x,idx);
+      //println!("{:?} {:?}",x,idx);
       v.extend_from_slice(inputs[0].index_axis(Axis(0), idx).to_slice().unwrap());
     });
     let mut shape = inputs[1].shape().to_vec();

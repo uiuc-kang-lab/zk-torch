@@ -13,7 +13,7 @@ impl Layer for ReLULayer {
     let relu = graph.addBB(Box::new(ReLUBasicBlock { input_SF: onnx::SF_LOG, output_SF: onnx::SF_LOG }));
     let relu_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
-        setup: Some((Box::new(ReLUBasicBlock { input_SF: onnx::SF_LOG, output_SF: onnx::SF_LOG }), onnx::CQ_RANGE_LOWER, onnx::CQ_RANGE)),
+        setup: Some((Box::new(ReLUBasicBlock { input_SF: onnx::SF_LOG, output_SF: onnx::SF_LOG }), onnx::CQ_RANGE_LOWER, onnx::CQ_RANGE, 1)),
       }),
       N: 1,
     }));

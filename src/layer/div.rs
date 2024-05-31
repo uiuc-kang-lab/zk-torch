@@ -13,11 +13,12 @@ impl Layer for DivLayer {
     let mut graph = Graph::new();
 
     if let Some(c) = constants[1]{
-      let c = onnx::SF_FLOAT * util::fr_to_int(*c.first().unwrap()) as f32;
+      let c =  (util::fr_to_int(*c.first().unwrap()) as f32) / onnx::SF_FLOAT;
+      println!("constant is {:?} {:?}",constants,c);
       let div = graph.addBB(Box::new(DivConstBasicBlock { c: c }));
       let div_check = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
-          setup: Some((Box::new(DivConstBasicBlock { c: c }), onnx::CQ_RANGE_LOWER, onnx::CQ_RANGE)),
+          setup: Some((Box::new(DivConstBasicBlock { c: c }), onnx::CQ_RANGE_LOWER, onnx::CQ_RANGE, 1)),
         }),
         N: 1,
       }));
@@ -34,7 +35,7 @@ impl Layer for DivLayer {
       N: 1,
     }));
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQBasicBlock { setup: Some((0, 1 << 12)) }),
+      basic_block: Box::new(CQBasicBlock { setup: Some((0, onnx::CQ_RANGE)) }),
       N: 1,
     }));
     let mul_SF2 = graph.addBB(Box::new(RepeaterBasicBlock {

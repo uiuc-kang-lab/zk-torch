@@ -25,18 +25,35 @@ impl Layer for MatMulLayer {
       basic_block: Box::new(MatMulBasicBlock {}),
       N: 2,
     }));
-    let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock { input_SF: onnx::SF_LOG * 2, output_SF: onnx::SF_LOG  }));
-    let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQ2BasicBlock {
-        setup: Some((Box::new(ChangeSFBasicBlock { input_SF: onnx::SF_LOG * 2, output_SF: onnx::SF_LOG }), onnx::CQ_RANGE_LOWER, onnx::CQ_RANGE)),
-      }),
-      N: 1,
-    }));
+
     let transpose_output = graph.addNode(transpose, vec![(-2, 0)]);
-    let matmul_output = graph.addNode(matmul, vec![(-1, 0), (transpose_output, 0)]);
-    let change_SF_output = graph.addNode(change_SF, vec![(matmul_output, 0)]);
-    let _ = graph.addNode(change_SF_check, vec![(matmul_output, 0), (change_SF_output, 0)]);
-    graph.outputs.push((change_SF_output, 0));
+    if n > (1<<13){
+      let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock { input_SF: onnx::SF_LOG, output_SF: onnx::SF_LOG / 2  }));
+      let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(CQ2BasicBlock {
+          setup: Some((Box::new(ChangeSFBasicBlock { input_SF: onnx::SF_LOG, output_SF: onnx::SF_LOG / 2 }), onnx::CQ_RANGE_LOWER, onnx::CQ_RANGE, 1)),
+        }),
+        N: 1,
+      }));
+      let change_SF_output_1 = graph.addNode(change_SF, vec![(-1, 0)]);
+      let change_SF_output_2 = graph.addNode(change_SF, vec![(transpose_output, 0)]);
+      let _ = graph.addNode(change_SF_check, vec![(-1, 0), (change_SF_output_1, 0)]);
+      let _ = graph.addNode(change_SF_check, vec![(transpose_output, 0), (change_SF_output_2, 0)]);
+      let matmul_output = graph.addNode(matmul, vec![(change_SF_output_1, 0), (change_SF_output_2, 0)]);
+      graph.outputs.push((matmul_output, 0));
+    }else{
+      let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock { input_SF: onnx::SF_LOG * 2, output_SF: onnx::SF_LOG  }));
+      let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(CQ2BasicBlock {
+          setup: Some((Box::new(ChangeSFBasicBlock { input_SF: onnx::SF_LOG * 2, output_SF: onnx::SF_LOG }), onnx::CQ_RANGE_LOWER, onnx::CQ_RANGE, 1)),
+        }),
+        N: 1,
+      }));
+      let matmul_output = graph.addNode(matmul, vec![(-1, 0), (transpose_output, 0)]);
+      let change_SF_output = graph.addNode(change_SF, vec![(matmul_output, 0)]);
+      let _ = graph.addNode(change_SF_check, vec![(matmul_output, 0), (change_SF_output, 0)]);
+      graph.outputs.push((change_SF_output, 0));
+    }
 
     let mut output_shape = util::broadcastDims(input_shapes, 2);
     if input_shapes[0].len() >= 2 {

@@ -22,7 +22,9 @@ mod util;
 
 fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&ArrayD<Fr>>) {
   // Run:
+  let mut start = std::time::Instant::now();
   let outputs = graph.run(inputs, models);
+  println!("run: {:?}",start.elapsed().as_micros()); start = std::time::Instant::now();
 
   // Setup:
   let models: Vec<ArrayD<Data>> = models
@@ -33,24 +35,30 @@ fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&
       convert_to_data(srs, model)
     })
     .collect();
+  println!("encode models: {:?}",start.elapsed().as_micros()); start = std::time::Instant::now();
   let models: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
   let setups = graph.setup(srs, &models);
+  println!("setup: {:?}",start.elapsed().as_micros()); start = std::time::Instant::now();
 
   // Encode Data:
   let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>)> =
-    setups.iter().map(|x| (x.0.iter().map(|y| (*y).into()).collect(), x.1.iter().map(|y| (*y).into()).collect())).collect();
+    setups.par_iter().map(|x| (x.0.par_iter().map(|y| (*y).into()).collect(), x.1.par_iter().map(|y| (*y).into()).collect())).collect();
+  println!("setups to affine: {:?}",start.elapsed().as_micros()); start = std::time::Instant::now();
   let setups = setups.iter().map(|x| (&x.0, &x.1)).collect();
-  let modelsEnc: Vec<ArrayD<DataEnc>> = models.iter().map(|model| (**model).map(|x| DataEnc::new(srs, x))).collect();
-  let inputs: Vec<ArrayD<Data>> = inputs.iter().map(|input| convert_to_data(srs, input)).collect();
+  let modelsEnc: Vec<ArrayD<DataEnc>> = models.par_iter().map(|model| (**model).map(|x| DataEnc::new(srs, x))).collect();
+  let inputs: Vec<ArrayD<Data>> = inputs.par_iter().map(|input| convert_to_data(srs, input)).collect();
+  println!("encode inputs: {:?}",start.elapsed().as_micros()); start = std::time::Instant::now();
   let inputs: Vec<&ArrayD<Data>> = inputs.iter().map(|input| input).collect();
   let inputsEnc: Vec<ArrayD<DataEnc>> = inputs.iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect();
   let outputs: Vec<Vec<&ArrayD<Fr>>> = outputs.iter().map(|output| output.iter().map(|x| x).collect()).collect();
   let outputs: Vec<&Vec<&ArrayD<Fr>>> = outputs.iter().map(|output| output).collect();
   let outputs: Vec<Vec<ArrayD<Data>>> = graph.encodeOutputs(srs, &models, &inputs, &outputs);
+  println!("encode outputs: {:?}",start.elapsed().as_micros()); start = std::time::Instant::now();
   let outputs: Vec<Vec<&ArrayD<Data>>> = outputs.iter().map(|outputs| outputs.iter().map(|x| x).collect()).collect();
   let outputs: Vec<&Vec<&ArrayD<Data>>> = outputs.iter().map(|x| x).collect();
   let outputsEnc: Vec<Vec<ArrayD<DataEnc>>> =
     outputs.iter().map(|output| (**output).iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect()).collect();
+  println!("finishing up pointers: {:?}",start.elapsed().as_micros()); start = std::time::Instant::now();
 
   // Save files:
   let modelsEncBytes = bincode::serialize(&modelsEnc).unwrap();
@@ -59,6 +67,7 @@ fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&
   fs::write("modelsEnc", &modelsEncBytes).unwrap();
   fs::write("inputsEnc", &inputsEncBytes).unwrap();
   fs::write("outputsEnc", &outputsEncBytes).unwrap();
+  println!("wrote files: {:?}",start.elapsed().as_micros()); start = std::time::Instant::now();
 
   // Fiat-Shamir:
   let mut hasher = Keccak256::new();
@@ -68,13 +77,17 @@ fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&
   let mut buf = [0u8; 32];
   hasher.finalize_into((&mut buf).into());
   let mut rng = StdRng::from_seed(buf);
+  println!("hashed: {:?}",start.elapsed().as_micros()); start = std::time::Instant::now();
 
   // Prove:
   let proofs = graph.prove(srs, &setups, &models, &inputs, &outputs, &mut rng);
+  println!("prove: {:?}",start.elapsed().as_micros()); start = std::time::Instant::now();
   proofs.serialize_uncompressed(File::create("proofs").unwrap()).unwrap();
+  println!("wrote proof: {:?}",start.elapsed().as_micros()); start = std::time::Instant::now();
 }
 
 fn verify(srs: &SRS, graph: &Graph) {
+  let mut start = std::time::Instant::now();
   // Read Files:
   let proofs = Vec::<(Vec<G1Affine>, Vec<G2Affine>)>::deserialize_uncompressed_unchecked(File::open("proofs").unwrap()).unwrap();
   let proofs = proofs.iter().map(|x| (&x.0, &x.1)).collect();
@@ -91,6 +104,7 @@ fn verify(srs: &SRS, graph: &Graph) {
   let outputsEnc: Vec<Vec<ArrayD<DataEnc>>> = bincode::deserialize(&outputsEncBytes).unwrap();
   let outputsEnc: Vec<Vec<&ArrayD<DataEnc>>> = outputsEnc.iter().map(|output| output.iter().map(|x| x).collect()).collect();
   let outputsEnc: Vec<&Vec<&ArrayD<DataEnc>>> = outputsEnc.iter().map(|x| x).collect();
+  println!("read files: {:?}",start.elapsed().as_micros()); start = std::time::Instant::now();
 
   // Fiat-Shamir:
   let mut hasher = Keccak256::new();
@@ -100,9 +114,11 @@ fn verify(srs: &SRS, graph: &Graph) {
   let mut buf = [0u8; 32];
   hasher.finalize_into((&mut buf).into());
   let mut rng = StdRng::from_seed(buf);
+  println!("hashed: {:?}",start.elapsed().as_micros()); start = std::time::Instant::now();
 
   // Verify:
   graph.verify(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng);
+  println!("verify: {:?}",start.elapsed().as_micros()); start = std::time::Instant::now();
 }
 
 fn main() {

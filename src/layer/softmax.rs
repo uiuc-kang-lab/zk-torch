@@ -9,9 +9,9 @@ use tract_onnx::pb::AttributeProto;
 pub struct SoftmaxLayer;
 impl Layer for SoftmaxLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
-    println!("softmax input shapes {:?}",input_shapes);
+    //println!("softmax input shapes {:?}",input_shapes);
     let mut graph = Graph::new();
-    let max = graph.addBB(Box::new(MaxBasicBlock {}));
+    let max = graph.addBB(Box::new(RepeaterBasicBlock {basic_block: Box::new(MaxBasicBlock {}), N: 1}));
     let sub = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(SubBasicBlock {}),
         N: 1,
@@ -21,8 +21,9 @@ impl Layer for SoftmaxLayer {
         basic_block: Box::new(CQ2BasicBlock {
           setup: Some((
             Box::new(ExpBasicBlock { input_SF: onnx::SF_LOG, output_SF: onnx::SF_LOG }),
-            -(onnx::CQ_RANGE as i32),
+            -(onnx::CQ_RANGE as i32)+1,
             onnx::CQ_RANGE,
+            1
           )),
         }),
         N: 1,
@@ -38,6 +39,7 @@ impl Layer for SoftmaxLayer {
           Box::new(LogBasicBlock { input_SF: onnx::SF_LOG, output_SF: onnx::SF_LOG }),
           0,
           onnx::CQ_RANGE,
+          1,
         )),
       }),
       N: 1,

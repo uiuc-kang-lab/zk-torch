@@ -1,8 +1,9 @@
 use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ndarray::{arr1, azip, s, ArrayD, Axis, Dimension, IxDyn, SliceInfo, SliceInfoElem};
+use ndarray::{arr1, par_azip, azip, s, ArrayD, Axis, Dimension, IxDyn, SliceInfo, SliceInfoElem};
 use rand::rngs::StdRng;
+use rayon::prelude::*;
 
 #[derive(Debug)]
 pub struct RepeaterBasicBlock {
@@ -95,28 +96,30 @@ fn combineArr<T: Clone>(arr: &ArrayD<&Vec<&ArrayD<T>>>) -> Vec<ArrayD<T>> {
 
 impl BasicBlock for RepeaterBasicBlock {
   fn genModel(&self) -> ArrayD<Fr> {
+    println!("repeater genmodel");
     self.basic_block.genModel()
   }
 
   fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    let temp = broadcastN::<Fr, Fr>(inputs, None, self.N);
-    let temp = temp.map(|(subArrays, _)| {
-      let subArrays: Vec<_> = subArrays.iter().map(|y| y).collect();
-      self.basic_block.run(model, &subArrays)
+    let mut temp = broadcastN::<Fr, Fr>(inputs, None, self.N);
+    temp.par_map_inplace(|(subArrays, _)| {
+      let subArrays2: Vec<_> = subArrays.iter().map(|y| y).collect();
+      *subArrays = self.basic_block.run(model, &subArrays2);
     });
-    let temp = temp.map(|x| x.iter().map(|y| y).collect());
+    let temp = temp.map(|x| x.0.iter().map(|y| y).collect());
     let temp = temp.map(|x| x);
     combineArr(&temp)
   }
 
   fn encodeOutputs(&self, srs: &SRS, model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
-    let temp = broadcastN(inputs, Some(outputs), self.N - 1);
-    let temp = temp.map(|(localInputs, localOutputs)| {
+    let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
+    let mut empty = ArrayD::from_elem(temp.shape(),vec![]);
+    par_azip!(((localInputs, localOutputs) in &mut temp, x in &mut empty) {
       let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
       let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
-      self.basic_block.encodeOutputs(srs, model, &localInputs, &localOutputs)
+      *x = self.basic_block.encodeOutputs(srs, model, &localInputs, &localOutputs);
     });
-    let temp = temp.map(|x| x.iter().map(|y| y).collect());
+    let temp = empty.map(|x| x.iter().map(|y| y).collect());
     let temp = temp.map(|x| x);
     combineArr(&temp)
   }

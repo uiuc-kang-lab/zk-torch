@@ -9,7 +9,7 @@ use tract_onnx::pb::AttributeProto;
 pub struct EqualLayer;
 impl Layer for EqualLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
-    println!("{:?}",constants);
+    //println!("{:?}",constants);
     assert!(*constants[1].unwrap().first().unwrap() == Fr::from(0));
     let mut graph = Graph::new();
     let one = graph.addBB(Box::new(Const2BasicBlock {c: arr1(&vec![Fr::from(1); *input_shapes[0].last().unwrap()]).into_dyn()}));

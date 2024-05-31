@@ -9,11 +9,13 @@ use std::collections::HashMap;
 use tract_onnx::prelude::{DatumType, Framework};
 use tract_onnx::tensor::load_tensor;
 
-pub const SF_LOG: usize = 10;
+pub const SF_LOG: usize = 9;
 pub const SF: usize = 1<<SF_LOG;
 pub const SF_FLOAT: f32 = (1<<SF_LOG) as f32;
 pub const CQ_RANGE:usize = 1 << 25;
 pub const CQ_RANGE_LOWER:i32 = - (1 << 24);
+pub const CONST_MAX:i32 = 1<<22;
+pub const CONST_MIN:i32 = -(1<<22);
 
 pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
   let onnx = tract_onnx::onnx();
@@ -66,11 +68,13 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
         let tensor = tensor.into_array::<f32>().unwrap();
         Ok(tensor.map(|x|{
           let mut y = (*x * SF_FLOAT).round();
-          if y < -(1<<15) as f32{
-            y = -(1<<15) as f32;
+          if y < CONST_MIN as f32{
+            println!("CONST_MIN {:?}",y);
+            y = CONST_MIN as f32;
           }
-          if y > (1<<15) as f32{
-            y = (1<<15) as f32;
+          if y > CONST_MAX as f32{
+            println!("CONST_MAX {:?}",y);
+            y = CONST_MAX as f32;
           }
           Fr::from(y as i32)
         }))
@@ -98,8 +102,9 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
   }
   let mut passed_constants = HashMap::new();
 
-  for node in onnx_graph.node.iter().take(22).filter(|node| node.op_type.as_str() != "Constant") {
+  for node in onnx_graph.node.iter().filter(|node| node.op_type.as_str() != "Constant") {
     let op = node.op_type.as_str();
+    println!("making {op}");
     let input_shapes: Vec<_> = node.input.iter().map(|x| &shapes[x]).collect();
     let my_constants = node.input.iter().map(|x|{
       passed_constants.get(x).or(
@@ -134,8 +139,8 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
     if my_constants.iter().all(|&x|x.is_some()) {
       let my_inputs:Vec<_> = my_constants.iter().map(|&x|x.unwrap().clone()).collect();
       let my_inputs = my_inputs.iter().map(|x|x).collect();
-      println!("{:?}",my_inputs);
-      println!("{:?}",local_graph);
+      //println!("{:?}",my_inputs);
+      //println!("{:?}",local_graph);
       let outputs = local_graph.run(&my_inputs, &vec![&arr1(&[]).into_dyn(); local_graph.basic_blocks.len()]);
       node.output.iter().zip(local_graph.outputs.iter()).for_each(|(output_str, &(nodeX, nodeY))|{
         passed_constants.insert(
@@ -153,7 +158,9 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
       let idx = *basic_blocks_idx.entry(name).or_insert_with(|| graph.basic_blocks.len());
       local_block_idx.push(idx);
       if idx == graph.basic_blocks.len() {
+        println!("generating model");
         setups.push(basic_block.genModel());
+        println!("done");
         graph.basic_blocks.push(basic_block);
       }
     }
@@ -183,8 +190,9 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
       node.output[0].clone(),
       local_graph.outputs.iter().map(|(x, y)| (start_idx + x, *y)).collect(),
     );
-    println!("adding output {:?} {:?}",node.output[0].clone(),
-      local_graph.outputs.iter().map(|(x, y)| (start_idx + x, *y)).collect::<Vec<_>>());
+    //println!("adding output {:?} {:?}",node.output[0].clone(),
+      //local_graph.outputs.iter().map(|(x, y)| (start_idx + x, *y)).collect::<Vec<_>>());
+    println!("op ptr: {:?} {:?}",op,graph.nodes.len());
     if op == "Shape"{
       passed_constants.insert(
         &node.output[0],

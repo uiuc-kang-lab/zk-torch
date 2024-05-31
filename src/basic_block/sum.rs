@@ -14,7 +14,7 @@ pub struct SumBasicBlock;
 impl BasicBlock for SumBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1 && inputs[0].ndim() == 1);
-    println!("sum output: {:?}",inputs[0].iter().sum::<Fr>());
+    //println!("sum output: {:?}",inputs[0].iter().sum::<Fr>());
     vec![arr1(&[inputs[0].iter().sum::<Fr>()]).into_dyn()]
   }
 

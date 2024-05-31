@@ -11,14 +11,14 @@ pub struct DivScalarBasicBlock {
 impl BasicBlock for DivScalarBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[1].len() == 1);
-    println!("div inputs {:?}",inputs);
-    let SF = self.output_SF as i32;
+    //println!("div inputs {:?}",inputs);
+    let SF = self.output_SF as i64;
     let mut div = vec![];
     let mut rem = vec![];
-    let y = util::fr_to_int(inputs[1][0]);
+    let y = util::fr_to_int(inputs[1][0]) as i64;
     assert!(y > 0);
     for x in inputs[0].iter() {
-      let x = util::fr_to_int(*x);
+      let x = util::fr_to_int(*x) as i64;
       let mut z = (2 * x * SF + y) / (2 * y);
       let mut r = (2 * x * SF + y) % (2 * y);
       if r < 0 {
@@ -39,10 +39,12 @@ pub struct DivConstBasicBlock {
 impl BasicBlock for DivConstBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1);
-    vec![inputs[0].map(|x| {
-      let mut x = util::fr_to_int(*x) as f32;
+    let mut out = inputs[0].clone();
+    out.par_mapv_inplace(|x| {
+      let mut x = util::fr_to_int(x) as f32;
       x /= self.c;
-      Fr::from(x.round() as i32)
-    })]
+      Fr::from(x.round() as i64)
+    });
+    vec![out]
   }
 }

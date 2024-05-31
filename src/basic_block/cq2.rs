@@ -16,36 +16,38 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct CQ2BasicBlock {
-  pub setup: Option<(Box<dyn BasicBlock>, i32, usize)>,
+  pub setup: Option<(Box<dyn BasicBlock>, i32, usize, u32)>,
 }
 
 impl BasicBlock for CQ2BasicBlock {
-
-  //TESTER
-  /*fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    let N = model.shape()[1];
-    println!("N:{N}");
-    let mut table_dict = HashMap::new();
-    if table_dict.len() == 0 {
-      for i in 0..N {
-        table_dict.insert((model[[0,i]], model[[1,i]]), i);
-      }
-    }
-    for x in inputs[0].iter().zip(inputs[1].iter()) {
-      let temp = (*x.0, *x.1);
-      assert!(table_dict.contains_key(&temp));
-    }
-    vec![]
-  }*/
-  //TESTER
-
-
   fn genModel(&self) -> ArrayD<Fr> {
+    println!("cq2 genmodel");
     util::gen_cq_table(
       &(self.setup.as_ref().unwrap().0),
       self.setup.as_ref().unwrap().1,
       self.setup.as_ref().unwrap().2,
+      self.setup.as_ref().unwrap().3,
     )
+  }
+
+  fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    let N = model.shape()[1];
+    for (&x,_) in inputs[0].iter().zip(inputs[1].iter()) {
+      if model[[0,0]] > Fr::from(1u64 << 40){
+        if x > Fr::from(1u64 << 40){
+          assert!(x >= model[[0,0]], "{:?} {:?} {:?}",-x,-model[[0,0]],model[[0,N-1]]);
+        }else{
+          assert!(x <= model[[0,N-1]], "{:?} {:?} {:?}",x,-model[[0,0]],model[[0,N-1]]);
+        }
+      }else{
+        if x > Fr::from(1u64 << 40){
+          assert!(false, "{:?} {:?} {:?}",-x,model[[0,0]],model[[0,N-1]]);
+        }else{
+          assert!(x >= model[[0,0]] && x <= model[[0,N-1]], "{:?} {:?} {:?}",x,model[[0,0]],model[[0,N-1]]);
+        }
+      }
+    }
+    vec![]
   }
 
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>) {
@@ -56,23 +58,24 @@ impl BasicBlock for CQ2BasicBlock {
     let mut setup = vec![];
     let mut setup2 = vec![];
     for i in 0..2 {
-      setup2.push(util::msm::<G2Projective>(&srs.X2A, &model[i].poly.coeffs) + srs.Y2P * model[i].r);
+      setup2.push(util::gpu_msm_g2(&srs.IX2A, &model[i].poly.coeffs) + srs.Y2P * model[i].r);
       let mut temp = model[i].poly.coeffs[1..].to_vec();
       temp.resize(N * 2 - 1, Fr::zero());
       let mut temp2 = srs.X1P[..N].to_vec();
       temp2.reverse();
       let mut Q_i_x_1 = util::toeplitz_mul(domain_2N, &temp, &temp2);
-      util::fft_in_place(domain_N, &mut Q_i_x_1);
+      Q_i_x_1 = util::gpu_fft_g1(domain_N, &Q_i_x_1);
       let temp = Fr::from(N as u32).inverse().unwrap();
       let temp2 = domain_N.group_gen_inv().pow(&[(N - 1) as u64]);
-      Q_i_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x *= temp * temp2.pow(&[i as u64]));
+      let scalars = (0..N).into_par_iter().map(|i|temp * temp2.pow(&[i as u64])).collect();
+      let Q_i_x_1 = util::gpu_ssm_g1(&Q_i_x_1, &scalars);
       setup.extend(Q_i_x_1);
     }
-    let mut L_i_x_1 = srs.X1P[..N].to_vec();
-    util::ifft_in_place(domain_N, &mut L_i_x_1);
-    let mut L_i_0_x_1 = L_i_x_1.clone();
+    let L_i_x_1 = util::gpu_ifft_g1(domain_N, &srs.X1P[..N].to_vec());
+    let scalars = (0..N).into_par_iter().map(|i|domain_N.group_gen_inv().pow(&[i as u64])).collect();
+    let mut L_i_0_x_1 = util::gpu_ssm_g1(&L_i_x_1, &scalars);
     let temp = srs.X1P[N - 1] * Fr::from(N as u64).inverse().unwrap();
-    L_i_0_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x = *x * domain_N.group_gen_inv().pow(&[i as u64]) - temp);
+    L_i_0_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x -= temp);
     setup.extend(L_i_x_1);
     setup.extend(L_i_0_x_1);
     return (setup, setup2);

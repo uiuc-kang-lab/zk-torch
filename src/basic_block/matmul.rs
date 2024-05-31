@@ -6,8 +6,9 @@ use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{ops::Mul, ops::Sub, UniformRand, Zero};
-use ndarray::{ArrayD, Ix1, Ix2, IxDyn};
+use ndarray::{arr1, arr2, ArrayD, Ix1, Ix2, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
+use rayon::prelude::*;
 
 fn index<'a, T>(A: &'a ArrayD<T>, i: usize) -> &T {
   if i == 0 {
@@ -21,7 +22,7 @@ fn index<'a, T>(A: &'a ArrayD<T>, i: usize) -> &T {
 pub struct MatMulBasicBlock;
 impl BasicBlock for MatMulBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    println!("{:?} {:?}",inputs[0].shape(),inputs[1].shape());
+    //println!("{:?} {:?}",inputs[0].shape(),inputs[1].shape());
     assert!(
       inputs.len() == 2
         && inputs[1].ndim() == 2
@@ -29,12 +30,21 @@ impl BasicBlock for MatMulBasicBlock {
           || (inputs[0].ndim() == 2 && inputs[0].shape()[1] == inputs[1].shape()[1]))
     );
     let b = inputs[1].view().into_dimensionality::<Ix2>().unwrap();
+    let m = b.shape()[0];
+    let n = b.shape()[1];
     if inputs[0].ndim() == 1 {
       let a = inputs[0].view().into_dimensionality::<Ix1>().unwrap();
-      vec![a.dot(&b.t()).into_dyn()]
+      vec![arr1(&((0..m).into_par_iter().map(|i|{
+        (0..n).map(|j|a[j] * b[[i,j]]).sum()
+      }).collect::<Vec<_>>())).into_dyn()]
     } else {
       let a = inputs[0].view().into_dimensionality::<Ix2>().unwrap();
-      vec![a.dot(&b.t()).into_dyn()]
+      let l = a.shape()[0];
+      let res:Vec<_> = (0..l*m).into_par_iter().map(|idx|{
+        let (i,j)=(idx/m,idx%m);
+        (0..n).map(|k|a[[i,k]] * b[[j,k]]).sum()
+      }).collect();
+      vec![ArrayD::from_shape_vec(vec![l,m],res).unwrap()]
     }
   }
 

@@ -25,6 +25,7 @@ impl Layer for ReduceMeanLayer {
           }),
           onnx::CQ_RANGE_LOWER,
           onnx::CQ_RANGE,
+          1,
         )),
       }),
       N: 1,

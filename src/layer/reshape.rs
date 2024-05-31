@@ -12,14 +12,14 @@ impl Layer for ReshapeLayer {
     let mut graph = Graph::new();
 
     let startShape = input_shapes[0];
-    let mut endShape: Vec<_> = constants[1].unwrap().as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).filter(|x| *x != 0).collect();
+    let mut endShape: Vec<_> = constants[1].unwrap().as_slice().unwrap().iter().map(|x| util::fr_to_int(*x) as i32).filter(|x| *x != 0).collect();
     if let Some(i) = endShape.iter().position(|&x|x==-1){
       let a = input_shapes[0].iter().fold(1, |x,&y| x * y) as i32;
       let b = endShape.iter().fold(-1, |x,&y| x * y);
       endShape[i] = a/b;
     }
     let endShape:Vec<_> = endShape.iter().map(|&x|x as usize).collect();
-    println!("final shape: {:?}",endShape);
+    //println!("final shape: {:?}",endShape);
 
     if startShape.last() == endShape.last() {
       let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: endShape.clone() }));

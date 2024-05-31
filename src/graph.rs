@@ -7,6 +7,7 @@ use ark_std::Zero;
 use ndarray::ArrayD;
 use rand::rngs::StdRng;
 use std::collections::HashMap;
+use rayon::prelude::*;
 
 #[derive(Debug)]
 pub struct Node {
@@ -28,6 +29,10 @@ impl Graph {
       println!("running {i} {:?}", self.basic_blocks[n.basic_block]);
       let myInputs = n.inputs.iter().map(|&(j, k)| if j < 0 { inputs[k + (-j-1) as usize] } else { &(outputs[j as usize][k]) }).collect();
       outputs[i] = self.basic_blocks[n.basic_block].run(&models[n.basic_block], &myInputs);
+      if i>187{
+        println!("outputs shape: {:?}",outputs[i].iter().map(|x|x.shape()).collect::<Vec<_>>());
+        println!("outputs: {:?}",outputs[i].iter().map(|x|x.iter().take(1026).map(|&x|util::fr_to_int(x)).collect::<Vec<_>>()).collect::<Vec<_>>());
+      }
     });
     return outputs;
   }
@@ -51,8 +56,8 @@ impl Graph {
   pub fn setup(&self, srs: &SRS, models: &Vec<&ArrayD<Data>>) -> Vec<(Vec<G1Projective>, Vec<G2Projective>)> {
     self
       .basic_blocks
-      .iter()
-      .zip(models.iter())
+      .par_iter()
+      .zip(models)
       .enumerate()
       .map(|(i, (b, m))| {
         println!("setting up {:?} {:?}", i, b);

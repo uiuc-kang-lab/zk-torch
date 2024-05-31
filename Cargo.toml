@@ -20,4 +20,4 @@ bincode = "1.3.3"
 
 icicle-cuda-runtime = { path = "/home/arigf2/project/my_icicle/wrappers/rust/icicle-cuda-runtime" }
 icicle-core = { path = "/home/arigf2/project/my_icicle/wrappers/rust/icicle-core", features = ["arkworks"]}
-icicle-bn254 = { path = "/home/arigf2/project/my_icicle/wrappers/rust/icicle-curves/icicle-bn254" , features = ["arkworks"]}
+icicle-bn254 = { path = "/home/arigf2/project/my_icicle/wrappers/rust/icicle-curves/icicle-bn254" , features = ["arkworks", "g2"]}

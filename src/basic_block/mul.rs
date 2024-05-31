@@ -102,11 +102,14 @@ impl BasicBlock for MulScalarBasicBlock {
 pub struct MulBasicBlock;
 impl BasicBlock for MulBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    println!("mul inputs {:?}",inputs);
+    //println!("mul inputs {:?}",inputs);
     assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[0].shape() == inputs[1].shape());
     let mut r = ArrayD::zeros(inputs[0].dim());
-    azip!((r in &mut r, &x in inputs[0], &y in inputs[1]) *r = x * y);
-    println!("mul outputs {:?}",inputs);
+    azip!((r in &mut r, &x in inputs[0], &y in inputs[1]) {
+      *r = x * y;
+      //assert!(*r < Fr::from(1<<28) || *r > Fr::from(-(1<<28)));
+    });
+    //println!("mul outputs {:?}",inputs);
     vec![r]
   }
   fn prove(

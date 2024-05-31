@@ -13,7 +13,7 @@ impl Layer for SqrtLayer {
     let sqrt = graph.addBB(Box::new(SqrtBasicBlock { input_SF: onnx::SF_LOG, output_SF: onnx::SF_LOG }));
     let sqrt_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
-        setup: Some((Box::new(SqrtBasicBlock { input_SF: onnx::SF_LOG, output_SF: onnx::SF_LOG }), onnx::CQ_RANGE_LOWER, onnx::CQ_RANGE)),
+        setup: Some((Box::new(SqrtBasicBlock { input_SF: onnx::SF_LOG, output_SF: onnx::SF_LOG }), 0, onnx::CQ_RANGE, 1)),
       }),
       N: 1,
     }));
