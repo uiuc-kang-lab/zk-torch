@@ -15,8 +15,13 @@ impl Layer for ConcatLayer {
     let axis = (if axis < 0 { input_shapes[0].len() as isize + axis } else { axis }) as usize;
     let mut outputShape = input_shapes[0].clone();
     outputShape[axis] = input_shapes.iter().map(|x| x[axis as usize]).sum();
-
-    if axis == input_shapes[0].len() - 1 {
+    if input_shapes[0].len() == 1 {
+      // workaround: for 1D input. Maybe we should use copy constraint to handle this case later.
+      let n_input = input_shapes.len();
+      let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: axis as usize }));
+      let concat_output = graph.addNode(concat, (0..n_input).map(|i| (-(i as i32 + 1), 0)).collect());
+      graph.outputs.push((concat_output, 0));
+    } else if axis == input_shapes[0].len() - 1 {
       // permute inputs
       let n = outputShape.len();
       let mut a = outputShape[n - 2];
@@ -27,14 +32,16 @@ impl Layer for ConcatLayer {
         basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
         N: 2,
       }));
-      let n_input = input_shapes.len();
       let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: (axis - 1) as usize }));
       let permutation_back = ((0..a).map(|x| x * b).collect(), (0..b).collect());
       let permute_back = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(PermuteBasicBlock { permutation: permutation_back }),
+        basic_block: Box::new(PermuteBasicBlock {
+          permutation: permutation_back,
+        }),
         N: 2,
       }));
 
+      let n_input = input_shapes.len();
       let mut n_permute_output = Vec::with_capacity(n_input);
       for i in 0..n_input {
         let permute_output = graph.addNode(permute, vec![(-(i as i32 + 1), 0)]);
@@ -49,7 +56,7 @@ impl Layer for ConcatLayer {
       let concat_output = graph.addNode(concat, (0..n_input).map(|i| (-(i as i32 + 1), 0)).collect());
       graph.outputs.push((concat_output, 0));
     }
-    
+
     (graph, vec![outputShape])
   }
 }

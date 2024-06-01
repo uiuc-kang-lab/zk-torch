@@ -75,6 +75,9 @@ fn testBasicBlocks() {
   testBasicBlock(CQ2BasicBlock { setup: None }, srs, &ab, &vec![&a_n, &b_n]);
   testBasicBlock(SumBasicBlock {}, srs, &empty, &vec![&a]);
 
+  let data_to_concat = ArrayD::from_shape_fn(IxDyn(&[1, 2]), |_| Fr::rand(&mut rng));
+  testBasicBlock(ConcatBasicBlock { axis: 0 }, srs, &empty, &vec![&data_to_concat, &data_to_concat.clone()]);
+
   let l: usize = 1 << 3;
   let m: usize = 1 << 2;
   let n: usize = 1 << 1;

@@ -3,7 +3,7 @@ use crate::graph::*;
 use crate::layer::Layer;
 use crate::util;
 use ark_bn254::Fr;
-use ndarray::ArrayD;
+use ndarray::{ArrayD, Axis};
 use tract_onnx::pb::AttributeProto;
 
 pub struct SqueezeLayer;
@@ -13,24 +13,27 @@ impl Layer for SqueezeLayer {
 
     let axes_result = attributes.iter().filter(|x| x.name == "axes").next();
     let mut axes: Vec<_>;
-    if let Some(x) = axes_result { // axes is provided
+    if let Some(x) = axes_result {
+      // axes is provided
       axes = x.ints.iter().map(|x| *x as i64).collect();
-    } else { // axes is not provided
+    } else {
+      // axes is not provided
       axes = input_shapes[0].iter().enumerate().filter(|(_, x)| **x == 1).map(|(i, _)| i as i64).collect();
     }
-  
+
     // map negative axes to positive
     axes = axes.iter().map(|&x| if x < 0 { input_shapes[0].len() as i64 + x } else { x }).collect();
 
     let startShape = input_shapes[0];
     assert!(axes.iter().all(|&x| startShape[x as usize] == 1));
     let endShape: Vec<_> = startShape.iter().enumerate().filter(|(i, _)| !axes.contains(&(*i as i64))).map(|(_, x)| *x).collect();
-    
+
     if startShape.last() == endShape.last() {
       let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: endShape.clone() }));
       let output = graph.addNode(reshape, vec![(-1, 0)]);
       graph.outputs.push((output, 0));
-    } else { // startShape.last() < endShape.last()
+    } else {
+      // startShape.last() < endShape.last()
       let n = startShape.len();
       let mut a = startShape[n - 2];
       assert!(*endShape.last().unwrap() == a);
@@ -51,6 +54,17 @@ impl Layer for SqueezeLayer {
   }
 }
 
+#[derive(Debug)]
+pub struct UnsqueezeBasicBlock;
+impl BasicBlock for UnsqueezeBasicBlock {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    // unsqueeze the input tensor
+    let r = inputs[0].clone();
+    let r = r.insert_axis(Axis(0));
+    vec![r]
+  }
+}
+
 pub struct UnsqueezeLayer;
 impl Layer for UnsqueezeLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
@@ -60,7 +74,19 @@ impl Layer for UnsqueezeLayer {
     let axis = if axis < 0 { input_shapes[0].len() as isize + axis + 1 } else { axis };
 
     let startShape = input_shapes[0];
-    let endShape: Vec<_> = (0..startShape.len() + 1).map(|x| if x == axis as usize { 1 } else { if x > axis as usize { startShape[x-1] } else { startShape[x] } }).collect();
+    let endShape: Vec<_> = (0..startShape.len() + 1)
+      .map(|x| {
+        if x == axis as usize {
+          1
+        } else {
+          if x > axis as usize {
+            startShape[x - 1]
+          } else {
+            startShape[x]
+          }
+        }
+      })
+      .collect();
 
     if startShape.last() == endShape.last() {
       let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: endShape.clone() }));
@@ -84,6 +110,11 @@ impl Layer for UnsqueezeLayer {
       let intermediate = graph.addNode(reshape, vec![(-1, 0)]);
       let output = graph.addNode(permute, vec![(intermediate, 0)]);
       graph.outputs.push((output, 0));
+    } else {
+      // special case (startShape.last() < endShape.last()): [] --> [1]
+      let id = graph.addBB(Box::new(UnsqueezeBasicBlock {}));
+      let id_output = graph.addNode(id, vec![(-1, 0)]);
+      graph.outputs.push((id_output, 0));
     }
 
     (graph, vec![endShape])
