@@ -174,12 +174,22 @@ impl BasicBlock for CopyConstraintBasicBlock {
     );
     let mut ssig_polys: Vec<_> = ssig.iter().map(|x| DensePolynomial::from_coefficients_vec(domain.ifft(x))).collect();
 
-    let mut proof_0 = vec![L_i_x_1[0], sid_x];
+    // Get Lagrange basis from first None element
+    let mut none_idx = 0;
+    for i in indices(self.permutation.shape()) {
+      let idx = i.clone();
+      if self.permutation[i].is_none() {
+        none_idx = N / last_outp_dim * idx[self.permutation.shape().len() - 1];
+        break;
+      }
+    }
+
+    let mut proof_0 = vec![L_i_x_1[0], L_i_x_1[none_idx], sid_x];
     proof_0.append(&mut ssig_polys.iter().map(|x| util::msm::<G1Projective>(&srs.X1A, &x.coeffs)).collect());
     let mut proof_2 = vec![sid_poly];
     proof_2.append(&mut ssig_polys);
 
-    return (proof_0, vec![L_i_x_2[0]], proof_2);
+    return (proof_0, vec![L_i_x_2[0], L_i_x_2[none_idx]], proof_2);
   }
 
   fn prove(
@@ -194,10 +204,11 @@ impl BasicBlock for CopyConstraintBasicBlock {
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let input = inputs[0];
     let output = outputs[0];
-    let input_len = input.first().unwrap().raw.len();
-    let output_len = output.first().unwrap().raw.len();
+    let input_deg = input.first().unwrap().raw.len();
+    let output_deg = output.first().unwrap().raw.len();
+    let last_outp_dim = self.output_dim[self.output_dim.ndim() - 1];
 
-    let N = max(input_len, output_len);
+    let N = max(input_deg, output_deg);
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
 
     // Round 1: quotients
@@ -205,6 +216,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let gamma = Fr::rand(rng);
 
     // Calculate fjs
+    let input_iter = inputs[0].iter();
+    let input_len = input_iter.len();
     let fj_polys: Vec<_> = inputs[0].iter().chain(outputs[0].iter()).map(|x| &x.poly).collect();
     let sid_poly = &setup.2[0];
     let ssig_polys = &setup.2[1..];
@@ -247,6 +260,35 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let L0Z_Q = L0Z_poly.divide_by_vanishing_poly(domain).unwrap();
     let L0Z_Q_x = util::msm::<G1Projective>(&srs.X1A, &L0Z_Q.0.coeffs);
 
+    // Calculate quotient for zero-pad check
+    // TODO: mb an issue with 1d arrays
+    let outp_ndim = self.permutation.ndim();
+    let mut has_none = false;
+    let mut none_f_idx = IxDyn::zeros(outp_ndim - 1);
+    let mut none_idx = 0;
+    let mut Lnone_f_Q_x = G1Projective::zero();
+    for i in indices(self.permutation.shape()) {
+      let idx = i.clone();
+      if self.permutation[i].is_none() {
+        has_none = true;
+        none_f_idx = IxDyn(&idx.as_array_view().iter().take(outp_ndim - 1).map(|x| *x).collect::<Vec<_>>());
+        none_idx = N / last_outp_dim * idx[self.permutation.shape().len() - 1];
+        break;
+      }
+    }
+    if has_none {
+      let mut Lnone_evals = vec![Fr::zero(); N];
+      Lnone_evals[none_idx] = Fr::one();
+      let Lnone_poly = DensePolynomial {
+        coeffs: domain.ifft(&Lnone_evals),
+      };
+      let f_poly = &outputs[0][none_f_idx.clone()].poly;
+      let Lnone_f_poly = Lnone_poly.mul(f_poly);
+
+      let Lnone_f_Q = Lnone_f_poly.divide_by_vanishing_poly(domain).unwrap();
+      Lnone_f_Q_x = util::msm::<G1Projective>(&srs.X1A, &Lnone_f_Q.0.coeffs).into();
+    }
+
     // Calculate quotient for Z(x)f'(x) = Z(gx)g'(x)
     let Zg_poly = DensePolynomial {
       coeffs: Z_poly.coeffs.iter().enumerate().map(|(i, x)| x * &domain.element(i)).collect(),
@@ -260,8 +302,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // Fiat-Shamir
     let mut bytes = Vec::new();
     let mut rng2 = StdRng::from_entropy();
-    let mut r: Vec<_> = (0..3).map(|_| Fr::rand(&mut rng2)).collect();
-    let proof = vec![Z_x, L0Z_Q_x, Q_x];
+    let mut r: Vec<_> = (0..4).map(|_| Fr::rand(&mut rng2)).collect();
+    let proof = vec![Z_x, L0Z_Q_x, Q_x, Lnone_f_Q_x];
     let mut proof: Vec<_> = proof.iter().enumerate().map(|(i, x)| (*x) + srs.Y1P * r[i]).collect();
     proof.serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
@@ -316,17 +358,18 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let opening_r: Fr = inputs[0].iter().chain(outputs[0].iter()).enumerate().map(|(i, x)| x.r * bs[ssig_polys.len() + i]).sum();
     let mut C: Vec<G1Projective> = vec![
       setup.0[0] * r[0] - (srs.X1P[N] - srs.X1P[0]) * r[1],
-      srs.X1P[0] * f1_a * r[0] - srs.X1P[0] * (a_pows[N - 1] - Fr::one()) * r[2] - (srs.X1P[1] - (srs.X1P[0] * a)) * r[5],
-      srs.X1P[0] * opening_r - (srs.X1P[1] - (srs.X1P[0] * a)) * r[3],
-      srs.X1P[0] * r[0] - (srs.X1P[1] - (srs.X1P[0] * a * omega)) * r[4],
+      setup.0[1] * outputs[0][none_f_idx].r - (srs.X1P[N] - srs.X1P[0]) * r[3],
+      srs.X1P[0] * f1_a * r[0] - srs.X1P[0] * (a_pows[N - 1] - Fr::one()) * r[2] - (srs.X1P[1] - (srs.X1P[0] * a)) * r[6],
+      srs.X1P[0] * opening_r - (srs.X1P[1] - (srs.X1P[0] * a)) * r[4],
+      srs.X1P[0] * r[0] - (srs.X1P[1] - (srs.X1P[0] * a * omega)) * r[5],
     ];
     proof.append(&mut C);
-    let mut s_1s = setup.0[1..].iter().map(|x| Into::<G1Projective>::into(*x)).collect();
+    let mut s_1s = setup.0[2..].iter().map(|x| Into::<G1Projective>::into(*x)).collect();
     proof.append(&mut s_1s);
 
     let mut evals = vec![Z_ga];
     evals.append(&mut q1_evals);
-    return (proof, vec![setup.1[0].into()], evals);
+    return (proof, vec![setup.1[0].into(), setup.1[1].into()], evals);
   }
 
   fn verify(
@@ -344,11 +387,11 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
     let omega = domain.group_gen();
 
-    let [Z_x, L0Z_Q_x, Q_x, q1_Q_x, Z_Q_x, r_Q_x, C1, C2, C3, C4, sid_x] = proof.0[..11] else {
+    let [Z_x, L0Z_Q_x, Q_x, Lnone_f_Q_x, q1_Q_x, Z_Q_x, r_Q_x, C1, C2, C3, C4, C5, sid_x] = proof.0[..13] else {
       panic!("Wrong proof format")
     };
-    let ssig_xs = &proof.0[11..];
-    let L0 = proof.1[0];
+    let ssig_xs = &proof.0[13..];
+    let [L0, Lnone] = proof.1[..] else { panic!("Wrong proof format") };
     let Z_ga = proof.2[0];
 
     let q1_evals = &proof.2[1..];
@@ -362,7 +405,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
 
     // Round 2 randomness
     let mut bytes = Vec::new();
-    vec![Z_x, L0Z_Q_x, Q_x].serialize_uncompressed(&mut bytes).unwrap();
+    vec![Z_x, L0Z_Q_x, Q_x, Lnone_f_Q_x].serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
     let a = Fr::rand(rng);
     let b = Fr::rand(rng);
@@ -373,6 +416,21 @@ impl BasicBlock for CopyConstraintBasicBlock {
       (-L0Z_Q_x, (srs.X2A[N] - srs.X2A[0]).into()),
       (-C1, srs.Y2A),
     ]);
+
+    // Check Lnone(x)f(x) = V(x)Q(x)
+    let outp_ndim = self.permutation.ndim();
+    for i in indices(self.permutation.shape()) {
+      let idx = i.clone();
+      if self.permutation[i].is_none() {
+        let none_f_idx = IxDyn(&idx.as_array_view().iter().take(outp_ndim - 1).map(|x| *x).collect::<Vec<_>>());
+        checks.push(vec![
+          (outputs[0][none_f_idx].g1, Lnone),
+          (-Lnone_f_Q_x, (srs.X2A[N] - srs.X2A[0]).into()),
+          (-C2, srs.Y2A),
+        ]);
+        break;
+      }
+    }
 
     // Check Z(x)f'(x) = Z(gx)g'(x)
     let fj1_as: Vec<_> = fj_as
@@ -396,7 +454,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
       ((-srs.X1A[0] * g1_a * (fj_as[fj_as.len() - 1] + gamma) * Z_ga).into(), srs.X2A[0]),
       ((-Q_x * (a_pows[N - 1] - Fr::one())).into(), srs.X2A[0]),
       (-r_Q_x, V_x),
-      (-C2, srs.Y2A),
+      (-C3, srs.Y2A),
     ]);
 
     // Check opening commitments over a
@@ -412,12 +470,12 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let q1_a: Fr = q1_evals[1..].iter().enumerate().fold(sid_a, |acc, (i, x)| acc + *x * bs[i]);
 
     let r_x: G1Affine = (srs.X1P[0] * q1_a).into();
-    checks.push(vec![((q1_x - r_x).into(), srs.X2A[0]), (-q1_Q_x, V_x.into()), (-C3, srs.Y2A)]);
+    checks.push(vec![((q1_x - r_x).into(), srs.X2A[0]), (-q1_Q_x, V_x.into()), (-C4, srs.Y2A)]);
 
     // Check Z opening commitment
     let Z_ga_x: G1Affine = (srs.X1P[0] * Z_ga).into();
     let V_x: G2Affine = (srs.X2P[1] - srs.X2P[0] * omega * a).into();
-    checks.push(vec![((Z_x - Z_ga_x).into(), srs.X2A[0]), (-Z_Q_x, V_x.into()), (-C4, srs.Y2A)]);
+    checks.push(vec![((Z_x - Z_ga_x).into(), srs.X2A[0]), (-Z_Q_x, V_x.into()), (-C5, srs.Y2A)]);
     checks
   }
 }

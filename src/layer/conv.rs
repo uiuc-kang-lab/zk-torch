@@ -54,7 +54,6 @@ pub fn splat_input(input_shape: &Vec<usize>, strides: &Vec<usize>, pads: &Vec<us
   let inp_shape = Dim(IxDyn(input_shape));
   let inp = ArrayD::from_shape_vec(inp_shape.clone(), indices(inp_shape).into_iter().map(|x| x.into_dyn()).collect()).unwrap();
 
-  // TODO: change to use None option for padding
   let inp_pad = pad(&inp, &padding, &IxDyn::zeros(input_shape.len()));
 
   let out_dims = out_hw(&dims, &strides, &ch_dims, &padding[2..].to_vec());
@@ -62,7 +61,7 @@ pub fn splat_input(input_shape: &Vec<usize>, strides: &Vec<usize>, pads: &Vec<us
   let mut inp_cells = vec![];
   let mut input_row_idx = 0;
 
-  // (O_H * O_W x inp_channels * C_H * C_W)
+  // (out_dims product x inp_channels * ch_dims product)
   for batch in 0..inp.shape()[0] {
     for out_idx in indices(out_dims.clone()) {
       inp_cells.push(vec![]);
@@ -98,6 +97,7 @@ pub fn splat_weights(weights_shape: &Vec<usize>) -> Vec<Vec<Option<IxDyn>>> {
   weights_cells
 }
 
+// Adds padding to the nearest power of two to splatted inputs/weights
 fn splat_pad(input: &Vec<Vec<Option<IxDyn>>>) -> ArrayD<Option<IxDyn>> {
   let outp_size = input.len();
   let conv_size = input[0].len();
@@ -117,9 +117,16 @@ impl Layer for ConvLayer {
     let dims = input_shapes[0][2..].to_vec();
     let ch_dims = weight_shape[2..].to_vec();
 
-    let strides: Vec<_> = attributes.iter().filter(|x| x.name == "strides").next().unwrap().ints.iter().map(|x| *x as usize).collect();
-    let pads: Vec<_> = attributes.iter().filter(|x| x.name == "pads").next().unwrap().ints.iter().map(|x| *x as usize).collect();
+    let strides: Vec<_> = match attributes.iter().filter(|x| x.name == "strides").next() {
+      Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
+      None => vec![1; dims.len()],
+    };
+    let pads: Vec<_> = match attributes.iter().filter(|x| x.name == "pads").next() {
+      Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
+      None => vec![0; 2 * dims.len()],
+    };
 
+    // Splat input
     let permutation = splat_input(&input_shapes[0], &strides, &pads, weight_shape[1], &ch_dims);
     let permutation_padded = splat_pad(&permutation);
     let output_dim = permutation_padded.dim();
@@ -149,6 +156,8 @@ impl Layer for ConvLayer {
       }),
       N: 1,
     }));
+
+    // Add bias
     let add = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(AddBasicBlock {}),
       N: 1,
