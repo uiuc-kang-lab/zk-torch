@@ -99,7 +99,8 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
 
   for node in onnx_graph.node.iter().filter(|node| node.op_type.as_str() != "Constant") {
     let op = node.op_type.as_str();
-    let input_shapes: Vec<_> = node.input.iter().map(|x| &shapes[x]).collect();
+    let input_shapes: Vec<_> = node.input.iter().map(|x| shapes.get(x)).collect();
+    let input_shapes = input_shapes.into_iter().filter_map(|x| x).collect::<Vec<_>>(); // hack: we ignore optional inputs
     let my_constants = node.input.iter().map(|x| passed_constants.get(x).or(constants_hashmap.get(x).map(|&y| &setups[y]))).collect();
     let my_attributes = node.attribute.iter().map(|x| x).collect();
     let (mut local_graph, output_shapes) = match op {
@@ -107,7 +108,9 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
       "Mul" => Ok(MulLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Cast" => Ok(CastLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Concat" => Ok(ConcatLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "ConstantOfShape" => Ok(ConstOfShapeLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Sub" => Ok(SubLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "LSTM" => Ok(LSTMLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Relu" => Ok(ReLULayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Gather" => Ok(GatherLayer::graph(&input_shapes, &my_constants, &my_attributes)),
@@ -122,6 +125,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
       "Where" => Ok(WhereLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Expand" => Ok(ExpandLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Softmax" => Ok(SoftmaxLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "Split" => Ok(SplitLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Squeeze" => Ok(SqueezeLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Unsqueeze" => Ok(UnsqueezeLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Erf" => Ok(ErfLayer::graph(&input_shapes, &my_constants, &my_attributes)),
@@ -152,6 +156,8 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
     }
     let start_idx = graph.nodes.len() as i32;
     for local_node in local_graph.nodes.iter() {
+      // filter out node input that are ""
+      let node_input = &node.input.iter().filter(|x| x as &str != "").collect::<Vec<_>>();
       graph.nodes.push(Node {
         basic_block: local_block_idx[local_node.basic_block],
         inputs: local_node
@@ -159,7 +165,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
           .iter()
           .map(|(x, y)| {
             if x < &0 {
-              let input_tag = &node.input[(-x - 1) as usize];
+              let input_tag = node_input[(-x - 1) as usize];
               if input_idx.contains_key(input_tag) {
                 (-(*input_idx.get(input_tag).unwrap() as i32) - 1, *y)
               } else {
@@ -172,10 +178,10 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
           .collect(),
       });
     }
-    outputs_idx.insert(
-      node.output[0].clone(),
-      local_graph.outputs.iter().map(|(x, y)| (start_idx + x, *y)).collect(),
-    );
+    for (i, output) in node.output.iter().enumerate() {
+      let local_output = local_graph.outputs[i];
+      outputs_idx.insert(output.clone(), vec![(start_idx + local_output.0, local_output.1)]);
+    }
     if op == "Shape" {
       passed_constants.insert(
         &node.output[0],

@@ -1,6 +1,6 @@
 use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ndarray::{arr0, ArrayD};
+use ndarray::{arr0, ArrayD, IxDyn};
 use rand::rngs::StdRng;
 
 #[derive(Debug)]
@@ -38,5 +38,16 @@ pub struct Const2BasicBlock {
 impl BasicBlock for Const2BasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     vec![self.c.clone()]
+  }
+}
+
+#[derive(Debug)]
+pub struct ConstOfShapeBasicBlock {
+  pub c: Fr,
+  pub shape: Vec<usize>,
+}
+impl BasicBlock for ConstOfShapeBasicBlock {
+  fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    vec![ArrayD::from_elem(IxDyn(&self.shape), self.c)]
   }
 }
