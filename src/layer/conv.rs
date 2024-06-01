@@ -1,6 +1,7 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
+use crate::onnx;
 use ark_bn254::Fr;
 use ndarray::indices;
 use ndarray::ArrayD;
@@ -149,7 +150,10 @@ impl Layer for ConvLayer {
     }));
     let matmul = graph.addBB(Box::new(MatMulBasicBlock {}));
 
-    let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock { input_SF: 6, output_SF: 3 }));
+    let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
+      input_SF: onnx::SF_LOG * 2,
+      output_SF: onnx::SF_LOG,
+    }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
         setup: Some((-(1 << 10), 1 << 11)),
