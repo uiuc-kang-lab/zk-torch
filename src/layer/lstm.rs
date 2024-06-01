@@ -29,31 +29,7 @@ impl Layer for LSTMLayer {
     assert!(input_shapes[2][input_shapes[2].len() - 1] == hidden_size);
     assert!(batch_size == 1);
     assert!(num_directions == 1);
-    /* reference: https://github.com/onnx/onnx/blob/main/onnx/backend/test/case/node/lstm.py
-      suppose X is of shape (seq_length, batch_size, feature_dim); but seq_length is always 1 for now
-       for x in np.split(self.X, self.X.shape[0], axis=0):
-           gates = (
-               np.dot(x, np.transpose(self.W))
-               + np.dot(H_t, np.transpose(self.R))
-               + np.add(*np.split(self.B, 2))
-           )
-           i, o, f, c = np.split(gates, 4, -1)
-           i = self.f(i)
-           o = self.f(o)
-           f = self.f(f)
-           c = self.g(c)
-           C = f * C_t + i * c
-
-           H = o * self.h(C)
-           h_list.append(H)
-           H_t = H
-           C_t = C
-
-       concatenated = np.concatenate(h_list)
-       Y[:, 0, :, :] = concatenated
-       Y_h = Y[-1]
-       return Y, Y_h
-    */
+    // reference: https://github.com/onnx/onnx/blob/main/onnx/backend/test/case/node/lstm.py
 
     let mut graph = Graph::new();
     // sublayer 1: MatMul for X and W
@@ -61,11 +37,6 @@ impl Layer for LSTMLayer {
     let (mut a, mut b) = (input_shapes[1][n - 2], input_shapes[1][n - 1]);
     a = util::next_pow(a as u32) as usize;
     b = util::next_pow(b as u32) as usize;
-    // let permutation = ((0..b).map(|x| x * a).collect(), (0..a).collect());
-    // let transpose = graph.addBB(Box::new(RepeaterBasicBlock {
-    //   basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
-    //   N: 2,
-    // }));
     let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: vec![a, b] }));
 
     let matmul = graph.addBB(Box::new(RepeaterBasicBlock {
@@ -100,12 +71,6 @@ impl Layer for LSTMLayer {
     let (mut a, mut b) = (input_shapes[2][n - 2], input_shapes[2][n - 1]);
     a = util::next_pow(a as u32) as usize;
     b = util::next_pow(b as u32) as usize;
-
-    // let permutation = ((0..b).map(|x| x * a).collect(), (0..a).collect());
-    // let transpose = graph.addBB(Box::new(RepeaterBasicBlock {
-    //   basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
-    //   N: 2,
-    // }));
     let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: vec![a, b] }));
     let matmul = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(MatMulBasicBlock {}),
