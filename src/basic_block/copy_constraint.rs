@@ -88,13 +88,11 @@ fn construct_ssig(
 pub struct CopyConstraintBasicBlock {
   pub permutation: ArrayD<Option<IxDyn>>,
   pub input_dim: IxDyn,
-  pub output_dim: IxDyn,
 }
 
 impl BasicBlock for CopyConstraintBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1 && inputs[0].dim() == self.input_dim);
-    assert!(self.permutation.dim() == self.output_dim);
     vec![ArrayD::from_shape_fn(self.permutation.shape(), |i| {
       if let Some(idx) = &self.permutation[i] {
         inputs[0][idx]
@@ -105,8 +103,9 @@ impl BasicBlock for CopyConstraintBasicBlock {
   }
 
   fn setup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+    let output_dim = self.permutation.dim();
     let last_inp_dim = self.input_dim[self.input_dim.ndim() - 1];
-    let last_outp_dim = self.output_dim[self.output_dim.ndim() - 1];
+    let last_outp_dim = output_dim[output_dim.ndim() - 1];
     let N = max(last_inp_dim, last_outp_dim);
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
     let mut L_i_x_1 = srs.X1P[..N].to_vec();
@@ -119,8 +118,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let mut input_dim = self.input_dim.as_array_view().to_vec().clone();
     input_dim[self.input_dim.ndim() - 1] = N;
     let offset: usize = input_dim.iter().product();
-    let flat_outp_idxs = self.permutation.indexed_iter().map(|(i, _)| flat_index(&self.output_dim, &Some(i), N).unwrap() + offset).collect();
-    let flat_outp_idxs = ArrayD::from_shape_vec(self.output_dim.clone(), flat_outp_idxs).unwrap();
+    let flat_outp_idxs = self.permutation.indexed_iter().map(|(i, _)| flat_index(&output_dim, &Some(i), N).unwrap() + offset).collect();
+    let flat_outp_idxs = ArrayD::from_shape_vec(output_dim.clone(), flat_outp_idxs).unwrap();
     // Indices of the input which are in each position of the permutation
     let flat_perm_idxs = self.permutation.map(|i| flat_index(&self.input_dim, i, N));
 
@@ -160,13 +159,13 @@ impl BasicBlock for CopyConstraintBasicBlock {
       .into_iter()
       .collect();
 
-    let mut outp_arr = ArrayD::from_elem(self.output_dim.clone(), (0, None));
+    let mut outp_arr = ArrayD::from_elem(output_dim.clone(), (0, None));
     Zip::from(&mut outp_arr).and(&flat_outp_idxs).and(&self.permutation).for_each(|r, &a, b| {
       *r = (a, flat_index(&self.input_dim, b, N));
     });
     ssig.append(
       &mut outp_arr
-        .map_axis(Axis(self.output_dim.ndim() - 1), |x| {
+        .map_axis(Axis(output_dim.ndim() - 1), |x| {
           construct_ssig(x.as_slice().unwrap(), N, last_outp_dim, &partitions, false)
         })
         .into_iter()
@@ -206,7 +205,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let output = outputs[0];
     let input_deg = input.first().unwrap().raw.len();
     let output_deg = output.first().unwrap().raw.len();
-    let last_outp_dim = self.output_dim[self.output_dim.ndim() - 1];
+    let output_dim = self.permutation.dim();
+    let last_outp_dim = output_dim[output_dim.ndim() - 1];
 
     let N = max(input_deg, output_deg);
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();

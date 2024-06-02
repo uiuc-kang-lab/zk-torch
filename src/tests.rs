@@ -104,7 +104,6 @@ fn test_copy_constraint() {
       )
       .unwrap(),
       input_dim: IxDyn(&[2, 2]),
-      output_dim: IxDyn(&[2, 2]),
     },
     srs,
     &empty,
@@ -136,7 +135,6 @@ fn test_copy_constraint() {
       )
       .unwrap(),
       input_dim: IxDyn(&[4, 2]),
-      output_dim: IxDyn(&[2, 2, 4]),
     },
     srs,
     &empty,
@@ -160,7 +158,6 @@ fn test_copy_constraint() {
       )
       .unwrap(),
       input_dim: IxDyn(&[2, 2, 4]),
-      output_dim: IxDyn(&[4, 2]),
     },
     srs,
     &empty,

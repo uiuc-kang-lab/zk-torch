@@ -130,23 +130,19 @@ impl Layer for ConvLayer {
     // Splat input
     let permutation = splat_input(&input_shapes[0], &strides, &pads, weight_shape[1], &ch_dims);
     let permutation_padded = splat_pad(&permutation);
-    let output_dim = permutation_padded.dim();
     let input_shape_padded: Vec<_> = input_shapes[0].iter().map(|i| i.next_power_of_two()).collect();
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation_padded,
       input_dim: IxDyn(&input_shape_padded),
-      output_dim,
     }));
 
     // TODO: change to CQLin and commit splatted weights
     let weights_splatted = splat_weights(&weight_shape);
     let weights_padded = splat_pad(&weights_splatted);
     let weight_shape_padded: Vec<_> = weight_shape.iter().map(|i| i.next_power_of_two()).collect();
-    let output_dim = weights_padded.dim();
     let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: weights_padded,
       input_dim: IxDyn(&weight_shape_padded),
-      output_dim: output_dim.clone(),
     }));
     let matmul = graph.addBB(Box::new(MatMulBasicBlock {}));
 
@@ -184,11 +180,9 @@ impl Layer for ConvLayer {
       padding.push([0, output_shape[i].next_power_of_two() - output_shape[i]]);
     }
     let reshape_padded = pad(&reshape_output, &padding, &None);
-    let output_dim = reshape_padded.dim();
     let cc2 = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: reshape_padded,
       input_dim: IxDyn(&[permutation.len().next_power_of_two(), weights_splatted.len().next_power_of_two()]),
-      output_dim,
     }));
 
     let cc_output = graph.addNode(cc, vec![(-1, 0)]);
