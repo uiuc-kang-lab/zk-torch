@@ -25,7 +25,7 @@ impl BasicBlock for ReshapeBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
-    _cache: &mut ProveVerifyCache,
+    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let n = self.shape.len();
     let view = inputs[0].view().into_shape(&self.shape[..n - 1]).unwrap();

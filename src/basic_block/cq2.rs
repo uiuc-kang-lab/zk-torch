@@ -82,14 +82,14 @@ impl BasicBlock for CQ2BasicBlock {
   }
 
   fn prove(
-    &mut self,
+    &self,
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
-    cache: &mut ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     assert!(inputs.len() == 2 && inputs[0].len() == 1 && inputs[1].len() == 1);
     let N = model[0].raw.len();
@@ -110,27 +110,31 @@ impl BasicBlock for CQ2BasicBlock {
     let L_i_x_1 = &setup.0[2 * N..3 * N];
     let L_i_0_x_1 = &setup.0[3 * N..];
 
-    let CacheValues::CQ2TableDict(table_dict) =
-      cache.entry(format!("cq2_table_dict_{:p}", self)).or_insert_with(|| CacheValues::CQ2TableDict(HashMap::new()))
-    else {
-      panic!("Cache type error")
-    };
-    if table_dict.len() == 0 {
-      for i in 0..N {
-        table_dict.insert((model[0].raw[i], model[1].raw[i]), i);
+    let m_i = {
+      let mut cache = cache.lock().unwrap();
+      let CacheValues::CQ2TableDict(table_dict) =
+        cache.entry(format!("cq2_table_dict_{:p}", self)).or_insert_with(|| CacheValues::CQ2TableDict(HashMap::new()))
+      else {
+        panic!("Cache type error")
+      };
+      if table_dict.len() == 0 {
+        for i in 0..N {
+          table_dict.insert((model[0].raw[i], model[1].raw[i]), i);
+        }
       }
-    }
 
-    // Calculate m
-    let mut m_i = HashMap::new();
-    for x in inputs[0].raw.iter().zip(inputs[1].raw.iter()) {
-      let temp = (*x.0, *x.1);
-      if !table_dict.contains_key(&temp) {
-        println!("{:?}", temp);
+      // Calculate m
+      let mut m_i = HashMap::new();
+      for x in inputs[0].raw.iter().zip(inputs[1].raw.iter()) {
+        let temp = (*x.0, *x.1);
+        if !table_dict.contains_key(&temp) {
+          println!("{:?}", temp);
+        }
+        m_i.entry(table_dict.get(&temp).unwrap().clone()).and_modify(|y| *y += 1).or_insert(1);
       }
-      m_i.entry(table_dict.get(&temp).unwrap()).and_modify(|y| *y += 1).or_insert(1);
-    }
-    let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = m_i.iter().map(|(i, y)| (L_i_x_1[**i], Fr::from(*y as u32))).unzip();
+      m_i
+    };
+    let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = m_i.iter().map(|(i, y)| (L_i_x_1[*i], Fr::from(*y as u32))).unzip();
     let m_x = util::msm::<G1Projective>(&temp, &temp2);
 
     let beta = Fr::rand(rng);
@@ -140,8 +144,8 @@ impl BasicBlock for CQ2BasicBlock {
       .iter()
       .map(|(i, y)| {
         (
-          **i,
-          Fr::from(*y as u32) * (model[0].raw[**i] + model[1].raw[**i] * alpha + beta).inverse().unwrap(),
+          *i,
+          Fr::from(*y as u32) * (model[0].raw[*i] + model[1].raw[*i] * alpha + beta).inverse().unwrap(),
         )
       })
       .collect();
@@ -203,7 +207,7 @@ impl BasicBlock for CQ2BasicBlock {
     _outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
-    _cache: &mut ProveVerifyCache,
+    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let inputs = vec![inputs[0].first().unwrap(), inputs[1].first().unwrap()];

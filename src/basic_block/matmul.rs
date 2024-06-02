@@ -49,41 +49,47 @@ impl BasicBlock for MatMulBasicBlock {
   }
 
   fn prove(
-    &mut self,
+    &self,
     srs: &SRS,
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     _model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
-    cache: &mut ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     let l = inputs[0].len();
     let m = inputs[0].first().unwrap().raw.len();
     let n = inputs[1].len();
     let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
-    let CacheValues::RLCRandom(alpha) = cache.entry("matmul_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
-      panic!("Cache type error")
+    let (alpha, beta) = {
+      let mut cache = cache.lock().unwrap();
+      let CacheValues::RLCRandom(alpha) = cache.entry("matmul_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
+        panic!("Cache type error")
+      };
+      let alpha = alpha.clone();
+      let CacheValues::RLCRandom(beta) = cache.entry("matmul_beta".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
+        panic!("Cache type error")
+      };
+      (alpha, beta.clone())
     };
-    let alpha = alpha.clone();
-    let CacheValues::RLCRandom(beta) = cache.entry("matmul_beta".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
-      panic!("Cache type error")
-    };
-    let beta = beta.clone();
 
-    let CacheValues::Data(alpha_pow) =
-      cache.entry(format!("matmul_alpha_msm_{l}")).or_insert_with(|| CacheValues::Data(Data::new(srs, &calc_pow(alpha, l))))
-    else {
-      panic!("Cache type error")
+    let (alpha_pow, beta_pow) = {
+      let mut cache = cache.lock().unwrap();
+      let CacheValues::Data(alpha_pow) =
+        cache.entry(format!("matmul_alpha_msm_{l}")).or_insert_with(|| CacheValues::Data(Data::new(srs, &calc_pow(alpha, l))))
+      else {
+        panic!("Cache type error")
+      };
+      let alpha_pow = alpha_pow.clone();
+      let CacheValues::Data(beta_pow) =
+        cache.entry(format!("matmul_beta_msm_{n}")).or_insert_with(|| CacheValues::Data(Data::new(srs, &calc_pow(beta, n))))
+      else {
+        panic!("Cache type error")
+      };
+      (alpha_pow, beta_pow.clone())
     };
-    let alpha_pow = alpha_pow.clone();
-    let CacheValues::Data(beta_pow) =
-      cache.entry(format!("matmul_beta_msm_{n}")).or_insert_with(|| CacheValues::Data(Data::new(srs, &calc_pow(beta, n))))
-    else {
-      panic!("Cache type error")
-    };
-    let beta_pow = beta_pow.clone();
 
     let mut flat_A = vec![Fr::zero(); m];
     let mut flat_A_r = Fr::zero();
@@ -168,7 +174,7 @@ impl BasicBlock for MatMulBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
-    cache: &mut ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let l = inputs[0].len();
@@ -180,24 +186,30 @@ impl BasicBlock for MatMulBasicBlock {
     };
     let flat_B_g2 = proof.1[0];
 
-    let CacheValues::RLCRandom(alpha) = cache.entry("matmul_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
-      panic!("Cache type error")
+    let (alpha, beta) = {
+      let mut cache = cache.lock().unwrap();
+      let CacheValues::RLCRandom(alpha) = cache.entry("matmul_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
+        panic!("Cache type error")
+      };
+      let alpha = alpha.clone();
+      let CacheValues::RLCRandom(beta) = cache.entry("matmul_beta".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
+        panic!("Cache type error")
+      };
+      (alpha, beta.clone())
     };
-    let alpha = alpha.clone();
-    let CacheValues::RLCRandom(beta) = cache.entry("matmul_beta".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
-      panic!("Cache type error")
-    };
-    let beta = beta.clone();
 
     let alpha_pow = calc_pow(alpha, l);
     let beta_pow = calc_pow(beta, n);
-    let CacheValues::G2(beta_pow_g2) = cache
-      .entry(format!("matmul_beta_msm_g2_{n}"))
-      .or_insert_with(|| CacheValues::G2(util::msm::<G2Projective>(&srs.X2A, &domain_n.ifft(&beta_pow)).into()))
-    else {
-      panic!("Cache type error")
+    let beta_pow_g2 = {
+      let mut cache = cache.lock().unwrap();
+      let CacheValues::G2(beta_pow_g2) = cache
+        .entry(format!("matmul_beta_msm_g2_{n}"))
+        .or_insert_with(|| CacheValues::G2(util::msm::<G2Projective>(&srs.X2A, &domain_n.ifft(&beta_pow)).into()))
+      else {
+        panic!("Cache type error")
+      };
+      beta_pow_g2.clone()
     };
-    let beta_pow_g2 = beta_pow_g2.clone();
 
     // Calculate flat_A
     let temp: Vec<_> = (0..l).map(|i| index(inputs[0], i).g1).collect();

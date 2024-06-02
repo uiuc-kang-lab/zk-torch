@@ -8,6 +8,7 @@ use ndarray::ArrayD;
 use rand::rngs::StdRng;
 use std::collections::HashMap;
 use rayon::prelude::*;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 pub struct Node {
@@ -75,7 +76,7 @@ impl Graph {
     outputs: &Vec<&Vec<&ArrayD<Data>>>,
     rng: &mut StdRng,
   ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>)> {
-    let mut cache = HashMap::new();
+    let mut cache = Arc::new(Mutex::new(HashMap::new()));
     self
       .nodes
       .iter()
@@ -83,7 +84,7 @@ impl Graph {
       .map(|(i, n)| {
         println!("proving {i} {:?}", self.basic_blocks[n.basic_block]);
         let myInputs: Vec<&ArrayD<Data>> = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
-        let proof = self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &myInputs, outputs[i], rng, &mut cache);
+        let proof = self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &myInputs, outputs[i], rng, cache.clone());
         let proof: (Vec<G1Affine>, Vec<G2Affine>) = (
           proof.0.iter().map(|x| (*x).into()).collect(),
           proof.1.iter().map(|x| (*x).into()).collect(),
@@ -105,7 +106,7 @@ impl Graph {
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>)>,
     rng: &mut StdRng,
   ) {
-    let mut cache = HashMap::new();
+    let mut cache = Arc::new(Mutex::new(HashMap::new()));
     let pairings: Vec<Vec<PairingCheck>> = self
       .nodes
       .iter()
@@ -113,7 +114,7 @@ impl Graph {
       .map(|(i, n)| {
         println!("verifying {i} {:?}", self.basic_blocks[n.basic_block]);
         let myInputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
-        let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, &mut cache);
+        let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, cache.clone());
         let mut bytes = Vec::new();
         let temp: (Vec<G1Affine>, Vec<G2Affine>) = (proofs[i].0.clone(), proofs[i].1.clone());
         temp.serialize_uncompressed(&mut bytes).unwrap();

@@ -129,26 +129,25 @@ impl BasicBlock for RepeaterBasicBlock {
   }
 
   fn prove(
-    &mut self,
+    &self,
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
-    cache: &mut ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
-    let temp = broadcastN(inputs, Some(outputs), self.N - 1);
-    let temp = temp.map(|(localInputs, localOutputs)| {
+    let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
+    let mut empty = ArrayD::from_elem(temp.shape(),(vec![],vec![]));
+    par_azip!(((localInputs, localOutputs) in &mut temp, x in &mut empty) {
       let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
       let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
-      self.basic_block.prove(srs, setup, model, &localInputs, &localOutputs, rng, cache)
+      let mut rng = rng.clone();
+      *x = self.basic_block.prove(srs, setup, model, &localInputs, &localOutputs, &mut rng, cache.clone());
     });
-    let mut proof = (vec![], vec![]);
-    temp.for_each(|(a, b)| {
-      proof.0.extend_from_slice(&a[..]);
-      proof.1.extend_from_slice(&b[..]);
-    });
+    let proof:(Vec<_>, Vec<_>) = empty.into_iter().unzip();
+    let proof = (proof.0.into_iter().flatten().collect(), proof.1.into_iter().flatten().collect());
     proof
   }
 
@@ -160,24 +159,26 @@ impl BasicBlock for RepeaterBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
-    cache: &mut ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
-    let temp = broadcastN(inputs, Some(outputs), self.N - 1);
+    let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
 
     let l = temp.len();
     let divA = proof.0.len() / l;
     let divB = proof.1.len() / l;
     let combined: Vec<_> = (0..l).map(|i| (&proof.0[i * divA..i * divA + divA], &proof.1[i * divB..i * divB + divB])).collect();
-    let proofArr = ArrayD::from_shape_vec(temp.shape(), combined).unwrap();
+    let mut proofArr = ArrayD::from_shape_vec(temp.shape(), combined).unwrap();
+    let mut empty = ArrayD::from_elem(temp.shape(),vec![]);
 
-    let mut pairings = vec![];
-    azip!(((localInputs, localOutputs) in &temp, localProof in &proofArr){
+    par_azip!(((localInputs, localOutputs) in &mut temp, localProof in &mut proofArr, x in &mut empty){
       let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
       let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
       let localProof = (&localProof.0.to_vec(), &localProof.1.to_vec());
-      let mut temp = self.basic_block.verify(srs, model, &localInputs, &localOutputs, localProof, rng, cache);
-      pairings.append(&mut temp);
+      let mut rng = rng.clone();
+      let mut temp = self.basic_block.verify(srs, model, &localInputs, &localOutputs, localProof, &mut rng, cache.clone());
+      *x = temp;
     });
+    let mut pairings = empty.into_iter().flatten().collect();
     pairings
   }
 }

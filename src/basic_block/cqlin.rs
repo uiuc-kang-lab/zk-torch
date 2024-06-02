@@ -104,31 +104,37 @@ impl BasicBlock for CQLinBasicBlock {
   }
 
   fn prove(
-    &mut self,
+    &self,
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
-    cache: &mut ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     let l = inputs[0].len();
     let m = model.len();
     let n = model[0].raw.len();
     let N = srs.X2P.len() - 1;
     let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
-    let CacheValues::RLCRandom(alpha) = cache.entry("cqlin_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
-      panic!("Cache type error")
+    let alpha = {
+      let mut cache = cache.lock().unwrap();
+      let CacheValues::RLCRandom(alpha) = cache.entry("cqlin_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
+        panic!("Cache type error")
+      };
+      alpha.clone()
     };
-    let alpha = alpha.clone();
 
-    let CacheValues::Data(alpha_pow) =
-      cache.entry(format!("cqlin_alpha_msm_{l}")).or_insert_with(|| CacheValues::Data(Data::new(srs, &calc_pow(alpha, l))))
-    else {
-      panic!("Cache type error")
+    let alpha_pow = {
+      let mut cache = cache.lock().unwrap();
+      let CacheValues::Data(alpha_pow) =
+        cache.entry(format!("cqlin_alpha_msm_{l}")).or_insert_with(|| CacheValues::Data(Data::new(srs, &calc_pow(alpha, l))))
+      else {
+        panic!("Cache type error")
+      };
+      alpha_pow.clone()
     };
-    let alpha_pow = alpha_pow.clone();
 
     let mut flat_A = vec![Fr::zero(); m];
     let mut flat_A_r = Fr::zero();
@@ -210,7 +216,7 @@ impl BasicBlock for CQLinBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     rng: &mut StdRng,
-    cache: &mut ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let l = inputs[0].len();
@@ -224,10 +230,13 @@ impl BasicBlock for CQLinBasicBlock {
 
     let [M_x] = proof.1[..] else { panic!("Wrong proof format") };
 
-    let CacheValues::RLCRandom(alpha) = cache.entry("cqlin_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
-      panic!("Cache type error")
+    let alpha = {
+      let mut cache = cache.lock().unwrap();
+      let CacheValues::RLCRandom(alpha) = cache.entry("cqlin_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
+        panic!("Cache type error")
+      };
+      alpha.clone()
     };
-    let alpha = alpha.clone();
     let alpha_pow = calc_pow(alpha, l);
 
     // Calculate flat_A

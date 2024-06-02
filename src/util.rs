@@ -181,7 +181,7 @@ pub fn gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>) -> G1Projective {
   gpu_set_random_device();
   let size = ark_std::cmp::min(points.len(), scalars.len());
   if size < 32 {
-    let points: Vec<_> = points.iter().map(|x| x.to_ark()).collect();
+    let points: Vec<_> = points.par_iter().map(|x| x.to_ark()).collect();
     return msm(&points, scalars);
   }
   let cfg = icicle_core::msm::MSMConfig::default();

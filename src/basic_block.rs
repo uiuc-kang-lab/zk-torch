@@ -48,6 +48,7 @@ pub mod rope;
 pub mod sub;
 pub mod sum;
 pub mod transpose;
+use std::sync::{Arc, Mutex};
 
 pub struct SRS {
   pub X1A: Vec<G1Affine>,
@@ -71,7 +72,7 @@ pub enum CacheValues {
   Data(Data),
   G2(G2Affine),
 }
-pub type ProveVerifyCache = HashMap<String, CacheValues>;
+pub type ProveVerifyCache = Arc<Mutex<HashMap<String, CacheValues>>>;
 
 pub type PairingCheck = Vec<(G1Affine, G2Affine)>;
 
@@ -148,14 +149,14 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync{
   }
 
   fn prove(
-    &mut self,
+    &self,
     _srs: &SRS,
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>),
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
-    _cache: &mut ProveVerifyCache,
+    _cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>) {
     (Vec::new(), Vec::new())
   }
@@ -168,7 +169,7 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync{
     _outputs: &Vec<&ArrayD<DataEnc>>,
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>),
     _rng: &mut StdRng,
-    _cache: &mut ProveVerifyCache,
+    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     vec![]
   }
