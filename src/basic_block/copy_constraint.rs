@@ -216,8 +216,6 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let gamma = Fr::rand(rng);
 
     // Calculate fjs
-    let input_iter = inputs[0].iter();
-    let input_len = input_iter.len();
     let fj_polys: Vec<_> = inputs[0].iter().chain(outputs[0].iter()).map(|x| &x.poly).collect();
     let sid_poly = &setup.2[0];
     let ssig_polys = &setup.2[1..];
