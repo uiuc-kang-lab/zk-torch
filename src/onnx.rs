@@ -31,10 +31,11 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
         .dim
         .iter()
         .map(|x| {
-          let tract_onnx::pb::tensor_shape_proto::dimension::Value::DimValue(x) = x.value.as_ref().unwrap() else {
-            panic!("unknown dimension")
-          };
-          *x as usize
+          if let Some(tract_onnx::pb::tensor_shape_proto::dimension::Value::DimValue(value)) = x.value.as_ref() {
+            *value as usize
+          } else {
+            1
+          }
         })
         .collect::<Vec<_>>(),
     );

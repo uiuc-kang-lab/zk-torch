@@ -190,7 +190,15 @@ impl Layer for ConvLayer {
     let cqlin_output = graph.addNode(matmul, vec![(cc_output, 0), (cc1_output, 0)]);
     let change_SF_output = graph.addNode(change_SF, vec![(cqlin_output, 0)]);
     let _ = graph.addNode(change_SF_check, vec![(change_SF_output, 0)]);
-    let add_output = graph.addNode(add, vec![(change_SF_output, 0), (-3, 0)]);
+
+    // Add bias if it exists
+    let add_output = {
+      if input_shapes.len() > 2 {
+        graph.addNode(add, vec![(change_SF_output, 0), (-3, 0)])
+      } else {
+        change_SF_output
+      }
+    };
     let cc2_output = graph.addNode(cc2, vec![(add_output, 0)]);
     graph.outputs.push((cc2_output, 0));
     (graph, vec![output_shape])
