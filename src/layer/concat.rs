@@ -16,11 +16,27 @@ impl Layer for ConcatLayer {
     let mut outputShape = input_shapes[0].clone();
     outputShape[axis] = input_shapes.iter().map(|x| x[axis as usize]).sum();
     if input_shapes[0].len() == 1 {
-      // workaround: for 1D input. Maybe we should use copy constraint to handle this case later.
-      let n_input = input_shapes.len();
+      let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: vec![1, 1] }));
       let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: axis as usize }));
-      let concat_output = graph.addNode(concat, (0..n_input).map(|i| (-(i as i32 + 1), 0)).collect());
-      graph.outputs.push((concat_output, 0));
+      let mut a = outputShape[0];
+      a = util::next_pow(a as u32) as usize;
+      let permute = graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(PermuteBasicBlock { permutation: (vec![0], (0..a).map(|x| x).collect()) }),
+        N: 2,
+      }));
+      let reshape_back = graph.addBB(Box::new(ReshapeBasicBlock { shape: vec![outputShape[0]] }));
+      
+      let n_input = input_shapes.len();
+      let mut n_reshape_output = Vec::with_capacity(n_input);
+      for i in 0..n_input {
+        let reshape_output = graph.addNode(reshape, vec![(-(i as i32 + 1), 0)]);
+        n_reshape_output.push((reshape_output, 0));
+      }
+      
+      let concat_output = graph.addNode(concat, n_reshape_output);
+      let permute_output = graph.addNode(permute, vec![(concat_output, 0)]);
+      let output = graph.addNode(reshape_back, vec![(permute_output, 0)]);
+      graph.outputs.push((output, 0));
     } else if axis == input_shapes[0].len() - 1 {
       // permute inputs
       let n = outputShape.len();
