@@ -42,7 +42,6 @@ impl BasicBlock for ConcatBasicBlock {
   ) -> Vec<PairingCheck> {
     let r = ndarray::concatenate(Axis(self.axis), &inputs.iter().map(|x| x.view()).collect::<Vec<_>>()).unwrap();
     let r_enc = outputs[0];
-    println!("{}",r.len());
     for i in 0..r.len() {
       assert!(r[i] == r_enc[i]);
     }

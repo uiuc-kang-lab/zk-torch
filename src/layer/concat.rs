@@ -6,7 +6,7 @@ use ark_bn254::Fr;
 use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
 
-fn get_concat_indices(input_shapes:  &Vec<&Vec<usize>>, output_shape: &Vec<usize>, axis: usize) -> Vec<ArrayD<Option<IxDyn>>> {
+fn get_concat_indices(input_shapes: &Vec<&Vec<usize>>, output_shape: &Vec<usize>, axis: usize) -> Vec<ArrayD<Option<IxDyn>>> {
   let mut indices = vec![];
   let mut axis_offset = 0;
   for i in 0..input_shapes.len() {
@@ -50,7 +50,7 @@ impl Layer for ConcatLayer {
         basic_block: Box::new(AddBasicBlock {}),
         N: 1,
       }));
-      
+
       let mut cc_outputs = vec![];
       for i in 0..input_shapes.len() {
         let cc_output = graph.addNode(cc_basicblocks[i], vec![(-(i as i32 + 1), 0)]);
