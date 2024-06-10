@@ -12,8 +12,14 @@ pub struct ConcatBasicBlock {
 
 impl BasicBlock for ConcatBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    assert!(self.axis != inputs[0].shape().len() - 1);
     for input in inputs.iter() {
-      assert!(inputs[0].shape()[1..] == input.shape()[1..]);
+      for i in 0..inputs[0].shape().len() {
+        if i == self.axis {
+          continue;
+        }
+        assert!(inputs[0].shape()[i] == input.shape()[i]);
+      }
     }
     let r = ndarray::concatenate(Axis(self.axis), &inputs.iter().map(|x| x.view()).collect::<Vec<_>>()).unwrap();
     vec![r]

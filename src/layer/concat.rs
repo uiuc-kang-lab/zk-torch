@@ -6,6 +6,11 @@ use ark_bn254::Fr;
 use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
 
+// This function returns N outputs where N is the number of inputs.
+// Each output is an array with the same shape as the final concatenation array.
+// And the value at each index is the index of the corresponding input array.
+// For example, [1], [1], [1] -> [0, None, None], [None, 0, None], [None, None, 0]
+// such that we can use the indices to copy the input arrays to a padded array and add them together into the final output array. 
 fn get_concat_indices(input_shapes: &Vec<&Vec<usize>>, output_shape: &Vec<usize>, axis: usize) -> Vec<ArrayD<Option<IxDyn>>> {
   let mut indices = vec![];
   let mut axis_offset = 0;
