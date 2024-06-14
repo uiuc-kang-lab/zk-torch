@@ -104,6 +104,9 @@ fn verify(srs: &SRS, graph: &Graph) {
   let mut rng = StdRng::from_seed(buf);
 
   // Verify:
+  #[cfg(feature = "debug")]
+  graph.verify_for_each_pairing(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng);
+  #[cfg(not(feature = "debug"))]
   graph.verify(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng);
 }
 
