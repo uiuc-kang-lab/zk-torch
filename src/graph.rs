@@ -135,7 +135,9 @@ impl Graph {
     assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
   }
 
-  pub fn verify_for_debug(
+  // This function should be only used for debugging purposes (it is very slow). 
+  // It verifies the proofs without combining pairing checks so that we can see which BasicBlock is failing.
+  pub fn verify_for_each_pairing(
     &self,
     srs: &SRS,
     models: &Vec<&ArrayD<DataEnc>>,
