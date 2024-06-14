@@ -1,3 +1,4 @@
+use crate::basic_block;
 use crate::basic_block::*;
 use crate::util;
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -135,7 +136,7 @@ impl Graph {
     assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
   }
 
-  // This function should be only used for debugging purposes (it is very slow). 
+  // This function should be only used for debugging purposes (it is very slow).
   // It verifies the proofs without combining pairing checks so that we can see which BasicBlock is failing.
   pub fn verify_for_each_pairing(
     &self,
@@ -149,7 +150,17 @@ impl Graph {
     let mut cache = HashMap::new();
     self.nodes.iter().enumerate().for_each(|(i, n)| {
       println!("verifying (debug mode) {i} {:?}", self.basic_blocks[n.basic_block]);
-      let myInputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
+      let myInputs = n
+        .inputs
+        .iter()
+        .map(|(basicblock_idx, output_idx)| {
+          if *basicblock_idx < 0 {
+            inputs[*output_idx]
+          } else {
+            &(outputs[*basicblock_idx as usize][*output_idx])
+          }
+        })
+        .collect();
       let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, &mut cache);
       let mut bytes = Vec::new();
       let temp: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (proofs[i].0.clone(), proofs[i].1.clone(), proofs[i].2.clone());
