@@ -95,12 +95,22 @@ fn testBasicBlocks() {
 fn test_copy_constraint() {
   let srs = &ptau::load_file("challenge", 7, 7);
   let empty = ArrayD::zeros(IxDyn(&[0]));
-  // output dim padding
+  // reverse
+  testBasicBlock(
+    CopyConstraintBasicBlock {
+      permutation: ArrayD::from_shape_vec(vec![4], vec![Some(IxDyn(&[3])), Some(IxDyn(&[2])), Some(IxDyn(&[1])), Some(IxDyn(&[0]))]).unwrap(),
+      input_dim: IxDyn(&[4]),
+    },
+    srs,
+    &empty,
+    &vec![&ArrayD::from_shape_vec(vec![4], (1..5).map(|x| Fr::from(x)).collect()).unwrap()],
+  );
+  // transpose
   testBasicBlock(
     CopyConstraintBasicBlock {
       permutation: ArrayD::from_shape_vec(
         vec![2, 2],
-        vec![Some(IxDyn(&[1, 1])), Some(IxDyn(&[1, 0])), Some(IxDyn(&[1, 0])), Some(IxDyn(&[0, 0]))],
+        vec![Some(IxDyn(&[1, 1])), Some(IxDyn(&[1, 0])), Some(IxDyn(&[0, 1])), Some(IxDyn(&[0, 0]))],
       )
       .unwrap(),
       input_dim: IxDyn(&[2, 2]),
@@ -140,20 +150,28 @@ fn test_copy_constraint() {
     &empty,
     &vec![&ArrayD::from_shape_vec(vec![4, 2], (1..9).map(|x| Fr::from(x)).collect()).unwrap()],
   );
-  // 3d -> 2d
+  // 3d -> 2d with padding
   testBasicBlock(
     CopyConstraintBasicBlock {
       permutation: ArrayD::from_shape_vec(
-        vec![4, 2],
+        vec![4, 4],
         vec![
           Some(IxDyn(&[1, 1, 0])),
           Some(IxDyn(&[1, 0, 1])),
           Some(IxDyn(&[0, 1, 0])),
+          None,
           Some(IxDyn(&[0, 0, 0])),
           Some(IxDyn(&[0, 1, 0])),
           Some(IxDyn(&[1, 1, 0])),
+          None,
           Some(IxDyn(&[0, 1, 1])),
           Some(IxDyn(&[0, 0, 0])),
+          Some(IxDyn(&[1, 0, 1])),
+          None,
+          None,
+          None,
+          None,
+          None,
         ],
       )
       .unwrap(),
@@ -162,5 +180,24 @@ fn test_copy_constraint() {
     srs,
     &empty,
     &vec![&ArrayD::from_shape_vec(vec![2, 2, 4], (1..17).map(|x| Fr::from(x)).collect()).unwrap()],
+  );
+  // slice
+  testBasicBlock(
+    CopyConstraintBasicBlock {
+      permutation: ArrayD::from_shape_vec(
+        vec![1, 1, 4],
+        vec![
+          Some(IxDyn(&[0, 0, 0])),
+          Some(IxDyn(&[0, 0, 1])),
+          Some(IxDyn(&[0, 0, 2])),
+          Some(IxDyn(&[0, 0, 3])),
+        ],
+      )
+      .unwrap(),
+      input_dim: IxDyn(&[2, 1, 4]),
+    },
+    srs,
+    &empty,
+    &vec![&ArrayD::from_shape_vec(vec![2, 1, 4], (1..9).map(|x| Fr::from(x)).collect()).unwrap()],
   );
 }
