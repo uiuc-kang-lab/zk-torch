@@ -325,7 +325,6 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let gt_polys: Vec<_> = fj_polys.iter().enumerate().map(|(i, x)| &ssig_polys[i].mul(&beta_poly) + x + gamma_poly.clone()).collect();
     let g1_poly = gt_polys.iter().fold(DensePolynomial::from_coefficients_vec(vec![Fr::one()]), |acc, x| acc.mul(x));
     let t_poly = f1_poly.mul(&Z_poly).sub(&g1_poly.mul(&Zg_poly));
-
     let t_poly = t_poly.divide_by_vanishing_poly(domain).unwrap().0;
     let t_x = util::msm::<G1Projective>(&srs.X1A, &t_poly.coeffs);
 
@@ -471,7 +470,6 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // Check Z(x)f'(x) = Z(gx)g'(x)
     let ft_as: Vec<_> = fj_as.iter().enumerate().map(|(i, x)| beta * Fr::from((i + 1) as i32) * a + *x + gamma).collect();
     let gt_as: Vec<_> = fj_as.iter().enumerate().map(|(i, x)| ssig_as[i] * beta + *x + gamma).collect();
-
     let ft_a: Fr = ft_as.iter().product();
     let gt_a: Fr = gt_as[..gt_as.len() - 1].iter().product();
     let a_pows = calc_pow(a, N);
@@ -494,9 +492,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
       .chain(fj_xs.iter())
       .enumerate()
       .fold(G1Projective::zero(), |acc, (i, x)| acc + Into::<G1Projective>::into(*x) * bs[i]);
-
     let q1_a: Fr = q1_evals.iter().enumerate().fold(Fr::zero(), |acc, (i, x)| acc + *x * bs[i]);
-
     checks.push(vec![
       ((q1_x - srs.X1P[0] * q1_a).into(), srs.X2A[0]),
       (-q1_Q_x, V_x.into()),
