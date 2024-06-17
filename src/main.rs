@@ -6,7 +6,7 @@ use ark_poly::univariate::DensePolynomial;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use basic_block::*;
 use ndarray::ArrayD;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use sha3::{Digest, Keccak256};
 use std::fs::{self, File};
@@ -109,11 +109,8 @@ fn verify(srs: &SRS, graph: &Graph) {
 
 fn main() {
   let srs = &ptau::load_file("challenge", 7, 7);
-  let (mut graph, models) = onnx::load_file("sample.onnx");
-  let mut rng = StdRng::from_entropy();
-  let input: Vec<Fr> = (0..4).map(|_| Fr::from(rng.gen_range(-4..4))).collect();
-  let input = ArrayD::from_shape_vec(vec![1, 4], input).unwrap();
-  let inputs = vec![&input];
+  let (mut graph, models, fake_inputs) = onnx::load_file("sample.onnx");
+  let inputs = fake_inputs.iter().map(|x| x).collect();
   let models = models.iter().map(|x| x).collect();
   prove(&srs, &inputs, &mut graph, &models);
   verify(&srs, &graph);

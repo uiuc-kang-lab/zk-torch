@@ -25,6 +25,17 @@ fn bitreverse(mut n: u32, l: u64) -> u32 {
   r
 }
 
+pub fn slice_nd_array(arr: ArrayD<Fr>, indices: &[usize]) -> ArrayD<Fr> {
+  // Create slices from the indices
+  let slices: Vec<_> = indices.iter().map(|&i| (0..i).into()).collect();
+
+  // Convert slices into a SliceInfo instance
+  let slice_info = unsafe { SliceInfo::<_, IxDyn, IxDyn>::new(slices).unwrap() };
+
+  // Slice the array
+  arr.slice_move(slice_info)
+}
+
 pub fn fft_helper<G: ScalarMul + std::ops::MulAssign<Fr>>(a: &mut Vec<G>, domain: GeneralEvaluationDomain<Fr>, inv: bool) {
   let n = a.len();
   let log_size = domain.log_size_of_group();
