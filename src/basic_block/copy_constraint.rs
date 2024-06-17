@@ -418,6 +418,13 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let N = max(inputs[0].first().unwrap().len, outputs[0].first().unwrap().len);
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
     let omega = domain.group_gen();
+
+    // TODO: Currently the prover is insecure because it passes in
+    // inputs and outputs to the verifier which do not withstand polynomial
+    // interpolation attacks in the inputs and outputs arguments.
+    // To fix this, we have to suppport a blinding scheme
+    // that works with openings more generally and enable the Data and DataEnc
+    // constructors to use the blinding scheme when appropriate.
     let input = inputs[0];
 
     let [Z_x, L0Z_Q_x, t_x, Lnone_f_Q_x, q1_Q_x, Z_Q_x, r_Q_x, C1, C2, C3, C4, C5] = proof.0[..12] else {
