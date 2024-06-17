@@ -55,7 +55,9 @@ fn flat_index(shape: &IxDyn, idx: &Option<IxDyn>, N: usize) -> Option<(usize, us
 // which encodes the permutation function
 // In a copy-constraint, the permutation should form a cycle for all elements
 // that should be the same over inputs and outputs.
-// If is_input, idxs is [(flat_idx of the input index, 0)]. Otherwise,
+// idxs tuple (i, j) refers to the jth element in the ith polynomial based on
+// the flattened input or output ArrayD
+// If is_input, idxs is [(flat_idx of the input index, (0, 0))]. Otherwise,
 // idxs is [(flat_idx of the output, flat_idx of the permuted input idx)]
 fn construct_ssig(
   idxs: &[((usize, usize), Option<(usize, usize)>)],
@@ -360,27 +362,14 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let ft_a = ft_as.iter().product();
     let ft_a_poly = DensePolynomial::from_coefficients_vec(vec![ft_a]);
     let lhs = Z_poly.mul(&ft_a_poly);
-    // assert!(util::msm::<G1Projective>(&srs.X1A, &lhs.coeffs) == Z_x * ft_a);
     let rhs_mul = DensePolynomial::from_coefficients_vec(vec![gt_a * Z_ga]);
     let rhs_add = DensePolynomial::from_coefficients_vec(vec![gamma + fj_as[fj_as.len() - 1]]);
     let rhs = (&ssig_polys[ssig_polys.len() - 1].mul(&beta_poly) + &rhs_add).mul(&rhs_mul);
-    // let ssig_xs = &setup.0[2..];
-    // assert!(
-    //   util::msm::<G1Projective>(&srs.X1A, &rhs.coeffs)
-    //     == (ssig_xs[ssig_xs.len() - 1] * beta + srs.X1A[0] * (fj_as[fj_as.len() - 1] + gamma)) * gt_a * Z_ga
-    // );
-    // assert!(DensePolynomial::from(domain.vanishing_polynomial()).evaluate(&a) == a_pows[N - 1] - Fr::one());
     let v = DensePolynomial::from_coefficients_vec(vec![a_pows[N - 1] - Fr::one()]).mul(&t_poly);
-    // assert!(util::msm::<G1Projective>(&srs.X1A, &v.coeffs) == t_x * (a_pows[N - 1] - Fr::one()));
     let q1_V = DensePolynomial { coeffs: vec![-a, Fr::one()] };
     let r_poly = &(&lhs - &rhs) - &v;
     let r_Q = &r_poly / &q1_V;
     let r_Q_x = util::msm::<G1Projective>(&srs.X1A, &r_Q.coeffs);
-    // assert!(r_Q.mul(&q1_V) == (&(&lhs - &rhs) - &v));
-    // assert!(
-    //   Bn254::pairing(util::msm::<G1Projective>(&srs.X1A, &(&(&lhs - &rhs) - &v).coeffs), srs.X2P[0])
-    //     == Bn254::pairing(r_Q_x, srs.X2P[1] - srs.X2P[0] * a)
-    // );
 
     // Calculate opening argument for fjs, ssigs over a
     let b = Fr::rand(rng);
