@@ -33,7 +33,6 @@ pub mod reducemean;
 pub mod reshape;
 pub mod shape;
 pub mod softmax;
-pub mod sub;
 pub mod transpose;
 pub mod r#where;
 
