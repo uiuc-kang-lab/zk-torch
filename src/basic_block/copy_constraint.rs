@@ -326,6 +326,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let g1_poly = gt_polys.iter().fold(DensePolynomial::from_coefficients_vec(vec![Fr::one()]), |acc, x| acc.mul(x));
     let t_poly = f1_poly.mul(&Z_poly).sub(&g1_poly.mul(&Zg_poly));
     let t_poly = t_poly.divide_by_vanishing_poly(domain).unwrap().0;
+    // TODO: We currently commit t entirely instead of splitting it into
+    // smaller polynomials of degree <n done in the Plonk paper.
     let t_x = util::msm::<G1Projective>(&srs.X1A, &t_poly.coeffs);
 
     // Round 2: openings
