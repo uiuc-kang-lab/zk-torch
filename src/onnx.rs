@@ -7,6 +7,7 @@ use ndarray::{arr1, ArrayD};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::collections::HashMap;
 use tract_onnx::pb;
+use tract_onnx::pb::tensor_proto::DataType;
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::{DatumType, Framework};
 use tract_onnx::tensor::load_tensor;
@@ -65,7 +66,7 @@ fn parse_onnx_constants<'a>(
   );
 
   let mut constants_hashmap = HashMap::new();
-  let mut setups = Vec::new();
+  let mut models = Vec::new();
   let mut idx = 0;
 
   for (name, tensor) in constants.clone() {
@@ -90,11 +91,11 @@ fn parse_onnx_constants<'a>(
     shapes.insert(name.clone(), tensor.shape().to_vec());
     let tensor = util::pad(&tensor);
     constants_hashmap.insert(name.clone(), idx);
-    setups.push(tensor);
+    models.push(tensor);
     idx += 1;
   }
 
-  (constants, constants_hashmap, setups)
+  (constants, constants_hashmap, models)
 }
 
 // This function is used for creating the output indices for constants of onnx models
@@ -117,6 +118,8 @@ fn create_output_indices<'a>(
 }
 
 // This function is used for generating fake inputs for onnx models
+// Fake inputs are random field (i.e., Fr) elements whose shapes and types match those described in the input tensors of an ONNX model.
+// Generating these when loading an ONNX file saves us from creating different input tensors ourselves when testing new ONNX.
 // It is only for testing purposes
 fn generate_fake_inputs_for_onnx(onnx_graph: &pb::GraphProto) -> Vec<ArrayD<Fr>> {
   let mut rng = StdRng::from_entropy();
@@ -141,7 +144,14 @@ fn generate_fake_inputs_for_onnx(onnx_graph: &pb::GraphProto) -> Vec<ArrayD<Fr>>
       .collect::<Vec<_>>();
     let val_num = &shape.iter().fold(1, |acc, x| acc * x);
 
-    let input: Vec<Fr> = (0..*val_num).map(|_| Fr::from(rng.gen_range(-2..2))).collect();
+    let input = match t.elem_type() {
+      DataType::Float | DataType::Float16 | DataType::Double => (0..*val_num).map(|_| Fr::from(rng.gen_range(-2..2))).collect(),
+      DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => (0..*val_num).map(|_| Fr::from(1)).collect(),
+      DataType::Uint8 | DataType::Uint16 | DataType::Uint32 | DataType::Uint64 => (0..*val_num).map(|_| Fr::from(1)).collect(),
+      _ => panic!("Unsupported constant type: {:?}", t.elem_type()),
+    };
+
+    //let input: Vec<Fr> = (0..*val_num).map(|_| Fr::from(rng.gen_range(-1..1))).collect();
     let input = ArrayD::from_shape_vec(shape, input).unwrap();
     let input = util::pad(&input);
     inputs.push(input);
@@ -153,29 +163,29 @@ fn generate_fake_inputs_for_onnx(onnx_graph: &pb::GraphProto) -> Vec<ArrayD<Fr>>
 fn get_local_graph(
   op: &str,
   input_shapes: &Vec<&Vec<usize>>,
-  my_constants: &Vec<Option<&ArrayD<Fr>>>,
-  my_attributes: Vec<&AttributeProto>,
+  node_constants: &Vec<Option<&ArrayD<Fr>>>,
+  node_attributes: Vec<&AttributeProto>,
 ) -> (Graph, Vec<Vec<usize>>) {
   match op {
-    "Add" => Ok(AddLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-    "Mul" => Ok(MulLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-    "Cast" => Ok(CastLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-    "Sub" => Ok(SubLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-    "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-    "Relu" => Ok(ReLULayer::graph(&input_shapes, &my_constants, &my_attributes)),
-    "Gather" => Ok(GatherLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-    "ReduceMean" => Ok(ReduceMeanLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-    "Pow" => Ok(PowLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-    "Div" => Ok(DivLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-    "Sqrt" => Ok(SqrtLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-    "Reshape" => Ok(ReshapeLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-    "Transpose" => Ok(TransposeLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-    "Shape" => Ok(ShapeLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-    "Equal" => Ok(EqualLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-    "Where" => Ok(WhereLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-    "Expand" => Ok(ExpandLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-    "Softmax" => Ok(SoftmaxLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-    "Erf" => Ok(ErfLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+    "Add" => Ok(AddLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Mul" => Ok(MulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Cast" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Sub" => Ok(SubLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Relu" => Ok(ReLULayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Gather" => Ok(GatherLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "ReduceMean" => Ok(ReduceMeanLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Pow" => Ok(PowLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Div" => Ok(DivLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Sqrt" => Ok(SqrtLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Reshape" => Ok(ReshapeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Transpose" => Ok(TransposeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Shape" => Ok(ShapeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Equal" => Ok(EqualLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Where" => Ok(WhereLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Expand" => Ok(ExpandLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Softmax" => Ok(SoftmaxLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Erf" => Ok(ErfLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     _ => Err(format!("Unsupported onnx operation: {op}")),
   }
   .unwrap()
@@ -189,7 +199,7 @@ fn update_graph(
   input_idx: &HashMap<String, usize>,
   outputs_idx: &mut HashMap<String, Vec<(i32, usize)>>,
   basic_blocks_idx: &mut HashMap<String, usize>,
-  setups: &mut Vec<ArrayD<Fr>>,
+  models: &mut Vec<ArrayD<Fr>>,
 ) {
   let mut local_block_idx = vec![];
   let temp = local_graph.basic_blocks;
@@ -198,7 +208,7 @@ fn update_graph(
     let idx = *basic_blocks_idx.entry(name).or_insert_with(|| graph.basic_blocks.len());
     local_block_idx.push(idx);
     if idx == graph.basic_blocks.len() {
-      setups.push(basic_block.genModel());
+      models.push(basic_block.genModel());
       graph.basic_blocks.push(basic_block);
     }
   }
@@ -211,16 +221,16 @@ fn update_graph(
       inputs: local_node
         .inputs
         .iter()
-        .map(|(x, y)| {
-          if x < &0 {
-            let input_tag = node_input[(-x - 1) as usize];
+        .map(|(basicblock_idx, output_idx)| {
+          if basicblock_idx < &0 {
+            let input_tag = node_input[(-basicblock_idx - 1) as usize];
             if input_idx.contains_key(input_tag) {
-              (-(*input_idx.get(input_tag).unwrap() as i32) - 1, *y)
+              (-(*input_idx.get(input_tag).unwrap() as i32) - 1, *output_idx)
             } else {
-              outputs_idx[input_tag][*y]
+              outputs_idx[input_tag][*output_idx]
             }
           } else {
-            (start_idx + *x, *y)
+            (start_idx + *basicblock_idx, *output_idx)
           }
         })
         .collect(),
@@ -238,7 +248,7 @@ fn process_node(
   graph: &mut Graph,
   shapes: &mut HashMap<String, Vec<usize>>,
   constants_hashmap: &HashMap<String, usize>,
-  setups: &mut Vec<ArrayD<Fr>>,
+  models: &mut Vec<ArrayD<Fr>>,
   passed_constants: &mut HashMap<String, ArrayD<Fr>>,
   input_idx: &HashMap<String, usize>,
   outputs_idx: &mut HashMap<String, Vec<(i32, usize)>>,
@@ -248,15 +258,15 @@ fn process_node(
   let op = node.op_type.as_str();
   let input_shapes: Vec<_> = node.input.iter().map(|x| shapes.get(x)).collect();
   let input_shapes = input_shapes.into_iter().filter_map(|x| x).collect::<Vec<_>>(); // hack: we ignore optional inputs
-  let my_constants = node.input.iter().map(|x| passed_constants.get(x).or(constants_hashmap.get(x).map(|&y| &setups[y]))).collect();
-  let my_attributes = node.attribute.iter().map(|x| x).collect();
-  let (local_graph, output_shapes) = get_local_graph(op, &input_shapes, &my_constants, my_attributes);
+  let node_constants = node.input.iter().map(|x| passed_constants.get(x).or(constants_hashmap.get(x).map(|&y| &models[y]))).collect();
+  let node_attributes = node.attribute.iter().map(|x| x).collect();
+  let (local_graph, output_shapes) = get_local_graph(op, &input_shapes, &node_constants, node_attributes);
 
-  // compute precomputable constants
-  if my_constants.iter().all(|&x| x.is_some()) {
-    let my_inputs: Vec<_> = my_constants.iter().map(|&x| x.unwrap().clone()).collect();
-    let my_inputs = my_inputs.iter().map(|x| x).collect();
-    let outputs = local_graph.run(&my_inputs, &vec![&arr1(&[]).into_dyn(); local_graph.basic_blocks.len()]);
+  // compute precomputable constants (these are constants that can be computed without proving)
+  if node_constants.iter().all(|&x| x.is_some()) {
+    let node_inputs: Vec<_> = node_constants.iter().map(|&x| x.unwrap().clone()).collect();
+    let node_inputs = node_inputs.iter().map(|x| x).collect();
+    let outputs = local_graph.run(&node_inputs, &vec![&arr1(&[]).into_dyn(); local_graph.basic_blocks.len()]);
     node
       .output
       .iter()
@@ -265,13 +275,13 @@ fn process_node(
       .for_each(|((output_str, &(nodeX, nodeY)), output_shape)| {
         passed_constants.insert(
           output_str.to_string(),
-          util::slice_nd_array(outputs[nodeX as usize][nodeY].clone(), &output_shape), // no need to pad for precomputable constants
+          util::slice_nd_array(outputs[nodeX as usize][nodeY].clone(), &output_shape),
         );
       });
   }
 
   // update graph with local graph
-  update_graph(graph, local_graph, node, &input_idx, outputs_idx, basic_blocks_idx, setups);
+  update_graph(graph, local_graph, node, &input_idx, outputs_idx, basic_blocks_idx, models);
 
   // handle a special case (op == "Shape")
   if op == "Shape" {
@@ -287,13 +297,16 @@ fn process_node(
   });
 }
 
-// This function is used for loading onnx models and returning the graph, setups, and fake inputs
+// This function is used for loading onnx models and returning the graph, models, and fake inputs
+// - Graph: the graph of zk-torch BasicBlocks after parsing the onnx layers
+// - Models: input tensors required for generating a setup for each BasicBlock
+// - Fake inputs: random field (i.e., Fr) elements whose shapes and types match those described in the input tensors of an ONNX model
 pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>, Vec<ArrayD<Fr>>) {
   let onnx = tract_onnx::onnx();
   let onnx_graph = onnx.proto_model_for_path(filename).unwrap().graph.unwrap();
 
   let (input_idx, mut shapes) = parse_onnx_inputs(&onnx_graph);
-  let (constants, constants_hashmap, mut setups) = parse_onnx_constants(&onnx_graph, &mut shapes);
+  let (constants, constants_hashmap, mut models) = parse_onnx_constants(&onnx_graph, &mut shapes);
 
   let mut graph = Graph {
     basic_blocks: vec![],
@@ -311,7 +324,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>, Vec<ArrayD<Fr>>) {
       &mut graph,
       &mut shapes,
       &constants_hashmap,
-      &mut setups,
+      &mut models,
       &mut passed_constants,
       &input_idx,
       &mut outputs_idx,
@@ -321,5 +334,5 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>, Vec<ArrayD<Fr>>) {
 
   let fake_inputs = generate_fake_inputs_for_onnx(&onnx_graph);
 
-  (graph, setups, fake_inputs)
+  (graph, models, fake_inputs)
 }

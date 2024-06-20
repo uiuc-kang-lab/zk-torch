@@ -30,13 +30,13 @@ impl Graph {
       let myInputs = n
         .inputs
         .iter()
-        .map(|&(j, k)| {
-          if j < 0 {
+        .map(|(basicblock_idx, output_idx)| {
+          if *basicblock_idx < 0 {
             // We currently support two types of indexing for the inputs, one is (-1,0),(-1,1),(-1,2),...
             // and the other is (-1,0),(-2,0),(-3,0),... In the future we will make this more standardized.
-            inputs[k + (-j - 1) as usize]
+            inputs[*output_idx + (-basicblock_idx - 1) as usize]
           } else {
-            &(outputs[j as usize][k])
+            &(outputs[*basicblock_idx as usize][*output_idx])
           }
         })
         .collect();
@@ -55,7 +55,17 @@ impl Graph {
     let mut outputsEnc = vec![vec![]; self.nodes.len()];
     self.nodes.iter().enumerate().for_each(|(i, n)| {
       println!("encoding {i} {:?}", self.basic_blocks[n.basic_block]);
-      let myInputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputsEnc[*j as usize][*k]) }).collect();
+      let myInputs = n
+        .inputs
+        .iter()
+        .map(|(basicblock_idx, output_idx)| {
+          if *basicblock_idx < 0 {
+            inputs[*output_idx + (-basicblock_idx - 1) as usize]
+          } else {
+            &(outputsEnc[*basicblock_idx as usize][*output_idx])
+          }
+        })
+        .collect();
       outputsEnc[i] = self.basic_blocks[n.basic_block].encodeOutputs(srs, &models[n.basic_block], &myInputs, outputs[i]);
     });
     return outputsEnc;
@@ -90,7 +100,17 @@ impl Graph {
       .enumerate()
       .map(|(i, n)| {
         println!("proving {i} {:?}", self.basic_blocks[n.basic_block]);
-        let myInputs: Vec<&ArrayD<Data>> = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
+        let myInputs = n
+          .inputs
+          .iter()
+          .map(|(basicblock_idx, output_idx)| {
+            if *basicblock_idx < 0 {
+              inputs[*output_idx + (-basicblock_idx - 1) as usize]
+            } else {
+              &(outputs[*basicblock_idx as usize][*output_idx])
+            }
+          })
+          .collect();
         let proof = self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &myInputs, outputs[i], rng, &mut cache);
         let proof: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (
           proof.0.iter().map(|x| (*x).into()).collect(),
@@ -121,7 +141,17 @@ impl Graph {
       .enumerate()
       .map(|(i, n)| {
         println!("verifying {i} {:?}", self.basic_blocks[n.basic_block]);
-        let myInputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
+        let myInputs = n
+          .inputs
+          .iter()
+          .map(|(basicblock_idx, output_idx)| {
+            if *basicblock_idx < 0 {
+              inputs[*output_idx + (-basicblock_idx - 1) as usize]
+            } else {
+              &(outputs[*basicblock_idx as usize][*output_idx])
+            }
+          })
+          .collect();
         let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, &mut cache);
         let mut bytes = Vec::new();
         let temp: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (proofs[i].0.clone(), proofs[i].1.clone(), proofs[i].2.clone());
