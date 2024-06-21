@@ -217,10 +217,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let N = max(input_deg, output_deg);
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
 
-    // Round 1: quotients
-    let beta = Fr::rand(rng);
-    let gamma = Fr::rand(rng);
-
+    // Round 1: Commit input and output polynomials
     // Calculate fjs
     let m = inputs[0].len() + outputs[0].len();
     let mut rng2 = StdRng::from_entropy();
@@ -241,10 +238,17 @@ impl BasicBlock for CopyConstraintBasicBlock {
       .collect();
 
     let ssig_polys = &setup.2[..];
+
+    // Round 2: Commit Z
+    let mut bytes = Vec::new();
+    let mut rng2 = StdRng::from_entropy();
+    fj_xs.serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+    let beta = Fr::rand(rng);
+    let gamma = Fr::rand(rng);
     let beta_poly = DensePolynomial::from_coefficients_vec(vec![beta]);
     let gamma_poly = DensePolynomial::from_coefficients_vec(vec![gamma]);
 
-    // Round 0: Calculate Z
     let mut Z = vec![Fr::zero(); N];
     Z[0] = Fr::one();
     for j in 0..(N - 1) {
@@ -269,7 +273,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let Z_poly = &Z_poly + &Z_blind_poly.mul(&DensePolynomial::from(domain.vanishing_polynomial()));
     let Z_x = util::msm::<G1Projective>(&srs.X1A, &Z_poly.coeffs);
 
-    // Calculate quotient for L0(X)(Z(X)-1) = 0
+    // Round 3: Commit t (batched quotient polynomial)
+    // Calculate L0(X)(Z(X)-1) polynomial
     let mut L0_evals = vec![Fr::zero(); N];
     L0_evals[0] = Fr::one();
     let L0_poly = DensePolynomial {
@@ -278,13 +283,12 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let one = DensePolynomial { coeffs: vec![Fr::one()] };
     let L0Z_poly = L0_poly.mul(&Z_poly.sub(&one));
 
-    // Calculate quotient for zero-pad check
+    // Calculate zero-pad check polynomial
     let mut fj_none_idx = 0; // position in f_polys
     let mut Lnone_poly = DensePolynomial::zero();
     for i in indices(self.permutation.shape()) {
       let idx = i.clone();
       if self.permutation[i].is_none() {
-        // has_none = true;
         let flat_none_idx = flat_index(&self.permutation.dim(), &Some(idx.clone()), N).unwrap();
         let mut Lnone_evals = vec![Fr::zero(); N];
         Lnone_evals[flat_none_idx.1] = Fr::one();
@@ -296,7 +300,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
       }
     }
 
-    // Calculate quotient for Z(x)f'(x) = Z(gx)g'(x)
+    // Calculate batched quotient for Z(x)f'(x) = Z(gx)g'(x) and above checks
     let mut bytes = Vec::new();
     let mut rng2 = StdRng::from_entropy();
     let mut r: Vec<_> = vec![Fr::rand(&mut rng2)];
@@ -329,7 +333,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // smaller polynomials of degree <n done in the Plonk paper.
     let t_x = util::msm::<G1Projective>(&srs.X1A, &t_poly.coeffs);
 
-    // Round 2: openings
+    // Round 4: Commit opening proofs
     // Fiat-Shamir
     let mut bytes = Vec::new();
     let mut rng2 = StdRng::from_entropy();
@@ -355,7 +359,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let Z_Q: DensePolynomial<_> = &temp / &Z_V;
     let Z_Q_x = util::msm::<G1Projective>(&srs.X1A, &Z_Q.coeffs);
 
-    // Calculate opening quotient for Z(x)f'(x) = Z(gx)g'(x) check
+    // Calculate opening quotient for batched quotient check
     let mut ssig_as: Vec<_> = ssig_polys.iter().map(|p| p.evaluate(&a)).collect();
     let ft_as: Vec<_> = fj_as.iter().enumerate().map(|(i, x)| beta * Fr::from((i + 1) as i32) * a + *x + gamma).collect();
     let gt_as: Vec<_> = fj_as.iter().enumerate().map(|(i, x)| ssig_as[i] * beta + *x + gamma).collect();
@@ -449,36 +453,39 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let ssig_as = &q1_evals[..m];
     let fj_as = &q1_evals[m..];
 
-    // Round 1 randomness
+    // Round 2 randomness
+    let mut bytes = Vec::new();
+    fj_xs.serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
     let beta = Fr::rand(rng);
     let gamma = Fr::rand(rng);
 
-    // Round 2 randomness
+    // Round 3 randomness
     let mut bytes = Vec::new();
     vec![Z_x].serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
     let alpha = Fr::rand(rng);
 
-    // randomness
+    // Round 4 randomness
     let mut bytes = Vec::new();
     vec![t_x].serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
     let a = Fr::rand(rng);
     let b = Fr::rand(rng);
 
-    // Check Lnone(x)f(x) = V(x)Q(x)
+    // Get none index for Lnone(x)f(x) = V(x)Q(x) check
     let mut has_none = false;
-    let mut flat_none_idx = 0;
+    let mut fj_none_idx = 0;
     for i in indices(self.permutation.shape()) {
       if self.permutation[i.clone()].is_none() {
         let idx = flat_index(&self.permutation.dim(), &Some(i), N).unwrap();
-        flat_none_idx = idx.0 + input.len();
+        fj_none_idx = idx.0 + input.len();
         has_none = true;
         break;
       }
     }
 
-    // Check Z(x)f'(x) = Z(gx)g'(x)
+    // Check t polynomial batched quotient
     let ft_as: Vec<_> = fj_as.iter().enumerate().map(|(i, x)| beta * Fr::from((i + 1) as i32) * a + *x + gamma).collect();
     let gt_as: Vec<_> = fj_as.iter().enumerate().map(|(i, x)| ssig_as[i] * beta + *x + gamma).collect();
     let ft_a: Fr = ft_as.iter().product();
@@ -497,7 +504,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
       (-C1, srs.Y2A),
     ];
     if has_none {
-      Z_check.push(((fj_xs[flat_none_idx] * alpha * alpha * Lnone_a).into(), srs.X2A[0]));
+      Z_check.push(((fj_xs[fj_none_idx] * alpha * alpha * Lnone_a).into(), srs.X2A[0]));
     }
     checks.push(Z_check);
 
@@ -515,7 +522,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
       (-C2, srs.Y2A),
     ]);
 
-    // Check Z opening commitment
+    // Check Z opening commitment over omega * a
     let Z_ga_x: G1Affine = (srs.X1P[0] * Z_ga).into();
     let V_x: G2Affine = (srs.X2P[1] - srs.X2P[0] * omega * a).into();
     checks.push(vec![((Z_x - Z_ga_x).into(), srs.X2A[0]), (-Z_Q_x, V_x.into()), (-C3, srs.Y2A)]);
