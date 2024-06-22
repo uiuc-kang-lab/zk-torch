@@ -90,7 +90,9 @@ fn construct_ssig(
     .collect()
 }
 
-// Permutation has the same shape as the output, and each index stores the index of the input array it equals to
+// This BasicBlock implements Plonk's copy constraint protocol over the inputs and outputs (Sec. 5.2 and 8 of https://eprint.iacr.org/2019/953.pdf) [1].
+// It additionally supports checking that elements corresponding to None are zero to support padding.
+// permutation has the same shape as the output, and each index stores the index of the input array it equals to.
 #[derive(Debug)]
 pub struct CopyConstraintBasicBlock {
   pub permutation: ArrayD<Option<IxDyn>>,
@@ -137,7 +139,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // Indices of the input which are in each position of the permutation
     let flat_perm_idxs = self.permutation.map(|i| flat_index(&self.input_dim, i, N));
 
-    // Create partitions
+    // Create partitions (p. 22 of [1])
     let mut partitions = HashMap::new();
     for i in indices(self.input_dim.clone()).into_iter() {
       let idx = flat_index(&self.input_dim, &Some(i), N);
@@ -155,7 +157,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
       partitions.insert(None, pad);
     }
 
-    // Calculate S_sigma_js
+    // Calculate S_sigma_js (p. 27 of [1])
     let inp_idxs: ArrayD<(usize, usize)> = ArrayD::from_shape_fn(self.input_dim.clone(), |i| flat_index(&self.input_dim, &Some(i), N).unwrap());
     let mut inp_arr = ArrayD::from_elem(self.input_dim.clone(), ((0, 0), None));
     Zip::from(&mut inp_arr).and(&inp_idxs).for_each(|r, &a| {
@@ -218,7 +220,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
 
     // Round 1: Commit input and output polynomials
-    // Calculate fjs
+    // Calculate fjs (corresponds to fjs on p. 22 and a, b, c on p. 28 of [1])
     let m = inputs[0].len() + outputs[0].len();
     let mut rng2 = StdRng::from_entropy();
     let fj_blind: Vec<_> = (0..m).map(|_| Fr::rand(&mut rng2)).collect();
@@ -239,7 +241,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
 
     let ssig_polys = &setup.2[..];
 
-    // Round 2: Commit Z
+    // Round 2: Commit Z (p. 28 of [1])
     let mut bytes = Vec::new();
     let mut rng2 = StdRng::from_entropy();
     fj_xs.serialize_uncompressed(&mut bytes).unwrap();
@@ -273,7 +275,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let Z_poly = &Z_poly + &Z_blind_poly.mul(&DensePolynomial::from(domain.vanishing_polynomial()));
     let Z_x = util::msm::<G1Projective>(&srs.X1A, &Z_poly.coeffs);
 
-    // Round 3: Commit t (batched quotient polynomial)
+    // Round 3: Commit t (batched quotient polynomial of the below polynomials, p. 29 of [1])
     // Calculate L0(X)(Z(X)-1) polynomial
     let mut L0_evals = vec![Fr::zero(); N];
     L0_evals[0] = Fr::one();
@@ -310,10 +312,11 @@ impl BasicBlock for CopyConstraintBasicBlock {
     util::add_randomness(rng, bytes);
     let alpha = Fr::rand(rng);
     let alpha_poly = DensePolynomial::from_coefficients_vec(vec![alpha]);
+    // Compute Z(omega * X) polynomial
     let Zg_poly = DensePolynomial {
       coeffs: Z_poly.coeffs.iter().enumerate().map(|(i, x)| x * &domain.element(i)).collect(),
     };
-    // These have the extra beta * X + gamma etc. terms that appear in Z, t, r
+    // These have the extra beta * X + gamma etc. terms that appear in Z, t, r (seen as terms of t on p. 29 of [1])
     let ft_polys: Vec<_> = fj_polys
       .iter()
       .enumerate()
@@ -348,7 +351,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let a = Fr::rand(rng);
     let mut fj_as: Vec<_> = fj_polys.iter().map(|p| p.evaluate(&a)).collect();
 
-    // Calculate opening argument for Z over omega * a
+    // Calculate opening argument for Z over omega * a (p. 30 of [1])
     let omega = domain.group_gen();
     let Z_ga = Z_poly.evaluate(&(omega * a));
     let Z_ga_poly = DensePolynomial { coeffs: vec![Z_ga] };
@@ -359,7 +362,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let Z_Q: DensePolynomial<_> = &temp / &Z_V;
     let Z_Q_x = util::msm::<G1Projective>(&srs.X1A, &Z_Q.coeffs);
 
-    // Calculate opening quotient for batched quotient check
+    // Calculate opening quotient for batched quotient check (containing r, fjs, ssigs on p. 30 of [1])
     let mut ssig_as: Vec<_> = ssig_polys.iter().map(|p| p.evaluate(&a)).collect();
     let ft_as: Vec<_> = fj_as.iter().enumerate().map(|(i, x)| beta * Fr::from((i + 1) as i32) * a + *x + gamma).collect();
     let gt_as: Vec<_> = fj_as.iter().enumerate().map(|(i, x)| ssig_as[i] * beta + *x + gamma).collect();
@@ -375,6 +378,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let q1_V = DensePolynomial { coeffs: vec![-a, Fr::one()] };
     let L0_a = L0_poly.evaluate(&a);
     let Lnone_a = Lnone_poly.evaluate(&a);
+
+    // Compute linearization polynomial r (p. 30 of [1])
     let r_poly = &(&lhs - &rhs) - &v
       + Z_poly.sub(&one).mul(&DensePolynomial::from_coefficients_vec(vec![alpha * L0_a]))
       + fj_polys[fj_none_idx].mul(&DensePolynomial::from_coefficients_vec(vec![alpha * alpha * Lnone_a]));
