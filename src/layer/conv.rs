@@ -110,6 +110,20 @@ fn splat_pad(input: &Vec<Vec<Option<IxDyn>>>) -> ArrayD<Option<IxDyn>> {
   pad(&flattened_inp, &padding, &None)
 }
 
+// Returns the permutation for CopyConstraintBasicBlock for a reshape operation given the unpadded input and output shapes
+pub fn reshape_permutation(input_shape: &Vec<usize>, output_shape: &Vec<usize>) -> ArrayD<Option<IxDyn>> {
+  let reshape = ArrayD::from_shape_fn(IxDyn(&input_shape), |i| Some(i));
+
+  let reshape_output = reshape.into_shape(IxDyn(&output_shape)).unwrap();
+
+  let mut padding = vec![];
+  for i in 0..output_shape.len() {
+    padding.push([0, output_shape[i].next_power_of_two() - output_shape[i]]);
+  }
+  let reshape_padded = pad(&reshape_output, &padding, &None);
+  reshape_padded
+}
+
 pub struct ConvLayer;
 impl Layer for ConvLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
@@ -164,7 +178,6 @@ impl Layer for ConvLayer {
     }));
 
     // Reshape matmul into output shape
-    let reshape = ArrayD::from_shape_fn(IxDyn(&[permutation.len(), weights_splatted.len()]), |i| Some(i));
     let mut padding = vec![];
     for i in 0..dims.len() {
       padding.push([pads[i], pads[dims.len() + i]]);
@@ -172,16 +185,9 @@ impl Layer for ConvLayer {
     let mut out_dims = out_hw(&dims, &strides, &ch_dims, &padding);
     let mut output_shape = vec![1, weight_shape[0]];
     output_shape.append(&mut out_dims);
-
-    let reshape_output = reshape.into_shape(IxDyn(&output_shape)).unwrap();
-
-    let mut padding = vec![];
-    for i in 0..output_shape.len() {
-      padding.push([0, output_shape[i].next_power_of_two() - output_shape[i]]);
-    }
-    let reshape_padded = pad(&reshape_output, &padding, &None);
+    let reshape_permutation = reshape_permutation(&vec![permutation.len(), weights_splatted.len()], &output_shape);
     let cc2 = graph.addBB(Box::new(CopyConstraintBasicBlock {
-      permutation: reshape_padded,
+      permutation: reshape_permutation,
       input_dim: IxDyn(&[permutation.len().next_power_of_two(), weights_splatted.len().next_power_of_two()]),
     }));
 
