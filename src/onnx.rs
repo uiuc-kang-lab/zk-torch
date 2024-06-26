@@ -103,25 +103,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
     let my_constants = node.input.iter().map(|x| passed_constants.get(x).or(constants_hashmap.get(x).map(|&y| &setups[y]))).collect();
     let my_attributes = node.attribute.iter().map(|x| x).collect();
     let (mut local_graph, output_shapes) = match op {
-      "Add" => Ok(AddLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Mul" => Ok(MulLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-      "Cast" => Ok(CastLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-      "Sub" => Ok(SubLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-      "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-      "Relu" => Ok(ReLULayer::graph(&input_shapes, &my_constants, &my_attributes)),
-      "Gather" => Ok(GatherLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-      "ReduceMean" => Ok(ReduceMeanLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-      "Pow" => Ok(PowLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-      "Div" => Ok(DivLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-      "Sqrt" => Ok(SqrtLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-      "Reshape" => Ok(ReshapeLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-      "Transpose" => Ok(TransposeLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-      "Shape" => Ok(ShapeLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-      "Equal" => Ok(EqualLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-      "Where" => Ok(WhereLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-      "Expand" => Ok(ExpandLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-      "Softmax" => Ok(SoftmaxLayer::graph(&input_shapes, &my_constants, &my_attributes)),
-      "Erf" => Ok(ErfLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       _ => Err(format!("Unsupported onnx operation: {op}")),
     }
     .unwrap();

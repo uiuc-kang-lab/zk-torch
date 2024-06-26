@@ -183,7 +183,6 @@ pub fn convert_to_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
   let mut a = a.map_axis(Axis(a.ndim() - 1), |r| Data {
     raw: r.as_slice().unwrap().to_vec(),
     poly: ark_poly::polynomial::univariate::DensePolynomial::zero(),
-    r: Fr::zero(),
     g1: G1Projective::zero(),
   });
   a.par_map_inplace(|x| {

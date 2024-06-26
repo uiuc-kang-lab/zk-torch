@@ -1,63 +1,27 @@
 #![allow(unused_imports)]
 use crate::util::{self, ark_de, ark_se};
-pub use add::AddBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{UniformRand, Zero};
 pub use constant::{Const2BasicBlock, ConstBasicBlock};
-pub use copy_constraint::CopyConstraintBasicBlock;
-pub use cq::CQBasicBlock;
-pub use cq2::CQ2BasicBlock;
-pub use cqlin::CQLinBasicBlock;
-pub use div::{DivConstBasicBlock, DivScalarBasicBlock};
-pub use eq::EqBasicBlock;
-pub use id::IdBasicBlock;
-pub use matmul::MatMulBasicBlock;
-pub use max::MaxBasicBlock;
-pub use mul::{MulBasicBlock, MulConstBasicBlock, MulScalarBasicBlock};
-use ndarray::{ArrayD, IxDyn};
+pub use mul::MulBasicBlock;
 pub use ops::*;
-pub use permute::PermuteBasicBlock;
-use rand::{rngs::StdRng, SeedableRng};
 pub use repeater::RepeaterBasicBlock;
-pub use reshape::ReshapeBasicBlock;
-pub use rope::RoPEBasicBlock;
+use ndarray::{ArrayD, IxDyn};
+use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-pub use sub::SubBasicBlock;
-pub use sum::SumBasicBlock;
-pub use transpose::TransposeBasicBlock;
-pub mod add;
 pub mod constant;
-pub mod copy_constraint;
-pub mod cq;
-pub mod cq2;
-pub mod cqlin;
-pub mod div;
-pub mod eq;
-pub mod id;
-pub mod matmul;
-pub mod max;
 pub mod mul;
 pub mod ops;
-pub mod permute;
 pub mod repeater;
-pub mod reshape;
-pub mod rope;
-pub mod sub;
-pub mod sum;
-pub mod transpose;
 
 pub struct SRS {
   pub X1A: Vec<G1Affine>,
   pub X2A: Vec<G2Affine>,
   pub X1P: Vec<G1Projective>,
   pub X2P: Vec<G2Projective>,
-  pub Y1A: G1Affine,
-  pub Y2A: G2Affine,
-  pub Y1P: G1Projective,
-  pub Y2P: G2Projective,
 }
 
 // During proofs and verifications, a cache is used to prevent recomputation.
@@ -81,26 +45,25 @@ pub struct Data {
   pub poly: DensePolynomial<Fr>,
   #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
   pub g1: G1Projective,
-  #[serde(serialize_with = "ark_se", deserialize_with = "ark_de")]
-  pub r: Fr,
 }
 
 impl Data {
   pub fn new(srs: &SRS, raw: &[Fr]) -> Data {
     let N = raw.len();
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
-    let f = DensePolynomial::from_coefficients_vec(domain.ifft(&raw));
+    let mut rng = StdRng::from_entropy();
+
+    let f = DensePolynomial::from_coefficients_vec(domain.ifft(&raw)) + rand_poly(&mut rng, 2, domain);
     let fx = if f.is_zero() {
       G1Projective::zero()
     } else {
       util::msm(&srs.X1A, &f.coeffs)
     };
-    let mut rng = StdRng::from_entropy();
+
     return Data {
       raw: raw.to_vec(),
       poly: f,
       g1: fx,
-      r: Fr::rand(&mut rng),
     };
   }
 }
@@ -113,10 +76,10 @@ pub struct DataEnc {
 }
 
 impl DataEnc {
-  pub fn new(srs: &SRS, data: &Data) -> DataEnc {
+  pub fn new(_srs: &SRS, data: &Data) -> DataEnc {
     return DataEnc {
       len: data.raw.len(),
-      g1: (data.g1 + srs.Y1P * data.r).into(),
+      g1: (data.g1).into(),
     };
   }
 }
@@ -168,4 +131,8 @@ pub trait BasicBlock: std::fmt::Debug {
   ) -> Vec<PairingCheck> {
     vec![]
   }
+}
+
+fn rand_poly(rng: &mut StdRng, degree: usize, domain: GeneralEvaluationDomain<Fr>) -> DensePolynomial<Fr> {
+  DensePolynomial::from_coefficients_vec((0..degree).map(|_| Fr::rand(rng)).collect()).mul_by_vanishing_poly(domain)
 }
