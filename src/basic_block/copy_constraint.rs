@@ -304,10 +304,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
 
     // Calculate batched quotient for Z(x)f'(x) = Z(gx)g'(x) and above checks
     let mut bytes = Vec::new();
-    let mut rng2 = StdRng::from_entropy();
-    let mut r: Vec<_> = vec![Fr::rand(&mut rng2)];
-    let proof = vec![Z_x];
-    let mut proof: Vec<_> = proof.iter().enumerate().map(|(i, x)| (*x) + srs.Y1P * r[i]).collect();
+    let mut proof = vec![Z_x];
     proof.serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
     let alpha = Fr::rand(rng);
@@ -340,12 +337,10 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // Fiat-Shamir
     let mut bytes = Vec::new();
     let mut rng2 = StdRng::from_entropy();
-    let mut r1: Vec<_> = vec![Fr::rand(&mut rng2)];
-    let proof_1 = vec![t_x];
-    let mut proof_1: Vec<_> = proof_1.iter().enumerate().map(|(i, x)| (*x) + srs.Y1P * r1[i]).collect();
+    let r = Fr::rand(&mut rng2);
+    let mut proof_1 = vec![t_x + srs.Y1P * r];
     proof_1.serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
-    r.append(&mut r1);
     proof.append(&mut proof_1);
 
     let a = Fr::rand(rng);
@@ -395,15 +390,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let W_x = util::msm::<G1Projective>(&srs.X1A, &W_poly.coeffs);
 
     // Blinding
-    let u = Fr::rand(rng);
-    let mut r1: Vec<_> = (0..2).map(|_| Fr::rand(&mut rng2)).collect();
-    proof.append(&mut vec![W_x, W_gx].iter().enumerate().map(|(i, x)| (*x) + srs.Y1P * r1[i]).collect());
-    r.append(&mut r1);
-    let mut C: Vec<G1Projective> = vec![
-      srs.X1P[1] * (r[2] + r[3] * u)
-        - srs.X1P[0] * (r[2] * a + r[3] * u * omega * a + r[0] * (ft_a + alpha * L0_a + u) - r[1] * (a_pows[N - 1] - Fr::one())),
-    ];
-    proof.append(&mut C);
+    proof.append(&mut vec![W_x, W_gx]);
+    proof.push(srs.X1P[0] * (r * (a_pows[N - 1] - Fr::one())));
 
     let mut ssig_xs = setup.0[2..].iter().map(|x| Into::<G1Projective>::into(*x)).collect();
     proof.append(&mut ssig_xs);
@@ -438,7 +426,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // constructors to use the blinding scheme when appropriate.
     let input = inputs[0];
 
-    let [Z_x, t_x, W_x, Z_Q_x, C1] = proof.0[..5] else {
+    let [Z_x, t_x, W_x, W_gx, C1] = proof.0[..5] else {
       panic!("Wrong proof format")
     };
 
@@ -473,6 +461,11 @@ impl BasicBlock for CopyConstraintBasicBlock {
     util::add_randomness(rng, bytes);
     let a = Fr::rand(rng);
     let b = Fr::rand(rng);
+
+    // Round 5 randomness
+    let mut bytes = Vec::new();
+    vec![W_x, W_gx].serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
     let u = Fr::rand(rng);
 
     // Get none index for Lnone(x)f(x) = V(x)Q(x) check
@@ -511,8 +504,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let r_0 = -L0_a * alpha - gt_a * (fj_as[fj_as.len() - 1] + gamma) * Z_ga;
     let E = srs.X1A[0] * (-r_0 + q1_a + u * Z_ga);
     checks.push(vec![
-      ((W_x + Z_Q_x * u).into(), srs.X2A[1]),
-      ((-(W_x * a + Z_Q_x * u * omega * a + F - E)).into(), srs.X2A[0]),
+      ((W_x + W_gx * u).into(), srs.X2A[1]),
+      ((-(W_x * a + W_gx * u * omega * a + F - E)).into(), srs.X2A[0]),
       (-C1, srs.Y2A),
     ]);
     checks
