@@ -4,10 +4,8 @@ use crate::layer::*;
 use crate::util;
 use ark_bn254::Fr;
 use ndarray::{arr1, ArrayD};
-use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::collections::HashMap;
 use tract_onnx::pb;
-use tract_onnx::pb::tensor_proto::DataType;
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::{DatumType, Framework};
 use tract_onnx::tensor::load_tensor;
@@ -117,48 +115,6 @@ fn create_output_indices<'a>(
   outputs_idx
 }
 
-// This function is used for generating fake inputs for onnx models
-// Fake inputs are random field (i.e., Fr) elements whose shapes and types match those described in the input tensors of an ONNX model.
-// Generating these when loading an ONNX file saves us from creating different input tensors ourselves when testing new ONNX.
-// It is only for testing purposes
-fn generate_fake_inputs_for_onnx(onnx_graph: &pb::GraphProto) -> Vec<ArrayD<Fr>> {
-  let mut rng = StdRng::from_entropy();
-
-  let mut inputs = vec![];
-
-  for onnx_input in onnx_graph.input.iter() {
-    let tract_onnx::pb::type_proto::Value::TensorType(t) = onnx_input.r#type.as_ref().unwrap().value.as_ref().unwrap();
-    let shape = t
-      .shape
-      .as_ref()
-      .unwrap()
-      .dim
-      .iter()
-      .map(|x| {
-        if let tract_onnx::pb::tensor_shape_proto::dimension::Value::DimValue(x) = x.value.as_ref().unwrap() {
-          *x as usize
-        } else {
-          panic!("Unknown dimension")
-        }
-      })
-      .collect::<Vec<_>>();
-    let val_num = &shape.iter().fold(1, |acc, x| acc * x);
-
-    let input = match t.elem_type() {
-      DataType::Float | DataType::Float16 | DataType::Double => (0..*val_num).map(|_| Fr::from(rng.gen_range(-2..2))).collect(),
-      DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => (0..*val_num).map(|_| Fr::from(1)).collect(),
-      DataType::Uint8 | DataType::Uint16 | DataType::Uint32 | DataType::Uint64 => (0..*val_num).map(|_| Fr::from(1)).collect(),
-      _ => panic!("Unsupported constant type: {:?}", t.elem_type()),
-    };
-
-    //let input: Vec<Fr> = (0..*val_num).map(|_| Fr::from(rng.gen_range(-1..1))).collect();
-    let input = ArrayD::from_shape_vec(shape, input).unwrap();
-    let input = util::pad(&input);
-    inputs.push(input);
-  }
-  inputs
-}
-
 // This function is used for getting the local graph for each layer
 fn get_local_graph(
   op: &str,
@@ -191,8 +147,8 @@ fn get_local_graph(
   .unwrap()
 }
 
-// This function is used for updating the graph of onnx after creating the local graph
-fn update_graph(
+// This function is used for updating the graph of onnx after creating a local graph
+fn update_graph_w_local_graph(
   graph: &mut Graph,
   local_graph: Graph,
   node: &pb::NodeProto,
@@ -201,6 +157,7 @@ fn update_graph(
   basic_blocks_idx: &mut HashMap<String, usize>,
   models: &mut Vec<ArrayD<Fr>>,
 ) {
+  // Pushing basicblocks and models in a local graph to update graph.basic_blocks and models
   let mut local_block_idx = vec![];
   let temp = local_graph.basic_blocks;
   for basic_block in temp.into_iter() {
@@ -212,6 +169,7 @@ fn update_graph(
       graph.basic_blocks.push(basic_block);
     }
   }
+  // Pushing nodes in a local graph to update graph.nodes
   let start_idx = graph.nodes.len() as i32;
   for local_node in local_graph.nodes.iter() {
     // filter out node input that are ""
@@ -236,13 +194,16 @@ fn update_graph(
         .collect(),
     });
   }
+  // tracking output_idx of local_graph
   for (i, output) in node.output.iter().enumerate() {
     let local_output = local_graph.outputs[i];
     outputs_idx.insert(output.clone(), vec![(start_idx + local_output.0, local_output.1)]);
   }
 }
 
-// This function is used for processing a layer of onnx models
+// This function is used for processing a layer of onnx models.
+// It matches each ONNX operation as a local graph, which can
+// then be used to update the overall graph for zk proving.
 fn process_node(
   node: &pb::NodeProto,
   graph: &mut Graph,
@@ -281,7 +242,7 @@ fn process_node(
   }
 
   // update graph with local graph
-  update_graph(graph, local_graph, node, &input_idx, outputs_idx, basic_blocks_idx, models);
+  update_graph_w_local_graph(graph, local_graph, node, &input_idx, outputs_idx, basic_blocks_idx, models);
 
   // handle a special case (op == "Shape")
   if op == "Shape" {
@@ -301,7 +262,7 @@ fn process_node(
 // - Graph: the graph of zk-torch BasicBlocks after parsing the onnx layers
 // - Models: input tensors required for generating a setup for each BasicBlock
 // - Fake inputs: random field (i.e., Fr) elements whose shapes and types match those described in the input tensors of an ONNX model
-pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>, Vec<ArrayD<Fr>>) {
+pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
   let onnx = tract_onnx::onnx();
   let onnx_graph = onnx.proto_model_for_path(filename).unwrap().graph.unwrap();
 
@@ -332,7 +293,5 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>, Vec<ArrayD<Fr>>) {
     );
   }
 
-  let fake_inputs = generate_fake_inputs_for_onnx(&onnx_graph);
-
-  (graph, models, fake_inputs)
+  (graph, models)
 }

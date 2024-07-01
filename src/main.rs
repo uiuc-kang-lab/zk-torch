@@ -109,7 +109,9 @@ fn verify(srs: &SRS, graph: &Graph) {
 
 fn main() {
   let srs = &ptau::load_file("challenge", 7, 7);
-  let (mut graph, models, fake_inputs) = onnx::load_file("sample.onnx");
+  let onnx_file_name = "sample.onnx";
+  let (mut graph, models) = onnx::load_file(onnx_file_name);
+  let fake_inputs = util::generate_fake_inputs_for_onnx(onnx_file_name);
   let inputs = fake_inputs.iter().map(|x| x).collect();
   let models = models.iter().map(|x| x).collect();
   prove(&srs, &inputs, &mut graph, &models);
