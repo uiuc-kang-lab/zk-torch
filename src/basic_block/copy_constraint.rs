@@ -90,7 +90,9 @@ fn construct_ssig(
     .collect()
 }
 
-// Permutation has the same shape as the output, and each index stores the index of the input array it equals to
+// This BasicBlock implements Plonk's copy constraint protocol over the inputs and outputs (Sec. 5.2 and 8 of https://eprint.iacr.org/2019/953.pdf) [1].
+// It additionally supports checking that elements corresponding to None are zero to support padding.
+// permutation has the same shape as the output, and each index stores the index of the input array it equals to.
 #[derive(Debug)]
 pub struct CopyConstraintBasicBlock {
   pub permutation: ArrayD<Option<IxDyn>>,
@@ -137,7 +139,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // Indices of the input which are in each position of the permutation
     let flat_perm_idxs = self.permutation.map(|i| flat_index(&self.input_dim, i, N));
 
-    // Create partitions
+    // Create partitions (p. 22 of [1])
     let mut partitions = HashMap::new();
     for i in indices(self.input_dim.clone()).into_iter() {
       let idx = flat_index(&self.input_dim, &Some(i), N);
@@ -155,7 +157,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
       partitions.insert(None, pad);
     }
 
-    // Calculate S_sigma_js
+    // Calculate S_sigma_js (p. 27 of [1])
     let inp_idxs: ArrayD<(usize, usize)> = ArrayD::from_shape_fn(self.input_dim.clone(), |i| flat_index(&self.input_dim, &Some(i), N).unwrap());
     let mut inp_arr = ArrayD::from_elem(self.input_dim.clone(), ((0, 0), None));
     Zip::from(&mut inp_arr).and(&inp_idxs).for_each(|r, &a| {
@@ -217,11 +219,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let N = max(input_deg, output_deg);
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
 
-    // Round 1: quotients
-    let beta = Fr::rand(rng);
-    let gamma = Fr::rand(rng);
-
-    // Calculate fjs
+    // Round 1: Commit input and output polynomials
+    // Calculate fjs (corresponds to fjs on p. 22 and a, b, c on p. 28 of [1])
     let m = inputs[0].len() + outputs[0].len();
     let mut rng2 = StdRng::from_entropy();
     let fj_blind: Vec<_> = (0..m).map(|_| Fr::rand(&mut rng2)).collect();
@@ -241,10 +240,17 @@ impl BasicBlock for CopyConstraintBasicBlock {
       .collect();
 
     let ssig_polys = &setup.2[..];
+
+    // Round 2: Commit Z (p. 28 of [1])
+    let mut bytes = Vec::new();
+    let mut rng2 = StdRng::from_entropy();
+    fj_xs.serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+    let beta = Fr::rand(rng);
+    let gamma = Fr::rand(rng);
     let beta_poly = DensePolynomial::from_coefficients_vec(vec![beta]);
     let gamma_poly = DensePolynomial::from_coefficients_vec(vec![gamma]);
 
-    // Calculate Z
     let mut Z = vec![Fr::zero(); N];
     Z[0] = Fr::one();
     for j in 0..(N - 1) {
@@ -269,7 +275,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let Z_poly = &Z_poly + &Z_blind_poly.mul(&DensePolynomial::from(domain.vanishing_polynomial()));
     let Z_x = util::msm::<G1Projective>(&srs.X1A, &Z_poly.coeffs);
 
-    // Calculate quotient for L0(X)(Z(X)-1) = 0
+    // Round 3: Commit t (batched quotient polynomial of the below polynomials, p. 29 of [1])
+    // Calculate L0(X)(Z(X)-1) polynomial
     let mut L0_evals = vec![Fr::zero(); N];
     L0_evals[0] = Fr::one();
     let L0_poly = DensePolynomial {
@@ -277,42 +284,36 @@ impl BasicBlock for CopyConstraintBasicBlock {
     };
     let one = DensePolynomial { coeffs: vec![Fr::one()] };
     let L0Z_poly = L0_poly.mul(&Z_poly.sub(&one));
-    let L0Z_Q = L0Z_poly.divide_by_vanishing_poly(domain).unwrap();
-    let L0Z_Q_x = util::msm::<G1Projective>(&srs.X1A, &L0Z_Q.0.coeffs);
 
-    // Calculate quotient for zero-pad check
-    let outp_ndim = self.permutation.ndim();
-    let mut has_none = false;
-    let mut none_idx = IxDyn::zeros(outp_ndim); // position in f_polys
-
-    let mut Lnone_f_Q_x = G1Projective::zero();
+    // Calculate zero-pad check polynomial
+    let mut fj_none_idx = 0; // position in f_polys
+    let mut Lnone_poly = DensePolynomial::zero();
     for i in indices(self.permutation.shape()) {
       let idx = i.clone();
       if self.permutation[i].is_none() {
-        has_none = true;
-        none_idx = idx.clone();
+        let flat_none_idx = flat_index(&self.permutation.dim(), &Some(idx.clone()), N).unwrap();
+        let mut Lnone_evals = vec![Fr::zero(); N];
+        Lnone_evals[flat_none_idx.1] = Fr::one();
+        Lnone_poly = DensePolynomial {
+          coeffs: domain.ifft(&Lnone_evals),
+        };
+        fj_none_idx = flat_none_idx.0 + input.len();
         break;
       }
     }
-    if has_none {
-      let idx = flat_index(&self.permutation.dim(), &Some(none_idx.clone()), N).unwrap();
-      let mut Lnone_evals = vec![Fr::zero(); N];
-      Lnone_evals[idx.1] = Fr::one();
-      let Lnone_poly = DensePolynomial {
-        coeffs: domain.ifft(&Lnone_evals),
-      };
-      let fj_none_poly = &fj_polys[idx.0 + input.len()];
-      let Lnone_f_poly = &Lnone_poly.mul(fj_none_poly);
 
-      let Lnone_f_Q = Lnone_f_poly.divide_by_vanishing_poly(domain).unwrap();
-      Lnone_f_Q_x = util::msm::<G1Projective>(&srs.X1A, &Lnone_f_Q.0.coeffs).into();
-    }
-
-    // Calculate quotient for Z(x)f'(x) = Z(gx)g'(x)
+    // Calculate batched quotient for Z(x)f'(x) = Z(gx)g'(x) and above checks
+    let mut bytes = Vec::new();
+    let mut proof = vec![Z_x];
+    proof.serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+    let alpha = Fr::rand(rng);
+    let alpha_poly = DensePolynomial::from_coefficients_vec(vec![alpha]);
+    // Compute Z(omega * X) polynomial
     let Zg_poly = DensePolynomial {
       coeffs: Z_poly.coeffs.iter().enumerate().map(|(i, x)| x * &domain.element(i)).collect(),
     };
-    // These have the extra beta * X + gamma etc. terms that appear in Z, t, r
+    // These have the extra beta * X + gamma etc. terms that appear in Z, t, r (seen as terms of t on p. 29 of [1])
     let ft_polys: Vec<_> = fj_polys
       .iter()
       .enumerate()
@@ -324,24 +325,28 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let f1_poly = ft_polys.iter().fold(DensePolynomial::from_coefficients_vec(vec![Fr::one()]), |acc, x| acc.mul(x));
     let gt_polys: Vec<_> = fj_polys.iter().enumerate().map(|(i, x)| &ssig_polys[i].mul(&beta_poly) + x + gamma_poly.clone()).collect();
     let g1_poly = gt_polys.iter().fold(DensePolynomial::from_coefficients_vec(vec![Fr::one()]), |acc, x| acc.mul(x));
-    let t_poly = f1_poly.mul(&Z_poly).sub(&g1_poly.mul(&Zg_poly));
+    let t_poly = f1_poly.mul(&Z_poly).sub(&g1_poly.mul(&Zg_poly))
+      + L0Z_poly.mul(&alpha_poly)
+      + Lnone_poly.mul(&fj_polys[fj_none_idx]).mul(&alpha_poly).mul(&alpha_poly);
     let t_poly = t_poly.divide_by_vanishing_poly(domain).unwrap().0;
+    // TODO: We currently commit t entirely instead of splitting it into
+    // smaller polynomials of degree <n done in the Plonk paper.
     let t_x = util::msm::<G1Projective>(&srs.X1A, &t_poly.coeffs);
 
-    // Round 2: openings
+    // Round 4: Commit opening proofs
     // Fiat-Shamir
     let mut bytes = Vec::new();
     let mut rng2 = StdRng::from_entropy();
-    let mut r: Vec<_> = (0..4).map(|_| Fr::rand(&mut rng2)).collect();
-    let proof = vec![Z_x, L0Z_Q_x, t_x, Lnone_f_Q_x];
-    let mut proof: Vec<_> = proof.iter().enumerate().map(|(i, x)| (*x) + srs.Y1P * r[i]).collect();
-    proof.serialize_uncompressed(&mut bytes).unwrap();
+    let r = Fr::rand(&mut rng2);
+    let mut proof_1 = vec![t_x + srs.Y1P * r];
+    proof_1.serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
+    proof.append(&mut proof_1);
 
     let a = Fr::rand(rng);
     let mut fj_as: Vec<_> = fj_polys.iter().map(|p| p.evaluate(&a)).collect();
 
-    // Calculate opening argument for Z over omega * a
+    // Calculate opening argument for Z over omega * a (p. 30 of [1])
     let omega = domain.group_gen();
     let Z_ga = Z_poly.evaluate(&(omega * a));
     let Z_ga_poly = DensePolynomial { coeffs: vec![Z_ga] };
@@ -350,9 +355,9 @@ impl BasicBlock for CopyConstraintBasicBlock {
     };
     let temp = Z_poly.sub(&Z_ga_poly);
     let Z_Q: DensePolynomial<_> = &temp / &Z_V;
-    let Z_Q_x = util::msm::<G1Projective>(&srs.X1A, &Z_Q.coeffs);
+    let W_gx = util::msm::<G1Projective>(&srs.X1A, &Z_Q.coeffs);
 
-    // Calculate opening quotient for Z(x)f'(x) = Z(gx)g'(x) check
+    // Calculate opening quotient for batched quotient check (containing r, fjs, ssigs on p. 30 of [1])
     let mut ssig_as: Vec<_> = ssig_polys.iter().map(|p| p.evaluate(&a)).collect();
     let ft_as: Vec<_> = fj_as.iter().enumerate().map(|(i, x)| beta * Fr::from((i + 1) as i32) * a + *x + gamma).collect();
     let gt_as: Vec<_> = fj_as.iter().enumerate().map(|(i, x)| ssig_as[i] * beta + *x + gamma).collect();
@@ -366,39 +371,33 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let rhs = (&ssig_polys[ssig_polys.len() - 1].mul(&beta_poly) + &rhs_add).mul(&rhs_mul);
     let v = DensePolynomial::from_coefficients_vec(vec![a_pows[N - 1] - Fr::one()]).mul(&t_poly);
     let q1_V = DensePolynomial { coeffs: vec![-a, Fr::one()] };
-    let r_poly = &(&lhs - &rhs) - &v;
-    let r_Q = &r_poly / &q1_V;
-    let r_Q_x = util::msm::<G1Projective>(&srs.X1A, &r_Q.coeffs);
+    let L0_a = L0_poly.evaluate(&a);
+    let Lnone_a = Lnone_poly.evaluate(&a);
 
-    // Calculate opening argument for fjs, ssigs over a
+    // Compute linearization polynomial r (p. 30 of [1])
+    let r_poly = &(&lhs - &rhs) - &v
+      + Z_poly.sub(&one).mul(&DensePolynomial::from_coefficients_vec(vec![alpha * L0_a]))
+      + fj_polys[fj_none_idx].mul(&DensePolynomial::from_coefficients_vec(vec![alpha * alpha * Lnone_a]));
+
+    // Calculate opening argument for W over a (p. 30 of [1])
     let b = Fr::rand(rng);
     let bs = calc_pow(b, ssig_polys.len() + ft_polys.len());
     let q1_poly: DensePolynomial<Fr> =
       ssig_polys.iter().chain(fj_polys.iter()).enumerate().fold(DensePolynomial::zero(), |acc, (i, p)| acc + p.mul(bs[i]));
     let q1_a = q1_poly.evaluate(&a);
     let q1_a_poly = DensePolynomial { coeffs: vec![q1_a] };
-    let temp = q1_poly.sub(&q1_a_poly);
-    let q1_Q = &temp / &q1_V;
-    let q1_Q_x = util::msm::<G1Projective>(&srs.X1A, &q1_Q.coeffs);
+    let W_poly = &(q1_poly.sub(&q1_a_poly) + r_poly) / &q1_V;
+    let W_x = util::msm::<G1Projective>(&srs.X1A, &W_poly.coeffs);
 
     // Blinding
-    let mut r1: Vec<_> = (0..3).map(|_| Fr::rand(&mut rng2)).collect();
-    proof.append(&mut vec![q1_Q_x, Z_Q_x, r_Q_x].iter().enumerate().map(|(i, x)| (*x) + srs.Y1P * r1[i]).collect());
-    r.append(&mut r1);
-    let mut C: Vec<G1Projective> = vec![
-      setup.0[0] * r[0] - (srs.X1P[N] - srs.X1P[0]) * r[1],
-      -(srs.X1P[N] - srs.X1P[0]) * r[3],
-      srs.X1P[0] * ft_a * r[0] - srs.X1P[0] * (a_pows[N - 1] - Fr::one()) * r[2] - (srs.X1P[1] - (srs.X1P[0] * a)) * r[6],
-      -(srs.X1P[1] - (srs.X1P[0] * a)) * r[4],
-      srs.X1P[0] * r[0] - (srs.X1P[1] - (srs.X1P[0] * a * omega)) * r[5],
-    ];
-    proof.append(&mut C);
+    proof.append(&mut vec![W_x, W_gx]);
+    proof.push(srs.X1P[0] * (r * (a_pows[N - 1] - Fr::one())));
 
     let mut ssig_xs = setup.0[2..].iter().map(|x| Into::<G1Projective>::into(*x)).collect();
     proof.append(&mut ssig_xs);
     proof.append(&mut fj_xs);
 
-    let mut evals = vec![Z_ga];
+    let mut evals = vec![Z_ga, L0_a, Lnone_a];
     evals.append(&mut ssig_as);
     evals.append(&mut fj_as);
     return (proof, vec![setup.1[0].into(), setup.1[1].into()], evals);
@@ -418,91 +417,97 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let N = max(inputs[0].first().unwrap().len, outputs[0].first().unwrap().len);
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
     let omega = domain.group_gen();
+
+    // TODO: Currently the prover is insecure because it passes in
+    // inputs and outputs to the verifier which do not withstand polynomial
+    // interpolation attacks in the inputs and outputs arguments.
+    // To fix this, we have to suppport a blinding scheme
+    // that works with openings more generally and enable the Data and DataEnc
+    // constructors to use the blinding scheme when appropriate.
     let input = inputs[0];
 
-    let [Z_x, L0Z_Q_x, t_x, Lnone_f_Q_x, q1_Q_x, Z_Q_x, r_Q_x, C1, C2, C3, C4, C5] = proof.0[..12] else {
+    let [Z_x, t_x, W_x, W_gx, C1] = proof.0[..5] else {
       panic!("Wrong proof format")
     };
 
     let m = inputs[0].len() + outputs[0].len();
-    let ssig_xs = &proof.0[12..m + 12];
-    let fj_xs = &proof.0[m + 12..];
+    let ssig_xs = &proof.0[5..m + 5];
+    let fj_xs = &proof.0[m + 5..];
 
-    let [L0, Lnone] = proof.1[..] else { panic!("Wrong proof format") };
-    let Z_ga = proof.2[0];
-
-    let q1_evals = &proof.2[1..];
+    // TODO: have verifier compute Lagrange basis evals
+    let [Z_ga, L0_a, Lnone_a] = proof.2[..3] else {
+      panic!("Wrong proof format")
+    };
+    let q1_evals = &proof.2[3..];
     let ssig_as = &q1_evals[..m];
     let fj_as = &q1_evals[m..];
 
-    // Round 1 randomness
+    // Round 2 randomness
+    let mut bytes = Vec::new();
+    fj_xs.serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
     let beta = Fr::rand(rng);
     let gamma = Fr::rand(rng);
 
-    // Round 2 randomness
+    // Round 3 randomness
     let mut bytes = Vec::new();
-    vec![Z_x, L0Z_Q_x, t_x, Lnone_f_Q_x].serialize_uncompressed(&mut bytes).unwrap();
+    vec![Z_x].serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+    let alpha = Fr::rand(rng);
+
+    // Round 4 randomness
+    let mut bytes = Vec::new();
+    vec![t_x].serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
     let a = Fr::rand(rng);
     let b = Fr::rand(rng);
 
-    // Check L0(x)(Z(x) - 1) = V(x)Q(x)
-    checks.push(vec![
-      ((Z_x - srs.X1A[0]).into(), L0),
-      (-L0Z_Q_x, (srs.X2A[N] - srs.X2A[0]).into()),
-      (-C1, srs.Y2A),
-    ]);
+    // Round 5 randomness
+    let mut bytes = Vec::new();
+    vec![W_x, W_gx].serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+    let u = Fr::rand(rng);
 
-    // Check Lnone(x)f(x) = V(x)Q(x)
+    // Get none index for Lnone(x)f(x) = V(x)Q(x) check
+    let mut has_none = false;
+    let mut fj_none_idx = 0;
     for i in indices(self.permutation.shape()) {
       if self.permutation[i.clone()].is_none() {
         let idx = flat_index(&self.permutation.dim(), &Some(i), N).unwrap();
-        let flat_none_f_idx = (idx.0 + input.len(), idx.1);
-        checks.push(vec![
-          (fj_xs[flat_none_f_idx.0], Lnone),
-          (-Lnone_f_Q_x, (srs.X2A[N] - srs.X2A[0]).into()),
-          (-C2, srs.Y2A),
-        ]);
+        fj_none_idx = idx.0 + input.len();
+        has_none = true;
         break;
       }
     }
 
-    // Check Z(x)f'(x) = Z(gx)g'(x)
+    // Perform the batched check (p. 31 of [1])
     let ft_as: Vec<_> = fj_as.iter().enumerate().map(|(i, x)| beta * Fr::from((i + 1) as i32) * a + *x + gamma).collect();
     let gt_as: Vec<_> = fj_as.iter().enumerate().map(|(i, x)| ssig_as[i] * beta + *x + gamma).collect();
     let ft_a: Fr = ft_as.iter().product();
+    // Contains all but the last
     let gt_a: Fr = gt_as[..gt_as.len() - 1].iter().product();
     let a_pows = calc_pow(a, N);
-    let V_x: G2Affine = (srs.X2P[1] - srs.X2P[0] * a).into();
-    checks.push(vec![
-      (Z_x, (srs.X2A[0] * ft_a).into()),
-      (
-        (-(ssig_xs[ssig_xs.len() - 1] * beta + srs.X1A[0] * (fj_as[fj_as.len() - 1] + gamma)) * gt_a * Z_ga).into(),
-        srs.X2A[0],
-      ),
-      ((-t_x * (a_pows[N - 1] - Fr::one())).into(), srs.X2A[0]),
-      (-r_Q_x, V_x),
-      (-C3, srs.Y2A),
-    ]);
 
-    // Check opening commitments over a
+    let mut D = Z_x * (ft_a + alpha * L0_a + u) - ssig_xs[ssig_xs.len() - 1] * beta * gt_a * Z_ga - t_x * (a_pows[N - 1] - Fr::one());
+    if has_none {
+      D = D + fj_xs[fj_none_idx] * alpha * alpha * Lnone_a;
+    }
+
     let bs = calc_pow(b, ssig_xs.len() + fj_xs.len());
     let q1_x: G1Projective = ssig_xs
       .iter()
       .chain(fj_xs.iter())
       .enumerate()
       .fold(G1Projective::zero(), |acc, (i, x)| acc + Into::<G1Projective>::into(*x) * bs[i]);
+    let F = D + q1_x;
     let q1_a: Fr = q1_evals.iter().enumerate().fold(Fr::zero(), |acc, (i, x)| acc + *x * bs[i]);
+    let r_0 = -L0_a * alpha - gt_a * (fj_as[fj_as.len() - 1] + gamma) * Z_ga;
+    let E = srs.X1A[0] * (-r_0 + q1_a + u * Z_ga);
     checks.push(vec![
-      ((q1_x - srs.X1P[0] * q1_a).into(), srs.X2A[0]),
-      (-q1_Q_x, V_x.into()),
-      (-C4, srs.Y2A),
+      ((W_x + W_gx * u).into(), srs.X2A[1]),
+      ((-(W_x * a + W_gx * u * omega * a + F - E)).into(), srs.X2A[0]),
+      (-C1, srs.Y2A),
     ]);
-
-    // Check Z opening commitment
-    let Z_ga_x: G1Affine = (srs.X1P[0] * Z_ga).into();
-    let V_x: G2Affine = (srs.X2P[1] - srs.X2P[0] * omega * a).into();
-    checks.push(vec![((Z_x - Z_ga_x).into(), srs.X2A[0]), (-Z_Q_x, V_x.into()), (-C5, srs.Y2A)]);
     checks
   }
 }
