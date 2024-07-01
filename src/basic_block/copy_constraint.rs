@@ -242,6 +242,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let ssig_polys = &setup.2[..];
 
     // Round 2: Commit Z (p. 28 of [1])
+    // Fiat-Shamir
     let mut bytes = Vec::new();
     let mut rng2 = StdRng::from_entropy();
     fj_xs.serialize_uncompressed(&mut bytes).unwrap();
@@ -276,6 +277,12 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let Z_x = util::msm::<G1Projective>(&srs.X1A, &Z_poly.coeffs);
 
     // Round 3: Commit t (batched quotient polynomial of the below polynomials, p. 29 of [1])
+    // Fiat-Shamir
+    let mut bytes = Vec::new();
+    let mut proof = vec![Z_x];
+    proof.serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+
     // Calculate L0(X)(Z(X)-1) polynomial
     let mut L0_evals = vec![Fr::zero(); N];
     L0_evals[0] = Fr::one();
@@ -303,10 +310,6 @@ impl BasicBlock for CopyConstraintBasicBlock {
     }
 
     // Calculate batched quotient for Z(x)f'(x) = Z(gx)g'(x) and above checks
-    let mut bytes = Vec::new();
-    let mut proof = vec![Z_x];
-    proof.serialize_uncompressed(&mut bytes).unwrap();
-    util::add_randomness(rng, bytes);
     let alpha = Fr::rand(rng);
     let alpha_poly = DensePolynomial::from_coefficients_vec(vec![alpha]);
     // Compute Z(omega * X) polynomial
@@ -333,7 +336,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // smaller polynomials of degree <n done in the Plonk paper.
     let t_x = util::msm::<G1Projective>(&srs.X1A, &t_poly.coeffs);
 
-    // Round 4: Commit opening proofs
+    // Round 4: Compute openings
     // Fiat-Shamir
     let mut bytes = Vec::new();
     let mut rng2 = StdRng::from_entropy();
@@ -344,11 +347,23 @@ impl BasicBlock for CopyConstraintBasicBlock {
     proof.append(&mut proof_1);
 
     let a = Fr::rand(rng);
-    let mut fj_as: Vec<_> = fj_polys.iter().map(|p| p.evaluate(&a)).collect();
-
-    // Calculate opening argument for Z over omega * a (p. 30 of [1])
     let omega = domain.group_gen();
     let Z_ga = Z_poly.evaluate(&(omega * a));
+    let L0_a = L0_poly.evaluate(&a);
+    let Lnone_a = Lnone_poly.evaluate(&a);
+    let ssig_as: Vec<_> = ssig_polys.iter().map(|p| p.evaluate(&a)).collect();
+    let fj_as: Vec<_> = fj_polys.iter().map(|p| p.evaluate(&a)).collect();
+    let mut evals = vec![Z_ga, L0_a, Lnone_a];
+    evals.append(&mut ssig_as.clone());
+    evals.append(&mut fj_as.clone());
+
+    // Round 5: Commit opening proofs
+    // Fiat-Shamir
+    let mut bytes = Vec::new();
+    evals.serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+
+    // Calculate opening argument for Z over omega * a (W_zetaomega on p. 30 of [1])
     let Z_ga_poly = DensePolynomial { coeffs: vec![Z_ga] };
     let Z_V = DensePolynomial {
       coeffs: vec![-a * omega, Fr::one()],
@@ -358,7 +373,6 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let W_gx = util::msm::<G1Projective>(&srs.X1A, &Z_Q.coeffs);
 
     // Calculate opening quotient for batched quotient check (containing r, fjs, ssigs on p. 30 of [1])
-    let mut ssig_as: Vec<_> = ssig_polys.iter().map(|p| p.evaluate(&a)).collect();
     let ft_as: Vec<_> = fj_as.iter().enumerate().map(|(i, x)| beta * Fr::from((i + 1) as i32) * a + *x + gamma).collect();
     let gt_as: Vec<_> = fj_as.iter().enumerate().map(|(i, x)| ssig_as[i] * beta + *x + gamma).collect();
     let a_pows = calc_pow(a, N);
@@ -371,15 +385,13 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let rhs = (&ssig_polys[ssig_polys.len() - 1].mul(&beta_poly) + &rhs_add).mul(&rhs_mul);
     let v = DensePolynomial::from_coefficients_vec(vec![a_pows[N - 1] - Fr::one()]).mul(&t_poly);
     let q1_V = DensePolynomial { coeffs: vec![-a, Fr::one()] };
-    let L0_a = L0_poly.evaluate(&a);
-    let Lnone_a = Lnone_poly.evaluate(&a);
 
     // Compute linearization polynomial r (p. 30 of [1])
     let r_poly = &(&lhs - &rhs) - &v
       + Z_poly.sub(&one).mul(&DensePolynomial::from_coefficients_vec(vec![alpha * L0_a]))
       + fj_polys[fj_none_idx].mul(&DensePolynomial::from_coefficients_vec(vec![alpha * alpha * Lnone_a]));
 
-    // Calculate opening argument for W over a (p. 30 of [1])
+    // Calculate opening argument for W over a (W_zeta on p. 30 of [1])
     let b = Fr::rand(rng);
     let bs = calc_pow(b, ssig_polys.len() + ft_polys.len());
     let q1_poly: DensePolynomial<Fr> =
@@ -397,9 +409,6 @@ impl BasicBlock for CopyConstraintBasicBlock {
     proof.append(&mut ssig_xs);
     proof.append(&mut fj_xs);
 
-    let mut evals = vec![Z_ga, L0_a, Lnone_a];
-    evals.append(&mut ssig_as);
-    evals.append(&mut fj_as);
     return (proof, vec![setup.1[0].into(), setup.1[1].into()], evals);
   }
 
@@ -460,9 +469,14 @@ impl BasicBlock for CopyConstraintBasicBlock {
     vec![t_x].serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
     let a = Fr::rand(rng);
-    let b = Fr::rand(rng);
 
     // Round 5 randomness
+    let mut bytes = Vec::new();
+    proof.2.serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+    let b = Fr::rand(rng);
+
+    // Round 5 end randomness
     let mut bytes = Vec::new();
     vec![W_x, W_gx].serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
