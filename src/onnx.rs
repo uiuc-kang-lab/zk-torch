@@ -157,7 +157,7 @@ fn update_graph_w_local_graph(
   basic_blocks_idx: &mut HashMap<String, usize>,
   models: &mut Vec<ArrayD<Fr>>,
 ) {
-  // Pushing basicblocks and models in a local graph to update graph.basic_blocks and models
+  // pushing basicblocks and models in a local graph to update graph.basic_blocks and models
   let mut local_block_idx = vec![];
   let temp = local_graph.basic_blocks;
   for basic_block in temp.into_iter() {
@@ -169,7 +169,7 @@ fn update_graph_w_local_graph(
       graph.basic_blocks.push(basic_block);
     }
   }
-  // Pushing nodes in a local graph to update graph.nodes
+  // pushing nodes in a local graph to update graph.nodes
   let start_idx = graph.nodes.len() as i32;
   for local_node in local_graph.nodes.iter() {
     // filter out node input that are ""
@@ -202,8 +202,8 @@ fn update_graph_w_local_graph(
 }
 
 // This function is used for processing a layer of onnx models.
-// It matches each ONNX operation as a local graph, which can
-// then be used to update the overall graph for zk proving.
+// It matches each onnx operation as a local graph. Then, it
+// update the overall graph by adding the local graph.
 fn process_node(
   node: &pb::NodeProto,
   graph: &mut Graph,
@@ -258,10 +258,9 @@ fn process_node(
   });
 }
 
-// This function is used for loading onnx models and returning the graph, models, and fake inputs
+// This function is used for loading onnx models and returning the graph and models
 // - Graph: the graph of zk-torch BasicBlocks after parsing the onnx layers
 // - Models: input tensors required for generating a setup for each BasicBlock
-// - Fake inputs: random field (i.e., Fr) elements whose shapes and types match those described in the input tensors of an ONNX model
 pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
   let onnx = tract_onnx::onnx();
   let onnx_graph = onnx.proto_model_for_path(filename).unwrap().graph.unwrap();
