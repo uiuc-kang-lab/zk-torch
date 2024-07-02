@@ -401,6 +401,12 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let W_poly = &(q1_poly.sub(&q1_a_poly) + r_poly) / &q1_V;
     let W_x = util::msm::<G1Projective>(&srs.X1A, &W_poly.coeffs);
 
+    // Round 5 end randomness
+    let mut bytes = Vec::new();
+    vec![W_x, W_gx].serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+    let _ = Fr::rand(rng);
+
     // Blinding
     proof.append(&mut vec![W_x, W_gx]);
     proof.push(srs.X1P[0] * (r * (a_pows[N - 1] - Fr::one())));
