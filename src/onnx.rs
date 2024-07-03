@@ -125,6 +125,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
       "Softmax" => Ok(SoftmaxLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Erf" => Ok(ErfLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       "Conv" => Ok(ConvLayer::graph(&input_shapes, &my_constants, &my_attributes)),
+      "MaxPool" => Ok(MaxPoolLayer::graph(&input_shapes, &my_constants, &my_attributes)),
       _ => Err(format!("Unsupported onnx operation: {op}")),
     }
     .unwrap();
