@@ -22,14 +22,12 @@ use ndarray::{ArrayD, IxDyn};
 pub use ops::*;
 pub use permute::PermuteBasicBlock;
 use rand::{rngs::StdRng, SeedableRng};
-#[cfg(feature = "gpu")]
 use rayon::prelude::*;
 pub use repeater::RepeaterBasicBlock;
 pub use reshape::ReshapeBasicBlock;
 pub use rope::RoPEBasicBlock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-#[cfg(feature = "gpu")]
 use std::sync::{Arc, Mutex};
 
 pub use sub::SubBasicBlock;
@@ -91,9 +89,7 @@ pub enum CacheValues {
   Data(Data),
   G2(G2Affine),
 }
-#[cfg(not(feature = "gpu"))]
-pub type ProveVerifyCache = HashMap<String, CacheValues>;
-#[cfg(feature = "gpu")]
+
 pub type ProveVerifyCache = Arc<Mutex<HashMap<String, CacheValues>>>;
 
 pub type PairingCheck = Vec<(G1Affine, G2Affine)>;
@@ -181,21 +177,6 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
     (Vec::new(), Vec::new(), Vec::new())
   }
 
-  #[cfg(not(feature = "gpu"))]
-  fn prove(
-    &mut self,
-    _srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
-    _model: &ArrayD<Data>,
-    _inputs: &Vec<&ArrayD<Data>>,
-    _outputs: &Vec<&ArrayD<Data>>,
-    _rng: &mut StdRng,
-    _cache: &mut ProveVerifyCache,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
-    (Vec::new(), Vec::new(), Vec::new())
-  }
-
-  #[cfg(feature = "gpu")]
   fn prove(
     &self,
     _srs: &SRS,
@@ -217,8 +198,7 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
     _outputs: &Vec<&ArrayD<DataEnc>>,
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
-    #[cfg(not(feature = "gpu"))] _cache: &mut ProveVerifyCache,
-    #[cfg(feature = "gpu")] _cache: ProveVerifyCache,
+    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     vec![]
   }

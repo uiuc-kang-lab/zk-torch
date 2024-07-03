@@ -14,6 +14,75 @@ use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
 
+#[cfg(not(feature = "gpu"))]
+fn cq2_setup_wrapper(srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+  let N = model[0].raw.len();
+  let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
+  let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
+  let mut setup = vec![];
+  let mut setup2 = vec![];
+  for i in 0..2 {
+    setup2.push(util::msm::<G2Projective>(&srs.X2A, &model[i].poly.coeffs) + srs.Y2P * model[i].r);
+    let mut temp = model[i].poly.coeffs[1..].to_vec();
+    temp.resize(N * 2 - 1, Fr::zero());
+    let mut temp2 = srs.X1P[..N].to_vec();
+    temp2.reverse();
+    let mut Q_i_x_1 = util::toeplitz_mul(domain_2N, &temp, &temp2);
+    util::fft_in_place(domain_N, &mut Q_i_x_1);
+    let temp = Fr::from(N as u32).inverse().unwrap();
+    let temp2 = domain_N.group_gen_inv().pow(&[(N - 1) as u64]);
+    Q_i_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x *= temp * temp2.pow(&[i as u64]));
+
+    setup.extend(Q_i_x_1);
+  }
+
+  let mut L_i_x_1 = srs.X1P[..N].to_vec();
+  util::ifft_in_place(domain_N, &mut L_i_x_1);
+  let mut L_i_0_x_1 = L_i_x_1.clone();
+  let temp = srs.X1P[N - 1] * Fr::from(N as u64).inverse().unwrap();
+  L_i_0_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x = *x * domain_N.group_gen_inv().pow(&[i as u64]) - temp);
+
+  setup.extend(L_i_x_1);
+  setup.extend(L_i_0_x_1);
+  return (setup, setup2, Vec::new());
+}
+
+#[cfg(feature = "gpu")]
+fn cq2_setup_wrapper(srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+  let N = model[0].raw.len();
+  let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
+  let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
+  let mut setup = vec![];
+  let mut setup2 = vec![];
+  for i in 0..2 {
+    setup2.push(util::gpu_msm_g2(&srs.IX2A, &model[i].poly.coeffs) + srs.Y2P * model[i].r);
+    let mut temp = model[i].poly.coeffs[1..].to_vec();
+    temp.resize(N * 2 - 1, Fr::zero());
+    let mut temp2 = srs.X1P[..N].to_vec();
+    temp2.reverse();
+    let mut Q_i_x_1 = util::toeplitz_mul(domain_2N, &temp, &temp2);
+    Q_i_x_1 = util::gpu_fft_g1(domain_N, &Q_i_x_1);
+    let temp = Fr::from(N as u32).inverse().unwrap();
+    let temp2 = domain_N.group_gen_inv().pow(&[(N - 1) as u64]);
+
+    let scalars = (0..N).into_par_iter().map(|i| temp * temp2.pow(&[i as u64])).collect();
+    let Q_i_x_1 = util::gpu_ssm_g1(&Q_i_x_1, &scalars);
+    Q_i_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x *= temp * temp2.pow(&[i as u64]));
+
+    setup.extend(Q_i_x_1);
+  }
+
+  let L_i_x_1 = util::gpu_ifft_g1(domain_N, &srs.X1P[..N].to_vec());
+  let scalars = (0..N).into_par_iter().map(|i| domain_N.group_gen_inv().pow(&[i as u64])).collect();
+  let mut L_i_0_x_1 = util::gpu_ssm_g1(&L_i_x_1, &scalars);
+  let temp = srs.X1P[N - 1] * Fr::from(N as u64).inverse().unwrap();
+  L_i_0_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x -= temp);
+
+  setup.extend(L_i_x_1);
+  setup.extend(L_i_0_x_1);
+  return (setup, setup2, Vec::new());
+}
+
 #[derive(Debug)]
 pub struct CQ2BasicBlock {
   pub setup: Option<(Box<dyn BasicBlock>, i32, usize)>,
@@ -28,196 +97,11 @@ impl BasicBlock for CQ2BasicBlock {
     )
   }
 
-  #[cfg(not(feature = "gpu"))]
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     assert!(model.ndim() == 1 && model.len() == 2);
-    let N = model[0].raw.len();
-    let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
-    let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
-    let mut setup = vec![];
-    let mut setup2 = vec![];
-    for i in 0..2 {
-      setup2.push(util::msm::<G2Projective>(&srs.X2A, &model[i].poly.coeffs) + srs.Y2P * model[i].r);
-      let mut temp = model[i].poly.coeffs[1..].to_vec();
-      temp.resize(N * 2 - 1, Fr::zero());
-      let mut temp2 = srs.X1P[..N].to_vec();
-      temp2.reverse();
-      let mut Q_i_x_1 = util::toeplitz_mul(domain_2N, &temp, &temp2);
-      util::fft_in_place(domain_N, &mut Q_i_x_1);
-      let temp = Fr::from(N as u32).inverse().unwrap();
-      let temp2 = domain_N.group_gen_inv().pow(&[(N - 1) as u64]);
-      Q_i_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x *= temp * temp2.pow(&[i as u64]));
-
-      setup.extend(Q_i_x_1);
-    }
-
-    let mut L_i_x_1 = srs.X1P[..N].to_vec();
-    util::ifft_in_place(domain_N, &mut L_i_x_1);
-    let mut L_i_0_x_1 = L_i_x_1.clone();
-    let temp = srs.X1P[N - 1] * Fr::from(N as u64).inverse().unwrap();
-    L_i_0_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x = *x * domain_N.group_gen_inv().pow(&[i as u64]) - temp);
-
-    setup.extend(L_i_x_1);
-    setup.extend(L_i_0_x_1);
-    return (setup, setup2, Vec::new());
+    cq2_setup_wrapper(srs, model)
   }
 
-  #[cfg(feature = "gpu")]
-  fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
-    assert!(model.ndim() == 1 && model.len() == 2);
-    let N = model[0].raw.len();
-    let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
-    let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
-    let mut setup = vec![];
-    let mut setup2 = vec![];
-    for i in 0..2 {
-      setup2.push(util::gpu_msm_g2(&srs.IX2A, &model[i].poly.coeffs) + srs.Y2P * model[i].r);
-      let mut temp = model[i].poly.coeffs[1..].to_vec();
-      temp.resize(N * 2 - 1, Fr::zero());
-      let mut temp2 = srs.X1P[..N].to_vec();
-      temp2.reverse();
-      let mut Q_i_x_1 = util::toeplitz_mul(domain_2N, &temp, &temp2);
-      Q_i_x_1 = util::gpu_fft_g1(domain_N, &Q_i_x_1);
-      let temp = Fr::from(N as u32).inverse().unwrap();
-      let temp2 = domain_N.group_gen_inv().pow(&[(N - 1) as u64]);
-
-      let scalars = (0..N).into_par_iter().map(|i| temp * temp2.pow(&[i as u64])).collect();
-      let Q_i_x_1 = util::gpu_ssm_g1(&Q_i_x_1, &scalars);
-      Q_i_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x *= temp * temp2.pow(&[i as u64]));
-
-      setup.extend(Q_i_x_1);
-    }
-
-    let L_i_x_1 = util::gpu_ifft_g1(domain_N, &srs.X1P[..N].to_vec());
-    let scalars = (0..N).into_par_iter().map(|i| domain_N.group_gen_inv().pow(&[i as u64])).collect();
-    let mut L_i_0_x_1 = util::gpu_ssm_g1(&L_i_x_1, &scalars);
-    let temp = srs.X1P[N - 1] * Fr::from(N as u64).inverse().unwrap();
-    L_i_0_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x -= temp);
-
-    setup.extend(L_i_x_1);
-    setup.extend(L_i_0_x_1);
-    return (setup, setup2, Vec::new());
-  }
-
-  #[cfg(not(feature = "gpu"))]
-  fn prove(
-    &mut self,
-    srs: &SRS,
-    setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
-    model: &ArrayD<Data>,
-    inputs: &Vec<&ArrayD<Data>>,
-    _outputs: &Vec<&ArrayD<Data>>,
-    rng: &mut StdRng,
-    cache: &mut ProveVerifyCache,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
-    assert!(inputs.len() == 2 && inputs[0].len() == 1 && inputs[1].len() == 1);
-    let N = model[0].raw.len();
-    let inputs = vec![inputs[0].first().unwrap(), inputs[1].first().unwrap()];
-    assert!(inputs[0].raw.len() == inputs[1].raw.len());
-    let n = inputs[0].raw.len();
-    let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
-    let alpha = Fr::rand(rng);
-    let agg_input: Vec<_> = inputs[0].raw.iter().zip(inputs[1].raw.iter()).map(|(x, y)| *x + *y * alpha).collect();
-    let mut agg_input = Data::new(srs, &agg_input); // Unnecessary msm
-    agg_input.r = inputs[0].r + inputs[1].r * alpha;
-    let agg_model_g1 = model[0].g1 + model[1].g1 * alpha;
-    let agg_model_r = model[0].r + model[1].r * alpha;
-
-    // gen(N, t):
-    let Q_i_x_1_A = &setup.0[..N];
-    let Q_i_x_1_B = &setup.0[N..2 * N];
-    let L_i_x_1 = &setup.0[2 * N..3 * N];
-    let L_i_0_x_1 = &setup.0[3 * N..];
-
-    let m_i = {
-      let CacheValues::CQ2TableDict(table_dict) =
-        cache.entry(format!("cq2_table_dict_{:p}", self)).or_insert_with(|| CacheValues::CQ2TableDict(HashMap::new()))
-      else {
-        panic!("Cache type error")
-      };
-      if table_dict.len() == 0 {
-        for i in 0..N {
-          table_dict.insert((model[0].raw[i], model[1].raw[i]), i);
-        }
-      }
-
-      // Calculate m
-      let mut m_i = HashMap::new();
-      for x in inputs[0].raw.iter().zip(inputs[1].raw.iter()) {
-        let temp = (*x.0, *x.1);
-        if !table_dict.contains_key(&temp) {
-          println!("{:?}", temp);
-        }
-        m_i.entry(table_dict.get(&temp).unwrap().clone()).and_modify(|y| *y += 1).or_insert(1);
-      }
-      m_i
-    };
-    let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = m_i.iter().map(|(i, y)| (L_i_x_1[*i], Fr::from(*y as u32))).unzip();
-    let m_x = util::msm::<G1Projective>(&temp, &temp2);
-
-    let beta = Fr::rand(rng);
-
-    // Calculate A
-    let A_i: HashMap<usize, Fr> = m_i
-      .iter()
-      .map(|(i, y)| {
-        (
-          *i,
-          Fr::from(*y as u32) * (model[0].raw[*i] + model[1].raw[*i] * alpha + beta).inverse().unwrap(),
-        )
-      })
-      .collect();
-    let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = A_i.iter().map(|(i, y)| (L_i_x_1[*i], *y)).unzip();
-    let A_x = util::msm::<G1Projective>(&temp, &temp2);
-    let temp: Vec<G1Projective> = A_i.iter().map(|(i, _)| Q_i_x_1_A[*i] + Q_i_x_1_B[*i] * alpha).collect();
-    let temp: Vec<G1Affine> = temp.iter().map(|x| (*x).into()).collect();
-    let A_Q_x = util::msm::<G1Projective>(&temp, &temp2);
-    let A_zero = srs.X1P[0] * (Fr::from(N as u32).inverse().unwrap() * A_i.iter().map(|(_, y)| *y).sum::<Fr>());
-    let temp: Vec<G1Affine> = A_i.iter().map(|(i, _)| L_i_0_x_1[*i]).collect();
-    let A_zero_div = util::msm::<G1Projective>(&temp, &temp2);
-
-    // Calculate B
-    let B_i: Vec<Fr> = agg_input.raw.iter().map(|x| (*x + beta).inverse().unwrap()).collect();
-    let B_poly = Evaluations::from_vec_and_domain(B_i.clone(), domain_n).interpolate();
-    let B_Q_poly = B_poly
-      .mul(&(agg_input.poly.clone() + (DensePolynomial::from_coefficients_vec(vec![beta]))))
-      .sub(&DensePolynomial::from_coefficients_vec(vec![Fr::one()]))
-      .divide_by_vanishing_poly(domain_n)
-      .unwrap()
-      .0;
-    let B_x = util::msm::<G1Projective>(&srs.X1A, &B_poly.coeffs);
-    let B_Q_x = util::msm::<G1Projective>(&srs.X1A, &B_Q_poly.coeffs);
-    let B_zero_div = if B_poly.is_zero() {
-      G1Projective::zero()
-    } else {
-      util::msm::<G1Projective>(&srs.X1A, &B_poly.coeffs[1..])
-    };
-    let B_DC = util::msm::<G1Projective>(&srs.X1A[N - n..], &B_poly.coeffs);
-
-    let f_x_2 = util::msm::<G2Projective>(&srs.X2A, &agg_input.poly.coeffs) + srs.Y2P * agg_input.r;
-
-    // Blinding
-    let mut rng2 = StdRng::from_entropy();
-    let r: Vec<_> = (0..9).map(|_| Fr::rand(&mut rng2)).collect();
-    let proof: Vec<G1Projective> = vec![m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC];
-    let mut proof: Vec<G1Projective> = proof.iter().enumerate().map(|(i, x)| (*x) + srs.Y1P * r[i]).collect();
-    let mut C = vec![
-      -(srs.X1P[N] - srs.X1P[0]) * r[2]
-        + agg_model_g1 * r[1]
-        + A_x * agg_model_r
-        + (srs.Y1P * agg_model_r * r[1])
-        + srs.X1P[0] * (r[1] * beta - r[0]),
-      -srs.X1P[1] * r[4] + srs.X1P[0] * (r[1] - r[3]),
-      -(srs.X1P[n] - srs.X1P[0]) * r[6] + agg_input.g1 * r[5] + B_x * agg_input.r + (srs.Y1P * agg_input.r * r[5]) + srs.X1P[0] * (r[5] * beta),
-      -srs.X1P[1] * r[7] + srs.X1P[0] * (r[5] - r[3] * Fr::from(N as u32) * Fr::from(n as u32).inverse().unwrap()),
-      -srs.X1P[0] * r[8] + srs.X1P[N - n] * r[5],
-    ];
-    proof.append(&mut C);
-
-    return (proof, vec![(setup.1[0] + setup.1[1] * alpha).into(), f_x_2], Vec::new());
-  }
-
-  #[cfg(feature = "gpu")]
   fn prove(
     &self,
     srs: &SRS,
@@ -344,8 +228,7 @@ impl BasicBlock for CQ2BasicBlock {
     _outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
-    #[cfg(not(feature = "gpu"))] _cache: &mut ProveVerifyCache,
-    #[cfg(feature = "gpu")] _cache: ProveVerifyCache,
+    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let inputs = vec![inputs[0].first().unwrap(), inputs[1].first().unwrap()];
