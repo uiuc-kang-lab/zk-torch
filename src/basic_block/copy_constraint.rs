@@ -465,10 +465,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
-    #[cfg(not(feature = "gpu"))]
-    _cache: &mut ProveVerifyCache,
-    #[cfg(feature = "gpu")]
-    _cache: ProveVerifyCache,
+    #[cfg(not(feature = "gpu"))] _cache: &mut ProveVerifyCache,
+    #[cfg(feature = "gpu")] _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let N = max(inputs[0].first().unwrap().len, outputs[0].first().unwrap().len);

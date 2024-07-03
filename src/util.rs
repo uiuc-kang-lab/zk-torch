@@ -9,22 +9,22 @@ use ark_ff::PrimeField;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{UniformRand, Zero};
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
+#[cfg(feature = "gpu")]
+use icicle_core::gfft;
+#[cfg(feature = "gpu")]
+use icicle_core::traits::ArkConvertible;
+#[cfg(feature = "gpu")]
+use icicle_cuda_runtime::memory::HostOrDeviceSlice;
 use ndarray::{arr0, arr1, concatenate, Array1, ArrayD, Axis, IxDyn, SliceInfo, SliceInfoElem};
-use rand::{rngs::StdRng, RngCore, SeedableRng, Rng};
+use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 use rayon::prelude::*;
 use sha3::{Digest, Keccak256};
 use std::collections::HashMap;
 use std::collections::{BTreeSet, HashSet};
 use tract_onnx::pb::tensor_proto::DataType;
 use tract_onnx::prelude::Framework;
-#[cfg(feature = "gpu")]
-use icicle_bn254::curve::{G1Affine as IG1A, G2Affine as IG2A, G1Projective as IG1P, G2Projective as IG2P, ScalarField};
-#[cfg(feature = "gpu")]
-use icicle_core::traits::ArkConvertible;
-#[cfg(feature = "gpu")]
-use icicle_cuda_runtime::memory::HostOrDeviceSlice;
-#[cfg(feature = "gpu")]
-use icicle_core::gfft;
 
 // This function is used for generating fake inputs for onnx models
 // Fake inputs are random field (i.e., Fr) elements whose shapes and types match those described in the input tensors of an ONNX model.
@@ -243,7 +243,7 @@ pub fn msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {
 }
 
 #[cfg(feature = "gpu")]
-fn gpu_set_random_device(){
+fn gpu_set_random_device() {
   let mut rng = StdRng::from_entropy();
   icicle_cuda_runtime::device::set_device(rng.gen_range(0..1)).unwrap();
 }
@@ -297,7 +297,7 @@ pub fn gpu_fft_g1_helper(omega: Fr, points: &Vec<G1Projective>) -> Vec<G1Project
   let start = std::time::Instant::now();
   gfft::gfft(&omega, &points, &mut results).unwrap();
   println!("fft {size}: {:?}", start.elapsed().as_micros());
-  results.as_slice().par_iter().map(|x|x.to_ark()).collect()
+  results.as_slice().par_iter().map(|x| x.to_ark()).collect()
 }
 
 #[cfg(feature = "gpu")]
@@ -313,7 +313,7 @@ pub fn gpu_ssm_g1(points: &Vec<G1Projective>, scalars: &Vec<Fr>) -> Vec<G1Projec
   let start = std::time::Instant::now();
   gfft::ssm(&scalars, &points, &mut results).unwrap();
   println!("ssm {size}: {:?}", start.elapsed().as_micros());
-  results.as_slice().par_iter().map(|x|x.to_ark()).collect()
+  results.as_slice().par_iter().map(|x| x.to_ark()).collect()
 }
 
 #[cfg(feature = "gpu")]
@@ -343,7 +343,7 @@ pub fn gpu_fft_g2_helper(omega: Fr, points: &Vec<G2Projective>) -> Vec<G2Project
   let start = std::time::Instant::now();
   gfft::gfft(&omega, &points, &mut results).unwrap();
   println!("fft2 {size}: {:?}", start.elapsed().as_micros());
-  results.as_slice().par_iter().map(|x|x.to_ark()).collect()
+  results.as_slice().par_iter().map(|x| x.to_ark()).collect()
 }
 
 #[cfg(feature = "gpu")]
@@ -359,7 +359,7 @@ pub fn gpu_ssm_g2(points: &Vec<G2Projective>, scalars: &Vec<Fr>) -> Vec<G2Projec
   let start = std::time::Instant::now();
   gfft::ssm(&scalars, &points, &mut results).unwrap();
   println!("ssm2 {size}: {:?}", start.elapsed().as_micros());
-  results.as_slice().par_iter().map(|x|x.to_ark()).collect()
+  results.as_slice().par_iter().map(|x| x.to_ark()).collect()
 }
 
 #[cfg(feature = "gpu")]

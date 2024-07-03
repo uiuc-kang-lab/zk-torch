@@ -32,16 +32,19 @@ impl BasicBlock for DivScalarBasicBlock {
       }
     }
     #[cfg(feature = "gpu")]
-    let (div, rem):(Vec<_>,Vec<_>) = inputs[0].into_par_iter().map(|x|{
-      let x = util::fr_to_int(*x) as i64;
-      let mut z = (2 * x * SF + y) / (2 * y);
-      let mut r = (2 * x * SF + y) % (2 * y);
-      if r < 0 {
-        z -= 1;
-        r += 2 * y;
-      }
-      (Fr::from(z), Fr::from(r))
-    }).unzip();
+    let (div, rem): (Vec<_>, Vec<_>) = inputs[0]
+      .into_par_iter()
+      .map(|x| {
+        let x = util::fr_to_int(*x) as i64;
+        let mut z = (2 * x * SF + y) / (2 * y);
+        let mut r = (2 * x * SF + y) % (2 * y);
+        if r < 0 {
+          z -= 1;
+          r += 2 * y;
+        }
+        (Fr::from(z), Fr::from(r))
+      })
+      .unzip();
     vec![arr1(&div).into_dyn(), arr1(&rem).into_dyn()]
   }
 }
@@ -68,7 +71,7 @@ impl BasicBlock for DivConstBasicBlock {
       x /= self.c;
       Fr::from(x.round() as i64)
     });
-    
+
     vec![out]
   }
 }

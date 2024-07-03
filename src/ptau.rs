@@ -1,13 +1,13 @@
 use crate::basic_block::*;
 use ark_bn254::{Fq, Fq2, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::PrimeField;
-use rayon::prelude::*;
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
 #[cfg(feature = "gpu")]
 use icicle_bn254::curve::{G1Affine as IG1A, G2Affine as IG2A};
 #[cfg(feature = "gpu")]
 use icicle_core::traits::ArkConvertible;
+use rayon::prelude::*;
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom};
 
 pub fn load_file(filename: &str, n: usize, m: usize) -> SRS {
   let powers_length = 1 << n;

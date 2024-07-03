@@ -321,10 +321,8 @@ impl BasicBlock for CQLinBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
-    #[cfg(not(feature = "gpu"))]
-    cache: &mut ProveVerifyCache,
-    #[cfg(feature = "gpu")]
-    cache: ProveVerifyCache,
+    #[cfg(not(feature = "gpu"))] cache: &mut ProveVerifyCache,
+    #[cfg(feature = "gpu")] cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let l = inputs[0].len();

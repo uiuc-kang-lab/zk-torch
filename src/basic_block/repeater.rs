@@ -2,11 +2,11 @@ use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::univariate::DensePolynomial;
+#[cfg(feature = "gpu")]
+use itertools::multiunzip;
 use ndarray::{arr1, azip, par_azip, s, ArrayD, Axis, Dimension, IxDyn, SliceInfo, SliceInfoElem};
 use rand::rngs::StdRng;
 use rayon::prelude::*;
-#[cfg(feature = "gpu")]
-use itertools::multiunzip;
 
 #[derive(Debug)]
 pub struct RepeaterBasicBlock {
@@ -126,14 +126,14 @@ impl BasicBlock for RepeaterBasicBlock {
     #[cfg(feature = "gpu")]
     let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
     #[cfg(feature = "gpu")]
-    let mut empty = ArrayD::from_elem(temp.shape(),vec![]);
+    let mut empty = ArrayD::from_elem(temp.shape(), vec![]);
     #[cfg(feature = "gpu")]
     par_azip!(((localInputs, localOutputs) in &mut temp, x in &mut empty) {
       let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
       let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
       *x = self.basic_block.encodeOutputs(srs, model, &localInputs, &localOutputs);
     });
-    
+
     #[cfg(not(feature = "gpu"))]
     let temp = broadcastN(inputs, Some(outputs), self.N - 1);
     #[cfg(not(feature = "gpu"))]
@@ -189,7 +189,7 @@ impl BasicBlock for RepeaterBasicBlock {
     cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
-    let mut empty = ArrayD::from_elem(temp.shape(),(vec![],vec![],vec![]));
+    let mut empty = ArrayD::from_elem(temp.shape(), (vec![], vec![], vec![]));
     par_azip!(((localInputs, localOutputs) in &mut temp, x in &mut empty) {
       let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
       let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
@@ -197,8 +197,12 @@ impl BasicBlock for RepeaterBasicBlock {
       let mut tmp  = self.basic_block.prove(srs, setup, model, &localInputs, &localOutputs, &mut rng, cache.clone());
       *x = tmp;
     });
-    let proof:(Vec<_>, Vec<_>, Vec<_>) = multiunzip(empty.into_iter());
-    let proof = (proof.0.into_iter().flatten().collect(), proof.1.into_iter().flatten().collect(), proof.2.into_iter().flatten().collect());
+    let proof: (Vec<_>, Vec<_>, Vec<_>) = multiunzip(empty.into_iter());
+    let proof = (
+      proof.0.into_iter().flatten().collect(),
+      proof.1.into_iter().flatten().collect(),
+      proof.2.into_iter().flatten().collect(),
+    );
     proof
   }
 
@@ -210,10 +214,8 @@ impl BasicBlock for RepeaterBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
-    #[cfg(not(feature = "gpu"))]
-    cache: &mut ProveVerifyCache,
-    #[cfg(feature = "gpu")]
-    cache: ProveVerifyCache,
+    #[cfg(not(feature = "gpu"))] cache: &mut ProveVerifyCache,
+    #[cfg(feature = "gpu")] cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     #[cfg(not(feature = "gpu"))]
     let temp = broadcastN(inputs, Some(outputs), self.N - 1);
@@ -239,7 +241,7 @@ impl BasicBlock for RepeaterBasicBlock {
     let mut proofArr = ArrayD::from_shape_vec(temp.shape(), combined).unwrap();
 
     #[cfg(feature = "gpu")]
-    let mut empty = ArrayD::from_elem(temp.shape(),vec![]);
+    let mut empty = ArrayD::from_elem(temp.shape(), vec![]);
     #[cfg(feature = "gpu")]
     par_azip!(((localInputs, localOutputs) in &mut temp, localProof in &mut proofArr, x in &mut empty){
       let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
@@ -262,7 +264,7 @@ impl BasicBlock for RepeaterBasicBlock {
       let mut temp = self.basic_block.verify(srs, model, &localInputs, &localOutputs, localProof, rng, cache);
       pairings.append(&mut temp);
     });
-    
+
     pairings
   }
 }

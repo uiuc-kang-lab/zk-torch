@@ -39,10 +39,8 @@ impl BasicBlock for AddBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
-    #[cfg(not(feature = "gpu"))]
-    _cache: &mut ProveVerifyCache,
-    #[cfg(feature = "gpu")]
-    _cache: ProveVerifyCache,
+    #[cfg(not(feature = "gpu"))] _cache: &mut ProveVerifyCache,
+    #[cfg(feature = "gpu")] _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let a = inputs[0].first().unwrap();
     let b = inputs[1].first().unwrap();

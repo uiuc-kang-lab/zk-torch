@@ -25,89 +25,68 @@ impl BasicBlock for CQBasicBlock {
     self.setup.clone()
   }
 
+  #[cfg(not(feature = "gpu"))]
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     assert!(model.len() == 1);
     let model = &model.first().unwrap();
     let N = model.raw.len();
     let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
     let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
-    
-    #[cfg(not(feature = "gpu"))]
     let T_x_2 = util::msm::<G2Projective>(&srs.X2A, &model.poly.coeffs) + srs.Y2P * model.r;
-    #[cfg(not(feature = "gpu"))]
     let mut temp = model.poly.coeffs[1..].to_vec();
-    #[cfg(not(feature = "gpu"))]
     temp.resize(N * 2 - 1, Fr::zero());
-    #[cfg(not(feature = "gpu"))]
     let mut temp2 = srs.X1P[..N].to_vec();
-    #[cfg(not(feature = "gpu"))]
     temp2.reverse();
-    #[cfg(not(feature = "gpu"))]
     let mut Q_i_x_1 = util::toeplitz_mul(domain_2N, &temp, &temp2);
-    #[cfg(not(feature = "gpu"))]
     util::fft_in_place(domain_N, &mut Q_i_x_1);
-    #[cfg(not(feature = "gpu"))]
     let temp = Fr::from(N as u32).inverse().unwrap();
-    #[cfg(not(feature = "gpu"))]
     let temp2 = domain_N.group_gen_inv().pow(&[(N - 1) as u64]);
-    #[cfg(not(feature = "gpu"))]
     Q_i_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x *= temp * temp2.pow(&[i as u64]));
-    #[cfg(not(feature = "gpu"))]
     let mut L_i_x_1 = srs.X1P[..N].to_vec();
-    #[cfg(not(feature = "gpu"))]
     util::ifft_in_place(domain_N, &mut L_i_x_1);
-    #[cfg(not(feature = "gpu"))]
     let mut L_i_0_x_1 = L_i_x_1.clone();
-    #[cfg(not(feature = "gpu"))]
     let temp = srs.X1P[N - 1] * Fr::from(N as u64).inverse().unwrap();
-    #[cfg(not(feature = "gpu"))]
     L_i_0_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x = *x * domain_N.group_gen_inv().pow(&[i as u64]) - temp);
-    
-    #[cfg(feature = "gpu")]
-    let T_x_2 = util::gpu_msm_g2(&srs.IX2A, &model.poly.coeffs) + srs.Y2P * model.r;
-    #[cfg(feature = "gpu")]
-    let mut temp = model.poly.coeffs[1..].to_vec();
-    #[cfg(feature = "gpu")]
-    temp.resize(N * 2 - 1, Fr::zero());
-    #[cfg(feature = "gpu")]
-    let mut temp2 = srs.X1P[..N].to_vec();
-    #[cfg(feature = "gpu")]
-    temp2.reverse();
-    #[cfg(feature = "gpu")]
-    let mut Q_i_x_1 = util::toeplitz_mul(domain_2N, &temp, &temp2);
-    #[cfg(feature = "gpu")]
-    {
-      Q_i_x_1 = util::gpu_fft_g1(domain_N, &Q_i_x_1);
-    }
-    #[cfg(feature = "gpu")]
-    let temp = Fr::from(N as u32).inverse().unwrap();
-    #[cfg(feature = "gpu")]
-    let temp2 = domain_N.group_gen_inv().pow(&[(N - 1) as u64]);
-    #[cfg(feature = "gpu")]
-    let scalars = (0..N).into_par_iter().map(|i|temp * temp2.pow(&[i as u64])).collect();
-    #[cfg(feature = "gpu")]
-    let Q_i_x_1 = util::gpu_ssm_g1(&Q_i_x_1, &scalars);
-    #[cfg(feature = "gpu")]
-    let L_i_x_1 = util::gpu_ifft_g1(domain_N, &srs.X1P[..N].to_vec());
-    #[cfg(feature = "gpu")]
-    let scalars = (0..N).into_par_iter().map(|i|domain_N.group_gen_inv().pow(&[i as u64])).collect();
-    #[cfg(feature = "gpu")]
-    let mut L_i_0_x_1 = util::gpu_ssm_g1(&L_i_x_1, &scalars);
-    #[cfg(feature = "gpu")]
-    let temp = srs.X1P[N - 1] * Fr::from(N as u64).inverse().unwrap();
-    #[cfg(feature = "gpu")]
-    {
-      L_i_0_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x -= temp);
-    }
-    
+
     let mut setup = Q_i_x_1;
     setup.extend(L_i_x_1);
     setup.extend(L_i_0_x_1);
     return (setup, vec![T_x_2], Vec::new());
   }
-  
+
+  #[cfg(feature = "gpu")]
+  fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+    assert!(model.len() == 1);
+    let model = &model.first().unwrap();
+    let N = model.raw.len();
+    let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
+    let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
+
+    let T_x_2 = util::gpu_msm_g2(&srs.IX2A, &model.poly.coeffs) + srs.Y2P * model.r;
+    let mut temp = model.poly.coeffs[1..].to_vec();
+    temp.resize(N * 2 - 1, Fr::zero());
+    let mut temp2 = srs.X1P[..N].to_vec();
+    temp2.reverse();
+    let mut Q_i_x_1 = util::toeplitz_mul(domain_2N, &temp, &temp2);
+    Q_i_x_1 = util::gpu_fft_g1(domain_N, &Q_i_x_1);
+    let temp = Fr::from(N as u32).inverse().unwrap();
+    let temp2 = domain_N.group_gen_inv().pow(&[(N - 1) as u64]);
+    let scalars = (0..N).into_par_iter().map(|i| temp * temp2.pow(&[i as u64])).collect();
+    let Q_i_x_1 = util::gpu_ssm_g1(&Q_i_x_1, &scalars);
+    let L_i_x_1 = util::gpu_ifft_g1(domain_N, &srs.X1P[..N].to_vec());
+    let scalars = (0..N).into_par_iter().map(|i| domain_N.group_gen_inv().pow(&[i as u64])).collect();
+    let mut L_i_0_x_1 = util::gpu_ssm_g1(&L_i_x_1, &scalars);
+    let temp = srs.X1P[N - 1] * Fr::from(N as u64).inverse().unwrap();
+    L_i_0_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x -= temp);
+
+    let mut setup = Q_i_x_1;
+    setup.extend(L_i_x_1);
+    setup.extend(L_i_0_x_1);
+    return (setup, vec![T_x_2], Vec::new());
+  }
+
   #[cfg(not(feature = "gpu"))]
-  fn prove(  
+  fn prove(
     &mut self,
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
@@ -204,7 +183,7 @@ impl BasicBlock for CQBasicBlock {
   }
 
   #[cfg(feature = "gpu")]
-  fn prove(  
+  fn prove(
     &self,
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
@@ -309,10 +288,8 @@ impl BasicBlock for CQBasicBlock {
     _outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
-    #[cfg(not(feature = "gpu"))]
-    _cache: &mut ProveVerifyCache,
-    #[cfg(feature = "gpu")]
-    _cache: ProveVerifyCache,
+    #[cfg(not(feature = "gpu"))] _cache: &mut ProveVerifyCache,
+    #[cfg(feature = "gpu")] _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let N = model.first().unwrap().len;

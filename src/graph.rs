@@ -8,9 +8,9 @@ use ark_serialize::CanonicalSerialize;
 use ark_std::Zero;
 use ndarray::ArrayD;
 use rand::rngs::StdRng;
-use std::collections::HashMap;
 #[cfg(feature = "gpu")]
 use rayon::prelude::*;
+use std::collections::HashMap;
 #[cfg(feature = "gpu")]
 use std::sync::{Arc, Mutex};
 
@@ -88,7 +88,7 @@ impl Graph {
         b.setup(srs, *m)
       })
       .collect();
-    
+
     #[cfg(not(feature = "gpu"))]
     let setup = self
       .basic_blocks
@@ -117,7 +117,7 @@ impl Graph {
     let mut cache = Arc::new(Mutex::new(HashMap::new()));
     #[cfg(not(feature = "gpu"))]
     let mut cache = HashMap::new();
-    
+
     self
       .nodes
       .iter()
@@ -125,18 +125,26 @@ impl Graph {
       .map(|(i, n)| {
         println!("proving {i} {:?}", self.basic_blocks[n.basic_block]);
         let myInputs = n
-        .inputs
-        .iter()
-        .map(|(basicblock_idx, output_idx)| {
-          if *basicblock_idx < 0 {
-            inputs[*output_idx + (-basicblock_idx - 1) as usize]
-          } else {
-            &(outputs[*basicblock_idx as usize][*output_idx])
-          }
-        })
-        .collect();
+          .inputs
+          .iter()
+          .map(|(basicblock_idx, output_idx)| {
+            if *basicblock_idx < 0 {
+              inputs[*output_idx + (-basicblock_idx - 1) as usize]
+            } else {
+              &(outputs[*basicblock_idx as usize][*output_idx])
+            }
+          })
+          .collect();
         #[cfg(feature = "gpu")]
-        let proof = self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &myInputs, outputs[i], rng, cache.clone());
+        let proof = self.basic_blocks[n.basic_block].prove(
+          srs,
+          setups[n.basic_block],
+          models[n.basic_block],
+          &myInputs,
+          outputs[i],
+          rng,
+          cache.clone(),
+        );
         #[cfg(not(feature = "gpu"))]
         let proof = self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &myInputs, outputs[i], rng, &mut cache);
         let proof: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (
@@ -173,16 +181,16 @@ impl Graph {
       .map(|(i, n)| {
         println!("verifying {i} {:?}", self.basic_blocks[n.basic_block]);
         let myInputs = n
-        .inputs
-        .iter()
-        .map(|(basicblock_idx, output_idx)| {
-          if *basicblock_idx < 0 {
-            inputs[*output_idx + (-basicblock_idx - 1) as usize]
-          } else {
-            &(outputs[*basicblock_idx as usize][*output_idx])
-          }
-        })
-        .collect();
+          .inputs
+          .iter()
+          .map(|(basicblock_idx, output_idx)| {
+            if *basicblock_idx < 0 {
+              inputs[*output_idx + (-basicblock_idx - 1) as usize]
+            } else {
+              &(outputs[*basicblock_idx as usize][*output_idx])
+            }
+          })
+          .collect();
         #[cfg(feature = "gpu")]
         let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, cache.clone());
         #[cfg(not(feature = "gpu"))]

@@ -55,10 +55,8 @@ impl BasicBlock for MulConstBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
-    #[cfg(not(feature = "gpu"))]
-    _cache: &mut ProveVerifyCache,
-    #[cfg(feature = "gpu")]
-    _cache: ProveVerifyCache,
+    #[cfg(not(feature = "gpu"))] _cache: &mut ProveVerifyCache,
+    #[cfg(feature = "gpu")] _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     vec![vec![
       (inputs[0].first().unwrap().g1, (srs.X2P[0] * Fr::from(self.c as u32)).into()),
@@ -122,10 +120,8 @@ impl BasicBlock for MulScalarBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
-    #[cfg(not(feature = "gpu"))]
-    _cache: &mut ProveVerifyCache,
-    #[cfg(feature = "gpu")]
-    _cache: ProveVerifyCache,
+    #[cfg(not(feature = "gpu"))] _cache: &mut ProveVerifyCache,
+    #[cfg(feature = "gpu")] _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     // Verify f(x)*g(x)=h(x)
@@ -214,10 +210,8 @@ impl BasicBlock for MulBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
-    #[cfg(not(feature = "gpu"))]
-    _cache: &mut ProveVerifyCache,
-    #[cfg(feature = "gpu")]
-    _cache: ProveVerifyCache,
+    #[cfg(not(feature = "gpu"))] _cache: &mut ProveVerifyCache,
+    #[cfg(feature = "gpu")] _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = vec![];
     // Verify f(x)*g(x)-h(x)=z(x)t(x)

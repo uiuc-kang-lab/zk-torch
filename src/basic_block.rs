@@ -12,6 +12,8 @@ pub use cq2::CQ2BasicBlock;
 pub use cqlin::CQLinBasicBlock;
 pub use div::{DivConstBasicBlock, DivScalarBasicBlock};
 pub use eq::EqBasicBlock;
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G2Affine as IG2A};
 pub use id::IdBasicBlock;
 pub use matmul::MatMulBasicBlock;
 pub use max::MaxBasicBlock;
@@ -20,15 +22,13 @@ use ndarray::{ArrayD, IxDyn};
 pub use ops::*;
 pub use permute::PermuteBasicBlock;
 use rand::{rngs::StdRng, SeedableRng};
+#[cfg(feature = "gpu")]
+use rayon::prelude::*;
 pub use repeater::RepeaterBasicBlock;
 pub use reshape::ReshapeBasicBlock;
 pub use rope::RoPEBasicBlock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-#[cfg(feature = "gpu")]
-use rayon::prelude::*;
-#[cfg(feature = "gpu")]
-use icicle_bn254::curve::{G1Affine as IG1A, G2Affine as IG2A};
 #[cfg(feature = "gpu")]
 use std::sync::{Arc, Mutex};
 
@@ -155,7 +155,7 @@ impl DataEnc {
   }
 }
 
-pub trait BasicBlock: std::fmt::Debug + Send + Sync{
+pub trait BasicBlock: std::fmt::Debug + Send + Sync {
   fn genModel(&self) -> ArrayD<Fr> {
     ArrayD::zeros(IxDyn(&[0]))
   }
@@ -217,10 +217,8 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync{
     _outputs: &Vec<&ArrayD<DataEnc>>,
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
-    #[cfg(not(feature = "gpu"))]
-    _cache: &mut ProveVerifyCache,
-    #[cfg(feature = "gpu")]
-    _cache: ProveVerifyCache,
+    #[cfg(not(feature = "gpu"))] _cache: &mut ProveVerifyCache,
+    #[cfg(feature = "gpu")] _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     vec![]
   }

@@ -37,33 +37,32 @@ impl BasicBlock for MatMulBasicBlock {
       let a = inputs[0].view().into_dimensionality::<Ix1>().unwrap();
       #[cfg(feature = "gpu")]
       {
-        out = vec![arr1(&((0..m).into_par_iter().map(|i|{
-          (0..n).map(|j|a[j] * b[[i,j]]).sum()
-        }).collect::<Vec<_>>())).into_dyn()];
+        out = vec![arr1(&((0..m).into_par_iter().map(|i| (0..n).map(|j| a[j] * b[[i, j]]).sum()).collect::<Vec<_>>())).into_dyn()];
       }
       #[cfg(not(feature = "gpu"))]
       {
         out = vec![a.dot(&b.t()).into_dyn()];
       }
-      
     } else {
       let a = inputs[0].view().into_dimensionality::<Ix2>().unwrap();
       let l = a.shape()[0];
       #[cfg(feature = "gpu")]
-      let res:Vec<_> = (0..l*m).into_par_iter().map(|idx|{
-        let (i,j)=(idx/m,idx%m);
-        (0..n).map(|k|a[[i,k]] * b[[j,k]]).sum()
-      }).collect();
+      let res: Vec<_> = (0..l * m)
+        .into_par_iter()
+        .map(|idx| {
+          let (i, j) = (idx / m, idx % m);
+          (0..n).map(|k| a[[i, k]] * b[[j, k]]).sum()
+        })
+        .collect();
       #[cfg(feature = "gpu")]
       {
-        out = vec![ArrayD::from_shape_vec(vec![l,m],res).unwrap()];
+        out = vec![ArrayD::from_shape_vec(vec![l, m], res).unwrap()];
       }
-      
+
       #[cfg(not(feature = "gpu"))]
       {
         out = vec![a.dot(&b.t()).into_dyn()];
       }
-      
     }
     out
   }
@@ -312,10 +311,8 @@ impl BasicBlock for MatMulBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
-    #[cfg(not(feature = "gpu"))]
-    cache: &mut ProveVerifyCache,
-    #[cfg(feature = "gpu")]
-    cache: ProveVerifyCache,
+    #[cfg(not(feature = "gpu"))] cache: &mut ProveVerifyCache,
+    #[cfg(feature = "gpu")] cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let l = inputs[0].len();
