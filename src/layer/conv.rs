@@ -45,7 +45,7 @@ pub fn out_hw(dims: &Vec<usize>, strides: &Vec<usize>, ch_dims: &Vec<usize>, pad
   dims.iter().enumerate().map(|(i, x)| (*x - ch_dims[i] + padding[i][0] + padding[i][1]) / strides[i] + 1).collect()
 }
 
-pub fn splat_input(input_shape: &Vec<usize>, strides: &Vec<usize>, pads: &Vec<usize>, ci: usize, ch_dims: &Vec<usize>) -> Vec<Vec<Option<IxDyn>>> {
+fn splat_input(input_shape: &Vec<usize>, strides: &Vec<usize>, pads: &Vec<usize>, ci: usize, ch_dims: &Vec<usize>) -> Vec<Vec<Option<IxDyn>>> {
   let dims = input_shape[2..].to_vec();
   let mut padding = vec![[0, 0], [0, 0]];
   for i in 0..dims.len() {
@@ -79,7 +79,7 @@ pub fn splat_input(input_shape: &Vec<usize>, strides: &Vec<usize>, pads: &Vec<us
   inp_cells
 }
 
-pub fn splat_weights(weights_shape: &Vec<usize>) -> Vec<Vec<Option<IxDyn>>> {
+fn splat_weights(weights_shape: &Vec<usize>) -> Vec<Vec<Option<IxDyn>>> {
   let mut weights_cells = vec![];
   let mut weight_row_idx = 0;
 
@@ -99,7 +99,7 @@ pub fn splat_weights(weights_shape: &Vec<usize>) -> Vec<Vec<Option<IxDyn>>> {
 }
 
 // Adds padding to the nearest power of two to splatted inputs/weights
-fn splat_pad(input: &Vec<Vec<Option<IxDyn>>>) -> ArrayD<Option<IxDyn>> {
+pub fn splat_pad(input: &Vec<Vec<Option<IxDyn>>>) -> ArrayD<Option<IxDyn>> {
   let outp_size = input.len();
   let conv_size = input[0].len();
   let flattened_inp: Vec<_> = input.into_iter().flat_map(|x| x.iter().map(|y| y.clone())).collect();
