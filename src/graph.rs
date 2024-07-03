@@ -9,6 +9,10 @@ use ark_std::Zero;
 use ndarray::ArrayD;
 use rand::rngs::StdRng;
 use std::collections::HashMap;
+#[cfg(feature = "gpu")]
+use rayon::prelude::*;
+#[cfg(feature = "gpu")]
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 pub struct Node {
@@ -73,7 +77,20 @@ impl Graph {
   }
 
   pub fn setup(&self, srs: &SRS, models: &Vec<&ArrayD<Data>>) -> Vec<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)> {
-    self
+    #[cfg(feature = "gpu")]
+    let setup = self
+      .basic_blocks
+      .par_iter()
+      .zip(models)
+      .enumerate()
+      .map(|(i, (b, m))| {
+        println!("setting up {:?} {:?}", i, b);
+        b.setup(srs, *m)
+      })
+      .collect();
+    
+    #[cfg(not(feature = "gpu"))]
+    let setup = self
       .basic_blocks
       .iter()
       .zip(models.iter())
@@ -82,7 +99,9 @@ impl Graph {
         println!("setting up {:?} {:?}", i, b);
         b.setup(srs, *m)
       })
-      .collect()
+      .collect();
+
+    setup
   }
 
   pub fn prove(
@@ -94,7 +113,11 @@ impl Graph {
     outputs: &Vec<&Vec<&ArrayD<Data>>>,
     rng: &mut StdRng,
   ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> {
+    #[cfg(feature = "gpu")]
+    let mut cache = Arc::new(Mutex::new(HashMap::new()));
+    #[cfg(not(feature = "gpu"))]
     let mut cache = HashMap::new();
+    
     self
       .nodes
       .iter()
@@ -102,16 +125,19 @@ impl Graph {
       .map(|(i, n)| {
         println!("proving {i} {:?}", self.basic_blocks[n.basic_block]);
         let myInputs = n
-          .inputs
-          .iter()
-          .map(|(basicblock_idx, output_idx)| {
-            if *basicblock_idx < 0 {
-              inputs[*output_idx + (-basicblock_idx - 1) as usize]
-            } else {
-              &(outputs[*basicblock_idx as usize][*output_idx])
-            }
-          })
-          .collect();
+        .inputs
+        .iter()
+        .map(|(basicblock_idx, output_idx)| {
+          if *basicblock_idx < 0 {
+            inputs[*output_idx + (-basicblock_idx - 1) as usize]
+          } else {
+            &(outputs[*basicblock_idx as usize][*output_idx])
+          }
+        })
+        .collect();
+        #[cfg(feature = "gpu")]
+        let proof = self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &myInputs, outputs[i], rng, cache.clone());
+        #[cfg(not(feature = "gpu"))]
         let proof = self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &myInputs, outputs[i], rng, &mut cache);
         let proof: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (
           proof.0.iter().map(|x| (*x).into()).collect(),
@@ -135,7 +161,11 @@ impl Graph {
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)>,
     rng: &mut StdRng,
   ) {
+    #[cfg(feature = "gpu")]
+    let mut cache = Arc::new(Mutex::new(HashMap::new()));
+    #[cfg(not(feature = "gpu"))]
     let mut cache = HashMap::new();
+
     let pairings: Vec<Vec<PairingCheck>> = self
       .nodes
       .iter()
@@ -143,16 +173,19 @@ impl Graph {
       .map(|(i, n)| {
         println!("verifying {i} {:?}", self.basic_blocks[n.basic_block]);
         let myInputs = n
-          .inputs
-          .iter()
-          .map(|(basicblock_idx, output_idx)| {
-            if *basicblock_idx < 0 {
-              inputs[*output_idx + (-basicblock_idx - 1) as usize]
-            } else {
-              &(outputs[*basicblock_idx as usize][*output_idx])
-            }
-          })
-          .collect();
+        .inputs
+        .iter()
+        .map(|(basicblock_idx, output_idx)| {
+          if *basicblock_idx < 0 {
+            inputs[*output_idx + (-basicblock_idx - 1) as usize]
+          } else {
+            &(outputs[*basicblock_idx as usize][*output_idx])
+          }
+        })
+        .collect();
+        #[cfg(feature = "gpu")]
+        let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, cache.clone());
+        #[cfg(not(feature = "gpu"))]
         let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, &mut cache);
         let mut bytes = Vec::new();
         let temp: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (proofs[i].0.clone(), proofs[i].1.clone(), proofs[i].2.clone());
@@ -176,7 +209,11 @@ impl Graph {
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)>,
     rng: &mut StdRng,
   ) {
+    #[cfg(feature = "gpu")]
+    let cache = Arc::new(Mutex::new(HashMap::new()));
+    #[cfg(not(feature = "gpu"))]
     let mut cache = HashMap::new();
+
     self.nodes.iter().enumerate().for_each(|(i, n)| {
       println!("verifying (debug mode) {i} {:?}", self.basic_blocks[n.basic_block]);
       let myInputs = n
@@ -184,18 +221,21 @@ impl Graph {
         .iter()
         .map(|(basicblock_idx, output_idx)| {
           if *basicblock_idx < 0 {
-            inputs[*output_idx]
+            inputs[*output_idx + (-basicblock_idx - 1) as usize]
           } else {
             &(outputs[*basicblock_idx as usize][*output_idx])
           }
         })
         .collect();
+      #[cfg(feature = "gpu")]
+      let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, cache.clone());
+      #[cfg(not(feature = "gpu"))]
       let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, &mut cache);
       let mut bytes = Vec::new();
       let temp: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (proofs[i].0.clone(), proofs[i].1.clone(), proofs[i].2.clone());
       temp.serialize_uncompressed(&mut bytes).unwrap();
       util::add_randomness(rng, bytes);
-      pairings.iter().for_each(|p| {
+      pairings.iter().enumerate().for_each(|(i, p)| {
         assert!(p
           .iter()
           .fold(PairingOutput::<Bn<ark_bn254::Config>>::zero(), |acc, x| {

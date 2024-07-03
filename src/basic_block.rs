@@ -25,6 +25,13 @@ pub use reshape::ReshapeBasicBlock;
 pub use rope::RoPEBasicBlock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+#[cfg(feature = "gpu")]
+use rayon::prelude::*;
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G2Affine as IG2A};
+#[cfg(feature = "gpu")]
+use std::sync::{Arc, Mutex};
+
 pub use sub::SubBasicBlock;
 pub use sum::SumBasicBlock;
 pub use transpose::TransposeBasicBlock;
@@ -49,6 +56,21 @@ pub mod sub;
 pub mod sum;
 pub mod transpose;
 
+#[cfg(feature = "gpu")]
+pub struct SRS {
+  pub X1A: Vec<G1Affine>,
+  pub X2A: Vec<G2Affine>,
+  pub X1P: Vec<G1Projective>,
+  pub X2P: Vec<G2Projective>,
+  pub Y1A: G1Affine,
+  pub Y2A: G2Affine,
+  pub Y1P: G1Projective,
+  pub Y2P: G2Projective,
+  pub IX1A: Vec<IG1A>,
+  pub IX2A: Vec<IG2A>,
+}
+
+#[cfg(not(feature = "gpu"))]
 pub struct SRS {
   pub X1A: Vec<G1Affine>,
   pub X2A: Vec<G2Affine>,
@@ -69,7 +91,10 @@ pub enum CacheValues {
   Data(Data),
   G2(G2Affine),
 }
+#[cfg(not(feature = "gpu"))]
 pub type ProveVerifyCache = HashMap<String, CacheValues>;
+#[cfg(feature = "gpu")]
+pub type ProveVerifyCache = Arc<Mutex<HashMap<String, CacheValues>>>;
 
 pub type PairingCheck = Vec<(G1Affine, G2Affine)>;
 
@@ -90,6 +115,15 @@ impl Data {
     let N = raw.len();
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
     let f = DensePolynomial::from_coefficients_vec(domain.ifft(&raw));
+    #[cfg(feature = "gpu")]
+    let fx = if f.is_zero() {
+      G1Projective::zero()
+    } else if N < 32 {
+      util::msm(&srs.X1A, &f.coeffs)
+    } else {
+      util::gpu_msm_g1(&srs.IX1A, &f.coeffs)
+    };
+    #[cfg(not(feature = "gpu"))]
     let fx = if f.is_zero() {
       G1Projective::zero()
     } else {
@@ -121,7 +155,7 @@ impl DataEnc {
   }
 }
 
-pub trait BasicBlock: std::fmt::Debug {
+pub trait BasicBlock: std::fmt::Debug + Send + Sync{
   fn genModel(&self) -> ArrayD<Fr> {
     ArrayD::zeros(IxDyn(&[0]))
   }
@@ -134,7 +168,11 @@ pub trait BasicBlock: std::fmt::Debug {
   // It defaults to running Data::new() on the last dimension of the outputs which runs an FFT and an MSM.
   // But for certain basic blocks such as add and reshape, this can be done much faster, and it should be overriden in these cases.
   fn encodeOutputs(&self, srs: &SRS, _model: &ArrayD<Data>, _inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
-    outputs.iter().map(|x| util::convert_to_data(srs, x)).collect()
+    #[cfg(not(feature = "gpu"))]
+    let out = outputs.iter().map(|x| util::convert_to_data(srs, x)).collect();
+    #[cfg(feature = "gpu")]
+    let out = outputs.par_iter().map(|x| util::convert_to_data(srs, x)).collect();
+    out
   }
 
   // The subsequent setup/prove/verify functions run on encoded Data objects (vector commitments).
@@ -143,6 +181,7 @@ pub trait BasicBlock: std::fmt::Debug {
     (Vec::new(), Vec::new(), Vec::new())
   }
 
+  #[cfg(not(feature = "gpu"))]
   fn prove(
     &mut self,
     _srs: &SRS,
@@ -156,6 +195,20 @@ pub trait BasicBlock: std::fmt::Debug {
     (Vec::new(), Vec::new(), Vec::new())
   }
 
+  #[cfg(feature = "gpu")]
+  fn prove(
+    &self,
+    _srs: &SRS,
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    _model: &ArrayD<Data>,
+    _inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    (Vec::new(), Vec::new(), Vec::new())
+  }
+
   fn verify(
     &self,
     _srs: &SRS,
@@ -164,7 +217,10 @@ pub trait BasicBlock: std::fmt::Debug {
     _outputs: &Vec<&ArrayD<DataEnc>>,
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
+    #[cfg(not(feature = "gpu"))]
     _cache: &mut ProveVerifyCache,
+    #[cfg(feature = "gpu")]
+    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     vec![]
   }

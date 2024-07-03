@@ -4,6 +4,10 @@ use ark_ff::PrimeField;
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G2Affine as IG2A};
+#[cfg(feature = "gpu")]
+use icicle_core::traits::ArkConvertible;
 
 pub fn load_file(filename: &str, n: usize, m: usize) -> SRS {
   let powers_length = 1 << n;
@@ -42,6 +46,12 @@ pub fn load_file(filename: &str, n: usize, m: usize) -> SRS {
     .collect();
   let g2_p: Vec<G2Projective> = g2.par_iter().map(|x| (*x).into()).collect();
 
+  #[cfg(feature = "gpu")]
+  let ig1: Vec<_> = g1.par_iter().map(|x| IG1A::from_ark(*x)).collect();
+  #[cfg(feature = "gpu")]
+  let ig2: Vec<_> = g2.par_iter().map(|x| IG2A::from_ark(*x)).collect();
+
+  #[cfg(not(feature = "gpu"))]
   let res = SRS {
     Y1A: g1[g2.len() - 1],
     Y2A: g2[g2.len() - 1],
@@ -52,5 +62,20 @@ pub fn load_file(filename: &str, n: usize, m: usize) -> SRS {
     X1P: g1_p,
     X2P: g2_p,
   };
+
+  #[cfg(feature = "gpu")]
+  let res = SRS {
+    Y1A: g1[g2.len() - 1],
+    Y2A: g2[g2.len() - 1],
+    Y1P: g1_p[g2.len() - 1],
+    Y2P: g2_p[g2.len() - 1],
+    X1A: g1,
+    X2A: g2,
+    X1P: g1_p,
+    X2P: g2_p,
+    IX1A: ig1,
+    IX2A: ig2,
+  };
+
   res
 }

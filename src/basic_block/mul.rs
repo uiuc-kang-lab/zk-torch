@@ -17,6 +17,7 @@ impl BasicBlock for MulConstBasicBlock {
     vec![inputs[0].map(|x| *x * Fr::from(self.c as u32))]
   }
 
+  #[cfg(not(feature = "gpu"))]
   fn prove(
     &mut self,
     srs: &SRS,
@@ -31,6 +32,21 @@ impl BasicBlock for MulConstBasicBlock {
     return (vec![C], vec![], Vec::new());
   }
 
+  #[cfg(feature = "gpu")]
+  fn prove(
+    &self,
+    srs: &SRS,
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    _model: &ArrayD<Data>,
+    inputs: &Vec<&ArrayD<Data>>,
+    outputs: &Vec<&ArrayD<Data>>,
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    let C = srs.X1P[0] * (Fr::from(self.c as u32) * inputs[0].first().unwrap().r - outputs[0].first().unwrap().r);
+    return (vec![C], vec![], Vec::new());
+  }
+
   fn verify(
     &self,
     srs: &SRS,
@@ -39,7 +55,10 @@ impl BasicBlock for MulConstBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
+    #[cfg(not(feature = "gpu"))]
     _cache: &mut ProveVerifyCache,
+    #[cfg(feature = "gpu")]
+    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     vec![vec![
       (inputs[0].first().unwrap().g1, (srs.X2P[0] * Fr::from(self.c as u32)).into()),
@@ -57,6 +76,7 @@ impl BasicBlock for MulScalarBasicBlock {
     vec![inputs[0].map(|x| *x * inputs[1].first().unwrap())]
   }
 
+  #[cfg(not(feature = "gpu"))]
   fn prove(
     &mut self,
     srs: &SRS,
@@ -75,6 +95,25 @@ impl BasicBlock for MulScalarBasicBlock {
     return (vec![C], vec![gx2], Vec::new());
   }
 
+  #[cfg(feature = "gpu")]
+  fn prove(
+    &self,
+    srs: &SRS,
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    _model: &ArrayD<Data>,
+    inputs: &Vec<&ArrayD<Data>>,
+    outputs: &Vec<&ArrayD<Data>>,
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    let inp0 = &inputs[0].first().unwrap();
+    let inp1 = &inputs[1].first().unwrap();
+    let out = &outputs[0].first().unwrap();
+    let gx2 = srs.X2P[0] * inp1.raw[0] + srs.Y2P * inp1.r;
+    let C = inp0.g1 * inp1.r + inp1.g1 * inp0.r + srs.Y1P * (inp0.r * inp1.r) - srs.X1P[0] * out.r;
+    return (vec![C], vec![gx2], Vec::new());
+  }
+
   fn verify(
     &self,
     srs: &SRS,
@@ -83,7 +122,10 @@ impl BasicBlock for MulScalarBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
+    #[cfg(not(feature = "gpu"))]
     _cache: &mut ProveVerifyCache,
+    #[cfg(feature = "gpu")]
+    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     // Verify f(x)*g(x)=h(x)
@@ -110,6 +152,7 @@ impl BasicBlock for MulBasicBlock {
     vec![r]
   }
 
+  #[cfg(not(feature = "gpu"))]
   fn prove(
     &mut self,
     srs: &SRS,
@@ -136,6 +179,33 @@ impl BasicBlock for MulBasicBlock {
     return (vec![tx, C], vec![gx2], Vec::new());
   }
 
+  #[cfg(feature = "gpu")]
+  fn prove(
+    &self,
+    srs: &SRS,
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    _model: &ArrayD<Data>,
+    inputs: &Vec<&ArrayD<Data>>,
+    outputs: &Vec<&ArrayD<Data>>,
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    let inp0 = &inputs[0].first().unwrap();
+    let inp1 = &inputs[1].first().unwrap();
+    let out = &outputs[0].first().unwrap();
+    let N = inp0.raw.len();
+    let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
+    let gx2 = util::msm::<G2Projective>(&srs.X2A, &inp1.poly.coeffs) + srs.Y2P * inp1.r;
+    let t = inp0.poly.mul(&inp1.poly).sub(&out.poly).divide_by_vanishing_poly(domain).unwrap().0;
+
+    // Blinding
+    let mut rng = StdRng::from_entropy();
+    let r = Fr::rand(&mut rng);
+    let tx = util::msm::<G1Projective>(&srs.X1A, &t.coeffs) + srs.Y1P * r;
+    let C = (inp0.g1 * inp1.r) + (inp1.g1 * inp0.r) + (srs.Y1P * (inp0.r * inp1.r)) - (srs.X1P[0] * out.r) - ((srs.X1P[N] - srs.X1P[0]) * r);
+    return (vec![tx, C], vec![gx2], Vec::new());
+  }
+
   fn verify(
     &self,
     srs: &SRS,
@@ -144,7 +214,10 @@ impl BasicBlock for MulBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
+    #[cfg(not(feature = "gpu"))]
     _cache: &mut ProveVerifyCache,
+    #[cfg(feature = "gpu")]
+    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = vec![];
     // Verify f(x)*g(x)-h(x)=z(x)t(x)

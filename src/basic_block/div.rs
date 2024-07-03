@@ -2,6 +2,7 @@ use super::BasicBlock;
 use crate::util;
 use ark_bn254::Fr;
 use ndarray::{arr1, ArrayD};
+use rayon::prelude::*;
 
 #[derive(Debug)]
 pub struct DivScalarBasicBlock {
@@ -11,22 +12,36 @@ pub struct DivScalarBasicBlock {
 impl BasicBlock for DivScalarBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[1].len() == 1);
-    let SF = self.output_SF as i32;
-    let mut div = vec![];
-    let mut rem = vec![];
-    let y = util::fr_to_int(inputs[1][0]);
+    let SF = self.output_SF as i64;
+    let y = util::fr_to_int(inputs[1][0]) as i64;
     assert!(y > 0);
-    for x in inputs[0].iter() {
-      let x = util::fr_to_int(*x);
+    let mut div: Vec<Fr> = vec![];
+    let mut rem: Vec<Fr> = vec![];
+    #[cfg(not(feature = "gpu"))]
+    {
+      for x in inputs[0].iter() {
+        let x = util::fr_to_int(*x) as i64;
+        let mut z = (2 * x * SF + y) / (2 * y);
+        let mut r = (2 * x * SF + y) % (2 * y);
+        if r < 0 {
+          z -= 1;
+          r += 2 * y;
+        }
+        div.push(Fr::from(z));
+        rem.push(Fr::from(r));
+      }
+    }
+    #[cfg(feature = "gpu")]
+    let (div, rem):(Vec<_>,Vec<_>) = inputs[0].into_par_iter().map(|x|{
+      let x = util::fr_to_int(*x) as i64;
       let mut z = (2 * x * SF + y) / (2 * y);
       let mut r = (2 * x * SF + y) % (2 * y);
       if r < 0 {
         z -= 1;
         r += 2 * y;
       }
-      div.push(Fr::from(z));
-      rem.push(Fr::from(r));
-    }
+      (Fr::from(z), Fr::from(r))
+    }).unzip();
     vec![arr1(&div).into_dyn(), arr1(&rem).into_dyn()]
   }
 }
@@ -39,10 +54,21 @@ pub struct DivConstBasicBlock {
 impl BasicBlock for DivConstBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1);
-    vec![inputs[0].map(|x| {
+    #[cfg(not(feature = "gpu"))]
+    let out = inputs[0].map(|x| {
       let mut x = util::fr_to_int(*x) as f32;
       x /= self.c;
       Fr::from(x.round() as i32)
-    })]
+    });
+    #[cfg(feature = "gpu")]
+    let mut out = inputs[0].clone();
+    #[cfg(feature = "gpu")]
+    out.par_mapv_inplace(|x| {
+      let mut x = util::fr_to_int(x) as f32;
+      x /= self.c;
+      Fr::from(x.round() as i64)
+    });
+    
+    vec![out]
   }
 }

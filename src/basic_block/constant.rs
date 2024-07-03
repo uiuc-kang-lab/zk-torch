@@ -1,6 +1,6 @@
 use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ndarray::{arr0, ArrayD};
+use ndarray::{arr0, ArrayD, IxDyn};
 use rand::rngs::StdRng;
 
 #[derive(Debug)]
@@ -22,7 +22,10 @@ impl BasicBlock for ConstBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
+    #[cfg(not(feature = "gpu"))]
     _cache: &mut ProveVerifyCache,
+    #[cfg(feature = "gpu")]
+    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     assert!(model == outputs[0]);
 

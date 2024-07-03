@@ -16,13 +16,26 @@ macro_rules! make_basic_block {
     impl BasicBlock for $name {
       fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
         assert!(inputs.len() == 1);
-        vec![inputs[0].map(|x| {
+        let mut out = inputs[0].clone();
+        #[cfg(feature = "gpu")]
+        {
+          out.par_mapv_inplace(|x| {
+            let mut x = util::fr_to_int(x) as f32;
+            x /= (1 << self.input_SF) as f32;
+            x = $operation(x);
+            x *= (1 << self.output_SF) as f32;
+            Fr::from(x.round() as i64)
+          });
+        }
+        #[cfg(not(feature = "gpu"))]
+        let out = out.map(|x| {
           let mut x = util::fr_to_int(*x) as f32;
           x /= (1 << self.input_SF) as f32;
           x = $operation(x);
           x *= (1 << self.output_SF) as f32;
           Fr::from(x.round() as i32)
-        })]
+        });
+        vec![out]
       }
     }
   };

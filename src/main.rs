@@ -31,6 +31,7 @@ fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&
   let setups = graph.setup(srs, &models);
 
   // Encode Data:
+  #[cfg(not(feature = "gpu"))]
   let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>)> = setups
     .iter()
     .map(|x| {
@@ -41,9 +42,26 @@ fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&
       )
     })
     .collect();
+  #[cfg(feature = "gpu")]
+  let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>)> = setups
+    .par_iter()
+    .map(|x| {
+      (
+        x.0.par_iter().map(|y| (*y).into()).collect(),
+        x.1.par_iter().map(|y| (*y).into()).collect(),
+        x.2.par_iter().map(|y| (y.clone())).collect(),
+      )
+    })
+    .collect();
   let setups = setups.iter().map(|x| (&x.0, &x.1, &x.2)).collect();
+  #[cfg(not(feature = "gpu"))]
   let modelsEnc: Vec<ArrayD<DataEnc>> = models.iter().map(|model| (**model).map(|x| DataEnc::new(srs, x))).collect();
+  #[cfg(feature = "gpu")]
+  let modelsEnc: Vec<ArrayD<DataEnc>> = models.par_iter().map(|model| (**model).map(|x| DataEnc::new(srs, x))).collect();
+  #[cfg(not(feature = "gpu"))]
   let inputs: Vec<ArrayD<Data>> = inputs.iter().map(|input| convert_to_data(srs, input)).collect();
+  #[cfg(feature = "gpu")]
+  let inputs: Vec<ArrayD<Data>> = inputs.par_iter().map(|input| convert_to_data(srs, input)).collect();
   let inputs: Vec<&ArrayD<Data>> = inputs.iter().map(|input| input).collect();
   let inputsEnc: Vec<ArrayD<DataEnc>> = inputs.iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect();
   let outputs: Vec<Vec<&ArrayD<Fr>>> = outputs.iter().map(|output| output.iter().map(|x| x).collect()).collect();

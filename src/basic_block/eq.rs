@@ -1,12 +1,13 @@
 use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::univariate::DensePolynomial;
-use ndarray::ArrayD;
+use ndarray::{ArrayD, IxDyn, Zip};
 use rand::rngs::StdRng;
 
 #[derive(Debug)]
 pub struct EqBasicBlock;
 impl BasicBlock for EqBasicBlock {
+  #[cfg(not(feature = "gpu"))]
   fn prove(
     &mut self,
     srs: &SRS,
@@ -23,6 +24,23 @@ impl BasicBlock for EqBasicBlock {
     (vec![C], Vec::new(), Vec::new())
   }
 
+  #[cfg(feature = "gpu")]
+  fn prove(
+    &self,
+    srs: &SRS,
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    _model: &ArrayD<Data>,
+    inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    assert!(inputs.len() == 2 && inputs[0].ndim() <= 1 && inputs[1].ndim() <= 1);
+    // Blinding
+    let C = srs.X1P[0] * (inputs[0].first().unwrap().r - inputs[1].first().unwrap().r);
+    (vec![C], Vec::new(), Vec::new())
+  }
+
   fn verify(
     &self,
     srs: &SRS,
@@ -31,7 +49,10 @@ impl BasicBlock for EqBasicBlock {
     _outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
+    #[cfg(not(feature = "gpu"))]
     _cache: &mut ProveVerifyCache,
+    #[cfg(feature = "gpu")]
+    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     // Verify f(x)+g(x)=h(x)
     vec![vec![

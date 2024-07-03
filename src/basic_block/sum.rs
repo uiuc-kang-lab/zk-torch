@@ -17,6 +17,7 @@ impl BasicBlock for SumBasicBlock {
     vec![arr1(&[inputs[0].iter().sum::<Fr>()]).into_dyn()]
   }
 
+  #[cfg(not(feature = "gpu"))]
   fn prove(
     &mut self,
     srs: &SRS,
@@ -41,6 +42,31 @@ impl BasicBlock for SumBasicBlock {
     return (vec![zero_div, C], vec![], Vec::new());
   }
 
+  #[cfg(feature = "gpu")]
+  fn prove(
+    &self,
+    srs: &SRS,
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    _model: &ArrayD<Data>,
+    inputs: &Vec<&ArrayD<Data>>,
+    outputs: &Vec<&ArrayD<Data>>,
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    let input = inputs[0].first().unwrap();
+    let m = input.raw.len();
+
+    let mut rng2 = StdRng::from_entropy();
+    let zero_div_r = Fr::rand(&mut rng2);
+    let zero_div = if input.poly.is_zero() {
+      G1Projective::zero()
+    } else {
+      util::msm::<G1Projective>(&srs.X1A, &input.poly.coeffs[1..])
+    } + srs.Y1P * zero_div_r;
+    let C = -srs.X1P[1] * zero_div_r + srs.X1P[0] * (input.r - outputs[0].first().unwrap().r * Fr::from(m as u32).inverse().unwrap());
+    return (vec![zero_div, C], vec![], Vec::new());
+  }
+
   fn verify(
     &self,
     srs: &SRS,
@@ -49,7 +75,10 @@ impl BasicBlock for SumBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
+    #[cfg(not(feature = "gpu"))]
     _cache: &mut ProveVerifyCache,
+    #[cfg(feature = "gpu")]
+    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let input = inputs[0].first().unwrap();
     let m = input.len;
