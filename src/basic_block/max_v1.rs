@@ -51,7 +51,7 @@ impl BasicBlock for MaxV1BasicBlock {
     let N = outputs[1].first().unwrap().raw.len();
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
 
-    // diff proving
+    // Diff proving
     let mut proof_1 = vec![];
     let max = outputs[0].first().unwrap();
     let input = inputs[0].first().unwrap();
@@ -59,9 +59,7 @@ impl BasicBlock for MaxV1BasicBlock {
     let C = srs.X1P[0] * (max.r - input.r - diff.r);
     proof_1.push(C);
 
-    // multiplication
-    // for the last one, don't need to construct new_product, only divide the
-    // product by quotient poly
+    // Multiplication proving
     let mut rng = StdRng::from_entropy();
 
     let mut product = outputs[1].first().unwrap().clone();
