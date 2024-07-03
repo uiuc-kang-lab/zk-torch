@@ -44,6 +44,8 @@ fn testBasicBlock<BB: BasicBlock>(mut basic_block: BB, srs: &SRS, model: &ArrayD
   let pairings = pairings.iter().map(|x| x).collect();
   let pairings = util::combine_pairing_checks(&pairings);
   assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
+  // Check that prove and verify end with the same rng state
+  assert_eq!(Fr::rand(&mut rng), Fr::rand(&mut rng2));
 }
 
 #[test]
