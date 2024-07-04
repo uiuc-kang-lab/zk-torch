@@ -54,21 +54,6 @@ pub mod sub;
 pub mod sum;
 pub mod transpose;
 
-#[cfg(feature = "gpu")]
-pub struct SRS {
-  pub X1A: Vec<G1Affine>,
-  pub X2A: Vec<G2Affine>,
-  pub X1P: Vec<G1Projective>,
-  pub X2P: Vec<G2Projective>,
-  pub Y1A: G1Affine,
-  pub Y2A: G2Affine,
-  pub Y1P: G1Projective,
-  pub Y2P: G2Projective,
-  pub IX1A: Vec<IG1A>,
-  pub IX2A: Vec<IG2A>,
-}
-
-#[cfg(not(feature = "gpu"))]
 pub struct SRS {
   pub X1A: Vec<G1Affine>,
   pub X2A: Vec<G2Affine>,
@@ -111,15 +96,6 @@ impl Data {
     let N = raw.len();
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
     let f = DensePolynomial::from_coefficients_vec(domain.ifft(&raw));
-    #[cfg(feature = "gpu")]
-    let fx = if f.is_zero() {
-      G1Projective::zero()
-    } else if N < 32 {
-      util::msm(&srs.X1A, &f.coeffs)
-    } else {
-      util::gpu_msm_g1(&srs.IX1A, &f.coeffs)
-    };
-    #[cfg(not(feature = "gpu"))]
     let fx = if f.is_zero() {
       G1Projective::zero()
     } else {

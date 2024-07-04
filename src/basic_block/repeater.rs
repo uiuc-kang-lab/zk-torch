@@ -33,7 +33,14 @@ fn repeater_run_wrapper(model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>, basic_blo
 }
 
 #[cfg(not(feature = "gpu"))]
-fn repeater_encodeOutputs_wrapper(srs: &SRS, model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>, basic_block: &dyn BasicBlock, N: usize) -> Vec<ArrayD<Data>> {
+fn repeater_encodeOutputs_wrapper(
+  srs: &SRS,
+  model: &ArrayD<Data>,
+  inputs: &Vec<&ArrayD<Data>>,
+  outputs: &Vec<&ArrayD<Fr>>,
+  basic_block: &dyn BasicBlock,
+  N: usize,
+) -> Vec<ArrayD<Data>> {
   let temp = broadcastN(inputs, Some(outputs), N - 1);
   let empty = temp.map(|(localInputs, localOutputs)| {
     let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
@@ -46,13 +53,20 @@ fn repeater_encodeOutputs_wrapper(srs: &SRS, model: &ArrayD<Data>, inputs: &Vec<
 }
 
 #[cfg(feature = "gpu")]
-fn repeater_encodeOutputs_wrapper(srs: &SRS, model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>, basic_block: &dyn BasicBlock, N: usize) -> Vec<ArrayD<Data>> {
-  let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
+fn repeater_encodeOutputs_wrapper(
+  srs: &SRS,
+  model: &ArrayD<Data>,
+  inputs: &Vec<&ArrayD<Data>>,
+  outputs: &Vec<&ArrayD<Fr>>,
+  basic_block: &dyn BasicBlock,
+  N: usize,
+) -> Vec<ArrayD<Data>> {
+  let mut temp = broadcastN(inputs, Some(outputs), N - 1);
   let mut empty = ArrayD::from_elem(temp.shape(), vec![]);
   par_azip!(((localInputs, localOutputs) in &mut temp, x in &mut empty) {
     let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
     let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
-    *x = self.basic_block.encodeOutputs(srs, model, &localInputs, &localOutputs);
+    *x = basic_block.encodeOutputs(srs, model, &localInputs, &localOutputs);
   });
   let temp = empty.map(|x| x.iter().map(|y| y).collect());
   let temp = temp.map(|x| x);
@@ -197,7 +211,7 @@ fn repeater_verify_wrapper(
   });
   let mut pairings = empty.into_iter().flatten().collect();
 
-  pairings 
+  pairings
 }
 
 #[derive(Debug)]

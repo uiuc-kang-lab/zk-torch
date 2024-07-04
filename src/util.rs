@@ -9,14 +9,6 @@ use ark_ff::PrimeField;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{UniformRand, Zero};
-#[cfg(feature = "gpu")]
-use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
-#[cfg(feature = "gpu")]
-use icicle_core::gfft;
-#[cfg(feature = "gpu")]
-use icicle_core::traits::ArkConvertible;
-#[cfg(feature = "gpu")]
-use icicle_cuda_runtime::memory::HostOrDeviceSlice;
 use ndarray::{arr0, arr1, concatenate, Array1, ArrayD, Axis, IxDyn, SliceInfo, SliceInfoElem};
 use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 use rayon::prelude::*;
@@ -25,6 +17,13 @@ use std::collections::HashMap;
 use std::collections::{BTreeSet, HashSet};
 use tract_onnx::pb::tensor_proto::DataType;
 use tract_onnx::prelude::Framework;
+#[cfg(feature = "gpu")]
+use {
+  icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField},
+  icicle_core::gfft,
+  icicle_core::traits::ArkConvertible,
+  icicle_cuda_runtime::memory::HostOrDeviceSlice,
+};
 
 // This function is used for generating fake inputs for onnx models
 // Fake inputs are random field (i.e., Fr) elements whose shapes and types match those described in the input tensors of an ONNX model.
@@ -142,12 +141,24 @@ pub fn ifft<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvaluationDom
 }
 
 pub fn fft_in_place<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvaluationDomain<Fr>, a: &mut Vec<G>) {
+  #[cfg(not(feature = "gpu"))]
   fft_helper(a, domain, false);
+  #[cfg(feature = "gpu")]
+  {
+    a = gpu_fft_g1(domain_N, a);
+  }
 }
 
 pub fn ifft_in_place<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvaluationDomain<Fr>, a: &mut Vec<G>) {
-  fft_helper(a, domain, true);
-  a.par_iter_mut().for_each(|x| *x *= domain.size_inv());
+  #[cfg(not(feature = "gpu"))]
+  {
+    fft_helper(a, domain, true);
+    a.par_iter_mut().for_each(|x| *x *= domain.size_inv());
+  }
+  #[cfg(feature = "gpu")]
+  {
+    a = gpu_ifft_g1(domain_N, a);
+  }
 }
 
 #[cfg(feature = "gpu")]
@@ -159,20 +170,6 @@ pub fn circulant_mul(domain: GeneralEvaluationDomain<Fr>, c: &Vec<Fr>, a: &Vec<G
   gpu_ifft_g1(domain, &r)
 }
 
-#[cfg(feature = "gpu")]
-pub fn toeplitz_mul(domain: GeneralEvaluationDomain<Fr>, m: &Vec<Fr>, a: &Vec<G1Projective>) -> Vec<G1Projective> {
-  let n = (m.len() + 1) / 2;
-  let mut temp = m.to_vec();
-  let mut m2 = temp.split_off(n - 1);
-  m2.push(Fr::zero());
-  m2.append(&mut temp);
-  let mut temp2 = a.to_vec();
-  temp2.resize(2 * n, G1Projective::zero());
-  let mut r = circulant_mul(domain, &m2, &temp2);
-  r.resize(n, G1Projective::zero());
-  r
-}
-
 #[cfg(not(feature = "gpu"))]
 pub fn circulant_mul<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvaluationDomain<Fr>, c: &Vec<Fr>, a: &Vec<G>) -> Vec<G> {
   let lambda = domain.fft(c);
@@ -182,7 +179,6 @@ pub fn circulant_mul<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEval
   r
 }
 
-#[cfg(not(feature = "gpu"))]
 pub fn toeplitz_mul<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvaluationDomain<Fr>, m: &Vec<Fr>, a: &Vec<G>) -> Vec<G> {
   let n = (m.len() + 1) / 2;
   let mut temp = m.to_vec();
@@ -228,7 +224,7 @@ pub fn add_randomness(rng: &mut StdRng, mut bytes: Vec<u8>) {
   *rng = StdRng::from_seed(buf);
 }
 
-pub fn msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {
+fn cpu_msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {
   let max_threads = rayon::current_num_threads();
   let size = ark_std::cmp::min(a.len(), b.len());
   if max_threads > size {
@@ -240,6 +236,39 @@ pub fn msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {
   let a_chunks = a.par_chunks(chunk_size);
   let b_chunks = b.par_chunks(chunk_size);
   return a_chunks.zip(b_chunks).map(|(x, y)| -> P { VariableBaseMSM::msm_unchecked(&x, &y) }).sum();
+}
+
+pub fn msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {
+  #[cfg(not(feature = "gpu"))]
+  let out = cpu_msm(a, b);
+
+  #[cfg(feature = "gpu")]
+  let out = if std::any::TypeId::of::<P>() == std::any::TypeId::of::<G1Projective>() {
+    let a: Vec<_> = a.par_iter().map(|x| IG1A::from_ark(*x)).collect();
+    let out = gpu_msm_g1(&a, b);
+    out
+  } else if std::any::TypeId::of::<P>() == std::any::TypeId::of::<G2Projective>() {
+    let a: Vec<_> = a.par_iter().map(|x| IG2A::from_ark(*x)).collect();
+    let out = gpu_msm_g2(&a, b);
+    out
+  } else {
+    panic!("Unsupported projective type");
+  };
+  out
+}
+
+pub fn ssm_g1_in_place(points: &mut Vec<G1Projective>, scalars: &Vec<Fr>) {
+  #[cfg(not(feature = "gpu"))]
+  {
+    points.par_iter_mut().zip(scalars.par_iter()).for_each(|(x, scalar)| {
+      *x *= *scalar;
+    });
+  }
+
+  #[cfg(feature = "gpu")]
+  {
+    points = gpu_ssm_g1(points, scalars);
+  }
 }
 
 #[cfg(feature = "gpu")]
@@ -254,7 +283,7 @@ pub fn gpu_msm_g2(points: &Vec<IG2A>, scalars: &Vec<Fr>) -> G2Projective {
   let size = ark_std::cmp::min(points.len(), scalars.len());
   if size < 32 {
     let points: Vec<_> = points.iter().map(|x| x.to_ark()).collect();
-    return msm(&points, scalars);
+    return cpu_msm(&points, scalars);
   }
   let cfg = icicle_core::msm::MSMConfig::default();
   let points = HostOrDeviceSlice::on_host(points[..size].to_vec());
@@ -272,7 +301,7 @@ pub fn gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>) -> G1Projective {
   let size = ark_std::cmp::min(points.len(), scalars.len());
   if size < 32 {
     let points: Vec<_> = points.par_iter().map(|x| x.to_ark()).collect();
-    return msm(&points, scalars);
+    return cpu_msm(&points, scalars);
   }
   let cfg = icicle_core::msm::MSMConfig::default();
   let points = HostOrDeviceSlice::on_host(points[..size].to_vec());
@@ -400,24 +429,6 @@ pub fn calc_pow(alpha: Fr, n: usize) -> Vec<Fr> {
   pow
 }
 
-#[cfg(feature = "gpu")]
-pub fn convert_to_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
-  if a.ndim() <= 1 {
-    return arr0(Data::new(srs, a.view().as_slice().unwrap())).into_dyn();
-  }
-  let mut a = a.map_axis(Axis(a.ndim() - 1), |r| Data {
-    raw: r.as_slice().unwrap().to_vec(),
-    poly: ark_poly::polynomial::univariate::DensePolynomial::zero(),
-    r: Fr::zero(),
-    g1: G1Projective::zero(),
-  });
-  a.par_map_inplace(|x| {
-    *x = Data::new(srs, &x.raw);
-  });
-  a
-}
-
-#[cfg(not(feature = "gpu"))]
 pub fn convert_to_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
   if a.ndim() <= 1 {
     return arr0(Data::new(srs, a.view().as_slice().unwrap())).into_dyn();

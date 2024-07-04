@@ -57,20 +57,28 @@ pub struct DivConstBasicBlock {
 impl BasicBlock for DivConstBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1);
-    #[cfg(not(feature = "gpu"))]
-    let out = inputs[0].map(|x| {
-      let mut x = util::fr_to_int(*x) as f32;
-      x /= self.c;
-      Fr::from(x.round() as i32)
-    });
-    #[cfg(feature = "gpu")]
-    let mut out = inputs[0].clone();
-    #[cfg(feature = "gpu")]
-    out.par_mapv_inplace(|x| {
-      let mut x = util::fr_to_int(x) as f32;
-      x /= self.c;
-      Fr::from(x.round() as i64)
-    });
+
+    let out = {
+      #[cfg(not(feature = "gpu"))]
+      {
+        inputs[0].map(|x| {
+          let mut x = util::fr_to_int(*x) as f32;
+          x /= self.c;
+          Fr::from(x.round() as i64)
+        })
+      }
+
+      #[cfg(feature = "gpu")]
+      {
+        let mut out = inputs[0].clone();
+        out.par_mapv_inplace(|x| {
+          let mut x = util::fr_to_int(x) as f32;
+          x /= self.c;
+          Fr::from(x.round() as i64)
+        });
+        out
+      }
+    };
 
     vec![out]
   }

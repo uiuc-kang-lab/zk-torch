@@ -14,75 +14,6 @@ use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
 
-#[cfg(not(feature = "gpu"))]
-fn cq2_setup_wrapper(srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
-  let N = model[0].raw.len();
-  let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
-  let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
-  let mut setup = vec![];
-  let mut setup2 = vec![];
-  for i in 0..2 {
-    setup2.push(util::msm::<G2Projective>(&srs.X2A, &model[i].poly.coeffs) + srs.Y2P * model[i].r);
-    let mut temp = model[i].poly.coeffs[1..].to_vec();
-    temp.resize(N * 2 - 1, Fr::zero());
-    let mut temp2 = srs.X1P[..N].to_vec();
-    temp2.reverse();
-    let mut Q_i_x_1 = util::toeplitz_mul(domain_2N, &temp, &temp2);
-    util::fft_in_place(domain_N, &mut Q_i_x_1);
-    let temp = Fr::from(N as u32).inverse().unwrap();
-    let temp2 = domain_N.group_gen_inv().pow(&[(N - 1) as u64]);
-    Q_i_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x *= temp * temp2.pow(&[i as u64]));
-
-    setup.extend(Q_i_x_1);
-  }
-
-  let mut L_i_x_1 = srs.X1P[..N].to_vec();
-  util::ifft_in_place(domain_N, &mut L_i_x_1);
-  let mut L_i_0_x_1 = L_i_x_1.clone();
-  let temp = srs.X1P[N - 1] * Fr::from(N as u64).inverse().unwrap();
-  L_i_0_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x = *x * domain_N.group_gen_inv().pow(&[i as u64]) - temp);
-
-  setup.extend(L_i_x_1);
-  setup.extend(L_i_0_x_1);
-  return (setup, setup2, Vec::new());
-}
-
-#[cfg(feature = "gpu")]
-fn cq2_setup_wrapper(srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
-  let N = model[0].raw.len();
-  let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
-  let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
-  let mut setup = vec![];
-  let mut setup2 = vec![];
-  for i in 0..2 {
-    setup2.push(util::gpu_msm_g2(&srs.IX2A, &model[i].poly.coeffs) + srs.Y2P * model[i].r);
-    let mut temp = model[i].poly.coeffs[1..].to_vec();
-    temp.resize(N * 2 - 1, Fr::zero());
-    let mut temp2 = srs.X1P[..N].to_vec();
-    temp2.reverse();
-    let mut Q_i_x_1 = util::toeplitz_mul(domain_2N, &temp, &temp2);
-    Q_i_x_1 = util::gpu_fft_g1(domain_N, &Q_i_x_1);
-    let temp = Fr::from(N as u32).inverse().unwrap();
-    let temp2 = domain_N.group_gen_inv().pow(&[(N - 1) as u64]);
-
-    let scalars = (0..N).into_par_iter().map(|i| temp * temp2.pow(&[i as u64])).collect();
-    let Q_i_x_1 = util::gpu_ssm_g1(&Q_i_x_1, &scalars);
-    Q_i_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x *= temp * temp2.pow(&[i as u64]));
-
-    setup.extend(Q_i_x_1);
-  }
-
-  let L_i_x_1 = util::gpu_ifft_g1(domain_N, &srs.X1P[..N].to_vec());
-  let scalars = (0..N).into_par_iter().map(|i| domain_N.group_gen_inv().pow(&[i as u64])).collect();
-  let mut L_i_0_x_1 = util::gpu_ssm_g1(&L_i_x_1, &scalars);
-  let temp = srs.X1P[N - 1] * Fr::from(N as u64).inverse().unwrap();
-  L_i_0_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x -= temp);
-
-  setup.extend(L_i_x_1);
-  setup.extend(L_i_0_x_1);
-  return (setup, setup2, Vec::new());
-}
-
 #[derive(Debug)]
 pub struct CQ2BasicBlock {
   pub setup: Option<(Box<dyn BasicBlock>, i32, usize)>,
@@ -99,7 +30,38 @@ impl BasicBlock for CQ2BasicBlock {
 
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     assert!(model.ndim() == 1 && model.len() == 2);
-    cq2_setup_wrapper(srs, model)
+    let N = model[0].raw.len();
+    let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
+    let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
+    let mut setup = vec![];
+    let mut setup2 = vec![];
+    for i in 0..2 {
+      setup2.push(util::msm::<G2Projective>(&srs.X2A, &model[i].poly.coeffs) + srs.Y2P * model[i].r);
+      let mut temp = model[i].poly.coeffs[1..].to_vec();
+      temp.resize(N * 2 - 1, Fr::zero());
+      let mut temp2 = srs.X1P[..N].to_vec();
+      temp2.reverse();
+      let mut Q_i_x_1 = util::toeplitz_mul(domain_2N, &temp, &temp2);
+      util::fft_in_place(domain_N, &mut Q_i_x_1);
+      let temp = Fr::from(N as u32).inverse().unwrap();
+      let temp2 = domain_N.group_gen_inv().pow(&[(N - 1) as u64]);
+      let scalars = (0..N).into_par_iter().map(|i| temp * temp2.pow(&[i as u64])).collect();
+      util::ssm_g1_in_place(&mut Q_i_x_1, &scalars);
+
+      setup.extend(Q_i_x_1);
+    }
+
+    let mut L_i_x_1 = srs.X1P[..N].to_vec();
+    util::ifft_in_place(domain_N, &mut L_i_x_1);
+    let mut L_i_0_x_1 = L_i_x_1.clone();
+    let scalars = (0..N).into_par_iter().map(|i| domain_N.group_gen_inv().pow(&[i as u64])).collect();
+    util::ssm_g1_in_place(&mut L_i_0_x_1, &scalars);
+    let temp = srs.X1P[N - 1] * Fr::from(N as u64).inverse().unwrap();
+    L_i_0_x_1.par_iter_mut().enumerate().for_each(|(_i, x)| *x -= temp);
+
+    setup.extend(L_i_x_1);
+    setup.extend(L_i_0_x_1);
+    return (setup, setup2, Vec::new());
   }
 
   fn prove(
