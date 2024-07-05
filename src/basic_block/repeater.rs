@@ -22,10 +22,10 @@ fn repeater_run_wrapper(model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>, basic_blo
 
 #[cfg(feature = "gpu")]
 fn repeater_run_wrapper(model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>, basic_block: &dyn BasicBlock, N: usize) -> Vec<ArrayD<Fr>> {
-  let mut temp = broadcastN::<Fr, Fr>(inputs, None, self.N);
+  let mut temp = broadcastN::<Fr, Fr>(inputs, None, N);
   temp.par_map_inplace(|(subArrays, _)| {
     let subArrays2: Vec<_> = subArrays.iter().map(|y| y).collect();
-    *subArrays = self.basic_block.run(model, &subArrays2);
+    *subArrays = basic_block.run(model, &subArrays2);
   });
   let temp = temp.map(|x| x.0.iter().map(|y| y).collect());
   let temp = temp.map(|x| x);
@@ -112,13 +112,13 @@ fn repeater_prove_wrapper(
   basic_block: &dyn BasicBlock,
   N: usize,
 ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
-  let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
+  let mut temp = broadcastN(inputs, Some(outputs), N - 1);
   let mut empty = ArrayD::from_elem(temp.shape(), (vec![], vec![], vec![]));
   par_azip!(((localInputs, localOutputs) in &mut temp, x in &mut empty) {
     let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
     let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
     let mut rng = rng.clone();
-    let mut tmp  = self.basic_block.prove(srs, setup, model, &localInputs, &localOutputs, &mut rng, cache.clone());
+    let mut tmp  = basic_block.prove(srs, setup, model, &localInputs, &localOutputs, &mut rng, cache.clone());
     *x = tmp;
   });
   let proof: (Vec<_>, Vec<_>, Vec<_>) = multiunzip(empty.into_iter());

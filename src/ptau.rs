@@ -4,11 +4,6 @@ use ark_ff::PrimeField;
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
-#[cfg(feature = "gpu")]
-use {
-  icicle_bn254::curve::{G1Affine as IG1A, G2Affine as IG2A},
-  icicle_core::traits::ArkConvertible,
-};
 
 pub fn load_file(filename: &str, n: usize, m: usize) -> SRS {
   let powers_length = 1 << n;
