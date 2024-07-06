@@ -346,16 +346,16 @@ impl BasicBlock for CopyConstraintBasicBlock {
     util::add_randomness(rng, bytes);
     proof.append(&mut proof_1);
 
-    let a = Fr::rand(rng);
+    let zeta = Fr::rand(rng);
     let omega = domain.group_gen();
-    let Z_ga = Z_poly.evaluate(&(omega * a));
-    let L0_a = L0_poly.evaluate(&a);
-    let Lnone_a = Lnone_poly.evaluate(&a);
-    let ssig_as: Vec<_> = ssig_polys.iter().map(|p| p.evaluate(&a)).collect();
-    let fj_as: Vec<_> = fj_polys.iter().map(|p| p.evaluate(&a)).collect();
-    let mut evals = vec![Z_ga, L0_a, Lnone_a];
-    evals.append(&mut ssig_as.clone());
-    evals.append(&mut fj_as.clone());
+    let Z_gz = Z_poly.evaluate(&(omega * zeta));
+    let L0_z = L0_poly.evaluate(&zeta);
+    let Lnone_z = Lnone_poly.evaluate(&zeta);
+    let ssig_zs: Vec<_> = ssig_polys.iter().map(|p| p.evaluate(&zeta)).collect();
+    let fj_zs: Vec<_> = fj_polys.iter().map(|p| p.evaluate(&zeta)).collect();
+    let mut evals = vec![Z_gz, L0_z, Lnone_z];
+    evals.append(&mut ssig_zs.clone());
+    evals.append(&mut fj_zs.clone());
 
     // Round 5: Commit opening proofs
     // Fiat-Shamir
@@ -364,41 +364,42 @@ impl BasicBlock for CopyConstraintBasicBlock {
     util::add_randomness(rng, bytes);
 
     // Calculate opening argument for Z over omega * a (W_zetaomega on p. 30 of [1])
-    let Z_ga_poly = DensePolynomial { coeffs: vec![Z_ga] };
+    let Z_gz_poly = DensePolynomial { coeffs: vec![Z_gz] };
     let Z_V = DensePolynomial {
-      coeffs: vec![-a * omega, Fr::one()],
+      coeffs: vec![-zeta * omega, Fr::one()],
     };
-    let temp = Z_poly.sub(&Z_ga_poly);
+    let temp = Z_poly.sub(&Z_gz_poly);
     let Z_Q: DensePolynomial<_> = &temp / &Z_V;
     let W_gx = util::msm::<G1Projective>(&srs.X1A, &Z_Q.coeffs);
 
     // Calculate opening quotient for batched quotient check (containing r, fjs, ssigs on p. 30 of [1])
-    let ft_as: Vec<_> = fj_as.iter().enumerate().map(|(i, x)| beta * Fr::from((i + 1) as i32) * a + *x + gamma).collect();
-    let gt_as: Vec<_> = fj_as.iter().enumerate().map(|(i, x)| ssig_as[i] * beta + *x + gamma).collect();
-    let a_pows = calc_pow(a, N);
-    let gt_a: Fr = gt_as[..gt_as.len() - 1].iter().product();
-    let ft_a = ft_as.iter().product();
-    let ft_a_poly = DensePolynomial::from_coefficients_vec(vec![ft_a]);
-    let lhs = Z_poly.mul(&ft_a_poly);
-    let rhs_mul = DensePolynomial::from_coefficients_vec(vec![gt_a * Z_ga]);
-    let rhs_add = DensePolynomial::from_coefficients_vec(vec![gamma + fj_as[fj_as.len() - 1]]);
+    let ft_zs: Vec<_> = fj_zs.iter().enumerate().map(|(i, x)| beta * Fr::from((i + 1) as i32) * zeta + *x + gamma).collect();
+    let gt_zs: Vec<_> = fj_zs.iter().enumerate().map(|(i, x)| ssig_zs[i] * beta + *x + gamma).collect();
+    let zeta_pows = calc_pow(zeta, N);
+    let gt_z: Fr = gt_zs[..gt_zs.len() - 1].iter().product();
+    let ft_z = ft_zs.iter().product();
+    let ft_z_poly = DensePolynomial::from_coefficients_vec(vec![ft_z]);
+    let lhs = Z_poly.mul(&ft_z_poly);
+    let rhs_mul = DensePolynomial::from_coefficients_vec(vec![gt_z * Z_gz]);
+    let rhs_add = DensePolynomial::from_coefficients_vec(vec![gamma + fj_zs[fj_zs.len() - 1]]);
     let rhs = (&ssig_polys[ssig_polys.len() - 1].mul(&beta_poly) + &rhs_add).mul(&rhs_mul);
-    let v = DensePolynomial::from_coefficients_vec(vec![a_pows[N - 1] - Fr::one()]).mul(&t_poly);
-    let q1_V = DensePolynomial { coeffs: vec![-a, Fr::one()] };
+    let q1_V = DensePolynomial {
+      coeffs: vec![-zeta, Fr::one()],
+    };
 
     // Compute linearization polynomial r (p. 30 of [1])
-    let r_poly = &(&lhs - &rhs) - &v
-      + Z_poly.sub(&one).mul(&DensePolynomial::from_coefficients_vec(vec![alpha * L0_a]))
-      + fj_polys[fj_none_idx].mul(&DensePolynomial::from_coefficients_vec(vec![alpha * alpha * Lnone_a]));
+    let r_poly = &(&lhs - &rhs) - &DensePolynomial::from_coefficients_vec(vec![zeta_pows[N - 1] - Fr::one()]).mul(&t_poly)
+      + Z_poly.sub(&one).mul(&DensePolynomial::from_coefficients_vec(vec![alpha * L0_z]))
+      + fj_polys[fj_none_idx].mul(&DensePolynomial::from_coefficients_vec(vec![alpha * alpha * Lnone_z]));
 
     // Calculate opening argument for W over a (W_zeta on p. 30 of [1])
-    let b = Fr::rand(rng);
-    let bs = calc_pow(b, ssig_polys.len() + ft_polys.len());
+    let v = Fr::rand(rng);
+    let vs = calc_pow(v, ssig_polys.len() + ft_polys.len());
     let q1_poly: DensePolynomial<Fr> =
-      ssig_polys.iter().chain(fj_polys.iter()).enumerate().fold(DensePolynomial::zero(), |acc, (i, p)| acc + p.mul(bs[i]));
-    let q1_a = q1_poly.evaluate(&a);
-    let q1_a_poly = DensePolynomial { coeffs: vec![q1_a] };
-    let W_poly = &(q1_poly.sub(&q1_a_poly) + r_poly) / &q1_V;
+      ssig_polys.iter().chain(fj_polys.iter()).enumerate().fold(DensePolynomial::zero(), |acc, (i, p)| acc + p.mul(vs[i]));
+    let q1_z = q1_poly.evaluate(&zeta);
+    let q1_z_poly = DensePolynomial { coeffs: vec![q1_z] };
+    let W_poly = &(q1_poly.sub(&q1_z_poly) + r_poly) / &q1_V;
     let W_x = util::msm::<G1Projective>(&srs.X1A, &W_poly.coeffs);
 
     // Round 5 end randomness
@@ -409,7 +410,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
 
     // Blinding
     proof.append(&mut vec![W_x, W_gx]);
-    proof.push(srs.X1P[0] * (r * (a_pows[N - 1] - Fr::one())));
+    proof.push(srs.X1P[0] * (r * (zeta_pows[N - 1] - Fr::one())));
 
     let mut ssig_xs = setup.0[2..].iter().map(|x| Into::<G1Projective>::into(*x)).collect();
     proof.append(&mut ssig_xs);
@@ -450,12 +451,12 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let fj_xs = &proof.0[m + 5..];
 
     // TODO: have verifier compute Lagrange basis evals
-    let [Z_ga, L0_a, Lnone_a] = proof.2[..3] else {
+    let [Z_gz, L0_z, Lnone_z] = proof.2[..3] else {
       panic!("Wrong proof format")
     };
     let q1_evals = &proof.2[3..];
-    let ssig_as = &q1_evals[..m];
-    let fj_as = &q1_evals[m..];
+    let ssig_zs = &q1_evals[..m];
+    let fj_zs = &q1_evals[m..];
 
     // Round 2 randomness
     let mut bytes = Vec::new();
@@ -474,13 +475,13 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let mut bytes = Vec::new();
     vec![t_x].serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
-    let a = Fr::rand(rng);
+    let zeta = Fr::rand(rng);
 
     // Round 5 randomness
     let mut bytes = Vec::new();
     proof.2.serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
-    let b = Fr::rand(rng);
+    let v = Fr::rand(rng);
 
     // Round 5 end randomness
     let mut bytes = Vec::new();
@@ -501,31 +502,31 @@ impl BasicBlock for CopyConstraintBasicBlock {
     }
 
     // Perform the batched check (p. 31 of [1])
-    let ft_as: Vec<_> = fj_as.iter().enumerate().map(|(i, x)| beta * Fr::from((i + 1) as i32) * a + *x + gamma).collect();
-    let gt_as: Vec<_> = fj_as.iter().enumerate().map(|(i, x)| ssig_as[i] * beta + *x + gamma).collect();
-    let ft_a: Fr = ft_as.iter().product();
+    let ft_zs: Vec<_> = fj_zs.iter().enumerate().map(|(i, x)| beta * Fr::from((i + 1) as i32) * zeta + *x + gamma).collect();
+    let gt_zs: Vec<_> = fj_zs.iter().enumerate().map(|(i, x)| ssig_zs[i] * beta + *x + gamma).collect();
+    let ft_z: Fr = ft_zs.iter().product();
     // Contains all but the last
-    let gt_a: Fr = gt_as[..gt_as.len() - 1].iter().product();
-    let a_pows = calc_pow(a, N);
+    let gt_z: Fr = gt_zs[..gt_zs.len() - 1].iter().product();
+    let zeta_pows = calc_pow(zeta, N);
 
-    let mut D = Z_x * (ft_a + alpha * L0_a + u) - ssig_xs[ssig_xs.len() - 1] * beta * gt_a * Z_ga - t_x * (a_pows[N - 1] - Fr::one());
+    let mut D = Z_x * (ft_z + alpha * L0_z + u) - ssig_xs[ssig_xs.len() - 1] * beta * gt_z * Z_gz - t_x * (zeta_pows[N - 1] - Fr::one());
     if has_none {
-      D = D + fj_xs[fj_none_idx] * alpha * alpha * Lnone_a;
+      D = D + fj_xs[fj_none_idx] * alpha * alpha * Lnone_z;
     }
 
-    let bs = calc_pow(b, ssig_xs.len() + fj_xs.len());
+    let vs = calc_pow(v, ssig_xs.len() + fj_xs.len());
     let q1_x: G1Projective = ssig_xs
       .iter()
       .chain(fj_xs.iter())
       .enumerate()
-      .fold(G1Projective::zero(), |acc, (i, x)| acc + Into::<G1Projective>::into(*x) * bs[i]);
+      .fold(G1Projective::zero(), |acc, (i, x)| acc + Into::<G1Projective>::into(*x) * vs[i]);
     let F = D + q1_x;
-    let q1_a: Fr = q1_evals.iter().enumerate().fold(Fr::zero(), |acc, (i, x)| acc + *x * bs[i]);
-    let r_0 = -L0_a * alpha - gt_a * (fj_as[fj_as.len() - 1] + gamma) * Z_ga;
-    let E = srs.X1A[0] * (-r_0 + q1_a + u * Z_ga);
+    let q1_z: Fr = q1_evals.iter().enumerate().fold(Fr::zero(), |acc, (i, x)| acc + *x * vs[i]);
+    let r_0 = -L0_z * alpha - gt_z * (fj_zs[fj_zs.len() - 1] + gamma) * Z_gz;
+    let E = srs.X1A[0] * (-r_0 + q1_z + u * Z_gz);
     checks.push(vec![
       ((W_x + W_gx * u).into(), srs.X2A[1]),
-      ((-(W_x * a + W_gx * u * omega * a + F - E)).into(), srs.X2A[0]),
+      ((-(W_x * zeta + W_gx * u * omega * zeta + F - E)).into(), srs.X2A[0]),
       (-C1, srs.Y2A),
     ]);
     checks
