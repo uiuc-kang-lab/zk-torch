@@ -15,25 +15,7 @@ impl BasicBlock for DivScalarBasicBlock {
     let SF = self.output_SF as i64;
     let y = util::fr_to_int(inputs[1][0]) as i64;
     assert!(y > 0);
-    let mut div: Vec<Fr> = vec![];
-    let mut rem: Vec<Fr> = vec![];
-    #[cfg(not(feature = "gpu"))]
-    {
-      for x in inputs[0].iter() {
-        let x = util::fr_to_int(*x) as i64;
-        let mut z = (2 * x * SF + y) / (2 * y);
-        let mut r = (2 * x * SF + y) % (2 * y);
-        if r < 0 {
-          z -= 1;
-          r += 2 * y;
-        }
-        div.push(Fr::from(z));
-        rem.push(Fr::from(r));
-      }
-    }
-    #[cfg(feature = "gpu")]
-    let (div, rem): (Vec<_>, Vec<_>) = inputs[0]
-      .into_par_iter()
+    let (div, rem): (Vec<_>, Vec<_>) = util::array_into_iter(inputs[0])
       .map(|x| {
         let x = util::fr_to_int(*x) as i64;
         let mut z = (2 * x * SF + y) / (2 * y);
@@ -43,8 +25,7 @@ impl BasicBlock for DivScalarBasicBlock {
           r += 2 * y;
         }
         (Fr::from(z), Fr::from(r))
-      })
-      .unzip();
+      }).unzip();
     vec![arr1(&div).into_dyn(), arr1(&rem).into_dyn()]
   }
 }
@@ -58,28 +39,13 @@ impl BasicBlock for DivConstBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1);
 
-    let out = {
-      #[cfg(not(feature = "gpu"))]
-      {
-        inputs[0].map(|x| {
-          let mut x = util::fr_to_int(*x) as f32;
-          x /= self.c;
-          Fr::from(x.round() as i64)
-        })
-      }
+    let out = util::array_into_iter(inputs[0])
+      .map(|x| {
+        let mut x = util::fr_to_int(*x) as f32;
+        x /= self.c;
+        Fr::from(x.round() as i64)
+      }).collect::<Vec<_>>();
 
-      #[cfg(feature = "gpu")]
-      {
-        let mut out = inputs[0].clone();
-        out.par_mapv_inplace(|x| {
-          let mut x = util::fr_to_int(x) as f32;
-          x /= self.c;
-          Fr::from(x.round() as i64)
-        });
-        out
-      }
-    };
-
-    vec![out]
+    vec![arr1(&out).into_dyn()]
   }
 }

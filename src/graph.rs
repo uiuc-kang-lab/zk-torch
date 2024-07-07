@@ -8,8 +8,6 @@ use ark_serialize::CanonicalSerialize;
 use ark_std::Zero;
 use ndarray::ArrayD;
 use rand::rngs::StdRng;
-#[cfg(feature = "gpu")]
-use rayon::prelude::*;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -76,31 +74,14 @@ impl Graph {
   }
 
   pub fn setup(&self, srs: &SRS, models: &Vec<&ArrayD<Data>>) -> Vec<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)> {
-    #[cfg(feature = "gpu")]
-    let setup = self
-      .basic_blocks
-      .par_iter()
-      .zip(models)
-      .enumerate()
-      .map(|(i, (b, m))| {
-        println!("setting up {:?} {:?}", i, b);
-        b.setup(srs, *m)
-      })
-      .collect();
-
-    #[cfg(not(feature = "gpu"))]
-    let setup = self
-      .basic_blocks
-      .iter()
+    util::vec_iter(&self.basic_blocks)
       .zip(models.iter())
       .enumerate()
       .map(|(i, (b, m))| {
         println!("setting up {:?} {:?}", i, b);
         b.setup(srs, *m)
       })
-      .collect();
-
-    setup
+      .collect()
   }
 
   pub fn prove(

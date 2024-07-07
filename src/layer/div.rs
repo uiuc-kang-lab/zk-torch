@@ -4,7 +4,7 @@ use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
-use ndarray::{Array1, ArrayD};
+use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;
 
 pub struct DivLayer;

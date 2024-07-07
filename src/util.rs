@@ -637,3 +637,23 @@ pub fn erf(x: f32) -> f32 {
   let y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * (-x * x).exp();
   sign * y
 }
+
+#[cfg(feature = "gpu")]
+pub fn array_into_iter<T>(x: &ArrayD<T>) -> impl ParallelIterator<Item = &T> {
+  x.into_par_iter()
+}
+
+#[cfg(not(feature = "gpu"))]
+pub fn array_into_iter<T>(x: &ArrayD<T>) -> impl Iterator<Item = &T> {
+  x.into_iter()
+}
+
+#[cfg(feature = "gpu")]
+pub fn vec_iter<T>(x: &Vec<T>) -> impl ParallelIterator<Item = &T> {
+  x.par_iter()
+}
+
+#[cfg(not(feature = "gpu"))]
+pub fn vec_iter<T>(x: &Vec<T>) -> impl Iterator<Item = &T> {
+  x.iter()
+}
