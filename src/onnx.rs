@@ -96,7 +96,6 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
     constants_hashmap.insert(name, idx);
     idx += 1;
   }
-  println!("graph: {:?}", graph);
   let mut passed_constants = HashMap::new();
 
   for node in onnx_graph.node.iter().filter(|node| node.op_type.as_str() != "Constant") {
