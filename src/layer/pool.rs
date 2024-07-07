@@ -73,7 +73,7 @@ impl Layer for MaxPoolLayer {
 
     // Prove max over each row
     let max = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MaxV1BasicBlock {}),
+      basic_block: Box::new(MaxProofBasicBlock {}),
       N: 1,
     }));
 
