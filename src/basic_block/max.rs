@@ -38,6 +38,7 @@ impl BasicBlock for MaxBasicBlock {
 pub struct MaxProofBasicBlock;
 
 // This max includes a proof and is intended to be followed by a lookup range check on the second output.
+// TODO: Proof should be updated to use openings
 impl BasicBlock for MaxProofBasicBlock {
   // Returns the max of the input and max - x for all x in input
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
