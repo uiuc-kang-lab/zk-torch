@@ -34,9 +34,7 @@ impl Layer for DivLayer {
       N: 1,
     }));
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQBasicBlock {
-        setup: Array1::from_iter(0..1 << 9).map(|x| Fr::from(*x)).into_dyn(),
-      }),
+      basic_block: Box::new(CQBasicBlock { setup: Some((0, 1 << 9)) }),
       N: 1,
     }));
     let mul_SF2 = graph.addBB(Box::new(RepeaterBasicBlock {
