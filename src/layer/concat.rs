@@ -30,15 +30,21 @@ fn get_concat_indices(input_shapes: &Vec<&Vec<usize>>, output_shape: &Vec<usize>
   indices
 }
 
+// Concatenate the input arrays along the specified axis.
+// If the axis is the last axis, we copy the input arrays to a padded array by Copy Constraint and add them together.
+// Otherwise, we directly concatenate the input arrays.
 pub struct ConcatLayer;
 impl Layer for ConcatLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
 
+    // Extract the 'axis' attribute and adjust for negative values
     let axis: isize = attributes.iter().filter(|x| x.name == "axis").next().unwrap().i as isize;
     let axis = (if axis < 0 { input_shapes[0].len() as isize + axis } else { axis }) as usize;
+    // Compute the output shape after concatenation
     let mut outputShape = input_shapes[0].clone();
     outputShape[axis] = input_shapes.iter().map(|x| x[axis as usize]).sum();
+    // If concatenating along the last axis, use copy constraint as the output commitment changes
     if axis == input_shapes[0].len() - 1 {
       let mut padded_output_shape = outputShape.clone();
       padded_output_shape[axis] = util::next_pow(padded_output_shape[axis] as u32) as usize;
@@ -62,7 +68,7 @@ impl Layer for ConcatLayer {
         let cc_output = graph.addNode(cc_basicblocks[i], vec![(-(i as i32 + 1), 0)]);
         cc_outputs.push((cc_output, 0));
       }
-      // add 2 cc_outputs and reduce to 1 output until only 1 output left
+      // add 2 cc_outputs at a time until only 1 output is left
       while cc_outputs.len() > 1 {
         let add_output = graph.addNode(add, vec![cc_outputs.pop().unwrap(), cc_outputs.pop().unwrap()]);
         cc_outputs.push((add_output, 0));
@@ -70,6 +76,7 @@ impl Layer for ConcatLayer {
       let final_output = cc_outputs.pop().unwrap();
       graph.outputs.push(final_output);
     } else {
+      // If not concatenating along the last axis, directly concatenate
       let n_input = input_shapes.len();
       let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: axis as usize }));
       let concat_output = graph.addNode(concat, (0..n_input).map(|i| (-(i as i32 + 1), 0)).collect());

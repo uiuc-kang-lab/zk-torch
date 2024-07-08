@@ -6,6 +6,10 @@ use ark_bn254::Fr;
 use ndarray::{ArrayD, Axis};
 use tract_onnx::pb::AttributeProto;
 
+// Squeeze the input tensor by removing all dimensions of size 1.
+// If axes is provided, remove the dimensions specified by axes.
+// Otherwise, remove all dimensions of size 1.
+// If the last dimension is squeezed, we need to permute the tensor before reshaping because the last dimension affects the commitment.
 pub struct SqueezeLayer;
 impl Layer for SqueezeLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
@@ -34,6 +38,7 @@ impl Layer for SqueezeLayer {
       graph.outputs.push((output, 0));
     } else {
       // startShape.last() < endShape.last()
+      // the last dimension is squeezed
       let n = startShape.len();
       let mut a = startShape[n - 2];
       assert!(*endShape.last().unwrap() == a);
@@ -65,6 +70,9 @@ impl BasicBlock for UnsqueezeBasicBlock {
   }
 }
 
+// Unsqueeze the input tensor by adding a dimension of size 1 at the specified axis.
+// If the last dimension is unsqueezed, we need to permute the tensor before reshaping because the last dimension affects the commitment.
+// Otherwise, when the last dimension is not unsqueezed or an arr0 is unsqueezed (special case), we can directly reshape it.
 pub struct UnsqueezeLayer;
 impl Layer for UnsqueezeLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
@@ -112,9 +120,9 @@ impl Layer for UnsqueezeLayer {
       graph.outputs.push((output, 0));
     } else {
       // special case (startShape.last() < endShape.last()): [] --> [1]
-      let id = graph.addBB(Box::new(UnsqueezeBasicBlock {}));
-      let id_output = graph.addNode(id, vec![(-1, 0)]);
-      graph.outputs.push((id_output, 0));
+      let unsqueeze = graph.addBB(Box::new(UnsqueezeBasicBlock {}));
+      let unsqueeze_output = graph.addNode(unsqueeze, vec![(-1, 0)]);
+      graph.outputs.push((unsqueeze_output, 0));
     }
 
     (graph, vec![endShape])
