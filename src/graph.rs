@@ -74,7 +74,9 @@ impl Graph {
   }
 
   pub fn setup(&self, srs: &SRS, models: &Vec<&ArrayD<Data>>) -> Vec<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)> {
-    util::vec_iter(&self.basic_blocks)
+    self
+      .basic_blocks
+      .iter()
       .zip(models.iter())
       .enumerate()
       .map(|(i, (b, m))| {

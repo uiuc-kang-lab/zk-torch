@@ -639,7 +639,7 @@ pub fn erf(x: f32) -> f32 {
 }
 
 #[cfg(feature = "gpu")]
-pub fn array_into_iter<T>(x: &ArrayD<T>) -> impl ParallelIterator<Item = &T> {
+pub fn array_into_iter<T: Send + Sync>(x: &ArrayD<T>) -> impl ParallelIterator<Item = &T> {
   x.into_par_iter()
 }
 
@@ -649,7 +649,7 @@ pub fn array_into_iter<T>(x: &ArrayD<T>) -> impl Iterator<Item = &T> {
 }
 
 #[cfg(feature = "gpu")]
-pub fn vec_iter<T>(x: &Vec<T>) -> impl ParallelIterator<Item = &T> {
+pub fn vec_iter<T: Send + Sync>(x: &Vec<T>) -> impl ParallelIterator<Item = &T> {
   x.par_iter()
 }
 
