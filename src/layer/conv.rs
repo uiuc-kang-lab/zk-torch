@@ -12,6 +12,7 @@ use ndarray::IxDyn;
 use ndarray::Slice;
 use tract_onnx::pb::AttributeProto;
 
+// Pads each dimension of input by the corresponding amount in padding on both ends.
 pub fn pad<G: Clone>(input: &ArrayD<G>, padding: &Vec<[usize; 2]>, pad_val: &G) -> ArrayD<G> {
   let tmp = input.into_iter().collect();
   let input = ArrayD::from_shape_vec(input.raw_dim(), tmp).unwrap();
@@ -132,13 +133,26 @@ impl Layer for ConvLayer {
     let dims = input_shapes[0][2..].to_vec();
     let ch_dims = weight_shape[2..].to_vec();
 
-    let strides: Vec<_> = match attributes.iter().filter(|x| x.name == "strides").next() {
+    let strides = match attributes.iter().filter(|x| x.name == "strides").next() {
       Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
       None => vec![1; dims.len()],
     };
-    let pads: Vec<_> = match attributes.iter().filter(|x| x.name == "pads").next() {
+    let pads = match attributes.iter().filter(|x| x.name == "pads").next() {
       Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
       None => vec![0; 2 * dims.len()],
+    };
+    let _dilations = match attributes.iter().filter(|x| x.name == "dilations").next() {
+      Some(v) => v
+        .ints
+        .iter()
+        .map(|x| {
+          if *x != 1 {
+            panic!("dilations != 1 not supported");
+          }
+          *x as usize
+        })
+        .collect(),
+      None => vec![1; dims.len() - 2],
     };
 
     // Splat input

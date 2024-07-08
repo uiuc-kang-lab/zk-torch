@@ -282,7 +282,7 @@ pub fn next_pow(n: u32) -> u32 {
   v
 }
 
-pub fn pad<T: Clone + ark_std::Zero>(a: &ArrayD<T>) -> ArrayD<T> {
+pub fn pad_to_pow_of_two<T: Clone + ark_std::Zero>(a: &ArrayD<T>) -> ArrayD<T> {
   let mut new = ArrayD::zeros(a.shape().iter().map(|x| next_pow(*x as u32) as usize).collect::<Vec<_>>());
   let slice = a.shape().iter().map(|x| ndarray::Slice::new(0, Some(*x as isize), 1).into()).collect::<Vec<SliceInfoElem>>();
   let sliceInfo: SliceInfo<_, IxDyn, IxDyn> = SliceInfo::try_from(&slice[..]).unwrap();

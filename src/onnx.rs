@@ -83,7 +83,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
     }
     .unwrap();
     shapes.insert(name.clone(), tensor.shape().to_vec());
-    let tensor = util::pad(&tensor);
+    let tensor = util::pad_to_pow_of_two(&tensor);
     outputs_idx.insert(name.clone(), vec![(graph.basic_blocks.len() as i32, 0)]);
     graph.nodes.push(Node {
       basic_block: graph.basic_blocks.len(),
