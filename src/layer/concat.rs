@@ -45,9 +45,10 @@ impl Layer for ConcatLayer {
       let permutations = get_concat_indices(input_shapes, &padded_output_shape, axis);
       let mut cc_basicblocks = vec![];
       for i in 0..input_shapes.len() {
+        let padded_input_shape: Vec<usize> = input_shapes[i].iter().map(|&x| util::next_pow(x as u32) as usize).collect();
         let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
           permutation: permutations[i].clone(),
-          input_dim: IxDyn(&input_shapes[i]),
+          input_dim: IxDyn(&padded_input_shape),
         }));
         cc_basicblocks.push(cc);
       }
@@ -55,7 +56,7 @@ impl Layer for ConcatLayer {
         basic_block: Box::new(AddBasicBlock {}),
         N: 1,
       }));
-
+      
       let mut cc_outputs = vec![];
       for i in 0..input_shapes.len() {
         let cc_output = graph.addNode(cc_basicblocks[i], vec![(-(i as i32 + 1), 0)]);

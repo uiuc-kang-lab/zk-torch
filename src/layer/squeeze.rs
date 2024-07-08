@@ -29,7 +29,7 @@ impl Layer for SqueezeLayer {
     let endShape: Vec<_> = startShape.iter().enumerate().filter(|(i, _)| !axes.contains(&(*i as i64))).map(|(_, x)| *x).collect();
 
     if startShape.last() == endShape.last() {
-      let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: endShape.clone() }));
+      let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: endShape.clone().iter().map(|&x| util::next_pow(x as u32) as usize).collect() }));
       let output = graph.addNode(reshape, vec![(-1, 0)]);
       graph.outputs.push((output, 0));
     } else {
@@ -89,7 +89,7 @@ impl Layer for UnsqueezeLayer {
       .collect();
 
     if startShape.last() == endShape.last() {
-      let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: endShape.clone() }));
+      let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: endShape.clone().iter().map(|&x| util::next_pow(x as u32) as usize).collect() }));
       let output = graph.addNode(reshape, vec![(-1, 0)]);
       graph.outputs.push((output, 0));
     } else if startShape.last() > endShape.last() {

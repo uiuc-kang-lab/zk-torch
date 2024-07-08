@@ -10,11 +10,57 @@ use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{UniformRand, Zero};
 use ndarray::{arr0, concatenate, Array1, ArrayD, Axis, IxDyn, SliceInfo, SliceInfoElem};
-use rand::{rngs::StdRng, RngCore, SeedableRng};
+use rand::{rngs::StdRng, RngCore, SeedableRng, Rng};
 use rayon::prelude::*;
 use sha3::{Digest, Keccak256};
 use std::collections::HashMap;
 use std::collections::{BTreeSet, HashSet};
+use tract_onnx::pb::tensor_proto::DataType;
+use tract_onnx::prelude::Framework;
+
+// This function is used for generating fake inputs for onnx models
+// Fake inputs are random field (i.e., Fr) elements whose shapes and types match those described in the input tensors of an ONNX model.
+// Generating these when loading an ONNX file saves us from creating different input tensors ourselves when testing new ONNX.
+// It is only for testing purposes
+pub fn generate_fake_inputs_for_onnx(filename: &str) -> Vec<ArrayD<Fr>> {
+  let onnx = tract_onnx::onnx();
+  let onnx_graph = onnx.proto_model_for_path(filename).unwrap().graph.unwrap();
+  let mut rng = StdRng::from_entropy();
+
+  let mut inputs = vec![];
+
+  for onnx_input in onnx_graph.input.iter() {
+    let tract_onnx::pb::type_proto::Value::TensorType(t) = onnx_input.r#type.as_ref().unwrap().value.as_ref().unwrap();
+    let shape = t
+      .shape
+      .as_ref()
+      .unwrap()
+      .dim
+      .iter()
+      .map(|x| {
+        if let tract_onnx::pb::tensor_shape_proto::dimension::Value::DimValue(x) = x.value.as_ref().unwrap() {
+          *x as usize
+        } else {
+          panic!("Unknown dimension")
+        }
+      })
+      .collect::<Vec<_>>();
+    let val_num = &shape.iter().fold(1, |acc, x| acc * x);
+
+    let input = match t.elem_type() {
+      DataType::Float | DataType::Float16 | DataType::Double => (0..*val_num).map(|_| Fr::from(rng.gen_range(-2..2))).collect(),
+      DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => (0..*val_num).map(|_| Fr::from(1)).collect(),
+      DataType::Uint8 | DataType::Uint16 | DataType::Uint32 | DataType::Uint64 => (0..*val_num).map(|_| Fr::from(1)).collect(),
+      _ => panic!("Unsupported constant type: {:?}", t.elem_type()),
+    };
+
+    //let input: Vec<Fr> = (0..*val_num).map(|_| Fr::from(rng.gen_range(-1..1))).collect();
+    let input = ArrayD::from_shape_vec(shape, input).unwrap();
+    let input = pad(&input);
+    inputs.push(input);
+  }
+  inputs
+}
 
 fn bitreverse(mut n: u32, l: u64) -> u32 {
   let mut r = 0;
@@ -23,6 +69,17 @@ fn bitreverse(mut n: u32, l: u64) -> u32 {
     n >>= 1;
   }
   r
+}
+
+pub fn slice_nd_array(arr: ArrayD<Fr>, indices: &[usize]) -> ArrayD<Fr> {
+  // Create slices from the indices
+  let slices: Vec<_> = indices.iter().map(|&i| (0..i).into()).collect();
+
+  // Convert slices into a SliceInfo instance
+  let slice_info = unsafe { SliceInfo::<_, IxDyn, IxDyn>::new(slices).unwrap() };
+
+  // Slice the array
+  arr.slice_move(slice_info)
 }
 
 pub fn fft_helper<G: ScalarMul + std::ops::MulAssign<Fr>>(a: &mut Vec<G>, domain: GeneralEvaluationDomain<Fr>, inv: bool) {

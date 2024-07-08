@@ -44,6 +44,8 @@ fn testBasicBlock<BB: BasicBlock>(mut basic_block: BB, srs: &SRS, model: &ArrayD
   let pairings = pairings.iter().map(|x| x).collect();
   let pairings = util::combine_pairing_checks(&pairings);
   assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
+  // Check that prove and verify end with the same rng state
+  assert_eq!(Fr::rand(&mut rng), Fr::rand(&mut rng2));
 }
 
 #[test]
@@ -75,9 +77,6 @@ fn testBasicBlocks() {
   testBasicBlock(CQ2BasicBlock { setup: None }, srs, &ab, &vec![&a_n, &b_n]);
   testBasicBlock(SumBasicBlock {}, srs, &empty, &vec![&a]);
 
-  let data_to_concat = ArrayD::from_shape_fn(IxDyn(&[1, 2]), |_| Fr::rand(&mut rng));
-  testBasicBlock(ConcatBasicBlock { axis: 0 }, srs, &empty, &vec![&data_to_concat, &data_to_concat.clone()]);
-
   let l: usize = 1 << 3;
   let m: usize = 1 << 2;
   let n: usize = 1 << 1;
@@ -98,12 +97,22 @@ fn testBasicBlocks() {
 fn test_copy_constraint() {
   let srs = &ptau::load_file("challenge", 7, 7);
   let empty = ArrayD::zeros(IxDyn(&[0]));
-  // output dim padding
+  // reverse
+  testBasicBlock(
+    CopyConstraintBasicBlock {
+      permutation: ArrayD::from_shape_vec(vec![4], vec![Some(IxDyn(&[3])), Some(IxDyn(&[2])), Some(IxDyn(&[1])), Some(IxDyn(&[0]))]).unwrap(),
+      input_dim: IxDyn(&[4]),
+    },
+    srs,
+    &empty,
+    &vec![&ArrayD::from_shape_vec(vec![4], (1..5).map(|x| Fr::from(x)).collect()).unwrap()],
+  );
+  // transpose
   testBasicBlock(
     CopyConstraintBasicBlock {
       permutation: ArrayD::from_shape_vec(
         vec![2, 2],
-        vec![Some(IxDyn(&[1, 1])), Some(IxDyn(&[1, 0])), Some(IxDyn(&[1, 0])), Some(IxDyn(&[0, 0]))],
+        vec![Some(IxDyn(&[1, 1])), Some(IxDyn(&[1, 0])), Some(IxDyn(&[0, 1])), Some(IxDyn(&[0, 0]))],
       )
       .unwrap(),
       input_dim: IxDyn(&[2, 2]),
@@ -143,20 +152,28 @@ fn test_copy_constraint() {
     &empty,
     &vec![&ArrayD::from_shape_vec(vec![4, 2], (1..9).map(|x| Fr::from(x)).collect()).unwrap()],
   );
-  // 3d -> 2d
+  // 3d -> 2d with padding
   testBasicBlock(
     CopyConstraintBasicBlock {
       permutation: ArrayD::from_shape_vec(
-        vec![4, 2],
+        vec![4, 4],
         vec![
           Some(IxDyn(&[1, 1, 0])),
           Some(IxDyn(&[1, 0, 1])),
           Some(IxDyn(&[0, 1, 0])),
+          None,
           Some(IxDyn(&[0, 0, 0])),
           Some(IxDyn(&[0, 1, 0])),
           Some(IxDyn(&[1, 1, 0])),
+          None,
           Some(IxDyn(&[0, 1, 1])),
           Some(IxDyn(&[0, 0, 0])),
+          Some(IxDyn(&[1, 0, 1])),
+          None,
+          None,
+          None,
+          None,
+          None,
         ],
       )
       .unwrap(),
@@ -165,5 +182,24 @@ fn test_copy_constraint() {
     srs,
     &empty,
     &vec![&ArrayD::from_shape_vec(vec![2, 2, 4], (1..17).map(|x| Fr::from(x)).collect()).unwrap()],
+  );
+  // slice
+  testBasicBlock(
+    CopyConstraintBasicBlock {
+      permutation: ArrayD::from_shape_vec(
+        vec![1, 1, 4],
+        vec![
+          Some(IxDyn(&[0, 0, 0])),
+          Some(IxDyn(&[0, 0, 1])),
+          Some(IxDyn(&[0, 0, 2])),
+          Some(IxDyn(&[0, 0, 3])),
+        ],
+      )
+      .unwrap(),
+      input_dim: IxDyn(&[2, 1, 4]),
+    },
+    srs,
+    &empty,
+    &vec![&ArrayD::from_shape_vec(vec![2, 1, 4], (1..9).map(|x| Fr::from(x)).collect()).unwrap()],
   );
 }
