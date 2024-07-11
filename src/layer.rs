@@ -25,9 +25,7 @@ pub use shape::ShapeLayer;
 pub use slice::SliceLayer;
 pub use softmax::SoftmaxLayer;
 pub use split::SplitLayer;
-pub use sqrt::SqrtLayer;
 pub use squeeze::{SqueezeLayer, UnsqueezeLayer};
-pub use sub::SubLayer;
 use tract_onnx::pb::AttributeProto;
 pub use transpose::TransposeLayer;
 
@@ -54,9 +52,7 @@ pub mod shape;
 pub mod slice;
 pub mod softmax;
 pub mod split;
-pub mod sqrt;
 pub mod squeeze;
-pub mod sub;
 pub mod transpose;
 pub mod r#where;
 
