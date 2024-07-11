@@ -3,6 +3,7 @@ use crate::graph::*;
 use crate::layer::*;
 use crate::util;
 use ark_bn254::Fr;
+use ark_std::Zero;
 use ndarray::{arr1, ArrayD};
 use std::collections::HashMap;
 use tract_onnx::pb;
@@ -87,7 +88,7 @@ fn parse_onnx_constants<'a>(
     .unwrap();
 
     shapes.insert(name.clone(), tensor.shape().to_vec());
-    let tensor = util::pad_to_pow_of_two(&tensor);
+    let tensor = util::pad_to_pow_of_two(&tensor, &Fr::zero());
     constants_hashmap.insert(name.clone(), idx);
     models.push(tensor);
     idx += 1;

@@ -9,7 +9,7 @@ use ark_ff::PrimeField;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{UniformRand, Zero};
-use ndarray::{arr0, concatenate, Array1, ArrayD, Axis, IxDyn, SliceInfo, SliceInfoElem};
+use ndarray::{arr0, concatenate, Array1, ArrayD, Axis, IxDyn, Slice, SliceInfo};
 use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 use rayon::prelude::*;
 use sha3::{Digest, Keccak256};
@@ -55,7 +55,7 @@ pub fn generate_fake_inputs_for_onnx(filename: &str) -> Vec<ArrayD<Fr>> {
     };
 
     let input = ArrayD::from_shape_vec(shape, input).unwrap();
-    let input = pad_to_pow_of_two(&input);
+    let input = pad_to_pow_of_two(&input, &Fr::zero());
     inputs.push(input);
   }
   inputs
@@ -338,12 +338,39 @@ pub fn next_pow(n: u32) -> u32 {
   v
 }
 
-pub fn pad_to_pow_of_two<T: Clone + ark_std::Zero>(a: &ArrayD<T>) -> ArrayD<T> {
-  let mut new = ArrayD::zeros(a.shape().iter().map(|x| next_pow(*x as u32) as usize).collect::<Vec<_>>());
-  let slice = a.shape().iter().map(|x| ndarray::Slice::new(0, Some(*x as isize), 1).into()).collect::<Vec<SliceInfoElem>>();
-  let sliceInfo: SliceInfo<_, IxDyn, IxDyn> = SliceInfo::try_from(&slice[..]).unwrap();
-  new.slice_mut(sliceInfo).assign(a);
-  new
+// Pads each dimension of input by the corresponding amount in padding on both ends.
+pub fn pad<G: Clone>(input: &ArrayD<G>, padding: &Vec<[usize; 2]>, pad_val: &G) -> ArrayD<G> {
+  let tmp = input.into_iter().collect();
+  let input = ArrayD::from_shape_vec(input.raw_dim(), tmp).unwrap();
+  assert_eq!(input.ndim(), padding.len());
+  let mut padded_shape = input.raw_dim();
+  for (ax, (&ax_len, &[pad_lo, pad_hi])) in input.shape().iter().zip(padding).enumerate() {
+    padded_shape[ax] = ax_len + pad_lo + pad_hi;
+  }
+
+  let mut padded = ArrayD::from_elem(padded_shape, pad_val);
+  let padded_dim = padded.raw_dim();
+  {
+    // Select portion of padded array that needs to be copied from the
+    // original array.
+    let mut orig_portion = padded.view_mut();
+    for (ax, &[pad_lo, pad_hi]) in padding.iter().enumerate() {
+      orig_portion.slice_axis_inplace(Axis(ax), Slice::from(pad_lo as isize..padded_dim[ax] as isize - (pad_hi as isize)));
+    }
+    // Copy the data from the original array.
+    orig_portion.assign(&input);
+  }
+
+  let dim = padded.raw_dim();
+  let tmp = padded.into_iter().map(|x| x.clone()).collect();
+  let padded = ArrayD::from_shape_vec(dim, tmp).unwrap();
+
+  padded
+}
+
+pub fn pad_to_pow_of_two<G: Clone>(input: &ArrayD<G>, pad_val: &G) -> ArrayD<G> {
+  let padding: Vec<_> = input.shape().iter().map(|x| [0, x.next_power_of_two() - x]).collect();
+  pad(&input, &padding, &pad_val)
 }
 
 /// Computes erf(x) approximation using A&S formula 7.1.26
