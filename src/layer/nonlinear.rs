@@ -50,3 +50,4 @@ define_nonlinear_layer!(CeilLayer, CeilBasicBlock);
 define_nonlinear_layer!(ErfLayer, ErfBasicBlock);
 define_nonlinear_layer!(ExpLayer, ExpBasicBlock);
 define_nonlinear_layer!(SigmoidLayer, SigmoidBasicBlock);
+define_nonlinear_layer!(TanhLayer, TanhBasicBlock);

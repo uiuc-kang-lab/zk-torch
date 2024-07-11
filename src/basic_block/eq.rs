@@ -44,8 +44,8 @@ impl BasicBlock for EqBasicBlock {
 }
 
 #[derive(Debug)]
-pub struct EqualBasicBlock;
-impl BasicBlock for EqualBasicBlock {
+pub struct ElementwiseEqBasicBlock;
+impl BasicBlock for ElementwiseEqBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 2 && inputs[0].ndim() <= 1 && inputs[1].ndim() <= 1);
     let mut r = ArrayD::zeros(IxDyn(&[std::cmp::max(inputs[0].len(), inputs[1].len())]));

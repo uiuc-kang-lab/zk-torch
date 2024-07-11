@@ -4,7 +4,6 @@ use ark_std::Zero;
 use ndarray::{ArrayD, Axis};
 use rand::rngs::StdRng;
 
-// only support concat over dim 0 for now
 #[derive(Debug)]
 pub struct SplitBasicBlock {
   pub axis: usize,

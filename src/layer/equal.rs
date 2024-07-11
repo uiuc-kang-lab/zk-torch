@@ -23,7 +23,7 @@ impl Layer for EqualLayer {
       N: 1,
     }));
     let equal = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(EqualBasicBlock {}),
+      basic_block: Box::new(ElementwiseEqBasicBlock {}),
       N: 1,
     }));
     let eq = graph.addBB(Box::new(RepeaterBasicBlock {
@@ -41,7 +41,7 @@ impl Layer for EqualLayer {
       N: 1,
     }));
 
-    let equal_output = graph.addNode(equal, vec![(-1, 0), (-2, 0)]);
+    let equal_output = graph.addNode(equal, vec![(-1, 0), (-2, 0)]); // a == b
     let one_output = graph.addNode(one, vec![]);
     let not_equal_output = graph.addNode(sub, vec![(one_output, 0), (equal_output, 0)]);
 
