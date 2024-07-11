@@ -9,12 +9,57 @@ use ark_ff::PrimeField;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{UniformRand, Zero};
-use ndarray::{arr0, concatenate, Array1, ArrayD, Axis, IxDyn, SliceInfo, SliceInfoElem};
-use rand::{rngs::StdRng, RngCore, SeedableRng};
+use ndarray::{arr0, concatenate, Array1, ArrayD, Axis, IxDyn, Slice, SliceInfo};
+use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 use rayon::prelude::*;
 use sha3::{Digest, Keccak256};
 use std::collections::HashMap;
 use std::collections::{BTreeSet, HashSet};
+use tract_onnx::pb::tensor_proto::DataType;
+use tract_onnx::prelude::Framework;
+
+// This function is used for generating fake inputs for onnx models
+// Fake inputs are random field (i.e., Fr) elements whose shapes and types match those described in the input tensors of an ONNX model.
+// Generating these when loading an ONNX file saves us from creating different input tensors ourselves when testing new ONNX.
+// It is only for testing purposes
+pub fn generate_fake_inputs_for_onnx(filename: &str) -> Vec<ArrayD<Fr>> {
+  let onnx = tract_onnx::onnx();
+  let onnx_graph = onnx.proto_model_for_path(filename).unwrap().graph.unwrap();
+  let mut rng = StdRng::from_entropy();
+
+  let mut inputs = vec![];
+
+  for onnx_input in onnx_graph.input.iter() {
+    let tract_onnx::pb::type_proto::Value::TensorType(t) = onnx_input.r#type.as_ref().unwrap().value.as_ref().unwrap();
+    let shape = t
+      .shape
+      .as_ref()
+      .unwrap()
+      .dim
+      .iter()
+      .map(|x| {
+        if let tract_onnx::pb::tensor_shape_proto::dimension::Value::DimValue(x) = x.value.as_ref().unwrap() {
+          *x as usize
+        } else {
+          panic!("Unknown dimension")
+        }
+      })
+      .collect::<Vec<_>>();
+    let val_num = &shape.iter().fold(1, |acc, x| acc * x);
+
+    let input = match t.elem_type() {
+      DataType::Float | DataType::Float16 | DataType::Double => (0..*val_num).map(|_| Fr::from(rng.gen_range(-2..2))).collect(),
+      DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => (0..*val_num).map(|_| Fr::from(1)).collect(),
+      DataType::Uint8 | DataType::Uint16 | DataType::Uint32 | DataType::Uint64 => (0..*val_num).map(|_| Fr::from(1)).collect(),
+      _ => panic!("Unsupported constant type: {:?}", t.elem_type()),
+    };
+
+    let input = ArrayD::from_shape_vec(shape, input).unwrap();
+    let input = pad_to_pow_of_two(&input, &Fr::zero());
+    inputs.push(input);
+  }
+  inputs
+}
 
 fn bitreverse(mut n: u32, l: u64) -> u32 {
   let mut r = 0;
@@ -23,6 +68,17 @@ fn bitreverse(mut n: u32, l: u64) -> u32 {
     n >>= 1;
   }
   r
+}
+
+pub fn slice_nd_array(arr: ArrayD<Fr>, indices: &[usize]) -> ArrayD<Fr> {
+  // Create slices from the indices
+  let slices: Vec<_> = indices.iter().map(|&i| (0..i).into()).collect();
+
+  // Convert slices into a SliceInfo instance
+  let slice_info = unsafe { SliceInfo::<_, IxDyn, IxDyn>::new(slices).unwrap() };
+
+  // Slice the array
+  arr.slice_move(slice_info)
 }
 
 pub fn fft_helper<G: ScalarMul + std::ops::MulAssign<Fr>>(a: &mut Vec<G>, domain: GeneralEvaluationDomain<Fr>, inv: bool) {
@@ -282,12 +338,39 @@ pub fn next_pow(n: u32) -> u32 {
   v
 }
 
-pub fn pad<T: Clone + ark_std::Zero>(a: &ArrayD<T>) -> ArrayD<T> {
-  let mut new = ArrayD::zeros(a.shape().iter().map(|x| next_pow(*x as u32) as usize).collect::<Vec<_>>());
-  let slice = a.shape().iter().map(|x| ndarray::Slice::new(0, Some(*x as isize), 1).into()).collect::<Vec<SliceInfoElem>>();
-  let sliceInfo: SliceInfo<_, IxDyn, IxDyn> = SliceInfo::try_from(&slice[..]).unwrap();
-  new.slice_mut(sliceInfo).assign(a);
-  new
+// Pads each dimension of input by the corresponding amount in padding on both ends.
+pub fn pad<G: Clone>(input: &ArrayD<G>, padding: &Vec<[usize; 2]>, pad_val: &G) -> ArrayD<G> {
+  let tmp = input.into_iter().collect();
+  let input = ArrayD::from_shape_vec(input.raw_dim(), tmp).unwrap();
+  assert_eq!(input.ndim(), padding.len());
+  let mut padded_shape = input.raw_dim();
+  for (ax, (&ax_len, &[pad_lo, pad_hi])) in input.shape().iter().zip(padding).enumerate() {
+    padded_shape[ax] = ax_len + pad_lo + pad_hi;
+  }
+
+  let mut padded = ArrayD::from_elem(padded_shape, pad_val);
+  let padded_dim = padded.raw_dim();
+  {
+    // Select portion of padded array that needs to be copied from the
+    // original array.
+    let mut orig_portion = padded.view_mut();
+    for (ax, &[pad_lo, pad_hi]) in padding.iter().enumerate() {
+      orig_portion.slice_axis_inplace(Axis(ax), Slice::from(pad_lo as isize..padded_dim[ax] as isize - (pad_hi as isize)));
+    }
+    // Copy the data from the original array.
+    orig_portion.assign(&input);
+  }
+
+  let dim = padded.raw_dim();
+  let tmp = padded.into_iter().map(|x| x.clone()).collect();
+  let padded = ArrayD::from_shape_vec(dim, tmp).unwrap();
+
+  padded
+}
+
+pub fn pad_to_pow_of_two<G: Clone>(input: &ArrayD<G>, pad_val: &G) -> ArrayD<G> {
+  let padding: Vec<_> = input.shape().iter().map(|x| [0, x.next_power_of_two() - x]).collect();
+  pad(&input, &padding, &pad_val)
 }
 
 /// Computes erf(x) approximation using A&S formula 7.1.26

@@ -12,9 +12,7 @@ pub struct ConcatBasicBlock {
 
 impl BasicBlock for ConcatBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    for input in inputs.iter() {
-      assert!(inputs[0].shape()[1..] == input.shape()[1..]);
-    }
+    assert!(self.axis != inputs[0].shape().len() - 1);
     let r = ndarray::concatenate(Axis(self.axis), &inputs.iter().map(|x| x.view()).collect::<Vec<_>>()).unwrap();
     vec![r]
   }
@@ -40,11 +38,15 @@ impl BasicBlock for ConcatBasicBlock {
     _rng: &mut StdRng,
     _cache: &mut ProveVerifyCache,
   ) -> Vec<PairingCheck> {
-    let r = ndarray::concatenate(Axis(self.axis), &inputs.iter().map(|x| x.view()).collect::<Vec<_>>()).unwrap();
-    let r_enc = outputs[0];
-    println!("{}",r.len());
-    for i in 0..r.len() {
-      assert!(r[i] == r_enc[i]);
+    if inputs[0].ndim() == 0 {
+      let r = inputs.iter().map(|input| input.first().unwrap().clone()).collect::<Vec<DataEnc>>();
+      let r_enc = outputs[0];
+      for i in 0..r.len() {
+        assert!(r[i] == r_enc[i]);
+      }
+    } else {
+      assert!(ndarray::concatenate(Axis(self.axis), &inputs.iter().map(|x| x.view()).collect::<Vec<_>>()) 
+        == Ok(outputs[0].clone()));
     }
     vec![]
   }
