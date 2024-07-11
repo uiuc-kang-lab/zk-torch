@@ -1,7 +1,8 @@
+use crate::util;
 use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::univariate::DensePolynomial;
-use ndarray::ArrayD;
+use ndarray::{ArrayD, IxDyn, Zip};
 use rand::rngs::StdRng;
 
 #[derive(Debug)]
@@ -39,5 +40,30 @@ impl BasicBlock for EqBasicBlock {
       (-inputs[1].first().unwrap().g1, srs.X2A[0]),
       (-proof.0[0], srs.Y2A),
     ]]
+  }
+}
+
+#[derive(Debug)]
+pub struct EqualBasicBlock;
+impl BasicBlock for EqualBasicBlock {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    assert!(inputs.len() == 2 && inputs[0].ndim() <= 1 && inputs[1].ndim() <= 1);
+    let mut r = ArrayD::zeros(IxDyn(&[std::cmp::max(inputs[0].len(), inputs[1].len())]));
+    if inputs[0].len() == 1 && inputs[1].ndim() > 0 {
+      Zip::from(r.view_mut())
+        .and(inputs[1].view())
+        .for_each(|r, &x| *r = (util::fr_to_int(x) == util::fr_to_int(*inputs[0].first().unwrap())) as u8);
+    } else if inputs[1].len() == 1 && inputs[0].ndim() > 0 {
+      Zip::from(r.view_mut())
+        .and(inputs[0].view())
+        .for_each(|r, &x| *r = (util::fr_to_int(x) == util::fr_to_int(*inputs[1].first().unwrap())) as u8);
+    } else {
+      Zip::from(r.view_mut())
+        .and(inputs[0].view())
+        .and(inputs[1].view())
+        .for_each(|r, &x, &y| *r = (util::fr_to_int(x) == util::fr_to_int(y)) as u8);
+    }
+
+    vec![r.map(|&x| Fr::from(x)).into_dyn()]
   }
 }

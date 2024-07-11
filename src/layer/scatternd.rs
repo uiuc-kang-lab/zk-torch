@@ -1,7 +1,6 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
-use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
 use ndarray::{ArrayD, IxDyn, Dim};
@@ -43,6 +42,7 @@ fn ndindex(shape: &[usize], current_index: &mut Vec<usize>, all_indices: &mut Ve
     }
 }
 
+// https://onnx.ai/onnx/operators/onnx__ScatterND.html
 pub struct ScatterNDLayer;
 impl Layer for ScatterNDLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {

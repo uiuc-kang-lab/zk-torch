@@ -1,9 +1,10 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
-use crate::onnx;
+use crate::util;
 use ark_bn254::Fr;
-use ndarray::ArrayD;
+use ark_std::Zero;
+use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
 
 pub struct RangeLayer;
@@ -13,22 +14,22 @@ impl Layer for RangeLayer {
     let start = constants[0].unwrap().as_slice().unwrap()[0];
     let limit = constants[1].unwrap().as_slice().unwrap()[0];
     let delta = constants[2].unwrap().as_slice().unwrap()[0];
-    // we may need to prove this
+    
     let range = graph.addBB(Box::new(RangeBasicBlock {
       start: start,
       limit: limit,
       delta: delta,
     }));
-    let range_check = graph.addBB(Box::new(CQ2BasicBlock {
-        setup: Some((
-          Box::new(RangeBasicBlock {
-            start: start,
-            limit: limit,
-            delta: delta,
-          }),
-          onnx::CQ_RANGE_LOWER,
-          onnx::CQ_RANGE,
-        )),
+    let (empty, empty1) = (ArrayD::zeros(IxDyn(&[0])), ArrayD::zeros(IxDyn(&[0])));
+    let empty_input = vec![&empty1];
+    let range_tensor = &RangeBasicBlock {
+      start: start,
+      limit: limit,
+      delta: delta,
+    }.run(&empty, &empty_input)[0].clone();
+
+    let range_check = graph.addBB(Box::new(CQBasicBlock {
+        setup: util::pad_to_pow_of_two(&range_tensor, &Fr::zero())
       }));
     let range_output = graph.addNode(range, vec![(-1, 0)]);
     let _ = graph.addNode(range_check, vec![(-1, 0), (range_output, 0)]);

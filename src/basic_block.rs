@@ -12,7 +12,7 @@ pub use cq::CQBasicBlock;
 pub use cq2::CQ2BasicBlock;
 pub use cqlin::CQLinBasicBlock;
 pub use div::{DivConstBasicBlock, DivScalarBasicBlock};
-pub use eq::EqBasicBlock;
+pub use eq::{EqBasicBlock, EqualBasicBlock};
 pub use id::IdBasicBlock;
 pub use matmul::MatMulBasicBlock;
 pub use max::MaxBasicBlock;
