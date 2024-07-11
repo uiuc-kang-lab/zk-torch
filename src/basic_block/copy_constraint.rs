@@ -25,7 +25,6 @@ use std::{
   iter::{once, repeat},
 };
 
-
 fn flat_index(shape: &IxDyn, idx: &Option<IxDyn>, N: usize) -> Option<(usize, usize)> {
   assert!(*idx == None || shape.ndim() == idx.as_ref().unwrap().ndim());
   let mut product = vec![];
