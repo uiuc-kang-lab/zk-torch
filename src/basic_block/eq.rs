@@ -1,5 +1,5 @@
-use crate::util;
 use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::univariate::DensePolynomial;
 use ndarray::{ArrayD, IxDyn, Zip};

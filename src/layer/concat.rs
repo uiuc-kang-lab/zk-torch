@@ -10,7 +10,7 @@ use tract_onnx::pb::AttributeProto;
 // Each output is an array with the same shape as the final concatenation array.
 // And the value at each index is the index of the corresponding input array.
 // For example, [1], [1], [1] -> [0, None, None], [None, 0, None], [None, None, 0]
-// such that we can use the indices to copy the input arrays to a padded array and add them together into the final output array. 
+// such that we can use the indices to copy the input arrays to a padded array and add them together into the final output array.
 fn get_concat_indices(input_shapes: &Vec<&Vec<usize>>, output_shape: &Vec<usize>, axis: usize) -> Vec<ArrayD<Option<IxDyn>>> {
   let mut indices = vec![];
   let mut axis_offset = 0;
@@ -62,7 +62,7 @@ impl Layer for ConcatLayer {
         basic_block: Box::new(AddBasicBlock {}),
         N: 1,
       }));
-      
+
       let mut cc_outputs = vec![];
       for i in 0..input_shapes.len() {
         let cc_output = graph.addNode(cc_basicblocks[i], vec![(-(i as i32 + 1), 0)]);

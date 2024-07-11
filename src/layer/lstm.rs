@@ -59,7 +59,7 @@ impl Layer for LSTMLayer {
     let R_T_output = graph.addNode(reshape, vec![(R_index, 0)]);
 
     // sublayer 4: Split for B
-    // Here, we need to transpose B first to split it because we cannot split along the last axis 
+    // Here, we need to transpose B first to split it because we cannot split along the last axis
     let axis: usize = 1;
     let split = vec![B_shape[1] / 2, B_shape[1] / 2];
 
@@ -296,7 +296,7 @@ impl Layer for LSTMLayer {
       let tanh_output = graph.addNode(tanh, vec![(C, 0)]);
       let _ = graph.addNode(tanh_check, vec![(C, 0), (tanh_output, 0)]);
       let sublayer18 = tanh_output;
-      
+
       // sublayer 19: H = output_gate * Tanh(C)
       let mul_output = graph.addNode(mul, vec![(output_gate_output, 0), (sublayer18, 0)]);
       let change_SF_output = graph.addNode(change_SF, vec![(mul_output, 0)]);
@@ -314,17 +314,22 @@ impl Layer for LSTMLayer {
       let H_t = graph.addNode(reshape, vec![(H, 0)]);
       H_list.push(H_t);
     }
-    
+
     // sublayer 21: Concat H_list
-    let concat = graph.addBB(Box::new(ConcatBasicBlock {
-      axis: 0,
-    }));
+    let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: 0 }));
     let output = graph.addNode(concat, H_list.iter().map(|&H_t| (H_t, 0)).collect());
 
     graph.outputs.push((output, 0)); // Y
-    graph.outputs.push((H_list[H_list.len()-1], 0)); // Y_h
-    graph.outputs.push((H_list[H_list.len()-1], 0)); // Y_c
+    graph.outputs.push((H_list[H_list.len() - 1], 0)); // Y_h
+    graph.outputs.push((H_list[H_list.len() - 1], 0)); // Y_c
 
-    (graph, vec![vec![seq_length, num_directions, batch_size, hidden_size], vec![num_directions, batch_size, hidden_size], vec![num_directions, batch_size, hidden_size]])
+    (
+      graph,
+      vec![
+        vec![seq_length, num_directions, batch_size, hidden_size],
+        vec![num_directions, batch_size, hidden_size],
+        vec![num_directions, batch_size, hidden_size],
+      ],
+    )
   }
 }

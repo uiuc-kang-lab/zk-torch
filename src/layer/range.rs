@@ -14,7 +14,7 @@ impl Layer for RangeLayer {
     let start = constants[0].unwrap().as_slice().unwrap()[0];
     let limit = constants[1].unwrap().as_slice().unwrap()[0];
     let delta = constants[2].unwrap().as_slice().unwrap()[0];
-    
+
     let range = graph.addBB(Box::new(RangeBasicBlock {
       start: start,
       limit: limit,
@@ -26,11 +26,13 @@ impl Layer for RangeLayer {
       start: start,
       limit: limit,
       delta: delta,
-    }.run(&empty, &empty_input)[0].clone();
+    }
+    .run(&empty, &empty_input)[0]
+      .clone();
 
     let range_check = graph.addBB(Box::new(CQBasicBlock {
-        setup: util::pad_to_pow_of_two(&range_tensor, &Fr::zero())
-      }));
+      setup: util::pad_to_pow_of_two(&range_tensor, &Fr::zero()),
+    }));
     let range_output = graph.addNode(range, vec![(-1, 0)]);
     let _ = graph.addNode(range_check, vec![(-1, 0), (range_output, 0)]);
     graph.outputs.push((range_output, 0));

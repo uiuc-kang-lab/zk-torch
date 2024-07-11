@@ -45,8 +45,7 @@ impl BasicBlock for ConcatBasicBlock {
         assert!(r[i] == r_enc[i]);
       }
     } else {
-      assert!(ndarray::concatenate(Axis(self.axis), &inputs.iter().map(|x| x.view()).collect::<Vec<_>>()) 
-        == Ok(outputs[0].clone()));
+      assert!(ndarray::concatenate(Axis(self.axis), &inputs.iter().map(|x| x.view()).collect::<Vec<_>>()) == Ok(outputs[0].clone()));
     }
     vec![]
   }

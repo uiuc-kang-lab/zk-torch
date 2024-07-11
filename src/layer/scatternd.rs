@@ -3,43 +3,41 @@ use crate::graph::*;
 use crate::layer::Layer;
 use crate::util;
 use ark_bn254::Fr;
-use ndarray::{ArrayD, IxDyn, Dim};
+use ndarray::{ArrayD, Dim, IxDyn};
 use tract_onnx::pb::AttributeProto;
 
 fn get_masks(input_shape: &[usize], indices: &ArrayD<Fr>) -> (ArrayD<Option<IxDyn>>, ArrayD<Option<IxDyn>>) {
-    let mut preserve = ArrayD::from_shape_fn(input_shape, |index| {
-        Some(index)
-    });
-    let mut update = ArrayD::from_shape_fn(input_shape, |_| None);
-    let indices_usize = indices.map(|x| util::fr_to_int(*x) as usize);
-    let indices_shape = indices.shape();
-    let update_indices = &indices_shape[..indices_shape.len() - 1];
+  let mut preserve = ArrayD::from_shape_fn(input_shape, |index| Some(index));
+  let mut update = ArrayD::from_shape_fn(input_shape, |_| None);
+  let indices_usize = indices.map(|x| util::fr_to_int(*x) as usize);
+  let indices_shape = indices.shape();
+  let update_indices = &indices_shape[..indices_shape.len() - 1];
 
-    let mut current_index = vec![];
-    let mut all_indices = vec![];
-    ndindex(update_indices, &mut current_index, &mut all_indices);
+  let mut current_index = vec![];
+  let mut all_indices = vec![];
+  ndindex(update_indices, &mut current_index, &mut all_indices);
 
-    for idx in all_indices {
-        let update_index = indices_usize[Dim(idx.clone())];
-        preserve[Dim(update_index)] = None;
-        update[Dim(update_index)] = Some(Dim(idx));
-    }
+  for idx in all_indices {
+    let update_index = indices_usize[Dim(idx.clone())];
+    preserve[Dim(update_index)] = None;
+    update[Dim(update_index)] = Some(Dim(idx));
+  }
 
-    (preserve, update)
+  (preserve, update)
 }
 
 fn ndindex(shape: &[usize], current_index: &mut Vec<usize>, all_indices: &mut Vec<Vec<usize>>) {
-    if current_index.len() == shape.len() {
-        all_indices.push(current_index.clone());
-        return;
-    }
+  if current_index.len() == shape.len() {
+    all_indices.push(current_index.clone());
+    return;
+  }
 
-    let dim = shape[current_index.len()];
-    for i in 0..dim {
-        current_index.push(i);
-        ndindex(shape, current_index, all_indices);
-        current_index.pop();
-    }
+  let dim = shape[current_index.len()];
+  for i in 0..dim {
+    current_index.push(i);
+    ndindex(shape, current_index, all_indices);
+    current_index.pop();
+  }
 }
 
 // https://onnx.ai/onnx/operators/onnx__ScatterND.html
@@ -61,8 +59,8 @@ impl Layer for ScatterNDLayer {
       input_dim: IxDyn(&input_shapes[1]),
     }));
     let add = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(AddBasicBlock {}),
-        N: 1,
+      basic_block: Box::new(AddBasicBlock {}),
+      N: 1,
     }));
 
     let data_to_preserve = graph.addNode(cc, vec![(-1, 0)]);

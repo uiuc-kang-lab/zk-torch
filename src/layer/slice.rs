@@ -25,7 +25,13 @@ fn combinations<T: Clone>(vecs: &Vec<Vec<T>>) -> Vec<Vec<T>> {
   result
 }
 
-fn get_slice(input_dim: &Vec<usize>, starts: &mut Vec<usize>, ends: &mut Vec<usize>, axes: &mut Vec<usize>, steps: &mut Vec<usize>) -> (ArrayD<Option<IxDyn>>, Vec<usize>, Vec<usize>) {
+fn get_slice(
+  input_dim: &Vec<usize>,
+  starts: &mut Vec<usize>,
+  ends: &mut Vec<usize>,
+  axes: &mut Vec<usize>,
+  steps: &mut Vec<usize>,
+) -> (ArrayD<Option<IxDyn>>, Vec<usize>, Vec<usize>) {
   let rank = input_dim.len();
   let mut result_idx = vec![vec![]; rank];
   let mut result_shape = vec![0; rank];
@@ -52,7 +58,7 @@ fn get_slice(input_dim: &Vec<usize>, starts: &mut Vec<usize>, ends: &mut Vec<usi
     let mut start = starts[i];
     let mut end = ends[i];
     let mut real_end = real_ends[i];
-    if end > input_shape_pad[i]{
+    if end > input_shape_pad[i] {
       end = input_shape_pad[i];
       real_end = input_dim[i];
     }
@@ -87,9 +93,38 @@ impl Layer for SliceLayer {
       Some(x) => x.unwrap().as_slice().unwrap().iter().map(|x| util::fr_to_int(*x) as usize).collect(),
       None => vec![1; starts.len()],
     };
-    let mut axes: Vec<_> = axes.iter().map(|&x| if x < 0 { (input_shapes[0].len() as i32 + x) as usize} else { x as usize }).collect();
-    let mut starts: Vec<_> = starts.iter().enumerate().map(|(i, &x)| if x < 0 { (input_shapes[0][axes[i]] as i32 + x) as usize } else { x as usize }).collect();
-    let mut ends: Vec<_> = ends.iter().enumerate().map(|(i, &x)| if x < 0 { (input_shapes[0][axes[i]] as i32 + x) as usize} else { x as usize }).collect();
+    let mut axes: Vec<_> = axes
+      .iter()
+      .map(|&x| {
+        if x < 0 {
+          (input_shapes[0].len() as i32 + x) as usize
+        } else {
+          x as usize
+        }
+      })
+      .collect();
+    let mut starts: Vec<_> = starts
+      .iter()
+      .enumerate()
+      .map(|(i, &x)| {
+        if x < 0 {
+          (input_shapes[0][axes[i]] as i32 + x) as usize
+        } else {
+          x as usize
+        }
+      })
+      .collect();
+    let mut ends: Vec<_> = ends
+      .iter()
+      .enumerate()
+      .map(|(i, &x)| {
+        if x < 0 {
+          (input_shapes[0][axes[i]] as i32 + x) as usize
+        } else {
+          x as usize
+        }
+      })
+      .collect();
 
     let (permutation, output_shape, input_shape_pad) = get_slice(&input_shapes[0], &mut starts, &mut ends, &mut axes, &mut steps);
 

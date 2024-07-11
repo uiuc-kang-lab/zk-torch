@@ -1,6 +1,6 @@
 use crate::basic_block::*;
 use crate::graph::*;
-use crate::layer::{Layer, squeeze::UnsqueezeBasicBlock};
+use crate::layer::{squeeze::UnsqueezeBasicBlock, Layer};
 use crate::util;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
@@ -62,7 +62,7 @@ impl Layer for ReshapeLayer {
         // special case: arr0 --> [1,1,...]
         let unsq = graph.addBB(Box::new(UnsqueezeBasicBlock {}));
         let mut unsq_output = graph.addNode(unsq, vec![(-1, 0)]);
-        for _ in 0..endShape.len()-1 {
+        for _ in 0..endShape.len() - 1 {
           unsq_output = graph.addNode(unsq, vec![(unsq_output, 0)]);
         }
         graph.outputs.push((unsq_output, 0));

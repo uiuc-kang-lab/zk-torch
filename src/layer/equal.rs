@@ -1,8 +1,8 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
-use crate::util;
 use crate::onnx;
+use crate::util;
 use ark_bn254::Fr;
 use ndarray::{arr1, ArrayD};
 use tract_onnx::pb::AttributeProto;
@@ -34,13 +34,13 @@ impl Layer for EqualLayer {
       basic_block: Box::new(MulBasicBlock {}),
       N: 1,
     }));
-    
-    let r: Vec<_> = (onnx::CQ_RANGE_LOWER..-onnx::CQ_RANGE_LOWER+1).filter(|&x| x != 0).map(Fr::from).collect();
+
+    let r: Vec<_> = (onnx::CQ_RANGE_LOWER..-onnx::CQ_RANGE_LOWER + 1).filter(|&x| x != 0).map(Fr::from).collect();
     let nonzero_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock { setup: arr1(&r).into_dyn() }),
       N: 1,
     }));
-    
+
     let equal_output = graph.addNode(equal, vec![(-1, 0), (-2, 0)]);
     let one_output = graph.addNode(one, vec![]);
     let not_equal_output = graph.addNode(sub, vec![(one_output, 0), (equal_output, 0)]);
