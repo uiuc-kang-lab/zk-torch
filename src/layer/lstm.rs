@@ -14,7 +14,7 @@ impl Layer for LSTMLayer {
     // currently, we do not support P (peepholes) and different sequence lengths
     assert!(input_shapes.len() == 6); // X, W, R, B, initial_h, initial_c
 
-    let (X_shape, W_shape, R_shape, B_shape, initial_h_shape, _initial_c_shape) = (
+    let (X_shape, W_shape, _R_shape, B_shape, initial_h_shape, _initial_c_shape) = (
       input_shapes[0],
       input_shapes[1],
       input_shapes[2],
@@ -38,25 +38,17 @@ impl Layer for LSTMLayer {
     let split = vec![1; seq_length];
     let split_X_bb = graph.addBB(Box::new(SplitBasicBlock {
       axis: 0,
-      split: split.clone().iter().map(|&x| util::next_pow(x as u32) as usize).collect(),
+      split: split.clone(),
     }));
     let X_output = graph.addNode(split_X_bb, vec![(X_index, 0)]);
 
     // sublayer 2: Transpose W to W_T (T denotes transpose)
-    let n = W_shape.len();
-    let (mut a, mut b) = (W_shape[n - 2], W_shape[n - 1]);
-    a = util::next_pow(a as u32) as usize;
-    b = util::next_pow(b as u32) as usize;
-    let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: vec![a, b] }));
-    let W_T_output = graph.addNode(reshape, vec![(W_index, 0)]);
+    // but we don't need to do anything here because matmul will handle it
+    let W_T_output = W_index;
 
     // sublayer 3: Transpose R to R_T
-    let n = R_shape.len();
-    let (mut a, mut b) = (R_shape[n - 2], R_shape[n - 1]);
-    a = util::next_pow(a as u32) as usize;
-    b = util::next_pow(b as u32) as usize;
-    let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: vec![a, b] }));
-    let R_T_output = graph.addNode(reshape, vec![(R_index, 0)]);
+    // but we don't need to do anything here because matmul will handle it
+    let R_T_output = R_index;
 
     // sublayer 4: Split for B
     // Here, we need to transpose B first to split it because we cannot split along the last axis
@@ -258,23 +250,6 @@ impl Layer for LSTMLayer {
       // sublayer 15: input_gate * candidate_memory
       let mul = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(MulBasicBlock {}),
-        N: 1,
-      }));
-      let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-        input_SF: onnx::SF_LOG * 2,
-        output_SF: onnx::SF_LOG,
-      }));
-      let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(CQ2BasicBlock {
-          setup: Some((
-            Box::new(ChangeSFBasicBlock {
-              input_SF: onnx::SF_LOG * 2,
-              output_SF: onnx::SF_LOG,
-            }),
-            onnx::CQ_RANGE_LOWER,
-            onnx::CQ_RANGE,
-          )),
-        }),
         N: 1,
       }));
       let mul_output = graph.addNode(mul, vec![(input_gate_output, 0), (candidate_memory_output, 0)]);
