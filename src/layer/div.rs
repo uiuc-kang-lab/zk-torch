@@ -35,7 +35,7 @@ impl Layer for DivLayer {
     }));
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
-        setup: Array1::from_iter(0..1 << 9).map(|x| Fr::from(*x)).into_dyn(),
+        setup: Array1::from_iter(0..1 << 9).map(|x| Fr::from(*x)),
       }),
       N: 1,
     }));

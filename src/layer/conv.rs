@@ -147,7 +147,7 @@ impl Layer for ConvLayer {
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
-        setup: Array1::from_iter(-(1 << 10)..1 << 11).map(|x| Fr::from(*x)).into_dyn(),
+        setup: Array1::from_iter(-(1 << 10)..1 << 11).map(|x| Fr::from(*x)),
       }),
       N: 1,
     }));
