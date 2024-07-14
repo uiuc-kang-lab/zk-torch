@@ -11,7 +11,7 @@ use tract_onnx::pb::AttributeProto;
 pub struct LSTMLayer;
 impl Layer for LSTMLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
-    // currently, we do not support P (peepholes) and different sequence lengths
+    // currently, we do not support P (peepholes)
     assert!(input_shapes.len() == 6); // X, W, R, B, initial_h, initial_c
 
     let (X_shape, W_shape, _R_shape, B_shape, initial_h_shape, _initial_c_shape) = (
@@ -100,8 +100,7 @@ impl Layer for LSTMLayer {
       basic_block: Box::new(AddBasicBlock {}),
       N: 1,
     }));
-    let add_output = graph.addNode(add, vec![(B_split_output[0], 0), (B_split_output[1], 0)]);
-    let sublayer5 = add_output;
+    let sublayer5 = graph.addNode(add, vec![(B_split_output[0], 0), (B_split_output[1], 0)]);
 
     // Iterate over t
     let mut H_t_output = h_index;
@@ -142,12 +141,10 @@ impl Layer for LSTMLayer {
       let sublayer7 = change_SF_output; // matmul(H_t, R_T)
 
       // sublayer 8: Calculate matmul(X_t, W_T) + matmul(H_t, R_T)
-      let add_output = graph.addNode(add, vec![(sublayer6, 0), (sublayer7, 0)]);
-      let sublayer8 = add_output;
+      let sublayer8 = graph.addNode(add, vec![(sublayer6, 0), (sublayer7, 0)]);
 
       // sublayer 9: Calculate gates = matmul(X_t, W_T) + matmul(H_t, R_T) + add(*B.split())
-      let add_output = graph.addNode(add, vec![(sublayer8, 0), (sublayer5, 0)]);
-      let gates = add_output;
+      let gates = graph.addNode(add, vec![(sublayer8, 0), (sublayer5, 0)]);
 
       // sublayer 10: Split gates into input_gate, output_gate, forget_gate, candidate_memory
       // Here, we need to transpose gates first to split it because we cannot split along the last axis
@@ -264,8 +261,7 @@ impl Layer for LSTMLayer {
       let sublayer16 = change_SF_output;
 
       // sublayer 17: C = sublayer15 + sublayer16 = input_gate * candidate_memory + forget gate * C_t
-      let add_output = graph.addNode(add, vec![(sublayer15, 0), (sublayer16, 0)]);
-      let C = add_output;
+      let C = graph.addNode(add, vec![(sublayer15, 0), (sublayer16, 0)]);
 
       // sublayer 18: Tanh(C)
       let tanh_output = graph.addNode(tanh, vec![(C, 0)]);

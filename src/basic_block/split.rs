@@ -13,7 +13,7 @@ pub struct SplitBasicBlock {
 impl BasicBlock for SplitBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1);
-    assert!(self.axis != inputs[0].ndim() - 1);
+    assert!(self.axis < inputs[0].ndim() - 1);
     assert!(inputs[0].shape()[self.axis] == self.split.iter().sum());
     let mut r = vec![];
     // use split_at
