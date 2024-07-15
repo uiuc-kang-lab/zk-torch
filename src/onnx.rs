@@ -3,6 +3,7 @@ use crate::graph::*;
 use crate::layer::*;
 use crate::util;
 use ark_bn254::Fr;
+use ark_std::Zero;
 use ndarray::{arr1, ArrayD};
 use std::collections::HashMap;
 use tract_onnx::pb;
@@ -87,7 +88,7 @@ fn parse_onnx_constants<'a>(
     .unwrap();
 
     shapes.insert(name.clone(), tensor.shape().to_vec());
-    let tensor = util::pad(&tensor);
+    let tensor = util::pad_to_pow_of_two(&tensor, &Fr::zero());
     constants_hashmap.insert(name.clone(), idx);
     models.push(tensor);
     idx += 1;
@@ -126,22 +127,35 @@ fn get_local_graph(
     "Add" => Ok(AddLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Mul" => Ok(MulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Cast" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Ceil" => Ok(CeilLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Concat" => Ok(ConcatLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "ConstantOfShape" => Ok(ConstOfShapeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Sub" => Ok(SubLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "LSTM" => Ok(LSTMLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Relu" => Ok(ReLULayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Gather" => Ok(GatherLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Range" => Ok(RangeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "ReduceMean" => Ok(ReduceMeanLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Pow" => Ok(PowLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Div" => Ok(DivLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "ScatterND" => Ok(ScatterNDLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Slice" => Ok(SliceLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Split" => Ok(SplitLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Sqrt" => Ok(SqrtLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Reshape" => Ok(ReshapeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Transpose" => Ok(TransposeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Tanh" => Ok(TanhLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Shape" => Ok(ShapeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Sigmoid" => Ok(SigmoidLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Equal" => Ok(EqualLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Where" => Ok(WhereLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Expand" => Ok(ExpandLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Softmax" => Ok(SoftmaxLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Squeeze" => Ok(SqueezeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Unsqueeze" => Ok(UnsqueezeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Erf" => Ok(ErfLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Conv" => Ok(ConvLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     _ => Err(format!("Unsupported onnx operation: {op}")),
   }
   .unwrap()

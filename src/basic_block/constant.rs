@@ -40,3 +40,14 @@ impl BasicBlock for Const2BasicBlock {
     vec![self.c.clone()]
   }
 }
+
+#[derive(Debug)]
+pub struct ConstOfShapeBasicBlock {
+  pub c: Fr,
+  pub shape: Vec<usize>,
+}
+impl BasicBlock for ConstOfShapeBasicBlock {
+  fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    vec![ArrayD::from_elem(IxDyn(&self.shape), self.c)]
+  }
+}

@@ -1,6 +1,7 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
+use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
 use ndarray::{arr1, ArrayD};
@@ -8,8 +9,7 @@ use tract_onnx::pb::AttributeProto;
 
 pub struct EqualLayer;
 impl Layer for EqualLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
-    assert!(*constants[1].unwrap().first().unwrap() == Fr::from(0));
+  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let one = graph.addBB(Box::new(Const2BasicBlock {
       c: arr1(&vec![Fr::from(1); *input_shapes[0].last().unwrap()]).into_dyn(),
@@ -18,9 +18,43 @@ impl Layer for EqualLayer {
       basic_block: Box::new(SubBasicBlock {}),
       N: 1,
     }));
+    let add = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(AddBasicBlock {}),
+      N: 1,
+    }));
+    let equal = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(ElementwiseEqBasicBlock {}),
+      N: 1,
+    }));
+    let eq = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(EqBasicBlock {}),
+      N: 1,
+    }));
+    let mul = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(MulBasicBlock {}),
+      N: 1,
+    }));
+
+    let r: Vec<_> = (onnx::CQ_RANGE_LOWER..-onnx::CQ_RANGE_LOWER + 1).filter(|&x| x != 0).map(Fr::from).collect();
+    let nonzero_check = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(CQBasicBlock { setup: arr1(&r) }),
+      N: 1,
+    }));
+
+    let equal_output = graph.addNode(equal, vec![(-1, 0), (-2, 0)]); // a == b
     let one_output = graph.addNode(one, vec![]);
-    let sub_output = graph.addNode(sub, vec![(one_output, 0), (-1, 0)]);
-    graph.outputs.push((sub_output, 0));
+    let not_equal_output = graph.addNode(sub, vec![(one_output, 0), (equal_output, 0)]);
+
+    let a_equal_b = graph.addNode(mul, vec![(-1, 0), (equal_output, 0)]); // a * (a == b)
+    let b_equal_a = graph.addNode(mul, vec![(-2, 0), (equal_output, 0)]); // b * (a == b)
+    let a_minus_b = graph.addNode(sub, vec![(-1, 0), (-2, 0)]); // a - b
+    let a_not_equal_b = graph.addNode(mul, vec![(a_minus_b, 0), (not_equal_output, 0)]); // (a - b) * (1 - (a == b))
+    let add_output = graph.addNode(add, vec![(a_not_equal_b, 0), (equal_output, 0)]); // should be all nonzeros
+
+    let _eq_check = graph.addNode(eq, vec![(a_equal_b, 0), (b_equal_a, 0)]);
+    let _nonzero_check = graph.addNode(nonzero_check, vec![(add_output, 0)]);
+
+    graph.outputs.push((equal_output, 0));
     (graph, vec![util::broadcastDims(input_shapes, 0)])
   }
 }

@@ -16,12 +16,12 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct CQBasicBlock {
-  pub setup: Option<(i32, usize)>,
+  pub setup: Array1<Fr>,
 }
 
 impl BasicBlock for CQBasicBlock {
   fn genModel(&self) -> ArrayD<Fr> {
-    Array1::from_iter(self.setup.unwrap().0..self.setup.unwrap().0 + (self.setup.unwrap().1 as i32)).map(|x| Fr::from(*x)).into_dyn()
+    self.setup.clone().into_dyn()
   }
 
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
