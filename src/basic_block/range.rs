@@ -3,6 +3,9 @@ use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ndarray::{arr1, ArrayD, IxDyn};
 use rand::rngs::StdRng;
 
+// RangeBasicBlock is a basic block that creates a tensor of a range of values.
+// It should not be used without proving the range is correct.
+// To prove the range, CQ basic block is used now.
 #[derive(Debug)]
 pub struct RangeBasicBlock {
   pub start: Fr,
