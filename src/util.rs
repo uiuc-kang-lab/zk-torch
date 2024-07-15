@@ -683,3 +683,17 @@ pub fn vec_iter<T: Send + Sync>(x: &Vec<T>) -> impl ParallelIterator<Item = &T> 
 pub fn vec_iter<T>(x: &Vec<T>) -> impl Iterator<Item = &T> {
   x.iter()
 }
+
+#[macro_export]
+macro_rules! ndarr_azip {
+    ($($arg:tt)*) => {
+        #[cfg(feature = "gpu")]
+        {
+            par_azip!($($arg)*)
+        }
+        #[cfg(not(feature = "gpu"))]
+        {
+            azip!($($arg)*)
+        }
+    };
+}
