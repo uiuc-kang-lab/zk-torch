@@ -8,6 +8,7 @@ use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain,
 use ark_std::{ops::Mul, ops::Sub, UniformRand, Zero};
 use ndarray::{arr1, arr2, ArrayD, Ix1, Ix2, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
+use rayon::iter::ParallelIterator;
 
 fn index<'a, T>(A: &'a ArrayD<T>, i: usize) -> &T {
   if i == 0 {
