@@ -130,15 +130,13 @@ impl Layer for LSTMLayer {
         N: 1,
       }));
       let matmul_output = graph.addNode(matmul, vec![(X_output, t), (W_T_output, 0)]);
-      let change_SF_output = graph.addNode(change_SF, vec![(matmul_output, 0)]);
-      let _ = graph.addNode(change_SF_check, vec![(matmul_output, 0), (change_SF_output, 0)]);
-      let sublayer6 = change_SF_output; // matmul(X_t, W_T)
+      let sublayer6 = graph.addNode(change_SF, vec![(matmul_output, 0)]); // matmul(X_t, W_T)
+      let _ = graph.addNode(change_SF_check, vec![(matmul_output, 0), (sublayer6, 0)]);
 
       // sublayer 7: MatMul for H_t and R_T
       let matmul_output = graph.addNode(matmul, vec![(H_t_output, 0), (R_T_output, 0)]);
-      let change_SF_output = graph.addNode(change_SF, vec![(matmul_output, 0)]);
-      let _ = graph.addNode(change_SF_check, vec![(matmul_output, 0), (change_SF_output, 0)]);
-      let sublayer7 = change_SF_output; // matmul(H_t, R_T)
+      let sublayer7 = graph.addNode(change_SF, vec![(matmul_output, 0)]); // matmul(H_t, R_T)
+      let _ = graph.addNode(change_SF_check, vec![(matmul_output, 0), (sublayer7, 0)]);
 
       // sublayer 8: Calculate matmul(X_t, W_T) + matmul(H_t, R_T)
       let sublayer8 = graph.addNode(add, vec![(sublayer6, 0), (sublayer7, 0)]);
@@ -208,19 +206,16 @@ impl Layer for LSTMLayer {
         }),
         N: 1,
       }));
-      let sigmoid_output = graph.addNode(sigmoid, vec![(gates[0], 0)]);
-      let _ = graph.addNode(sigmoid_check, vec![(gates[0], 0), (sigmoid_output, 0)]);
-      let input_gate_output = sigmoid_output;
+      let input_gate_output = graph.addNode(sigmoid, vec![(gates[0], 0)]);
+      let _ = graph.addNode(sigmoid_check, vec![(gates[0], 0), (input_gate_output, 0)]);
 
       // sublayer 12: Sigmoid for output gate
-      let sigmoid_output = graph.addNode(sigmoid, vec![(gates[1], 0)]);
-      let _ = graph.addNode(sigmoid_check, vec![(gates[1], 0), (sigmoid_output, 0)]);
-      let output_gate_output = sigmoid_output;
+      let output_gate_output = graph.addNode(sigmoid, vec![(gates[1], 0)]);
+      let _ = graph.addNode(sigmoid_check, vec![(gates[1], 0), (output_gate_output, 0)]);
 
       // sublayer 13: Sigmoid for forget gate
-      let sigmoid_output = graph.addNode(sigmoid, vec![(gates[2], 0)]);
-      let _ = graph.addNode(sigmoid_check, vec![(gates[2], 0), (sigmoid_output, 0)]);
-      let forget_gate_output = sigmoid_output;
+      let forget_gate_output = graph.addNode(sigmoid, vec![(gates[2], 0)]);
+      let _ = graph.addNode(sigmoid_check, vec![(gates[2], 0), (forget_gate_output, 0)]);
 
       // sublayer 14: Tanh for candidate memory
       let tanh = graph.addBB(Box::new(TanhBasicBlock {
@@ -240,9 +235,8 @@ impl Layer for LSTMLayer {
         }),
         N: 1,
       }));
-      let tanh_output = graph.addNode(tanh, vec![(gates[3], 0)]);
-      let _ = graph.addNode(tanh_check, vec![(gates[3], 0), (tanh_output, 0)]);
-      let candidate_memory_output = tanh_output;
+      let candidate_memory_output = graph.addNode(tanh, vec![(gates[3], 0)]);
+      let _ = graph.addNode(tanh_check, vec![(gates[3], 0), (candidate_memory_output, 0)]);
 
       // sublayer 15: input_gate * candidate_memory
       let mul = graph.addBB(Box::new(RepeaterBasicBlock {
@@ -250,29 +244,25 @@ impl Layer for LSTMLayer {
         N: 1,
       }));
       let mul_output = graph.addNode(mul, vec![(input_gate_output, 0), (candidate_memory_output, 0)]);
-      let change_SF_output = graph.addNode(change_SF, vec![(mul_output, 0)]);
-      let _ = graph.addNode(change_SF_check, vec![(mul_output, 0), (change_SF_output, 0)]);
-      let sublayer15 = change_SF_output;
+      let sublayer15 = graph.addNode(change_SF, vec![(mul_output, 0)]);
+      let _ = graph.addNode(change_SF_check, vec![(mul_output, 0), (sublayer15, 0)]);
 
       // sublayer 16: forget gate * C_t
       let mul_output = graph.addNode(mul, vec![(forget_gate_output, 0), (C_t_output, 0)]);
-      let change_SF_output = graph.addNode(change_SF, vec![(mul_output, 0)]);
-      let _ = graph.addNode(change_SF_check, vec![(mul_output, 0), (change_SF_output, 0)]);
-      let sublayer16 = change_SF_output;
+      let sublayer16 = graph.addNode(change_SF, vec![(mul_output, 0)]);
+      let _ = graph.addNode(change_SF_check, vec![(mul_output, 0), (sublayer16, 0)]);
 
       // sublayer 17: C = sublayer15 + sublayer16 = input_gate * candidate_memory + forget gate * C_t
       let C = graph.addNode(add, vec![(sublayer15, 0), (sublayer16, 0)]);
 
       // sublayer 18: Tanh(C)
-      let tanh_output = graph.addNode(tanh, vec![(C, 0)]);
-      let _ = graph.addNode(tanh_check, vec![(C, 0), (tanh_output, 0)]);
-      let sublayer18 = tanh_output;
+      let sublayer18 = graph.addNode(tanh, vec![(C, 0)]);
+      let _ = graph.addNode(tanh_check, vec![(C, 0), (sublayer18, 0)]);
 
       // sublayer 19: H = output_gate * Tanh(C)
       let mul_output = graph.addNode(mul, vec![(output_gate_output, 0), (sublayer18, 0)]);
-      let change_SF_output = graph.addNode(change_SF, vec![(mul_output, 0)]);
-      let _ = graph.addNode(change_SF_check, vec![(mul_output, 0), (change_SF_output, 0)]);
-      let H = change_SF_output; // shape = [num_directions, batch_size, hidden_size]
+      let H = graph.addNode(change_SF, vec![(mul_output, 0)]); // shape = [num_directions, batch_size, hidden_size]
+      let _ = graph.addNode(change_SF_check, vec![(mul_output, 0), (H, 0)]);
 
       // update H_t_output and C_t_output
       H_t_output = H;
