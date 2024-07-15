@@ -5,7 +5,7 @@ use rand::rngs::StdRng;
 
 // RangeBasicBlock is a basic block that creates a tensor of a range of values.
 // It should not be used without proving the range is correct.
-// To prove the range, CQ basic block is used now.
+// To prove the range, CQ basic block is now used in range layer.
 #[derive(Debug)]
 pub struct RangeBasicBlock {
   pub start: Fr,
