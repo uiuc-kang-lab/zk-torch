@@ -121,6 +121,17 @@ impl GpuFft for Projective<ark_bn254::g2::Config> {
   }
 }
 
+#[cfg(feature = "gpu")]
+pub fn fft_helper<G: GpuFft + std::clone::Clone>(a: &mut Vec<G>, domain: GeneralEvaluationDomain<Fr>, inv: bool) {
+  if inv {
+    let gpu_result = G::gpu_ifft(domain, &a);
+    *a = gpu_result;
+  } else {
+    let gpu_result = G::gpu_fft(domain, &a);
+    *a = gpu_result;
+  }
+}
+
 #[cfg(not(feature = "gpu"))]
 pub fn fft_helper<G: ScalarMul + std::ops::MulAssign<Fr>>(a: &mut Vec<G>, domain: GeneralEvaluationDomain<Fr>, inv: bool) {
   let n = a.len();
@@ -161,44 +172,14 @@ pub fn fft_helper<G: ScalarMul + std::ops::MulAssign<Fr>>(a: &mut Vec<G>, domain
 }
 
 #[cfg(feature = "gpu")]
-pub fn fft_helper<G: GpuFft + std::clone::Clone>(a: &mut Vec<G>, domain: GeneralEvaluationDomain<Fr>, inv: bool) {
-  if inv {
-    let gpu_result = G::gpu_ifft(domain, &a);
-    *a = gpu_result;
-  } else {
-    let gpu_result = G::gpu_fft(domain, &a);
-    *a = gpu_result;
-  }
-}
-
-#[cfg(not(feature = "gpu"))]
-pub fn fft<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvaluationDomain<Fr>, a: &Vec<G>) -> Vec<G> {
+pub fn fft<G: GpuFft + std::clone::Clone>(domain: GeneralEvaluationDomain<Fr>, a: &Vec<G>) -> Vec<G> {
   let mut r = a.to_vec();
   fft_helper(&mut r, domain, false);
   r
 }
 
 #[cfg(not(feature = "gpu"))]
-pub fn ifft<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvaluationDomain<Fr>, a: &Vec<G>) -> Vec<G> {
-  let mut r = a.to_vec();
-  fft_helper(&mut r, domain, true);
-  r.par_iter_mut().for_each(|x| *x *= domain.size_inv());
-  r
-}
-
-#[cfg(not(feature = "gpu"))]
-pub fn fft_in_place<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvaluationDomain<Fr>, a: &mut Vec<G>) {
-  fft_helper(a, domain, false);
-}
-
-#[cfg(not(feature = "gpu"))]
-pub fn ifft_in_place<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvaluationDomain<Fr>, a: &mut Vec<G>) {
-  fft_helper(a, domain, true);
-  a.par_iter_mut().for_each(|x| *x *= domain.size_inv());
-}
-
-#[cfg(feature = "gpu")]
-pub fn fft<G: GpuFft + std::clone::Clone>(domain: GeneralEvaluationDomain<Fr>, a: &Vec<G>) -> Vec<G> {
+pub fn fft<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvaluationDomain<Fr>, a: &Vec<G>) -> Vec<G> {
   let mut r = a.to_vec();
   fft_helper(&mut r, domain, false);
   r
@@ -211,14 +192,33 @@ pub fn ifft<G: GpuFft + std::clone::Clone>(domain: GeneralEvaluationDomain<Fr>, 
   r
 }
 
+#[cfg(not(feature = "gpu"))]
+pub fn ifft<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvaluationDomain<Fr>, a: &Vec<G>) -> Vec<G> {
+  let mut r = a.to_vec();
+  fft_helper(&mut r, domain, true);
+  r.par_iter_mut().for_each(|x| *x *= domain.size_inv());
+  r
+}
+
 #[cfg(feature = "gpu")]
 pub fn fft_in_place<G: GpuFft + std::clone::Clone>(domain: GeneralEvaluationDomain<Fr>, a: &mut Vec<G>) {
+  fft_helper(a, domain, false);
+}
+
+#[cfg(not(feature = "gpu"))]
+pub fn fft_in_place<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvaluationDomain<Fr>, a: &mut Vec<G>) {
   fft_helper(a, domain, false);
 }
 
 #[cfg(feature = "gpu")]
 pub fn ifft_in_place<G: GpuFft + std::clone::Clone>(domain: GeneralEvaluationDomain<Fr>, a: &mut Vec<G>) {
   fft_helper(a, domain, true);
+}
+
+#[cfg(not(feature = "gpu"))]
+pub fn ifft_in_place<G: ScalarMul + std::ops::MulAssign<Fr>>(domain: GeneralEvaluationDomain<Fr>, a: &mut Vec<G>) {
+  fft_helper(a, domain, true);
+  a.par_iter_mut().for_each(|x| *x *= domain.size_inv());
 }
 
 #[cfg(feature = "gpu")]
@@ -326,27 +326,27 @@ impl GpuMsmProjective for Projective<ark_bn254::g2::Config> {
   }
 }
 
-#[cfg(not(feature = "gpu"))]
-pub fn msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {
-  cpu_msm(a, b)
-}
-
 #[cfg(feature = "gpu")]
 pub fn msm<G: GpuMsmProjective + std::clone::Clone + ark_ec::ScalarMul>(a: &[G::GpuMsmAffine], b: &[Fr]) -> G {
   G::gpu_msm(a, b)
 }
 
+#[cfg(not(feature = "gpu"))]
+pub fn msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {
+  cpu_msm(a, b)
+}
+
 pub fn ssm_g1_in_place(points: &mut Vec<G1Projective>, scalars: &Vec<Fr>) {
+  #[cfg(feature = "gpu")]
+  {
+    *points = gpu_ssm_g1(points, scalars);
+  }
+
   #[cfg(not(feature = "gpu"))]
   {
     points.par_iter_mut().zip(scalars.par_iter()).for_each(|(x, scalar)| {
       *x *= *scalar;
     });
-  }
-
-  #[cfg(feature = "gpu")]
-  {
-    *points = gpu_ssm_g1(points, scalars);
   }
 }
 
