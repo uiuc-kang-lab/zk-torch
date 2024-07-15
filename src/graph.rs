@@ -207,7 +207,7 @@ impl Graph {
       let temp: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (proofs[i].0.clone(), proofs[i].1.clone(), proofs[i].2.clone());
       temp.serialize_uncompressed(&mut bytes).unwrap();
       util::add_randomness(rng, bytes);
-      pairings.iter().enumerate().for_each(|(_, p)| {
+      pairings.iter().for_each(|p| {
         assert!(p
           .iter()
           .fold(PairingOutput::<Bn<ark_bn254::Config>>::zero(), |acc, x| {

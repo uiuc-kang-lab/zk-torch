@@ -57,7 +57,7 @@ impl BasicBlock for CQ2BasicBlock {
     let scalars = (0..N).into_par_iter().map(|i| domain_N.group_gen_inv().pow(&[i as u64])).collect();
     util::ssm_g1_in_place(&mut L_i_0_x_1, &scalars);
     let temp = srs.X1P[N - 1] * Fr::from(N as u64).inverse().unwrap();
-    L_i_0_x_1.par_iter_mut().enumerate().for_each(|(_, x)| *x -= temp);
+    L_i_0_x_1.par_iter_mut().for_each(|x| *x -= temp);
 
     setup.extend(L_i_x_1);
     setup.extend(L_i_0_x_1);
