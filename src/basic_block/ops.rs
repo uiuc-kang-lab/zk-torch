@@ -23,7 +23,8 @@ macro_rules! make_basic_block {
             x = $operation(x);
             x *= (1 << self.output_SF) as f32;
             Fr::from(x.round() as i32)
-          }).collect::<Vec<_>>();
+          })
+          .collect::<Vec<_>>();
 
         vec![arr1(&out).into_dyn()]
       }

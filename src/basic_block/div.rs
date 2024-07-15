@@ -25,7 +25,8 @@ impl BasicBlock for DivScalarBasicBlock {
           r += 2 * y;
         }
         (Fr::from(z), Fr::from(r))
-      }).unzip();
+      })
+      .unzip();
     vec![arr1(&div).into_dyn(), arr1(&rem).into_dyn()]
   }
 }
@@ -44,7 +45,8 @@ impl BasicBlock for DivConstBasicBlock {
         let mut x = util::fr_to_int(*x) as f32;
         x /= self.c;
         Fr::from(x.round() as i64)
-      }).collect::<Vec<_>>();
+      })
+      .collect::<Vec<_>>();
 
     vec![arr1(&out).into_dyn()]
   }
