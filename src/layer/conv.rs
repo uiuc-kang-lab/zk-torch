@@ -6,10 +6,10 @@ use crate::util::pad;
 use crate::util::pad_to_pow_of_two;
 use ark_bn254::Fr;
 use ndarray::indices;
+use ndarray::ArrayD;
 use ndarray::Dim;
 use ndarray::Dimension;
 use ndarray::IxDyn;
-use ndarray::{Array1, ArrayD};
 use tract_onnx::pb::AttributeProto;
 
 pub fn out_hw(dims: &Vec<usize>, strides: &Vec<usize>, ch_dims: &Vec<usize>, padding: &Vec<[usize; 2]>) -> Vec<usize> {
@@ -147,7 +147,7 @@ impl Layer for ConvLayer {
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
-        setup: Array1::from_iter(-(1 << 10)..1 << 11).map(|x| Fr::from(*x)),
+        setup: Some((-(1 << 10), 1 << 11)),
       }),
       N: 1,
     }));
