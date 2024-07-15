@@ -46,7 +46,7 @@ impl BasicBlock for SplitBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
-    _cache: &mut ProveVerifyCache,
+    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut b = inputs[0].view();
     for i in 0..outputs.len() {

@@ -36,7 +36,7 @@ impl BasicBlock for ConcatBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
-    _cache: &mut ProveVerifyCache,
+    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     if inputs[0].ndim() == 0 {
       let r = inputs.iter().map(|input| input.first().unwrap().clone()).collect::<Vec<DataEnc>>();

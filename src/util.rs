@@ -9,7 +9,7 @@ use ark_ff::PrimeField;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{UniformRand, Zero};
-use ndarray::{arr0, arr1, concatenate, Array1, ArrayD, Axis, IxDyn, Slice, SliceInfo, SliceInfoElem};
+use ndarray::{arr0, concatenate, Array1, ArrayD, Axis, IxDyn, Slice, SliceInfo};
 use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 use rayon::prelude::*;
 use sha3::{Digest, Keccak256};
