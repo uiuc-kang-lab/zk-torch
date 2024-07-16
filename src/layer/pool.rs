@@ -1,13 +1,11 @@
 use crate::basic_block::*;
 use crate::graph::*;
-use crate::layer::conv::{out_hw, pad, reshape_permutation, splat_pad};
+use crate::layer::conv::{out_hw, reshape_permutation, splat_pad};
 use crate::layer::Layer;
+use crate::onnx;
+use crate::util::pad;
 use ark_bn254::Fr;
-use ndarray::indices;
-use ndarray::ArrayD;
-use ndarray::Dim;
-use ndarray::Dimension;
-use ndarray::IxDyn;
+use ndarray::{arr1, indices, ArrayD, Dim, Dimension, IxDyn};
 use tract_onnx::pb::AttributeProto;
 
 fn splat_input(input_shape: &Vec<usize>, strides: &Vec<usize>, pads: &Vec<usize>, ci: usize, ch_dims: &Vec<usize>) -> Vec<Vec<Option<IxDyn>>> {
@@ -92,8 +90,9 @@ impl Layer for MaxPoolLayer {
       input_dim: IxDyn(&reshape_inp_padded),
     }));
 
+    let r: Vec<_> = (0..-onnx::CQ_RANGE_LOWER).map(Fr::from).collect();
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQBasicBlock { setup: Some((0, 1 << 9)) }),
+      basic_block: Box::new(CQBasicBlock { setup: arr1(&r) }),
       N: 1,
     }));
 

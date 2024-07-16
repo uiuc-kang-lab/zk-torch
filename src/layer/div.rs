@@ -4,7 +4,7 @@ use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
-use ndarray::ArrayD;
+use ndarray::{Array1, ArrayD};
 use tract_onnx::pb::AttributeProto;
 
 pub struct DivLayer;
@@ -34,7 +34,9 @@ impl Layer for DivLayer {
       N: 1,
     }));
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQBasicBlock { setup: Some((0, 1 << 9)) }),
+      basic_block: Box::new(CQBasicBlock {
+        setup: Array1::from_iter(0..1 << 9).map(|x| Fr::from(*x)),
+      }),
       N: 1,
     }));
     let mul_SF2 = graph.addBB(Box::new(RepeaterBasicBlock {

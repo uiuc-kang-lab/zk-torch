@@ -1,6 +1,6 @@
 use crate::basic_block::*;
 use crate::graph::*;
-use crate::layer::Layer;
+use crate::layer::{squeeze::UnsqueezeBasicBlock, Layer};
 use crate::util;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
@@ -18,7 +18,7 @@ impl Layer for ReshapeLayer {
       let b = endShape.iter().fold(-1, |x, &y| x * y);
       endShape[i] = a / b;
     }
-    let endShape: Vec<_> = endShape.iter().map(|&x| x as usize).collect();
+    let endShape: Vec<_> = endShape.iter().map(|&x| x as usize).filter(|x| *x != 0).collect();
 
     if startShape.last() == endShape.last() {
       let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: endShape.clone() }));
@@ -44,19 +44,29 @@ impl Layer for ReshapeLayer {
       graph.outputs.push((output, 0));
     } else {
       let n = startShape.len();
-      let (mut a, mut b) = (startShape[n - 2], startShape[n - 1]);
-      assert!(*endShape.last().unwrap() == a * b);
-      (a, b) = (util::next_pow(a as u32) as usize, util::next_pow(b as u32) as usize);
-      let permutation = (vec![0], (0..a * b).collect());
-      let permute = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
-        N: 2,
-      }));
-      let intermediateShape = endShape.iter().map(|&x| util::next_pow(x as u32) as usize).collect();
-      let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: intermediateShape }));
-      let intermediate = graph.addNode(permute, vec![(-1, 0)]);
-      let output = graph.addNode(reshape, vec![(intermediate, 0)]);
-      graph.outputs.push((output, 0));
+      if n >= 2 {
+        let (mut a, mut b) = (startShape[n - 2], startShape[n - 1]);
+        assert!(*endShape.last().unwrap() == a * b);
+        (a, b) = (util::next_pow(a as u32) as usize, util::next_pow(b as u32) as usize);
+        let permutation = (vec![0], (0..a * b).collect());
+        let permute = graph.addBB(Box::new(RepeaterBasicBlock {
+          basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
+          N: 2,
+        }));
+        let intermediateShape = endShape.iter().map(|&x| util::next_pow(x as u32) as usize).collect();
+        let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: intermediateShape }));
+        let intermediate = graph.addNode(permute, vec![(-1, 0)]);
+        let output = graph.addNode(reshape, vec![(intermediate, 0)]);
+        graph.outputs.push((output, 0));
+      } else {
+        // special case: arr0 --> [1,1,...]
+        let unsq = graph.addBB(Box::new(UnsqueezeBasicBlock {}));
+        let mut unsq_output = graph.addNode(unsq, vec![(-1, 0)]);
+        for _ in 0..endShape.len() - 1 {
+          unsq_output = graph.addNode(unsq, vec![(unsq_output, 0)]);
+        }
+        graph.outputs.push((unsq_output, 0));
+      }
     }
 
     (graph, vec![endShape])

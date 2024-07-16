@@ -1,6 +1,7 @@
 use crate::basic_block::*;
 use crate::util;
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_poly::univariate::DensePolynomial;
 use ark_serialize::CanonicalSerialize;
@@ -30,13 +31,13 @@ impl Graph {
       let myInputs = n
         .inputs
         .iter()
-        .map(|&(j, k)| {
-          if j < 0 {
+        .map(|(basicblock_idx, output_idx)| {
+          if *basicblock_idx < 0 {
             // We currently support two types of indexing for the inputs, one is (-1,0),(-1,1),(-1,2),...
             // and the other is (-1,0),(-2,0),(-3,0),... In the future we will make this more standardized.
-            inputs[k + (-j - 1) as usize]
+            inputs[*output_idx + (-basicblock_idx - 1) as usize]
           } else {
-            &(outputs[j as usize][k])
+            &(outputs[*basicblock_idx as usize][*output_idx])
           }
         })
         .collect();
@@ -55,7 +56,17 @@ impl Graph {
     let mut outputsEnc = vec![vec![]; self.nodes.len()];
     self.nodes.iter().enumerate().for_each(|(i, n)| {
       println!("encoding {i} {:?}", self.basic_blocks[n.basic_block]);
-      let myInputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputsEnc[*j as usize][*k]) }).collect();
+      let myInputs = n
+        .inputs
+        .iter()
+        .map(|(basicblock_idx, output_idx)| {
+          if *basicblock_idx < 0 {
+            inputs[*output_idx + (-basicblock_idx - 1) as usize]
+          } else {
+            &(outputsEnc[*basicblock_idx as usize][*output_idx])
+          }
+        })
+        .collect();
       outputsEnc[i] = self.basic_blocks[n.basic_block].encodeOutputs(srs, &models[n.basic_block], &myInputs, outputs[i]);
     });
     return outputsEnc;
@@ -90,7 +101,17 @@ impl Graph {
       .enumerate()
       .map(|(i, n)| {
         println!("proving {i} {:?}", self.basic_blocks[n.basic_block]);
-        let myInputs: Vec<&ArrayD<Data>> = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
+        let myInputs = n
+          .inputs
+          .iter()
+          .map(|(basicblock_idx, output_idx)| {
+            if *basicblock_idx < 0 {
+              inputs[*output_idx + (-basicblock_idx - 1) as usize]
+            } else {
+              &(outputs[*basicblock_idx as usize][*output_idx])
+            }
+          })
+          .collect();
         let proof = self.basic_blocks[n.basic_block].prove(srs, setups[n.basic_block], models[n.basic_block], &myInputs, outputs[i], rng, &mut cache);
         let proof: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (
           proof.0.iter().map(|x| (*x).into()).collect(),
@@ -121,7 +142,17 @@ impl Graph {
       .enumerate()
       .map(|(i, n)| {
         println!("verifying {i} {:?}", self.basic_blocks[n.basic_block]);
-        let myInputs = n.inputs.iter().map(|(j, k)| if *j < 0 { inputs[*k] } else { &(outputs[*j as usize][*k]) }).collect();
+        let myInputs = n
+          .inputs
+          .iter()
+          .map(|(basicblock_idx, output_idx)| {
+            if *basicblock_idx < 0 {
+              inputs[*output_idx + (-basicblock_idx - 1) as usize]
+            } else {
+              &(outputs[*basicblock_idx as usize][*output_idx])
+            }
+          })
+          .collect();
         let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, &mut cache);
         let mut bytes = Vec::new();
         let temp: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (proofs[i].0.clone(), proofs[i].1.clone(), proofs[i].2.clone());
@@ -132,6 +163,47 @@ impl Graph {
       .collect();
     let pairings = util::combine_pairing_checks(&pairings.iter().flatten().collect());
     assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
+  }
+
+  // This function should be only used for debugging purposes (it is very slow).
+  // It verifies the proofs without combining pairing checks so that we can see which BasicBlock is failing.
+  pub fn verify_for_each_pairing(
+    &self,
+    srs: &SRS,
+    models: &Vec<&ArrayD<DataEnc>>,
+    inputs: &Vec<&ArrayD<DataEnc>>,
+    outputs: &Vec<&Vec<&ArrayD<DataEnc>>>,
+    proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)>,
+    rng: &mut StdRng,
+  ) {
+    let mut cache = HashMap::new();
+    self.nodes.iter().enumerate().for_each(|(i, n)| {
+      println!("verifying (debug mode) {i} {:?}", self.basic_blocks[n.basic_block]);
+      let myInputs = n
+        .inputs
+        .iter()
+        .map(|(basicblock_idx, output_idx)| {
+          if *basicblock_idx < 0 {
+            inputs[*output_idx]
+          } else {
+            &(outputs[*basicblock_idx as usize][*output_idx])
+          }
+        })
+        .collect();
+      let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, &mut cache);
+      let mut bytes = Vec::new();
+      let temp: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (proofs[i].0.clone(), proofs[i].1.clone(), proofs[i].2.clone());
+      temp.serialize_uncompressed(&mut bytes).unwrap();
+      util::add_randomness(rng, bytes);
+      pairings.iter().for_each(|p| {
+        assert!(p
+          .iter()
+          .fold(PairingOutput::<Bn<ark_bn254::Config>>::zero(), |acc, x| {
+            acc + Bn254::pairing(x.0, x.1)
+          })
+          .is_zero());
+      });
+    });
   }
 
   pub fn new() -> Self {

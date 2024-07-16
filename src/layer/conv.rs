@@ -2,44 +2,15 @@ use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
 use crate::onnx;
+use crate::util::pad;
+use crate::util::pad_to_pow_of_two;
 use ark_bn254::Fr;
 use ndarray::indices;
-use ndarray::ArrayD;
-use ndarray::Axis;
 use ndarray::Dim;
 use ndarray::Dimension;
 use ndarray::IxDyn;
-use ndarray::Slice;
+use ndarray::{Array1, ArrayD};
 use tract_onnx::pb::AttributeProto;
-
-pub fn pad<G: Clone>(input: &ArrayD<G>, padding: &Vec<[usize; 2]>, pad_val: &G) -> ArrayD<G> {
-  let tmp = input.into_iter().collect();
-  let input = ArrayD::from_shape_vec(input.raw_dim(), tmp).unwrap();
-  assert_eq!(input.ndim(), padding.len());
-  let mut padded_shape = input.raw_dim();
-  for (ax, (&ax_len, &[pad_lo, pad_hi])) in input.shape().iter().zip(padding).enumerate() {
-    padded_shape[ax] = ax_len + pad_lo + pad_hi;
-  }
-
-  let mut padded = ArrayD::from_elem(padded_shape, pad_val);
-  let padded_dim = padded.raw_dim();
-  {
-    // Select portion of padded array that needs to be copied from the
-    // original array.
-    let mut orig_portion = padded.view_mut();
-    for (ax, &[pad_lo, pad_hi]) in padding.iter().enumerate() {
-      orig_portion.slice_axis_inplace(Axis(ax), Slice::from(pad_lo as isize..padded_dim[ax] as isize - (pad_hi as isize)));
-    }
-    // Copy the data from the original array.
-    orig_portion.assign(&input);
-  }
-
-  let dim = padded.raw_dim();
-  let tmp = padded.into_iter().map(|x| x.clone()).collect();
-  let padded = ArrayD::from_shape_vec(dim, tmp).unwrap();
-
-  padded
-}
 
 pub fn out_hw(dims: &Vec<usize>, strides: &Vec<usize>, ch_dims: &Vec<usize>, padding: &Vec<[usize; 2]>) -> Vec<usize> {
   dims.iter().enumerate().map(|(i, x)| (*x - ch_dims[i] + padding[i][0] + padding[i][1]) / strides[i] + 1).collect()
@@ -104,10 +75,7 @@ pub fn splat_pad(input: &Vec<Vec<Option<IxDyn>>>) -> ArrayD<Option<IxDyn>> {
   let conv_size = input[0].len();
   let flattened_inp: Vec<_> = input.into_iter().flat_map(|x| x.iter().map(|y| y.clone())).collect();
   let flattened_inp = ArrayD::from_shape_vec(IxDyn(&vec![outp_size, conv_size]), flattened_inp).unwrap();
-  let (m, n) = (flattened_inp.shape()[0].next_power_of_two(), flattened_inp.shape()[1].next_power_of_two());
-  let (ph, pw) = ((0, m - flattened_inp.shape()[0]), (0, n - flattened_inp.shape()[1]));
-  let padding = vec![[ph.0, ph.1], [pw.0, pw.1]];
-  pad(&flattened_inp, &padding, &None)
+  pad_to_pow_of_two(&flattened_inp, &None)
 }
 
 // Returns the permutation for CopyConstraintBasicBlock for a reshape operation given the unpadded input and output shapes
@@ -132,13 +100,26 @@ impl Layer for ConvLayer {
     let dims = input_shapes[0][2..].to_vec();
     let ch_dims = weight_shape[2..].to_vec();
 
-    let strides: Vec<_> = match attributes.iter().filter(|x| x.name == "strides").next() {
+    let strides = match attributes.iter().filter(|x| x.name == "strides").next() {
       Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
       None => vec![1; dims.len()],
     };
-    let pads: Vec<_> = match attributes.iter().filter(|x| x.name == "pads").next() {
+    let pads = match attributes.iter().filter(|x| x.name == "pads").next() {
       Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
       None => vec![0; 2 * dims.len()],
+    };
+    let _dilations = match attributes.iter().filter(|x| x.name == "dilations").next() {
+      Some(v) => v
+        .ints
+        .iter()
+        .map(|x| {
+          if *x != 1 {
+            panic!("dilations != 1 not supported");
+          }
+          *x as usize
+        })
+        .collect(),
+      None => vec![1; dims.len() - 2],
     };
 
     // Splat input
@@ -166,7 +147,7 @@ impl Layer for ConvLayer {
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
-        setup: Some((-(1 << 10), 1 << 11)),
+        setup: Array1::from_iter(-(1 << 10)..1 << 11).map(|x| Fr::from(*x)),
       }),
       N: 1,
     }));
