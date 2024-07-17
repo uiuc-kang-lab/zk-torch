@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::basic_block::*;
 use crate::util;
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
