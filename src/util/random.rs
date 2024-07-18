@@ -1,3 +1,8 @@
+/*
+ * Random utilities:
+ * The functions are used for adding randomness to the RNG and 
+ * setting the random device for GPU computations.
+ */
 #![allow(unused_imports)]
 use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 use sha3::{Digest, Keccak256};

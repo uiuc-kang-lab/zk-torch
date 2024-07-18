@@ -1,6 +1,6 @@
 pub use arithmetic::*;
-pub use array::*;
 pub use fft::*;
+pub use iter::*;
 pub use msm::*;
 pub use onnx::*;
 pub use prover::*;
@@ -10,8 +10,8 @@ pub use shape::*;
 pub use verifier::*;
 
 pub mod arithmetic;
-pub mod array;
 pub mod fft;
+pub mod iter;
 pub mod msm;
 pub mod onnx;
 pub mod prover;

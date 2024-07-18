@@ -1,3 +1,8 @@
+/*
+ * ONNX utilities:
+ * The function(s) are used for ONNX-related operations.
+ * For example, generate fake inputs for ONNX models.
+ */
 use crate::util::pad_to_pow_of_two;
 use ark_bn254::Fr;
 use ark_std::Zero;

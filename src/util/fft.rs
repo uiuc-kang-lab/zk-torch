@@ -1,3 +1,8 @@
+/*
+ * FFT utilities:
+ * The functions are used for performing FFT and IFFT on G1 and G2 points.
+ * Each function has a CPU and GPU implementation.
+ */
 #![allow(dead_code)]
 #![allow(unused_imports)]
 use ark_bn254::Fr;

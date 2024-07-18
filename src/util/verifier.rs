@@ -1,3 +1,8 @@
+/*
+ * Verifier utilities:
+ * The functions are used for verification-related operations, such as 
+ * an algorithm for combining pairing checks.
+ */
 use crate::util::msm;
 use crate::PairingCheck;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};

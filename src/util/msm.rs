@@ -1,3 +1,8 @@
+/*
+ * MSM utilities:
+ * The functions are used for performing MSM, SSM, and toeplitz mul on G1 and G2 points.
+ * Each function has a CPU and GPU implementation.
+ */
 #![allow(unused_imports)]
 use crate::util::{fft, ifft_in_place};
 use ark_bn254::{Fr, G1Projective};

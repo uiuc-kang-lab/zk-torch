@@ -1,3 +1,8 @@
+/*
+ * Prover utilities:
+ * The functions are used for proving-related operations, such as 
+ * generating CQ tables and converting them to Data (generating commitment).
+ */
 use crate::{BasicBlock, Data, SRS};
 use ark_bn254::{Fr, G1Projective};
 use ark_std::Zero;

@@ -1,3 +1,6 @@
+/*
+ * Serialization utilities for converting between serde and ark_serialize.
+ */
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
 // For serialization, ArrayD uses serde while G1Affine uses ark_serialize.
