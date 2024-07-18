@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 use crate::util::{fft, ifft_in_place};
 use ark_bn254::{Fr, G1Projective};
 use ark_ec::{ScalarMul, VariableBaseMSM};
@@ -6,8 +7,9 @@ use ark_std::Zero;
 use rayon::prelude::*;
 #[cfg(feature = "gpu")]
 use {
-  crate::util::{gpu_set_random_device, gpu_fft_g1, gpu_ifft_g1},
-  ark_bn254::{G1Affine, G2Affine, G2Projective},
+  crate::util::{gpu_fft_g1, gpu_ifft_g1, gpu_set_random_device},
+  ark_bn254::G2Projective,
+  ark_ec::short_weierstrass::{Affine, Projective},
   icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField},
   icicle_core::gfft,
   icicle_core::traits::ArkConvertible,

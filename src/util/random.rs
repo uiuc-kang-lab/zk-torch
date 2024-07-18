@@ -1,4 +1,5 @@
-use rand::{rngs::StdRng, RngCore, SeedableRng};
+#![allow(unused_imports)]
+use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 use sha3::{Digest, Keccak256};
 
 pub fn add_randomness(rng: &mut StdRng, mut bytes: Vec<u8>) {
@@ -13,7 +14,7 @@ pub fn add_randomness(rng: &mut StdRng, mut bytes: Vec<u8>) {
 }
 
 #[cfg(feature = "gpu")]
-fn gpu_set_random_device() {
+pub fn gpu_set_random_device() {
   let mut rng = StdRng::from_entropy();
   icicle_cuda_runtime::device::set_device(rng.gen_range(0..1)).unwrap();
 }
