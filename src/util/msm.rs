@@ -15,6 +15,30 @@ use {
 };
 
 #[cfg(feature = "gpu")]
+pub fn msm<G: GpuMsmProjective + std::clone::Clone + ark_ec::ScalarMul>(a: &[G::GpuMsmAffine], b: &[Fr]) -> G {
+  G::gpu_msm(a, b)
+}
+
+#[cfg(not(feature = "gpu"))]
+pub fn msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {
+  cpu_msm(a, b)
+}
+
+pub fn ssm_g1_in_place(points: &mut Vec<G1Projective>, scalars: &Vec<Fr>) {
+  #[cfg(feature = "gpu")]
+  {
+    *points = gpu_ssm_g1(points, scalars);
+  }
+
+  #[cfg(not(feature = "gpu"))]
+  {
+    points.par_iter_mut().zip(scalars.par_iter()).for_each(|(x, scalar)| {
+      *x *= *scalar;
+    });
+  }
+}
+
+#[cfg(feature = "gpu")]
 pub fn circulant_mul(domain: GeneralEvaluationDomain<Fr>, c: &Vec<Fr>, a: &Vec<G1Projective>) -> Vec<G1Projective> {
   gpu_set_random_device();
   let lambda = domain.fft(c);
@@ -88,27 +112,21 @@ impl GpuMsmProjective for Projective<ark_bn254::g2::Config> {
 }
 
 #[cfg(feature = "gpu")]
-pub fn msm<G: GpuMsmProjective + std::clone::Clone + ark_ec::ScalarMul>(a: &[G::GpuMsmAffine], b: &[Fr]) -> G {
-  G::gpu_msm(a, b)
-}
-
-#[cfg(not(feature = "gpu"))]
-pub fn msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {
-  cpu_msm(a, b)
-}
-
-pub fn ssm_g1_in_place(points: &mut Vec<G1Projective>, scalars: &Vec<Fr>) {
-  #[cfg(feature = "gpu")]
-  {
-    *points = gpu_ssm_g1(points, scalars);
+pub fn gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>) -> G1Projective {
+  gpu_set_random_device();
+  let size = ark_std::cmp::min(points.len(), scalars.len());
+  if size < 32 {
+    let points: Vec<_> = points.par_iter().map(|x| x.to_ark()).collect();
+    return cpu_msm(&points, scalars);
   }
-
-  #[cfg(not(feature = "gpu"))]
-  {
-    points.par_iter_mut().zip(scalars.par_iter()).for_each(|(x, scalar)| {
-      *x *= *scalar;
-    });
-  }
+  let cfg = icicle_core::msm::MSMConfig::default();
+  let points = HostOrDeviceSlice::on_host(points[..size].to_vec());
+  let scalars = scalars[..size].par_iter().map(|x| ScalarField::from_ark(*x)).collect();
+  let scalars = HostOrDeviceSlice::on_host(scalars);
+  let results = vec![IG1P::zero(); 1];
+  let mut results: HostOrDeviceSlice<'_, IG1P> = HostOrDeviceSlice::on_host(results);
+  icicle_core::msm::msm(&scalars, &points, &cfg, &mut results).unwrap();
+  results.as_slice()[0].to_ark()
 }
 
 #[cfg(feature = "gpu")]
@@ -125,24 +143,6 @@ pub fn gpu_msm_g2(points: &Vec<IG2A>, scalars: &Vec<Fr>) -> G2Projective {
   let scalars = HostOrDeviceSlice::on_host(scalars);
   let results = vec![IG2P::zero(); 1];
   let mut results: HostOrDeviceSlice<'_, IG2P> = HostOrDeviceSlice::on_host(results);
-  icicle_core::msm::msm(&scalars, &points, &cfg, &mut results).unwrap();
-  results.as_slice()[0].to_ark()
-}
-
-#[cfg(feature = "gpu")]
-pub fn gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>) -> G1Projective {
-  gpu_set_random_device();
-  let size = ark_std::cmp::min(points.len(), scalars.len());
-  if size < 32 {
-    let points: Vec<_> = points.par_iter().map(|x| x.to_ark()).collect();
-    return cpu_msm(&points, scalars);
-  }
-  let cfg = icicle_core::msm::MSMConfig::default();
-  let points = HostOrDeviceSlice::on_host(points[..size].to_vec());
-  let scalars = scalars[..size].par_iter().map(|x| ScalarField::from_ark(*x)).collect();
-  let scalars = HostOrDeviceSlice::on_host(scalars);
-  let results = vec![IG1P::zero(); 1];
-  let mut results: HostOrDeviceSlice<'_, IG1P> = HostOrDeviceSlice::on_host(results);
   icicle_core::msm::msm(&scalars, &points, &cfg, &mut results).unwrap();
   results.as_slice()[0].to_ark()
 }
