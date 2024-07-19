@@ -1,7 +1,7 @@
 use super::BasicBlock;
 use crate::util;
 use ark_bn254::Fr;
-use ndarray::{arr1, ArrayD};
+use ndarray::ArrayD;
 use rayon::iter::ParallelIterator;
 
 macro_rules! make_basic_block {
@@ -17,6 +17,7 @@ macro_rules! make_basic_block {
     impl BasicBlock for $name {
       fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
         assert!(inputs.len() == 1);
+        let shape = inputs[0].shape();
         let out = util::array_into_iter(inputs[0])
           .map(|x| {
             let mut x = util::fr_to_int(*x) as f32;
@@ -27,7 +28,7 @@ macro_rules! make_basic_block {
           })
           .collect::<Vec<_>>();
 
-        vec![arr1(&out).into_dyn()]
+        vec![ArrayD::from_shape_vec(shape, out).unwrap()]
       }
     }
   };
