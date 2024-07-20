@@ -2,10 +2,8 @@ use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
 use ark_bn254::Fr;
-use ndarray::{arr1, ArrayD};
+use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;
-
-use super::equal;
 
 pub struct ClipLayer;
 impl Layer for ClipLayer {
