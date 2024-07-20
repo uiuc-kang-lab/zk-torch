@@ -110,8 +110,8 @@ fn verify(srs: &SRS, graph: &Graph) {
 }
 
 fn main() {
-  let srs = &ptau::load_file("challenge", 7, 7);
-  let onnx_file_name = "sample.onnx";
+  let srs = &ptau::load_file("challenge_18", 18, 18);
+  let onnx_file_name = "network.onnx";
   let (mut graph, models) = onnx::load_file(onnx_file_name);
   let fake_inputs = util::generate_fake_inputs_for_onnx(onnx_file_name);
   let inputs = fake_inputs.iter().map(|x| x).collect();

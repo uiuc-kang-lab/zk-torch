@@ -11,11 +11,11 @@ use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::{DatumType, Framework};
 use tract_onnx::tensor::load_tensor;
 
-pub const SF_LOG: usize = 3; //9
+pub const SF_LOG: usize = 0; //9
 pub const SF: usize = 1 << SF_LOG;
 pub const SF_FLOAT: f32 = (1 << SF_LOG) as f32;
-pub const CQ_RANGE: usize = 1 << 6; //12
-pub const CQ_RANGE_LOWER: i32 = -(1 << 5);
+pub const CQ_RANGE: usize = 1 << 12; //12
+pub const CQ_RANGE_LOWER: i32 = -(1 << 11);
 
 // This function is used for parsing the inputs of onnx models
 fn parse_onnx_inputs(onnx_graph: &pb::GraphProto) -> (HashMap<String, usize>, HashMap<String, Vec<usize>>) {
@@ -127,7 +127,9 @@ fn get_local_graph(
     "Add" => Ok(AddLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Mul" => Ok(MulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Cast" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Identity" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Ceil" => Ok(CeilLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Clip" => Ok(ClipLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Concat" => Ok(ConcatLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "ConstantOfShape" => Ok(ConstOfShapeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Sub" => Ok(SubLayer::graph(&input_shapes, &node_constants, &node_attributes)),
@@ -144,6 +146,7 @@ fn get_local_graph(
     "Split" => Ok(SplitLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Sqrt" => Ok(SqrtLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Reshape" => Ok(ReshapeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Tan" => Ok(TanLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Transpose" => Ok(TransposeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Tanh" => Ok(TanhLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Shape" => Ok(ShapeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
