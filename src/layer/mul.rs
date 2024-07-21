@@ -36,11 +36,14 @@ impl Layer for MulLayer {
       }),
       N: 1,
     }));
+    // If any of the inputs are scalars, use the scalar version of the mul basic block.
     let mul_basicblock = if input_shapes[1].len() == 0 || input_shapes[0].len() == 0 {
       mul_scalar
+    // else use the normal version of the mul basic block.
     } else {
       mul
     };
+    // If the first input is a scalar, swap the inputs, because the mul scalar basic block expects the scalar to be the second input.
     let mul_output = if input_shapes[0].len() == 0 {
       graph.addNode(mul_basicblock, vec![(-2, 0), (-1, 0)])
     } else {
