@@ -686,14 +686,14 @@ pub fn vec_iter<T>(x: &Vec<T>) -> impl Iterator<Item = &T> {
 
 #[macro_export]
 macro_rules! ndarr_azip {
-    ($($arg:tt)*) => {
-        #[cfg(feature = "gpu")]
-        {
-            par_azip!($($arg)*)
-        }
-        #[cfg(not(feature = "gpu"))]
-        {
-            azip!($($arg)*)
-        }
-    };
+  ($($arg:tt)*) => {
+    #[cfg(feature = "gpu")]
+    {
+      par_azip!($($arg)*)
+    }
+    #[cfg(not(feature = "gpu"))]
+    {
+      azip!($($arg)*)
+    }
+  };
 }
