@@ -184,7 +184,7 @@ impl Graph {
         .iter()
         .map(|(basicblock_idx, output_idx)| {
           if *basicblock_idx < 0 {
-            inputs[*output_idx]
+            inputs[*output_idx + (-basicblock_idx - 1) as usize]
           } else {
             &(outputs[*basicblock_idx as usize][*output_idx])
           }

@@ -208,6 +208,12 @@ pub fn msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {
   return a_chunks.zip(b_chunks).map(|(x, y)| -> P { VariableBaseMSM::msm_unchecked(&x, &y) }).sum();
 }
 
+pub fn ssm_g1_in_place(points: &mut Vec<G1Projective>, scalars: &Vec<Fr>) {
+  points.par_iter_mut().zip(scalars.par_iter()).for_each(|(x, scalar)| {
+    *x *= *scalar;
+  });
+}
+
 pub fn gen_cq_table(basic_block: &Box<dyn BasicBlock>, offset: i32, size: usize) -> ArrayD<Fr> {
   let range = Array1::from_shape_fn(size, |i| Fr::from(i as u32) + Fr::from(offset)).into_dyn();
   let result = &(**basic_block).run(&ArrayD::zeros(IxDyn(&[0])), &vec![&range])[0];
@@ -386,4 +392,19 @@ pub fn erf(x: f32) -> f32 {
   let t = 1.0 / (1.0 + p * x);
   let y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * (-x * x).exp();
   sign * y
+}
+
+pub fn array_into_iter<T>(x: &ArrayD<T>) -> impl Iterator<Item = &T> {
+  x.into_iter()
+}
+
+pub fn vec_iter<T>(x: &Vec<T>) -> impl Iterator<Item = &T> {
+  x.iter()
+}
+
+#[macro_export]
+macro_rules! ndarr_azip {
+  ($($arg:tt)*) => {
+    azip!($($arg)*)
+  };
 }

@@ -39,12 +39,17 @@ impl BasicBlock for CQBasicBlock {
     util::fft_in_place(domain_N, &mut Q_i_x_1);
     let temp = Fr::from(N as u32).inverse().unwrap();
     let temp2 = domain_N.group_gen_inv().pow(&[(N - 1) as u64]);
-    Q_i_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x *= temp * temp2.pow(&[i as u64]));
+    let scalars: Vec<_> = (0..N).into_par_iter().map(|i| temp * temp2.pow(&[i as u64])).collect();
+    util::ssm_g1_in_place(&mut Q_i_x_1, &scalars);
     let mut L_i_x_1 = srs.X1P[..N].to_vec();
     util::ifft_in_place(domain_N, &mut L_i_x_1);
     let mut L_i_0_x_1 = L_i_x_1.clone();
+    let scalars = (0..N).into_par_iter().map(|i| domain_N.group_gen_inv().pow(&[i as u64])).collect();
+    util::ssm_g1_in_place(&mut L_i_0_x_1, &scalars);
+
     let temp = srs.X1P[N - 1] * Fr::from(N as u64).inverse().unwrap();
-    L_i_0_x_1.par_iter_mut().enumerate().for_each(|(i, x)| *x = *x * domain_N.group_gen_inv().pow(&[i as u64]) - temp);
+    L_i_0_x_1.par_iter_mut().for_each(|x| *x -= temp);
+
     let mut setup = Q_i_x_1;
     setup.extend(L_i_x_1);
     setup.extend(L_i_0_x_1);
@@ -73,32 +78,35 @@ impl BasicBlock for CQBasicBlock {
     let Q_i_x_1 = &setup.0[..N];
     let L_i_x_1 = &setup.0[N..2 * N];
     let L_i_0_x_1 = &setup.0[2 * N..];
-    let CacheValues::CQTableDict(table_dict) =
-      cache.entry(format!("cq_table_dict_{:p}", self)).or_insert_with(|| CacheValues::CQTableDict(HashMap::new()))
-    else {
-      panic!("Cache type error")
-    };
-    if table_dict.len() == 0 {
-      for i in 0..N {
-        table_dict.insert(model.raw[i], i);
+    let m_i = {
+      let CacheValues::CQTableDict(table_dict) =
+        cache.entry(format!("cq_table_dict_{:p}", self)).or_insert_with(|| CacheValues::CQTableDict(HashMap::new()))
+      else {
+        panic!("Cache type error")
+      };
+      if table_dict.len() == 0 {
+        for i in 0..N {
+          table_dict.insert(model.raw[i], i);
+        }
       }
-    }
 
-    // Calculate m
-    let mut m_i = HashMap::new();
-    for x in input.raw.iter() {
-      if !table_dict.contains_key(x) {
-        println!("{:?},{:?}", x, -*x);
+      // Calculate m
+      let mut m_i = HashMap::new();
+      for x in input.raw.iter() {
+        if !table_dict.contains_key(x) {
+          println!("{:?},{:?}", x, -*x);
+        }
+        m_i.entry(table_dict.get(x).unwrap().clone()).and_modify(|y| *y += 1).or_insert(1);
       }
-      m_i.entry(table_dict.get(x).unwrap()).and_modify(|y| *y += 1).or_insert(1);
-    }
-    let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = m_i.iter().map(|(i, y)| (L_i_x_1[**i], Fr::from(*y as u32))).unzip();
+      m_i
+    };
+    let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = m_i.iter().map(|(i, y)| (L_i_x_1[*i], Fr::from(*y as u32))).unzip();
     let m_x = util::msm::<G1Projective>(&temp, &temp2);
 
     let beta = Fr::rand(rng);
 
     // Calculate A
-    let A_i: HashMap<usize, Fr> = m_i.iter().map(|(i, y)| (**i, Fr::from(*y as u32) * (model.raw[**i] + beta).inverse().unwrap())).collect();
+    let A_i: HashMap<usize, Fr> = m_i.iter().map(|(i, y)| (*i, Fr::from(*y as u32) * (model.raw[*i] + beta).inverse().unwrap())).collect();
     let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = A_i.iter().map(|(i, y)| (L_i_x_1[*i], *y)).unzip();
     let A_x = util::msm::<G1Projective>(&temp, &temp2);
     let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = A_i.iter().map(|(i, y)| (Q_i_x_1[*i], *y)).unzip();

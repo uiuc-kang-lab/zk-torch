@@ -73,7 +73,14 @@ fn testBasicBlocks() {
   testBasicBlock(AddBasicBlock {}, srs, &empty, &vec![&b, &a_0]);
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a_0, &b]);
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&b, &a_0]);
-  testBasicBlock(CQBasicBlock { setup: a.clone().into_dimensionality::<ndarray::Ix1>().unwrap() }, srs, &a, &vec![&a_n]);
+  testBasicBlock(
+    CQBasicBlock {
+      setup: a.clone().into_dimensionality::<ndarray::Ix1>().unwrap(),
+    },
+    srs,
+    &a,
+    &vec![&a_n],
+  );
   testBasicBlock(CQ2BasicBlock { setup: None }, srs, &ab, &vec![&a_n, &b_n]);
   testBasicBlock(SumBasicBlock {}, srs, &empty, &vec![&a]);
 

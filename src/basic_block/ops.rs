@@ -16,13 +16,18 @@ macro_rules! make_basic_block {
     impl BasicBlock for $name {
       fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
         assert!(inputs.len() == 1);
-        vec![inputs[0].map(|x| {
-          let mut x = util::fr_to_int(*x) as f32;
-          x /= (1 << self.input_SF) as f32;
-          x = $operation(x);
-          x *= (1 << self.output_SF) as f32;
-          Fr::from(x.round() as i32)
-        })]
+        let shape = inputs[0].shape();
+        let out = util::array_into_iter(inputs[0])
+          .map(|x| {
+            let mut x = util::fr_to_int(*x) as f32;
+            x /= (1 << self.input_SF) as f32;
+            x = $operation(x);
+            x *= (1 << self.output_SF) as f32;
+            Fr::from(x.round() as i32)
+          })
+          .collect::<Vec<_>>();
+
+        vec![ArrayD::from_shape_vec(shape, out).unwrap()]
       }
     }
   };
