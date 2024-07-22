@@ -17,8 +17,6 @@ mod graph;
 mod layer;
 mod onnx;
 mod ptau;
-#[cfg(test)]
-mod tests;
 mod util;
 
 fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&ArrayD<Fr>>) {

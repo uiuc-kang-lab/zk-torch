@@ -3,7 +3,7 @@
 use super::{BasicBlock, Data, DataEnc, SRS};
 use crate::{
   util::{self, calc_pow},
-  PairingCheck, ProveVerifyCache,
+  basic_block::PairingCheck, basic_block::ProveVerifyCache,
 };
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::{pairing::Pairing, AffineRepr};

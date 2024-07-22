@@ -3,6 +3,7 @@ use crate::graph::*;
 use crate::layer::Layer;
 use crate::util;
 use ark_bn254::Fr;
+use ndarray::Dimension;
 use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
 
@@ -14,9 +15,12 @@ use tract_onnx::pb::AttributeProto;
 fn get_concat_indices(input_shapes: &Vec<&Vec<usize>>, output_shape: &Vec<usize>, axis: usize) -> Vec<ArrayD<Option<IxDyn>>> {
   let mut indices = vec![];
   let mut axis_offset = 0;
+  let padded_output_shape = output_shape.iter().map(|&x| util::next_pow(x as u32) as usize).collect::<Vec<_>>();
   for i in 0..input_shapes.len() {
-    let output = ArrayD::from_shape_fn(output_shape.as_slice(), |index| {
-      if index[axis] >= axis_offset && index[axis] < axis_offset + input_shapes[i][axis] {
+    let output = ArrayD::from_shape_fn(padded_output_shape.as_slice(), |index| {
+      // check if every index is within the range of the input array
+      let valid = index.as_array_view().iter().enumerate().all(|(j, &x)| if j != axis { x < input_shapes[i][j] } else { true });
+      if index[axis] >= axis_offset && index[axis] < axis_offset + input_shapes[i][axis] && valid {
         let mut new_index = index.clone();
         new_index[axis] = index[axis] - axis_offset;
         Some(new_index)
@@ -46,9 +50,7 @@ impl Layer for ConcatLayer {
     outputShape[axis] = input_shapes.iter().map(|x| x[axis as usize]).sum();
     // If concatenating along the last axis, use copy constraint as the output commitment changes
     if axis == input_shapes[0].len() - 1 {
-      let mut padded_output_shape = outputShape.clone();
-      padded_output_shape[axis] = util::next_pow(padded_output_shape[axis] as u32) as usize;
-      let permutations = get_concat_indices(input_shapes, &padded_output_shape, axis);
+      let permutations = get_concat_indices(input_shapes, &outputShape, axis);
       let mut cc_basicblocks = vec![];
       for i in 0..input_shapes.len() {
         let padded_input_shape: Vec<usize> = input_shapes[i].iter().map(|&x| util::next_pow(x as u32) as usize).collect();

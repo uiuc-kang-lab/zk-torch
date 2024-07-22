@@ -35,7 +35,7 @@ impl Layer for LSTMLayer {
 
     let mut graph = Graph::new();
     // sublayer 1: Split X to X_t
-    let split = vec![1; seq_length];
+    let split = vec![1; util::next_pow(seq_length as u32) as usize];
     let split_X_bb = graph.addBB(Box::new(SplitBasicBlock {
       axis: 0,
       split: split.clone(),
