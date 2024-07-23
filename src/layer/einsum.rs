@@ -5,55 +5,55 @@ use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
-use tract_onnx::pb::AttributeProto;
 use std::collections::HashMap;
+use tract_onnx::pb::AttributeProto;
 
 fn parse_einsum(equation: &str) -> (Vec<String>, Vec<String>) {
-    // Helper function to map letters to a standard set while preserving "..."
-    fn standardize(input: &str, map: &mut HashMap<char, char>, current: &mut char) -> String {
-        let mut result = String::new();
-        let mut chars = input.chars().peekable();
-        while let Some(&ch) = chars.peek() {
-            if ch == '.' && chars.clone().take(3).collect::<String>() == "..." {
-                result.push_str("...");
-                for _ in 0..3 {
-                    chars.next();
-                }
-            } else {
-                if !map.contains_key(&ch) {
-                    map.insert(ch, *current);
-                    *current = ((*current as u8) + 1) as char;
-                }
-                result.push(*map.get(&ch).unwrap());
-                chars.next();
-            }
+  // Helper function to map letters to a standard set while preserving "..."
+  fn standardize(input: &str, map: &mut HashMap<char, char>, current: &mut char) -> String {
+    let mut result = String::new();
+    let mut chars = input.chars().peekable();
+    while let Some(&ch) = chars.peek() {
+      if ch == '.' && chars.clone().take(3).collect::<String>() == "..." {
+        result.push_str("...");
+        for _ in 0..3 {
+          chars.next();
         }
-        result
+      } else {
+        if !map.contains_key(&ch) {
+          map.insert(ch, *current);
+          *current = ((*current as u8) + 1) as char;
+        }
+        result.push(*map.get(&ch).unwrap());
+        chars.next();
+      }
     }
+    result
+  }
 
-    // Remove all spaces from the equation
-    let equation = equation.replace(" ", "");
+  // Remove all spaces from the equation
+  let equation = equation.replace(" ", "");
 
-    // Split the equation into left-hand side (lhs) and right-hand side (rhs)
-    let parts: Vec<&str> = equation.split("->").collect();
-    
-    // Split the lhs into individual operands
-    let lhs: Vec<&str> = parts[0].split(',').collect();
-    
-    // Split the rhs into the resulting dimensions, if present
-    let rhs: Vec<&str> = if parts.len() > 1 {
-        parts[1].split_whitespace().collect()
-    } else {
-        Vec::new()
-    };
-    
-    // Create a standardized mapping for the letters
-    let mut map = HashMap::new();
-    let mut current = 'a';
-    let lhs_standardized: Vec<String> = lhs.iter().map(|&s| standardize(s, &mut map, &mut current)).collect();
-    let rhs_standardized: Vec<String> = rhs.iter().map(|&s| standardize(s, &mut map, &mut current)).collect();
-    
-    (lhs_standardized, rhs_standardized)
+  // Split the equation into left-hand side (lhs) and right-hand side (rhs)
+  let parts: Vec<&str> = equation.split("->").collect();
+
+  // Split the lhs into individual operands
+  let lhs: Vec<&str> = parts[0].split(',').collect();
+
+  // Split the rhs into the resulting dimensions, if present
+  let rhs: Vec<&str> = if parts.len() > 1 {
+    parts[1].split_whitespace().collect()
+  } else {
+    Vec::new()
+  };
+
+  // Create a standardized mapping for the letters
+  let mut map = HashMap::new();
+  let mut current = 'a';
+  let lhs_standardized: Vec<String> = lhs.iter().map(|&s| standardize(s, &mut map, &mut current)).collect();
+  let rhs_standardized: Vec<String> = rhs.iter().map(|&s| standardize(s, &mut map, &mut current)).collect();
+
+  (lhs_standardized, rhs_standardized)
 }
 
 // EinsumLayer implements the einsum operation in ONNX. It supports the following equations:
@@ -73,12 +73,7 @@ impl Layer for EinsumLayer {
       assert!(input_shapes[0].len() == 1 && input_shapes[1].len() == 1);
       let unsqueeze = graph.addBB(Box::new(UnsqueezeBasicBlock {}));
       let to_split = vec![1; util::next_pow(input_shapes[0][0] as u32) as usize];
-      let split = graph.addBB(
-        Box::new(SplitBasicBlock { 
-          axis: 0,
-          split: to_split,
-        })
-      );
+      let split = graph.addBB(Box::new(SplitBasicBlock { axis: 0, split: to_split }));
       let mul_scalar = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(MulScalarBasicBlock {}),
         N: 1,
@@ -108,7 +103,7 @@ impl Layer for EinsumLayer {
         basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
         N: 2,
       }));
-      
+
       // to split the input vector into scalars, we first unsqueeze and permute it
       let unsqueeze_output = graph.addNode(unsqueeze, vec![(-1, 0)]);
       let permute_output = graph.addNode(permute, vec![(unsqueeze_output, 0)]);
@@ -116,7 +111,7 @@ impl Layer for EinsumLayer {
       // for each scalar, we multiply it by the other input vector
       let mut mul_scalar_outputs = vec![];
       for i in 0..input_shapes[0][0] {
-        let mul_scalar_output = graph.addNode(mul_scalar, vec![(-2,0), (split_output, i)]);
+        let mul_scalar_output = graph.addNode(mul_scalar, vec![(-2, 0), (split_output, i)]);
         let change_SF_output = graph.addNode(change_SF, vec![(mul_scalar_output, 0)]);
         let _ = graph.addNode(change_SF_check, vec![(mul_scalar_output, 0), (change_SF_output, 0)]);
         mul_scalar_outputs.push(change_SF_output);
