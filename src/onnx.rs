@@ -131,6 +131,7 @@ fn get_local_graph(
     "Concat" => Ok(ConcatLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "ConstantOfShape" => Ok(ConstOfShapeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Sub" => Ok(SubLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Einsum" => Ok(EinsumLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "LSTM" => Ok(LSTMLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Relu" => Ok(ReLULayer::graph(&input_shapes, &node_constants, &node_attributes)),
