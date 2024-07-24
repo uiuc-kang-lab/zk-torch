@@ -15,7 +15,7 @@ pub use div::{DivConstBasicBlock, DivScalarBasicBlock};
 pub use eq::{ElementwiseEqBasicBlock, EqBasicBlock};
 pub use id::IdBasicBlock;
 pub use matmul::MatMulBasicBlock;
-pub use max::MaxBasicBlock;
+pub use max::{MaxBasicBlock, MaxProofBasicBlock};
 pub use mul::{MulBasicBlock, MulConstBasicBlock, MulScalarBasicBlock};
 use ndarray::{ArrayD, IxDyn};
 pub use ops::*;

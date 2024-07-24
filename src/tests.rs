@@ -114,6 +114,18 @@ fn testBasicBlocks() {
 }
 
 #[test]
+fn test_max() {
+  let srs = &ptau::load_file("challenge", 7, 7);
+  let empty = ArrayD::zeros(IxDyn(&[0]));
+  let a = ArrayD::from_shape_vec(IxDyn(&[2]), vec![1, 0].into_iter().map(|x| Fr::from(x)).collect()).unwrap();
+  testBasicBlock(MaxProofBasicBlock {}, srs, &empty, &vec![&a]);
+  let b = ArrayD::from_shape_vec(IxDyn(&[4]), vec![-2, 2, -1, 4].into_iter().map(|x| Fr::from(x)).collect()).unwrap();
+  testBasicBlock(MaxProofBasicBlock {}, srs, &empty, &vec![&b]);
+  let c = ArrayD::from_shape_vec(IxDyn(&[4]), vec![-4, -3, -1, -2].into_iter().map(|x| Fr::from(x)).collect()).unwrap();
+  testBasicBlock(MaxProofBasicBlock {}, srs, &empty, &vec![&c]);
+}
+
+#[test]
 fn test_copy_constraint() {
   let srs = &ptau::load_file("challenge", 7, 7);
   let empty = ArrayD::zeros(IxDyn(&[0]));
