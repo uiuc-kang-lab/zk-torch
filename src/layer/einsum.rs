@@ -56,6 +56,93 @@ fn parse_einsum(equation: &str) -> (Vec<String>, Vec<String>) {
   (lhs_standardized, rhs_standardized)
 }
 
+fn vector_outer_product(graph: &mut Graph, input_shapes: &Vec<&Vec<usize>>) -> Vec<usize> {
+  let unsqueeze = graph.addBB(Box::new(UnsqueezeBasicBlock {}));
+  let to_split = vec![1; util::next_pow(input_shapes[0][0] as u32) as usize];
+  let split = graph.addBB(Box::new(SplitBasicBlock { axis: 0, split: to_split }));
+  let mul_scalar = graph.addBB(Box::new(RepeaterBasicBlock {
+    basic_block: Box::new(MulScalarBasicBlock {}),
+    N: 1,
+  }));
+  let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
+    input_SF: onnx::SF_LOG * 2,
+    output_SF: onnx::SF_LOG,
+  }));
+  let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
+    basic_block: Box::new(CQ2BasicBlock {
+      setup: Some((
+        Box::new(ChangeSFBasicBlock {
+          input_SF: onnx::SF_LOG * 2,
+          output_SF: onnx::SF_LOG,
+        }),
+        onnx::CQ_RANGE_LOWER,
+        onnx::CQ_RANGE,
+      )),
+    }),
+    N: 1,
+  }));
+  let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: 0 }));
+  let mut b = input_shapes[0][0];
+  b = util::next_pow(b as u32) as usize;
+  let permutation = ((0..b).map(|x| x).collect(), vec![0]);
+  let permute = graph.addBB(Box::new(RepeaterBasicBlock {
+    basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
+    N: 2,
+  }));
+  // to split the input vector into scalars, we first unsqueeze and permute it
+  let unsqueeze_output = graph.addNode(unsqueeze, vec![(-1, 0)]);
+  let permute_output = graph.addNode(permute, vec![(unsqueeze_output, 0)]);
+  let split_output = graph.addNode(split, vec![(permute_output, 0)]);
+  // for each scalar, we multiply it by the other input vector
+  let mut mul_scalar_outputs = vec![];
+  for i in 0..input_shapes[0][0] {
+    let mul_scalar_output = graph.addNode(mul_scalar, vec![(-2, 0), (split_output, i)]);
+    let change_SF_output = graph.addNode(change_SF, vec![(mul_scalar_output, 0)]);
+    let _ = graph.addNode(change_SF_check, vec![(mul_scalar_output, 0), (change_SF_output, 0)]);
+    mul_scalar_outputs.push(change_SF_output);
+  }
+  // finally, we concatenate the results to get the outer product
+  let concat_output = graph.addNode(concat, mul_scalar_outputs.iter().map(|x| (*x, 0)).collect());
+  let output_shape = vec![input_shapes[0][0], input_shapes[1][0]];
+  graph.outputs.push((concat_output, 0));
+  output_shape
+}
+
+fn vector_inner_product(graph: &mut Graph, input_shapes: &Vec<&Vec<usize>>) -> Vec<usize> {
+  let mul = graph.addBB(Box::new(RepeaterBasicBlock {
+    basic_block: Box::new(MulBasicBlock {}),
+    N: 1,
+  }));
+  let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
+    input_SF: onnx::SF_LOG * 2,
+    output_SF: onnx::SF_LOG,
+  }));
+  let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
+    basic_block: Box::new(CQ2BasicBlock {
+      setup: Some((
+        Box::new(ChangeSFBasicBlock {
+          input_SF: onnx::SF_LOG * 2,
+          output_SF: onnx::SF_LOG,
+        }),
+        onnx::CQ_RANGE_LOWER,
+        onnx::CQ_RANGE,
+      )),
+    }),
+    N: 1,
+  }));
+  let sum = graph.addBB(Box::new(RepeaterBasicBlock {
+    basic_block: Box::new(SumBasicBlock {}),
+    N: 1,
+  }));
+  let mul_output = graph.addNode(mul, vec![(-1, 0), (-2, 0)]);
+  let change_SF_output = graph.addNode(change_SF, vec![(mul_output, 0)]);
+  let _ = graph.addNode(change_SF_check, vec![(mul_output, 0), (change_SF_output, 0)]);
+  let sum_output = graph.addNode(sum, vec![(change_SF_output, 0)]);
+  let output_shape = vec![1];
+  graph.outputs.push((sum_output, 0));
+  output_shape
+}
+
 // EinsumLayer implements the einsum operation in ONNX. It supports the following equations:
 // - "a,b->ab" (vector outer product)
 // - "a,a->" (vector inner product)
@@ -71,90 +158,12 @@ impl Layer for EinsumLayer {
     // vector outer product
     if input_eqs == vec!["a", "b"] && output_eq == vec!["ab"] {
       assert!(input_shapes[0].len() == 1 && input_shapes[1].len() == 1);
-      let unsqueeze = graph.addBB(Box::new(UnsqueezeBasicBlock {}));
-      let to_split = vec![1; util::next_pow(input_shapes[0][0] as u32) as usize];
-      let split = graph.addBB(Box::new(SplitBasicBlock { axis: 0, split: to_split }));
-      let mul_scalar = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(MulScalarBasicBlock {}),
-        N: 1,
-      }));
-      let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-        input_SF: onnx::SF_LOG * 2,
-        output_SF: onnx::SF_LOG,
-      }));
-      let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(CQ2BasicBlock {
-          setup: Some((
-            Box::new(ChangeSFBasicBlock {
-              input_SF: onnx::SF_LOG * 2,
-              output_SF: onnx::SF_LOG,
-            }),
-            onnx::CQ_RANGE_LOWER,
-            onnx::CQ_RANGE,
-          )),
-        }),
-        N: 1,
-      }));
-      let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: 0 }));
-      let mut b = input_shapes[0][0];
-      b = util::next_pow(b as u32) as usize;
-      let permutation = ((0..b).map(|x| x).collect(), vec![0]);
-      let permute = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
-        N: 2,
-      }));
-
-      // to split the input vector into scalars, we first unsqueeze and permute it
-      let unsqueeze_output = graph.addNode(unsqueeze, vec![(-1, 0)]);
-      let permute_output = graph.addNode(permute, vec![(unsqueeze_output, 0)]);
-      let split_output = graph.addNode(split, vec![(permute_output, 0)]);
-      // for each scalar, we multiply it by the other input vector
-      let mut mul_scalar_outputs = vec![];
-      for i in 0..input_shapes[0][0] {
-        let mul_scalar_output = graph.addNode(mul_scalar, vec![(-2, 0), (split_output, i)]);
-        let change_SF_output = graph.addNode(change_SF, vec![(mul_scalar_output, 0)]);
-        let _ = graph.addNode(change_SF_check, vec![(mul_scalar_output, 0), (change_SF_output, 0)]);
-        mul_scalar_outputs.push(change_SF_output);
-      }
-      // finally, we concatenate the results to get the outer product
-      let concat_output = graph.addNode(concat, mul_scalar_outputs.iter().map(|x| (*x, 0)).collect());
-      let output_shape = vec![input_shapes[0][0], input_shapes[1][0]];
-      graph.outputs.push((concat_output, 0));
+      let output_shape = vector_outer_product(&mut graph, input_shapes);
       (graph, vec![output_shape])
     // vector inner product
     } else if input_eqs == vec!["a", "a"] {
       assert!(input_shapes[0].len() == 1 && input_shapes[1].len() == 1);
-      let mul = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(MulBasicBlock {}),
-        N: 1,
-      }));
-      let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-        input_SF: onnx::SF_LOG * 2,
-        output_SF: onnx::SF_LOG,
-      }));
-      let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(CQ2BasicBlock {
-          setup: Some((
-            Box::new(ChangeSFBasicBlock {
-              input_SF: onnx::SF_LOG * 2,
-              output_SF: onnx::SF_LOG,
-            }),
-            onnx::CQ_RANGE_LOWER,
-            onnx::CQ_RANGE,
-          )),
-        }),
-        N: 1,
-      }));
-      let sum = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(SumBasicBlock {}),
-        N: 1,
-      }));
-      let mul_output = graph.addNode(mul, vec![(-1, 0), (-2, 0)]);
-      let change_SF_output = graph.addNode(change_SF, vec![(mul_output, 0)]);
-      let _ = graph.addNode(change_SF_check, vec![(mul_output, 0), (change_SF_output, 0)]);
-      let sum_output = graph.addNode(sum, vec![(change_SF_output, 0)]);
-      let output_shape = vec![1];
-      graph.outputs.push((sum_output, 0));
+      let output_shape = vector_inner_product(&mut graph, input_shapes);
       (graph, vec![output_shape])
     } else {
       panic!("EinsumLayer not implemented for equation {:?}", equation);
