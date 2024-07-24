@@ -2,25 +2,17 @@ use super::BasicBlock;
 use crate::{
   basic_block::{Data, DataEnc, SRS},
   onnx,
-  util::{self, calc_pow, convert_to_data},
+  util::{self, calc_pow},
   PairingCheck, ProveVerifyCache,
 };
-use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ec::pairing::Pairing;
+use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain, Polynomial};
 use ark_serialize::CanonicalSerialize;
-use ark_std::One;
-use ark_std::Zero;
-use ark_std::{cmp::max, UniformRand};
-use ndarray::Axis;
-use ndarray::{arr0, arr1, azip, Array, ArrayD};
+use ark_std::{cmp::max, One, UniformRand, Zero};
+use ndarray::{arr1, azip, ArrayD, Axis};
 use rand::{rngs::StdRng, SeedableRng};
-use std::{
-  borrow::Borrow,
-  ops::{Mul, Sub},
-  time::Instant,
-};
+use std::ops::{Mul, Sub};
 
 #[derive(Debug)]
 pub struct MaxBasicBlock;
