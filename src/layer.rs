@@ -25,6 +25,7 @@ pub use slice::SliceLayer;
 pub use softmax::SoftmaxLayer;
 pub use split::SplitLayer;
 pub use squeeze::{SqueezeLayer, UnsqueezeLayer};
+pub use tile::TileLayer;
 use tract_onnx::pb::AttributeProto;
 pub use transpose::TransposeLayer;
 
@@ -51,6 +52,7 @@ pub mod slice;
 pub mod softmax;
 pub mod split;
 pub mod squeeze;
+pub mod tile;
 pub mod transpose;
 pub mod r#where;
 

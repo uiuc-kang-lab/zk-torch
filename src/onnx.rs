@@ -146,6 +146,7 @@ fn get_local_graph(
     "Reshape" => Ok(ReshapeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Transpose" => Ok(TransposeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Tanh" => Ok(TanhLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Tile" => Ok(TileLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Shape" => Ok(ShapeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Sigmoid" => Ok(SigmoidLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Equal" => Ok(EqualLayer::graph(&input_shapes, &node_constants, &node_attributes)),
