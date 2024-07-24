@@ -73,7 +73,14 @@ fn testBasicBlocks() {
   testBasicBlock(AddBasicBlock {}, srs, &empty, &vec![&b, &a_0]);
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a_0, &b]);
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&b, &a_0]);
-  testBasicBlock(CQBasicBlock { setup: a.clone().into_dimensionality::<ndarray::Ix1>().unwrap() }, srs, &a, &vec![&a_n]);
+  testBasicBlock(
+    CQBasicBlock {
+      setup: a.clone().into_dimensionality::<ndarray::Ix1>().unwrap(),
+    },
+    srs,
+    &a,
+    &vec![&a_n],
+  );
   testBasicBlock(CQ2BasicBlock { setup: None }, srs, &ab, &vec![&a_n, &b_n]);
   testBasicBlock(SumBasicBlock {}, srs, &empty, &vec![&a]);
 
@@ -110,8 +117,12 @@ fn testBasicBlocks() {
 fn test_max() {
   let srs = &ptau::load_file("challenge", 7, 7);
   let empty = ArrayD::zeros(IxDyn(&[0]));
-  let a = ArrayD::from_shape_vec(IxDyn(&[4]), vec![-4, 2, -1, 4].into_iter().map(|x| Fr::from(x)).collect()).unwrap();
+  let a = ArrayD::from_shape_vec(IxDyn(&[2]), vec![1, 0].into_iter().map(|x| Fr::from(x)).collect()).unwrap();
   testBasicBlock(MaxProofBasicBlock {}, srs, &empty, &vec![&a]);
+  let b = ArrayD::from_shape_vec(IxDyn(&[4]), vec![-2, 2, -1, 4].into_iter().map(|x| Fr::from(x)).collect()).unwrap();
+  testBasicBlock(MaxProofBasicBlock {}, srs, &empty, &vec![&b]);
+  let c = ArrayD::from_shape_vec(IxDyn(&[4]), vec![-4, -3, -1, -2].into_iter().map(|x| Fr::from(x)).collect()).unwrap();
+  testBasicBlock(MaxProofBasicBlock {}, srs, &empty, &vec![&c]);
 }
 
 #[test]
