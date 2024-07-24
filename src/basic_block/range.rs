@@ -2,6 +2,7 @@
 #![allow(non_upper_case_globals)]
 use super::{BasicBlock, Data, DataEnc, SRS};
 use crate::{
+  onnx,
   util::{self, calc_pow},
   PairingCheck, ProveVerifyCache,
 };
@@ -25,15 +26,15 @@ use std::{
   iter::{once, repeat},
 };
 
-// RangeBasicBlock is a basic block that creates a tensor of a range of values.
-// TODO: add proper blinding for opening arguments, similar issue as in CopyConstraintBasicBlock
+// RangeConstBasicBlock is a basic block that creates a tensor of a range of values.
+// The range is defined by three constants: the start, limit, and delta values.
 #[derive(Debug)]
-pub struct RangeBasicBlock {
+pub struct RangeConstBasicBlock {
   pub start: i32,
   pub limit: i32,
   pub delta: i32,
 }
-impl BasicBlock for RangeBasicBlock {
+impl BasicBlock for RangeConstBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     let mut r = vec![];
     let mut x = self.start;
@@ -41,7 +42,29 @@ impl BasicBlock for RangeBasicBlock {
       r.push(Fr::from(x));
       x += self.delta;
     }
-    println!("{:?}", r);
+    vec![arr1(&r).into_dyn()]
+  }
+}
+
+// RangeBasicBlock is a basic block that creates a tensor of a range of values.
+// The difference between RangeBasicBlock and RangeConstBasicBlock is that RangeBasicBlock
+// takes the limit value as a private input, while RangeConstBasicBlock takes the limit value as a constant.
+// TODO: add proper blinding for opening arguments, similar issue as in CopyConstraintBasicBlock
+#[derive(Debug)]
+pub struct RangeBasicBlock {
+  pub start: i32,
+  pub delta: i32,
+}
+impl BasicBlock for RangeBasicBlock {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    assert!(inputs.len() == 1 && inputs[0].ndim() == 1);
+    let limit = util::fr_to_int(inputs[0][0]) as i32;
+    let mut r = vec![];
+    let mut x = self.start;
+    while x < limit {
+      r.push(Fr::from(x));
+      x += self.delta;
+    }
     vec![arr1(&r).into_dyn()]
   }
 
@@ -50,14 +73,16 @@ impl BasicBlock for RangeBasicBlock {
     srs: &SRS,
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     _model: &ArrayD<Data>,
-    _inputs: &Vec<&ArrayD<Data>>,
+    inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
     _cache: &mut ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    let limit = util::fr_to_int(inputs[0].first().unwrap().raw[0]) as i32;
     // number_of_elements = max( ceil( (limit - start) / delta ) , 0 )
-    let element_num = max(0, ((self.limit - self.start) + self.delta - 1) / self.delta);
-    let N = util::next_pow(element_num as u32) as usize;
+    let element_num = max(0, ((limit - self.start) + self.delta - 1) / self.delta);
+    let N = onnx::CQ_RANGE;
+    assert!(element_num <= N as i32);
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
     let omega = domain.group_gen();
 
@@ -155,8 +180,7 @@ impl BasicBlock for RangeBasicBlock {
     rng: &mut StdRng,
     _cache: &mut ProveVerifyCache,
   ) -> Vec<PairingCheck> {
-    let element_num = max(0, ((self.limit - self.start) + self.delta - 1) / self.delta);
-    let N = util::next_pow(element_num as u32) as usize;
+    let N = onnx::CQ_RANGE;
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
 
     // First check selection(z) * [f(z) + step(z) - f(omega * z)] == t(z) * vanishing_poly(z)
