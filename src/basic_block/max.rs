@@ -10,7 +10,7 @@ use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain, Polynomial};
 use ark_serialize::CanonicalSerialize;
 use ark_std::{cmp::max, One, UniformRand, Zero};
-use ndarray::{arr1, azip, ArrayD, Axis};
+use ndarray::{arr0, arr1, azip, ArrayD, Axis};
 use rand::{rngs::StdRng, SeedableRng};
 use std::ops::{Mul, Sub};
 
@@ -33,7 +33,7 @@ impl BasicBlock for MaxBasicBlock {
 #[derive(Debug)]
 pub struct MaxProofBasicBlock;
 
-// This max includes a proof and is intended to be followed by a lookup range check on the second output.
+// This max includes a proof. The first output is the max and second output is a vector of max - x for all input values x. The second output is needed because it is necessary to perform a range check on the second output.
 impl BasicBlock for MaxProofBasicBlock {
   // Returns the max of the input and max - x for all x in input
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
@@ -56,6 +56,23 @@ impl BasicBlock for MaxProofBasicBlock {
     vec![max_arr, r]
   }
 
+  fn encodeOutputs(&self, srs: &SRS, _model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
+    let input = inputs[0].first().unwrap();
+    let max = util::convert_to_data(srs, outputs[0]);
+    let max_data = max.first().unwrap();
+
+    vec![
+      max.clone(),
+      arr0(Data {
+        raw: outputs[1].clone().into_raw_vec(),
+        poly: (&max_data.poly) - (&input.poly),
+        g1: max_data.g1 - input.g1,
+        r: max_data.r - input.r,
+      })
+      .into_dyn(),
+    ]
+  }
+
   fn prove(
     &mut self,
     srs: &SRS,
@@ -71,10 +88,7 @@ impl BasicBlock for MaxProofBasicBlock {
 
     // Round 1: Prove difference and commit s
     // Diff proving
-    let max = outputs[0].first().unwrap();
-    let input = inputs[0].first().unwrap();
     let diff = outputs[1].first().unwrap();
-    let C1 = srs.X1P[0] * (max.r - input.r - diff.r);
 
     // s has to have 0 as the first element, which should happen after sorting
     let mut s = diff.raw.clone();
@@ -87,12 +101,13 @@ impl BasicBlock for MaxProofBasicBlock {
     let mut bytes = Vec::new();
     let mut rng2 = StdRng::from_entropy();
     let r: Vec<_> = (0..2).map(|_| Fr::rand(&mut rng2)).collect();
-    let mut proof = vec![s_x + srs.Y1P * r[0], C1];
+    let mut proof = vec![s_x + srs.Y1P * r[0]];
     proof.serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
 
     // Compute Z commitment
     // Grand product argument to check that s is a permutation of f
+    // Z(omega * X) (s(X) + gamma) = (d(X) + gamma) * Z(X)
     let mut Z = vec![Fr::zero(); N];
     let gamma = Fr::rand(rng);
     Z[0] = Fr::one();
@@ -130,8 +145,8 @@ impl BasicBlock for MaxProofBasicBlock {
     let alpha = Fr::rand(rng);
 
     // t constraints:
-    // Z(oX) (s(X) + gamma) = (d(X) + gamma) * Z(X)
-    // L0(X)(Z(X)-1) = 0s
+    // Z(omega * X) (s(X) + gamma) = (d(X) + gamma) * Z(X)
+    // L0(X)(Z(X)-1) = 0
     // L0(X)s(X) = 0
     let gamma_poly = DensePolynomial::from_coefficients_vec(vec![gamma]);
     let alpha_poly = DensePolynomial::from_coefficients_vec(vec![alpha]);
@@ -186,7 +201,7 @@ impl BasicBlock for MaxProofBasicBlock {
     let W_gQ: DensePolynomial<_> = &Z_poly.sub(&Z_gz_poly) / &W_gV;
     let W_gx = util::msm::<G1Projective>(&srs.X1A, &W_gQ.coeffs);
 
-    // Round 5 end randomness
+    // Round 5 end randomness. This is necessary in the prover to keep rng state consistent with the verifier.
     let mut bytes = Vec::new();
     vec![W_x, W_gx].serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
@@ -214,7 +229,7 @@ impl BasicBlock for MaxProofBasicBlock {
     let input = inputs[0].first().unwrap();
     let diff = outputs[1].first().unwrap();
 
-    let [s_x, C1, Z_x, t_x, W_x, W_gx, C2] = proof.0[..] else {
+    let [s_x, Z_x, t_x, W_x, W_gx, C2] = proof.0[..] else {
       panic!("Wrong proof format")
     };
 
@@ -222,7 +237,7 @@ impl BasicBlock for MaxProofBasicBlock {
 
     // Round 2 randomness
     let mut bytes = Vec::new();
-    vec![s_x, C1].serialize_uncompressed(&mut bytes).unwrap();
+    vec![s_x].serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
     let gamma = Fr::rand(rng);
 
@@ -251,7 +266,7 @@ impl BasicBlock for MaxProofBasicBlock {
     let u = Fr::rand(rng);
 
     // Verify that diff = max - input
-    checks.push(vec![((max.g1 - input.g1 - diff.g1).into(), srs.X2A[0]), (-C1, srs.Y2A)]);
+    assert!(max.g1 - input.g1 == diff.g1);
 
     // Verify t batched check
     let zeta_pows = calc_pow(zeta, N);
