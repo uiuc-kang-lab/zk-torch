@@ -41,6 +41,8 @@ impl BasicBlock for Const2BasicBlock {
   }
 }
 
+// ConstOfShapeBasicBlock is a basic block that creates a constant tensor of a given shape and value.
+// It requires no proving since the constant value is known as a public input.
 #[derive(Debug)]
 pub struct ConstOfShapeBasicBlock {
   pub c: Fr,

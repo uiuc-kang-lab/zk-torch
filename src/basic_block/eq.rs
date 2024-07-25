@@ -43,20 +43,24 @@ impl BasicBlock for EqBasicBlock {
   }
 }
 
+// ElementwiseEqBasicBlock is a basic block that performs elementwise equality comparison.
 #[derive(Debug)]
 pub struct ElementwiseEqBasicBlock;
 impl BasicBlock for ElementwiseEqBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 2 && inputs[0].ndim() <= 1 && inputs[1].ndim() <= 1);
     let mut r = ArrayD::zeros(IxDyn(&[std::cmp::max(inputs[0].len(), inputs[1].len())]));
+    // broadcast inputs[0] to compare with each element in inputs[1]
     if inputs[0].len() == 1 && inputs[1].ndim() > 0 {
       Zip::from(r.view_mut())
         .and(inputs[1].view())
         .for_each(|r, &x| *r = (util::fr_to_int(x) == util::fr_to_int(*inputs[0].first().unwrap())) as u8);
+    // broadcast inputs[1] to compare with each element in inputs[0]
     } else if inputs[1].len() == 1 && inputs[0].ndim() > 0 {
       Zip::from(r.view_mut())
         .and(inputs[0].view())
         .for_each(|r, &x| *r = (util::fr_to_int(x) == util::fr_to_int(*inputs[1].first().unwrap())) as u8);
+    // elementwise comparison
     } else {
       Zip::from(r.view_mut())
         .and(inputs[0].view())

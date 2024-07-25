@@ -79,8 +79,10 @@ pub enum CacheValues {
   G2(G2Affine),
 }
 
-// The cache needs to be in Arc<Mutex<>> because it is shared between threads during proving and verifying.
-// Arc allows multiple threads to access the cache, and Mutex ensures that only one thread can write to the cache at a time.
+// The cache is wrapped in Arc<Mutex<>> to allow multiple threads within the same role (either prover or verifier) to access it.
+// Arc (Atomic Reference Counting) enables safe sharing of the cache between threads, 
+// while Mutex ensures that only one thread can write to the cache at a time, preventing race conditions.
+// Note: Each prover and verifier maintains its own separate cache. There is no cache sharing between the prover and verifier.
 pub type ProveVerifyCache = Arc<Mutex<HashMap<String, CacheValues>>>;
 
 pub type PairingCheck = Vec<(G1Affine, G2Affine)>;
