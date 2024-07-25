@@ -57,14 +57,14 @@ impl BasicBlock for CQBasicBlock {
   }
 
   fn prove(
-    &mut self,
+    &self,
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
-    cache: &mut ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     assert!(inputs.len() == 1 && inputs[0].len() == 1);
     let model = &model.first().unwrap();
@@ -79,6 +79,7 @@ impl BasicBlock for CQBasicBlock {
     let L_i_x_1 = &setup.0[N..2 * N];
     let L_i_0_x_1 = &setup.0[2 * N..];
     let m_i = {
+      let mut cache = cache.lock().unwrap();
       let CacheValues::CQTableDict(table_dict) =
         cache.entry(format!("cq_table_dict_{:p}", self)).or_insert_with(|| CacheValues::CQTableDict(HashMap::new()))
       else {
@@ -160,7 +161,7 @@ impl BasicBlock for CQBasicBlock {
     _outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
-    _cache: &mut ProveVerifyCache,
+    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let N = model.first().unwrap().len;

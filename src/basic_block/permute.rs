@@ -34,16 +34,17 @@ impl BasicBlock for PermuteBasicBlock {
   }
 
   fn prove(
-    &mut self,
+    &self,
     srs: &SRS,
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     _model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
-    cache: &mut ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let alpha = {
+      let mut cache = cache.lock().unwrap();
       let CacheValues::RLCRandom(alpha) = cache.entry("permute_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
         panic!("Cache type error")
       };
@@ -63,6 +64,7 @@ impl BasicBlock for PermuteBasicBlock {
     let alpha_pow = calc_pow(alpha, n * m);
 
     let b = {
+      let mut cache = cache.lock().unwrap();
       let CacheValues::Data(b) = cache.entry(format!("permute_b_msm_{m}_{n}")).or_insert_with(|| {
         CacheValues::Data({
           let b: Vec<_> = (0..m).map(|i| alpha_pow[i * n]).collect();
@@ -75,6 +77,7 @@ impl BasicBlock for PermuteBasicBlock {
     };
 
     let d = {
+      let mut cache = cache.lock().unwrap();
       let CacheValues::Data(d) = cache.entry(format!("permute_d_msm_{self:p}")).or_insert_with(|| {
         CacheValues::Data({
           let d: Vec<_> = (0..m2).map(|i| alpha_pow[self.permutation.1[i]]).collect();
@@ -157,10 +160,11 @@ impl BasicBlock for PermuteBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
-    cache: &mut ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let alpha = {
+      let mut cache = cache.lock().unwrap();
       let CacheValues::RLCRandom(alpha) = cache.entry("permute_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
         panic!("Cache type error")
       };
@@ -187,6 +191,7 @@ impl BasicBlock for PermuteBasicBlock {
     let d: Vec<_> = (0..m2).map(|i| alpha_pow[self.permutation.1[i]]).collect();
 
     let b_g2 = {
+      let mut cache = cache.lock().unwrap();
       let CacheValues::G2(b_g2) = cache
         .entry(format!("permute_b_msm_g2_{m}_{n}"))
         .or_insert_with(|| CacheValues::G2(util::msm::<G2Projective>(&srs.X2A, &domain_m.ifft(&b)).into()))
@@ -197,6 +202,7 @@ impl BasicBlock for PermuteBasicBlock {
     };
 
     let d_g2 = {
+      let mut cache = cache.lock().unwrap();
       let CacheValues::G2(d_g2) = cache
         .entry(format!("permute_d_msm_g2_{self:p}"))
         .or_insert_with(|| CacheValues::G2(util::msm::<G2Projective>(&srs.X2A, &domain_m2.ifft(&d)).into()))
