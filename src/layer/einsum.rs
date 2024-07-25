@@ -108,7 +108,7 @@ fn vector_outer_product(graph: &mut Graph, input_shapes: &Vec<&Vec<usize>>) -> V
   output_shape
 }
 
-fn vector_inner_product(graph: &mut Graph, input_shapes: &Vec<&Vec<usize>>) -> Vec<usize> {
+fn vector_inner_product(graph: &mut Graph, _input_shapes: &Vec<&Vec<usize>>) -> Vec<usize> {
   let mul = graph.addBB(Box::new(RepeaterBasicBlock {
     basic_block: Box::new(MulBasicBlock {}),
     N: 1,
@@ -161,7 +161,7 @@ impl Layer for EinsumLayer {
       let output_shape = vector_outer_product(&mut graph, input_shapes);
       (graph, vec![output_shape])
     // vector inner product
-    } else if input_eqs == vec!["a", "a"] {
+    } else if input_eqs == vec!["a", "a"] && output_eq.len() == 0 {
       assert!(input_shapes[0].len() == 1 && input_shapes[1].len() == 1);
       let output_shape = vector_inner_product(&mut graph, input_shapes);
       (graph, vec![output_shape])
