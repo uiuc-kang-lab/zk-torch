@@ -110,20 +110,11 @@ fn verify(srs: &SRS, graph: &Graph) {
 }
 
 fn main() {
-  let srs = &ptau::load_file("challenge_18", 18, 18);
-  let onnx_file_name = "network.onnx";
+  let srs = &ptau::load_file("challenge", 7, 7);
+  let onnx_file_name = "sample.onnx";
   let (mut graph, models) = onnx::load_file(onnx_file_name);
-  let maximum_score = ArrayD::from_shape_vec(vec![1], vec![Fr::from(5)]).unwrap();
-  let previous_score = ArrayD::from_shape_vec(vec![1], vec![Fr::from(3)]).unwrap();
-  let verified = ArrayD::from_shape_vec(vec![1], vec![Fr::from(1)]).unwrap();
-  let proof_size = ArrayD::from_shape_vec(vec![1], vec![Fr::from(16)]).unwrap();
-  let response_time = ArrayD::from_shape_vec(vec![1], vec![Fr::from(10)]).unwrap();
-  let maximum_response_time = ArrayD::from_shape_vec(vec![1], vec![Fr::from(20)]).unwrap();
-  let minimum_response_time = ArrayD::from_shape_vec(vec![1], vec![Fr::from(5)]).unwrap();
-  let validator_hot_key = ArrayD::from_shape_vec(vec![64], vec![Fr::from(8); 64]).unwrap();
-  let block_number = ArrayD::from_shape_vec(vec![1], vec![Fr::from(100)]).unwrap();
-  let miner_uid = ArrayD::from_shape_vec(vec![1], vec![Fr::from(23)]).unwrap();
-  let inputs = vec![&maximum_score, &previous_score, &verified, &proof_size, &response_time, &maximum_response_time, &minimum_response_time, &validator_hot_key, &block_number, &miner_uid];
+  let fake_inputs = util::generate_fake_inputs_for_onnx(onnx_file_name);
+  let inputs = fake_inputs.iter().map(|x| x).collect();
   let models = models.iter().map(|x| x).collect();
   prove(&srs, &inputs, &mut graph, &models);
   verify(&srs, &graph);
