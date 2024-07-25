@@ -44,6 +44,49 @@ impl BasicBlock for RangeConstBasicBlock {
     }
     vec![arr1(&r).into_dyn()]
   }
+
+  fn setup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+    let element_num = max(0, ((self.limit - self.start) + self.delta - 1) / self.delta);
+    let domain = GeneralEvaluationDomain::<Fr>::new(element_num as usize).unwrap();
+
+    let mut r = vec![];
+    let mut x = self.start;
+    while x < self.limit {
+      r.push(Fr::from(x));
+      x += self.delta;
+    }
+    let range_poly = DensePolynomial::from_coefficients_vec(domain.ifft(&r));
+    let range_x = util::msm::<G1Projective>(&srs.X1A, &range_poly.coeffs);
+    (vec![range_x], vec![], vec![])
+  }
+
+  fn prove(
+      &mut self,
+      srs: &SRS,
+      setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+      _model: &ArrayD<Data>,
+      _inputs: &Vec<&ArrayD<Data>>,
+      outputs: &Vec<&ArrayD<Data>>,
+      _rng: &mut StdRng,
+      _cache: &mut ProveVerifyCache,
+    ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    let C = srs.Y1P * outputs[0].first().unwrap().r;
+    (vec![setup.0[0].into(), C.into()], vec![], vec![])
+  }
+
+  fn verify(
+      &self,
+      _srs: &SRS,
+      _model: &ArrayD<DataEnc>,
+      _inputs: &Vec<&ArrayD<DataEnc>>,
+      outputs: &Vec<&ArrayD<DataEnc>>,
+      proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+      _rng: &mut StdRng,
+      _cache: &mut ProveVerifyCache,
+    ) -> Vec<PairingCheck> {
+    assert!(proof.0[0] + proof.0[1] == outputs[0].first().unwrap().g1);
+    vec![]
+  }
 }
 
 // RangeBasicBlock is a basic block that creates a tensor of a range of values.
