@@ -92,6 +92,7 @@ impl BasicBlock for RangeConstBasicBlock {
 // RangeBasicBlock is a basic block that creates a tensor of a range of values.
 // The difference between RangeBasicBlock and RangeConstBasicBlock is that RangeBasicBlock
 // takes the limit value as a private input, while RangeConstBasicBlock takes the limit value as a constant.
+// We don't use this basic block in the current implementation because we can't compile the graph without knowing the limit value.
 // TODO: add proper blinding for opening arguments, similar issue as in CopyConstraintBasicBlock
 #[derive(Debug)]
 pub struct RangeBasicBlock {
@@ -108,7 +109,13 @@ impl BasicBlock for RangeBasicBlock {
       r.push(Fr::from(x));
       x += self.delta;
     }
-    vec![arr1(&r).into_dyn()]
+    x -= self.delta;
+    // return the range and the last value
+    // TODO: check that the 
+    // (1) last value - limit <= delta
+    // (2) last value - range >= 0
+    // (3) last value is in range
+    vec![arr1(&r).into_dyn(), arr1(&[Fr::from(x)]).into_dyn()]
   }
 
   fn prove(
@@ -226,7 +233,9 @@ impl BasicBlock for RangeBasicBlock {
     let N = onnx::CQ_RANGE;
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
 
-    // First check selection(z) * [f(z) + step(z) - f(omega * z)] == t(z) * vanishing_poly(z)
+    // First check
+    // (1) selection(z) * [f(z) + step(z) - f(omega * z)] == t(z) * vanishing_poly(z)
+    // (2) L_0(z) * [f(z) - start] == 0
     let proof0_for_check = &proof.0[..3];
     let mut bytes = Vec::new();
     proof0_for_check.serialize_uncompressed(&mut bytes).unwrap();
@@ -239,7 +248,12 @@ impl BasicBlock for RangeBasicBlock {
       panic!("Invalid proof length");
     };
 
+    let mut L0 = vec![Fr::zero(); N];
+    L0[0] = Fr::one();
+    let L0_poly = DensePolynomial { coeffs: domain.ifft(&L0) };
+    let L0_poly_z = L0_poly.evaluate(&z);
     assert!(selection_z * (f_z + step_z - f_omega_z) == t_z * vanishing_poly_z);
+    assert!(L0_poly_z * (f_z-Fr::from(self.start)) == Fr::zero());
 
     // Then check openings are correct
 
