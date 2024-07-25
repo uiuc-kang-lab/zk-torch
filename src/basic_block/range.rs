@@ -61,14 +61,14 @@ impl BasicBlock for RangeConstBasicBlock {
   }
 
   fn prove(
-      &mut self,
+      &self,
       srs: &SRS,
       setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
       _model: &ArrayD<Data>,
       _inputs: &Vec<&ArrayD<Data>>,
       outputs: &Vec<&ArrayD<Data>>,
       _rng: &mut StdRng,
-      _cache: &mut ProveVerifyCache,
+      _cache: ProveVerifyCache,
     ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let C = srs.Y1P * outputs[0].first().unwrap().r;
     (vec![setup.0[0].into(), C.into()], vec![], vec![])
@@ -82,7 +82,7 @@ impl BasicBlock for RangeConstBasicBlock {
       outputs: &Vec<&ArrayD<DataEnc>>,
       proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
       _rng: &mut StdRng,
-      _cache: &mut ProveVerifyCache,
+      _cache: ProveVerifyCache,
     ) -> Vec<PairingCheck> {
     assert!(proof.0[0] + proof.0[1] == outputs[0].first().unwrap().g1);
     vec![]
