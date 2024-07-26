@@ -125,6 +125,7 @@ fn get_local_graph(
 ) -> (Graph, Vec<Vec<usize>>) {
   match op {
     "Add" => Ok(AddLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "And" => Ok(MulLayer::graph(&input_shapes, &node_constants, &node_attributes)), // use MulLayer for And
     "Mul" => Ok(MulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Cast" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Identity" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)), // Identity is equivalent to Cast in zk-torch
