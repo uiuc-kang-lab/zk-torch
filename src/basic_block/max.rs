@@ -56,6 +56,15 @@ impl BasicBlock for MaxProofBasicBlock {
     vec![max_arr, r]
   }
 
+  // Overview of the proof:
+  // 1. IFFT the 1-d array F as a polynomial f(X)
+  // 2. Compute another polynomial d(X) by IFFTing max - F and requires that
+  //   - Every evaluation of d(X) over the domain elements >= 0. This requires a range check such as with CQ
+  //   - The subtraction is correctly performed by checking [d]_1 == [max]_1 - [f]_1
+  // 3. Show max really exists in one of the evaluations of f(X) by showing 0 exists in d(X)
+  //   - Sort d(x) in ascending order to get s(x), then the first element in s(x) should be 0. Verifier will check that the first element of s is 0.
+  //   - Prove that d(x) is a permutation of s(x). This is proven via a product check polynomial Z, and requires openings.
+  // 4. Prove all openings are valid
   fn encodeOutputs(&self, srs: &SRS, _model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
     let input = inputs[0].first().unwrap();
     let max = util::convert_to_data(srs, outputs[0]);
@@ -78,7 +87,7 @@ impl BasicBlock for MaxProofBasicBlock {
     srs: &SRS,
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     _model: &ArrayD<Data>,
-    inputs: &Vec<&ArrayD<Data>>,
+    _inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
     _cache: &mut ProveVerifyCache,
