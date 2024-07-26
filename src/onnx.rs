@@ -138,6 +138,7 @@ fn get_local_graph(
     "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Neg" => Ok(NegLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Relu" => Ok(ReLULayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Flatten" => Ok(FlattenLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Gather" => Ok(GatherLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Range" => Ok(RangeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Reciprocal" => Ok(ReciprocalLayer::graph(&input_shapes, &node_constants, &node_attributes)),
