@@ -167,6 +167,7 @@ fn get_local_graph(
     "Unsqueeze" => Ok(UnsqueezeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Erf" => Ok(ErfLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Conv" => Ok(ConvLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Xor" => Ok(XorLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     _ => Err(format!("Unsupported onnx operation: {op}")),
   }
   .unwrap()
