@@ -2,6 +2,7 @@ use super::BasicBlock;
 use crate::util;
 use ark_bn254::Fr;
 use ndarray::{arr1, ArrayD};
+use rayon::prelude::*;
 
 #[derive(Debug)]
 pub struct DivScalarBasicBlock {

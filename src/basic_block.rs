@@ -22,12 +22,15 @@ pub use ops::*;
 pub use permute::PermuteBasicBlock;
 use rand::{rngs::StdRng, SeedableRng};
 pub use range::RangeBasicBlock;
+use rayon::prelude::*;
 pub use repeater::RepeaterBasicBlock;
 pub use reshape::ReshapeBasicBlock;
 pub use rope::RoPEBasicBlock;
 use serde::{Deserialize, Serialize};
 pub use split::SplitBasicBlock;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
 pub use sub::SubBasicBlock;
 pub use sum::SumBasicBlock;
 pub use transpose::TransposeBasicBlock;
@@ -75,7 +78,12 @@ pub enum CacheValues {
   Data(Data),
   G2(G2Affine),
 }
-pub type ProveVerifyCache = HashMap<String, CacheValues>;
+
+// The cache is wrapped in Arc<Mutex<>> to allow multiple threads within the same role (either prover or verifier) to access it.
+// Arc (Atomic Reference Counting) enables safe sharing of the cache between threads,
+// while Mutex ensures that only one thread can write to the cache at a time, preventing race conditions.
+// Note: Each prover and verifier maintains its own separate cache. There is no cache sharing between the prover and verifier.
+pub type ProveVerifyCache = Arc<Mutex<HashMap<String, CacheValues>>>;
 
 pub type PairingCheck = Vec<(G1Affine, G2Affine)>;
 
@@ -127,7 +135,7 @@ impl DataEnc {
   }
 }
 
-pub trait BasicBlock: std::fmt::Debug {
+pub trait BasicBlock: std::fmt::Debug + Send + Sync {
   fn genModel(&self) -> ArrayD<Fr> {
     ArrayD::zeros(IxDyn(&[0]))
   }
@@ -150,14 +158,14 @@ pub trait BasicBlock: std::fmt::Debug {
   }
 
   fn prove(
-    &mut self,
+    &self,
     _srs: &SRS,
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
-    _cache: &mut ProveVerifyCache,
+    _cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     (Vec::new(), Vec::new(), Vec::new())
   }
@@ -170,7 +178,7 @@ pub trait BasicBlock: std::fmt::Debug {
     _outputs: &Vec<&ArrayD<DataEnc>>,
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
-    _cache: &mut ProveVerifyCache,
+    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     vec![]
   }

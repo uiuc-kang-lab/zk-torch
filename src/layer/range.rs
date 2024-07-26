@@ -32,9 +32,7 @@ impl Layer for RangeLayer {
       .clone();
 
     let range_setup: Array1<Fr> = util::pad_to_pow_of_two(&range_tensor, &Fr::zero()).into_dimensionality::<ndarray::Ix1>().unwrap();
-    let range_check = graph.addBB(Box::new(CQBasicBlock {
-      setup: range_setup,
-    }));
+    let range_check = graph.addBB(Box::new(CQBasicBlock { setup: range_setup }));
     let range_output = graph.addNode(range, vec![(-1, 0)]);
     let _ = graph.addNode(range_check, vec![(-1, 0), (range_output, 0)]);
     graph.outputs.push((range_output, 0));

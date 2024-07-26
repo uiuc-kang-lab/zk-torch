@@ -52,5 +52,6 @@ pub fn load_file(filename: &str, n: usize, m: usize) -> SRS {
     X1P: g1_p,
     X2P: g2_p,
   };
+
   res
 }

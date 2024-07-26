@@ -104,14 +104,14 @@ impl BasicBlock for CQLinBasicBlock {
   }
 
   fn prove(
-    &mut self,
+    &self,
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
-    cache: &mut ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let l = inputs[0].len();
     let m = model.len();
@@ -119,6 +119,7 @@ impl BasicBlock for CQLinBasicBlock {
     let N = srs.X2P.len() - 1;
     let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
     let alpha = {
+      let mut cache = cache.lock().unwrap();
       let CacheValues::RLCRandom(alpha) = cache.entry("cqlin_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
         panic!("Cache type error")
       };
@@ -126,6 +127,7 @@ impl BasicBlock for CQLinBasicBlock {
     };
 
     let alpha_pow = {
+      let mut cache = cache.lock().unwrap();
       let CacheValues::Data(alpha_pow) =
         cache.entry(format!("cqlin_alpha_msm_{l}")).or_insert_with(|| CacheValues::Data(Data::new(srs, &calc_pow(alpha, l))))
       else {
@@ -214,7 +216,7 @@ impl BasicBlock for CQLinBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
-    cache: &mut ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let l = inputs[0].len();
@@ -229,6 +231,7 @@ impl BasicBlock for CQLinBasicBlock {
     let [M_x] = proof.1[..] else { panic!("Wrong proof format") };
 
     let alpha = {
+      let mut cache = cache.lock().unwrap();
       let CacheValues::RLCRandom(alpha) = cache.entry("cqlin_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
         panic!("Cache type error")
       };

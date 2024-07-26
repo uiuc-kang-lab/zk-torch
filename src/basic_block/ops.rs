@@ -2,6 +2,7 @@ use super::BasicBlock;
 use crate::util;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
+use rayon::iter::ParallelIterator;
 
 macro_rules! make_basic_block {
   (

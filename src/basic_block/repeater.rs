@@ -5,6 +5,7 @@ use ark_poly::univariate::DensePolynomial;
 use itertools::multiunzip;
 use ndarray::{arr1, azip, par_azip, s, ArrayD, Axis, Dimension, IxDyn, SliceInfo, SliceInfoElem};
 use rand::rngs::StdRng;
+use rayon::prelude::*;
 
 #[derive(Debug)]
 pub struct RepeaterBasicBlock {
@@ -129,14 +130,14 @@ impl BasicBlock for RepeaterBasicBlock {
   }
 
   fn prove(
-    &mut self,
+    &self,
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
-    cache: &mut ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
     let mut empty = ArrayD::from_elem(temp.shape(), (vec![], vec![], vec![]));
@@ -144,7 +145,7 @@ impl BasicBlock for RepeaterBasicBlock {
       let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
       let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
       let mut rng = rng.clone();
-      let tmp = self.basic_block.prove(srs, setup, model, &localInputs, &localOutputs, &mut rng, cache);
+      let tmp = self.basic_block.prove(srs, setup, model, &localInputs, &localOutputs, &mut rng, cache.clone());
       *x = tmp;
     });
     let proof: (Vec<_>, Vec<_>, Vec<_>) = multiunzip(empty.into_iter());
@@ -164,7 +165,7 @@ impl BasicBlock for RepeaterBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
-    cache: &mut ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
 
@@ -189,7 +190,7 @@ impl BasicBlock for RepeaterBasicBlock {
       let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
       let localProof = (&localProof.0.to_vec(), &localProof.1.to_vec(), &localProof.2.to_vec());
       let mut rng = rng.clone();
-      let temp = self.basic_block.verify(srs, model, &localInputs, &localOutputs, localProof, &mut rng, cache);
+      let temp = self.basic_block.verify(srs, model, &localInputs, &localOutputs, localProof, &mut rng, cache.clone());
       *x = temp;
     });
     let pairings = empty.into_iter().flatten().collect();
