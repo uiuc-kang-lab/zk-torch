@@ -20,29 +20,10 @@ impl Layer for XorLayer {
       basic_block: Box::new(MulBasicBlock {}),
       N: 1,
     }));
-    let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-      input_SF: onnx::SF_LOG * 2,
-      output_SF: onnx::SF_LOG,
-    }));
-    let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQ2BasicBlock {
-        setup: Some((
-          Box::new(ChangeSFBasicBlock {
-            input_SF: onnx::SF_LOG * 2,
-            output_SF: onnx::SF_LOG,
-          }),
-          onnx::CQ_RANGE_LOWER,
-          onnx::CQ_RANGE,
-        )),
-      }),
-      N: 1,
-    }));
     let _ = graph.addNode(bool_check, vec![(-1, 0), (-2, 0)]);
     let sub_output = graph.addNode(sub, vec![(-1, 0), (-2, 0)]);
-    let mul_output = graph.addNode(mul, vec![(sub_output, 0), (sub_output, 0)]); // XOR(a, b) = PointwiseMul((a - b), (a - b))
-    let change_SF_output = graph.addNode(change_SF, vec![(mul_output, 0)]);
-    let _ = graph.addNode(change_SF_check, vec![(mul_output, 0), (change_SF_output, 0)]);
-    graph.outputs.push((change_SF_output, 0));
+    let xor_output = graph.addNode(mul, vec![(sub_output, 0), (sub_output, 0)]); // XOR(a, b) = PointwiseMul((a - b), (a - b))
+    graph.outputs.push((xor_output, 0));
     (graph, vec![util::broadcastDims(input_shapes, 0)])
   }
 }
