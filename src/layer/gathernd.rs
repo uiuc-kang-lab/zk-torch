@@ -3,22 +3,23 @@ use crate::graph::*;
 use crate::layer::Layer;
 use crate::util;
 use ark_bn254::Fr;
+use ark_std::iterable::Iterable;
 use ndarray::Dimension;
-use ndarray::{ArrayD, IxDyn, Axis, s};
+use ndarray::{ArrayD, Axis, IxDyn};
 use tract_onnx::pb::AttributeProto;
 
 // array: the N-dimensional array
 // n_minus_1_index: the index of the N-1 dimension
 fn get_sub_array<T>(array: ArrayD<T>, n_minus_1_index: &[usize]) -> ArrayD<T>
 where
-    T: Clone,
+  T: Clone,
 {
-    let mut sub_array = array.clone();
-    for &index in n_minus_1_index.iter() {
-      let s = sub_array.view();
-      sub_array = s.index_axis(Axis(0), index).to_owned();
-    }
-    sub_array
+  let mut sub_array = array.clone();
+  for &index in n_minus_1_index.iter() {
+    let s = sub_array.view();
+    sub_array = s.index_axis(Axis(0), index).to_owned();
+  }
+  sub_array
 }
 
 fn get_gathernd_masks(input_shape: &[usize], indices: &ArrayD<usize>, batch_dims: usize) -> (ArrayD<Option<IxDyn>>, Vec<usize>) {
@@ -55,12 +56,12 @@ fn get_gathernd_masks(input_shape: &[usize], indices: &ArrayD<usize>, batch_dims
   (padded_permutation, output_shape)
 }
 
-// reference: https://onnx.ai/onnx/operators/onnx__GatherND.html
+// reference (v13): https://onnx.ai/onnx/operators/onnx__GatherND.html
 pub struct GatherNDLayer;
 impl Layer for GatherNDLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
-    
+
     let indices = if constants[1].is_none() {
       // we cannot handle non-constant indices because we need to know the shape of the indices to compile graph in zk-torch
       panic!("GatherNDLayer: indices must be a constant");
@@ -69,7 +70,17 @@ impl Layer for GatherNDLayer {
     };
 
     // attributes may contain batch_dims, but we only support batch_dims = 0 for now
-    let batch_dims: usize = 0;
+    let batch_dims: usize = if attributes.iter().find(|x| x.name == "batch_dims").is_none() {
+      0
+    } else {
+      let b = attributes.iter().filter(|x| x.name == "axis").next().unwrap().i as usize;
+      if b != 0 {
+        panic!("GatherNDLayer: only support the case where batch_dims = 0");
+      } else {
+        b
+      }
+    };
+
     let data_shape = input_shapes[0].clone();
     let padded_data_shape: Vec<_> = data_shape.iter().map(|&x| util::next_pow(x as u32) as usize).collect();
 
