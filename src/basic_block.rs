@@ -6,6 +6,7 @@ use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain,
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{UniformRand, Zero};
 pub use clip::ClipBasicBlock;
+pub use bool_check::BooleanCheckBasicBlock;
 pub use concat::ConcatBasicBlock;
 pub use constant::{Const2BasicBlock, ConstBasicBlock, ConstOfShapeBasicBlock};
 pub use copy_constraint::CopyConstraintBasicBlock;
@@ -35,6 +36,7 @@ use std::sync::{Arc, Mutex};
 pub use sub::SubBasicBlock;
 pub use sum::SumBasicBlock;
 pub use transpose::TransposeBasicBlock;
+pub mod bool_check;
 pub mod add;
 pub mod clip;
 pub mod concat;
