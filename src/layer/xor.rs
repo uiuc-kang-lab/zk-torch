@@ -11,6 +11,7 @@ pub struct XorLayer;
 impl Layer for XorLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
+    let bool_check = graph.addBB(Box::new(BooleanCheckBasicBlock {}));
     let sub = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(SubBasicBlock {}),
       N: 1,
@@ -36,6 +37,7 @@ impl Layer for XorLayer {
       }),
       N: 1,
     }));
+    let _ = graph.addNode(bool_check, vec![(-1, 0), (-2, 0)]);
     let sub_output = graph.addNode(sub, vec![(-1, 0), (-2, 0)]);
     let mul_output = graph.addNode(mul, vec![(sub_output, 0), (sub_output, 0)]); // XOR(a, b) = PointwiseMul((a - b), (a - b))
     let change_SF_output = graph.addNode(change_SF, vec![(mul_output, 0)]);
