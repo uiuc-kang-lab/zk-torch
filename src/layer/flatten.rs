@@ -23,7 +23,7 @@ fn get_permutation(input_shape: &[usize], axis: usize) -> (ArrayD<Option<IxDyn>>
 
 // https://onnx.ai/onnx/operators/onnx__Flatten.html
 // Flattens the input tensor into a 2D matrix.
-// If input tensor has shape (d_0, d_1, … d_n) then the output will have shape (d_0 X d_1 … d_(axis-1), d_axis X d_(axis+1) … X dn).
+// If input tensor has shape (d_0, d_1, ..., d_n) then the output will have shape (d_0 × d_1 × ... × d_{axis-1}, d_{axis} × d_{axis+1} × ... × dn).
 pub struct FlattenLayer;
 impl Layer for FlattenLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
