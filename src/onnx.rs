@@ -128,6 +128,7 @@ fn get_local_graph(
     "Mul" => Ok(MulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Cast" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Ceil" => Ok(CeilLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Clip" => Ok(ClipLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Concat" => Ok(ConcatLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "ConstantOfShape" => Ok(ConstOfShapeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Cos" => Ok(CosLayer::graph(&input_shapes, &node_constants, &node_attributes)),

@@ -2,6 +2,7 @@ use crate::graph::Graph;
 pub use arithmetic::{AddLayer, SubLayer};
 use ark_bn254::Fr;
 pub use cast::CastLayer;
+pub use clip::ClipLayer;
 pub use concat::ConcatLayer;
 pub use constantofshape::ConstOfShapeLayer;
 pub use conv::ConvLayer;
@@ -33,6 +34,7 @@ pub use transpose::TransposeLayer;
 
 pub mod arithmetic;
 pub mod cast;
+pub mod clip;
 pub mod concat;
 pub mod constantofshape;
 pub mod conv;

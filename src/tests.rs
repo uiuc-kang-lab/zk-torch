@@ -112,6 +112,9 @@ fn testBasicBlocks() {
   testBasicBlock(PermuteBasicBlock { permutation: p1 }, srs, &empty, &vec![&a]);
   testBasicBlock(PermuteBasicBlock { permutation: p2 }, srs, &empty, &vec![&a]);
   testBasicBlock(PermuteBasicBlock { permutation: p3 }, srs, &empty, &vec![&a]);
+  let min = 1.;
+  let max = 8.;
+  testBasicBlock(ClipBasicBlock { min, max }, srs, &empty, &vec![&a]);
 }
 
 #[test]
