@@ -20,7 +20,8 @@ impl Layer for AndLayer {
       N: 1,
     }));
 
-    let _ = graph.addNode(bool_check, vec![(-1, 0), (-2, 0)]);
+    let _ = graph.addNode(bool_check, vec![(-1, 0)]);
+    let _ = graph.addNode(bool_check, vec![(-2, 0)]);
     // If any of the inputs are scalars, use the scalar version of the mul basic block.
     let mul_basicblock = if input_shapes[1].len() == 0 || input_shapes[0].len() == 0 {
       mul_scalar
