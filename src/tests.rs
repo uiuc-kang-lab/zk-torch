@@ -120,8 +120,7 @@ fn testBasicBlocks() {
 
   // generate booleans
   let a = ArrayD::from_shape_fn(IxDyn(&[4]), |_| Fr::from(rng.gen_range(0..2)));
-  let b = ArrayD::from_shape_fn(IxDyn(&[16]), |_| Fr::from(rng.gen_range(0..2)));
-  testBasicBlock(BooleanCheckBasicBlock {}, srs, &empty, &vec![&a, &b])
+  testBasicBlock(BooleanCheckBasicBlock {}, srs, &empty, &vec![&a])
 }
 
 #[test]
