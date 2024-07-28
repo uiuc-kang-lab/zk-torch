@@ -426,7 +426,6 @@ impl BasicBlock for CopyConstraintBasicBlock {
 
     // Compute linearization polynomial r (p. 30 of [1])
     let mut r_none_poly = DensePolynomial::<Fr>::zero();
-    // for (i, (Lnone_z, idx)) in Lnone_zs.iter().zip(fj_none_idxs.iter()).enumerate() {
     for i in 0..Lnone_zs.len() {
       let pad_val_poly = DensePolynomial::from_coefficients_vec(vec![*pad_vals[i]]);
       r_none_poly = &r_none_poly
@@ -534,7 +533,6 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let u = Fr::rand(rng);
 
     // Get none index for Lnone(x)f(x) = V(x)Q(x) check
-    // let mut has_none = false;
     let mut pad_vals = vec![];
     let mut fj_none_idxs = vec![];
     for (val, partition) in self.padding_partitions.iter() {
