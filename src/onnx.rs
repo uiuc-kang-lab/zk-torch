@@ -83,6 +83,10 @@ fn parse_onnx_constants<'a>(
         let tensor = tensor.into_array::<i64>().unwrap();
         Ok(tensor.map(|x| Fr::from(*x)))
       }
+      DatumType::Bool => {
+        let tensor = tensor.into_array::<bool>().unwrap();
+        Ok(tensor.map(|x| Fr::from(*x as i32)))
+      }
       _ => Err(format!("Unsupported constant type: {:?}", tensor.datum_type())),
     }
     .unwrap();
