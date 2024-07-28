@@ -16,8 +16,10 @@ pub fn fr_to_int(x: Fr) -> i32 {
 
 pub fn calc_pow(alpha: Fr, n: usize) -> Vec<Fr> {
   let mut pow: Vec<Fr> = vec![alpha; n];
-  for i in 0..n - 1 {
-    pow[i + 1] = pow[i] * alpha;
+  if n > 0 {
+    for i in 0..n - 1 {
+      pow[i + 1] = pow[i] * alpha;
+    }
   }
   pow
 }

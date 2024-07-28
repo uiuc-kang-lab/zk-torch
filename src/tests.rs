@@ -4,10 +4,11 @@ use ark_bn254::{Bn254, Fr, G1Affine, G2Affine};
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_poly::univariate::DensePolynomial;
 use ark_std::UniformRand;
-use ark_std::Zero;
+use ark_std::{One, Zero};
+use copy_constraint::zero_padding_partition;
 use ndarray::{arr0, concatenate, s, ArrayD, Axis, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 
 fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) {
@@ -130,56 +131,63 @@ fn test_max() {
 fn test_copy_constraint() {
   let srs = &ptau::load_file("challenge", 7, 7);
   let empty = ArrayD::zeros(IxDyn(&[0]));
+  let permutation = ArrayD::from_shape_vec(vec![4], vec![Some(IxDyn(&[3])), Some(IxDyn(&[2])), Some(IxDyn(&[1])), Some(IxDyn(&[0]))]).unwrap();
   // reverse
   testBasicBlock(
     CopyConstraintBasicBlock {
-      permutation: ArrayD::from_shape_vec(vec![4], vec![Some(IxDyn(&[3])), Some(IxDyn(&[2])), Some(IxDyn(&[1])), Some(IxDyn(&[0]))]).unwrap(),
+      permutation,
       input_dim: IxDyn(&[4]),
+      padding_partitions: BTreeMap::new(),
     },
     srs,
     &empty,
     &vec![&ArrayD::from_shape_vec(vec![4], (1..5).map(|x| Fr::from(x)).collect()).unwrap()],
   );
   // transpose
+  let permutation = ArrayD::from_shape_vec(
+    vec![2, 2],
+    vec![Some(IxDyn(&[1, 1])), Some(IxDyn(&[1, 0])), Some(IxDyn(&[0, 1])), Some(IxDyn(&[0, 0]))],
+  )
+  .unwrap();
   testBasicBlock(
     CopyConstraintBasicBlock {
-      permutation: ArrayD::from_shape_vec(
-        vec![2, 2],
-        vec![Some(IxDyn(&[1, 1])), Some(IxDyn(&[1, 0])), Some(IxDyn(&[0, 1])), Some(IxDyn(&[0, 0]))],
-      )
-      .unwrap(),
+      permutation,
       input_dim: IxDyn(&[2, 2]),
+      padding_partitions: BTreeMap::new(),
     },
     srs,
     &empty,
     &vec![&ArrayD::from_shape_vec(vec![2, 2], (1..5).map(|x| Fr::from(x)).collect()).unwrap()],
   );
   // 2d -> 3d
+  let permutation = ArrayD::from_shape_vec(
+    vec![2, 2, 4],
+    vec![
+      Some(IxDyn(&[1, 1])),
+      Some(IxDyn(&[2, 0])),
+      Some(IxDyn(&[3, 1])),
+      Some(IxDyn(&[0, 0])),
+      Some(IxDyn(&[1, 1])),
+      Some(IxDyn(&[2, 0])),
+      Some(IxDyn(&[3, 1])),
+      Some(IxDyn(&[0, 0])),
+      Some(IxDyn(&[1, 1])),
+      Some(IxDyn(&[2, 0])),
+      Some(IxDyn(&[3, 1])),
+      Some(IxDyn(&[0, 0])),
+      Some(IxDyn(&[1, 1])),
+      Some(IxDyn(&[2, 0])),
+      Some(IxDyn(&[3, 1])),
+      None,
+    ],
+  )
+  .unwrap();
+  let padding_partitions = zero_padding_partition(&permutation);
   testBasicBlock(
     CopyConstraintBasicBlock {
-      permutation: ArrayD::from_shape_vec(
-        vec![2, 2, 4],
-        vec![
-          Some(IxDyn(&[1, 1])),
-          Some(IxDyn(&[2, 0])),
-          Some(IxDyn(&[3, 1])),
-          Some(IxDyn(&[0, 0])),
-          Some(IxDyn(&[1, 1])),
-          Some(IxDyn(&[2, 0])),
-          Some(IxDyn(&[3, 1])),
-          Some(IxDyn(&[0, 0])),
-          Some(IxDyn(&[1, 1])),
-          Some(IxDyn(&[2, 0])),
-          Some(IxDyn(&[3, 1])),
-          Some(IxDyn(&[0, 0])),
-          Some(IxDyn(&[1, 1])),
-          Some(IxDyn(&[2, 0])),
-          Some(IxDyn(&[3, 1])),
-          Some(IxDyn(&[0, 0])),
-        ],
-      )
-      .unwrap(),
+      permutation,
       input_dim: IxDyn(&[4, 2]),
+      padding_partitions,
     },
     srs,
     &empty,
@@ -211,6 +219,10 @@ fn test_copy_constraint() {
       )
       .unwrap(),
       input_dim: IxDyn(&[2, 2, 4]),
+      padding_partitions: BTreeMap::from([
+        (Fr::zero(), vec![IxDyn(&[3, 0]), IxDyn(&[3, 1]), IxDyn(&[3, 2]), IxDyn(&[3, 3])]),
+        (Fr::one(), vec![IxDyn(&[0, 3]), IxDyn(&[1, 3]), IxDyn(&[2, 3])]),
+      ]),
     },
     srs,
     &empty,
@@ -230,6 +242,7 @@ fn test_copy_constraint() {
       )
       .unwrap(),
       input_dim: IxDyn(&[2, 1, 4]),
+      padding_partitions: BTreeMap::new(),
     },
     srs,
     &empty,

@@ -3,6 +3,7 @@ use crate::graph::*;
 use crate::layer::Layer;
 use crate::util;
 use ark_bn254::Fr;
+use copy_constraint::zero_padding_partition;
 use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
 
@@ -52,9 +53,11 @@ impl Layer for ConcatLayer {
       let mut cc_basicblocks = vec![];
       for i in 0..input_shapes.len() {
         let padded_input_shape: Vec<usize> = input_shapes[i].iter().map(|&x| util::next_pow(x as u32) as usize).collect();
+        let padding_partitions = zero_padding_partition(&permutations[i]);
         let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
           permutation: permutations[i].clone(),
           input_dim: IxDyn(&padded_input_shape),
+          padding_partitions,
         }));
         cc_basicblocks.push(cc);
       }
