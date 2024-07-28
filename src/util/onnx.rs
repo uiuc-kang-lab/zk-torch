@@ -10,6 +10,7 @@ use ndarray::ArrayD;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use tract_onnx::pb::tensor_proto::DataType;
 use tract_onnx::prelude::Framework;
+use serde::Deserialize;
 
 // This function is used for generating fake inputs for onnx models
 // Fake inputs are random field (i.e., Fr) elements whose shapes and types match those described in the input tensors of an ONNX model.
@@ -44,6 +45,7 @@ pub fn generate_fake_inputs_for_onnx(filename: &str) -> Vec<ArrayD<Fr>> {
       DataType::Float | DataType::Float16 | DataType::Double => (0..*val_num).map(|_| Fr::from(rng.gen_range(-2..2))).collect(),
       DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => (0..*val_num).map(|_| Fr::from(1)).collect(),
       DataType::Uint8 | DataType::Uint16 | DataType::Uint32 | DataType::Uint64 => (0..*val_num).map(|_| Fr::from(1)).collect(),
+      DataType::Bool => (0..*val_num).map(|_| Fr::from(rng.gen_range(0..2))).collect(),
       _ => panic!("Unsupported constant type: {:?}", t.elem_type()),
     };
 
@@ -51,5 +53,65 @@ pub fn generate_fake_inputs_for_onnx(filename: &str) -> Vec<ArrayD<Fr>> {
     let input = pad_to_pow_of_two(&input, &Fr::zero());
     inputs.push(input);
   }
+  inputs
+}
+
+#[derive(Deserialize, Debug)]
+struct InputData {
+    input_data: Vec<Vec<f64>>,
+}
+
+pub fn load_inputs_from_json_for_onnx(onnx_name: &str, json_name: &str) -> Vec<ArrayD<Fr>> {
+  let onnx = tract_onnx::onnx();
+  let onnx_graph = onnx.proto_model_for_path(onnx_name).unwrap().graph.unwrap();
+  let mut inputs = vec![];
+
+  let json = std::fs::read_to_string(json_name).expect("Failed to read file");
+  let json: InputData = serde_json::from_str(&json).unwrap();
+
+  for (i, onnx_input) in onnx_graph.input.iter().enumerate() {
+    let tract_onnx::pb::type_proto::Value::TensorType(t) = onnx_input.r#type.as_ref().unwrap().value.as_ref().unwrap();
+    let shape = t
+      .shape
+      .as_ref()
+      .unwrap()
+      .dim
+      .iter()
+      .map(|x| {
+        if let tract_onnx::pb::tensor_shape_proto::dimension::Value::DimValue(x) = x.value.as_ref().unwrap() {
+          *x as usize
+        } else {
+          panic!("Unknown dimension")
+        }
+      })
+      .collect::<Vec<_>>();
+    let val_num = &shape.iter().fold(1, |acc, x| acc * x);
+
+    let input = match t.elem_type() {
+      DataType::Float | DataType::Float16 | DataType::Double => {
+        let input: Vec<Fr> = json.input_data[i].iter().map(|x| {
+          let y = (*x * crate::onnx::SF_FLOAT as f64).round();
+          Fr::from(y as i32) } ).collect();
+        input
+      }   
+      
+      DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => {
+        let input: Vec<Fr> = json.input_data[i].iter().map(|x| { Fr::from(*x as i32) }).collect();
+        input
+      }
+      DataType::Uint8 | DataType::Uint16 | DataType::Uint32 | DataType::Uint64 => {
+        let input: Vec<Fr> = json.input_data[i].iter().map(|x| { Fr::from(*x as u32) }).collect();
+        input
+      }
+      DataType::Bool => {
+        let input: Vec<Fr> = json.input_data[i].iter().map(|x| { Fr::from(*x as u8) }).collect();
+        input
+      }
+      _ => panic!("Unsupported constant type: {:?}", t.elem_type()),
+    };
+    let input = ArrayD::from_shape_vec(shape, input).unwrap();
+    let input = pad_to_pow_of_two(&input, &Fr::zero());
+    inputs.push(input);
+  } 
   inputs
 }

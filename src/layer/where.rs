@@ -32,13 +32,9 @@ impl Layer for WhereLayer {
     }));
 
     let one_output = graph.addNode(one, vec![]);
-    let mul1_output = if input_shapes[1].len() == 0 {
-      graph.addNode(mul_scalar, vec![(-1, 0), (-2, 0)])
-    } else {
-      graph.addNode(mul, vec![(-1, 0), (-2, 0)])
-    };
+    let mul1_output = graph.addNode(if input_shapes[1].len() == 0 { mul_scalar } else { mul }, vec![(-1, 0), (-2, 0)]);
     let sub_output = graph.addNode(sub, vec![(one_output, 0), (-1, 0)]);
-    let mul2_output = graph.addNode(mul, vec![(sub_output, 0), (-3, 0)]);
+    let mul2_output = graph.addNode(if input_shapes[2].len() == 0 { mul_scalar } else { mul }, vec![(sub_output, 0), (-3, 0)]);
     let add_output = graph.addNode(add, vec![(mul1_output, 0), (mul2_output, 0)]);
     graph.outputs.push((add_output, 0));
     (graph, vec![input_shapes[0].clone()])
