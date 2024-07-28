@@ -22,13 +22,19 @@ mod tests;
 mod util;
 
 fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&ArrayD<Fr>>) {
+  println!("Proving...");
+  // start time
+  let start = std::time::Instant::now();
   // Run:
   let outputs = graph.run(inputs, models);
-
+  let run_time = start.elapsed();
+  println!("Time to run: {:?}", run_time);
   // Setup:
   let models: Vec<ArrayD<Data>> = models.par_iter().map(|model| convert_to_data(srs, model)).collect();
   let models: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
   let setups = graph.setup(srs, &models);
+  let setup_time = start.elapsed();
+  println!("Time to setup: {:?}", setup_time - run_time);
 
   // Encode Data:
   let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>)> = util::vec_iter(&setups)
@@ -52,6 +58,8 @@ fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&
   let outputs: Vec<&Vec<&ArrayD<Data>>> = outputs.iter().map(|x| x).collect();
   let outputsEnc: Vec<Vec<ArrayD<DataEnc>>> =
     outputs.iter().map(|output| (**output).iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect()).collect();
+  let encode_time = start.elapsed();
+  println!("Time to encode: {:?}", encode_time - setup_time);
 
   // Save files:
   let modelsEncBytes = bincode::serialize(&modelsEnc).unwrap();
@@ -60,6 +68,8 @@ fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&
   fs::write("modelsEnc", &modelsEncBytes).unwrap();
   fs::write("inputsEnc", &inputsEncBytes).unwrap();
   fs::write("outputsEnc", &outputsEncBytes).unwrap();
+  let save_time = start.elapsed();
+  println!("Time to save: {:?}", save_time - encode_time);
 
   // Fiat-Shamir:
   let mut hasher = Keccak256::new();
@@ -69,13 +79,19 @@ fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&
   let mut buf = [0u8; 32];
   hasher.finalize_into((&mut buf).into());
   let mut rng = StdRng::from_seed(buf);
+  let fiat_shamir_time = start.elapsed();
+  println!("Time to Fiat-Shamir: {:?}", fiat_shamir_time - save_time);
 
   // Prove:
   let proofs = graph.prove(srs, &setups, &models, &inputs, &outputs, &mut rng);
   proofs.serialize_uncompressed(File::create("proofs").unwrap()).unwrap();
+  let prove_time = start.elapsed();
+  println!("Time to prove: {:?}", prove_time - fiat_shamir_time);
 }
 
 fn verify(srs: &SRS, graph: &Graph) {
+  println!("Verifying...");
+  let start = std::time::Instant::now();
   // Read Files:
   let proofs = Vec::<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)>::deserialize_uncompressed_unchecked(File::open("proofs").unwrap()).unwrap();
   let proofs = proofs.iter().map(|x| (&x.0, &x.1, &x.2)).collect();
@@ -92,6 +108,8 @@ fn verify(srs: &SRS, graph: &Graph) {
   let outputsEnc: Vec<Vec<ArrayD<DataEnc>>> = bincode::deserialize(&outputsEncBytes).unwrap();
   let outputsEnc: Vec<Vec<&ArrayD<DataEnc>>> = outputsEnc.iter().map(|output| output.iter().map(|x| x).collect()).collect();
   let outputsEnc: Vec<&Vec<&ArrayD<DataEnc>>> = outputsEnc.iter().map(|x| x).collect();
+  let read_time = start.elapsed();
+  println!("Time to read: {:?}", read_time);
 
   // Fiat-Shamir:
   let mut hasher = Keccak256::new();
@@ -101,12 +119,16 @@ fn verify(srs: &SRS, graph: &Graph) {
   let mut buf = [0u8; 32];
   hasher.finalize_into((&mut buf).into());
   let mut rng = StdRng::from_seed(buf);
+  let fiat_shamir_time = start.elapsed();
+  println!("Time to Fiat-Shamir: {:?}", fiat_shamir_time - read_time);
 
   // Verify:
   #[cfg(feature = "debug")]
   graph.verify_for_each_pairing(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng);
   #[cfg(not(feature = "debug"))]
   graph.verify(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng);
+  let verify_time = start.elapsed();
+  println!("Time to verify: {:?}", verify_time - fiat_shamir_time);
 }
 
 fn main() {
