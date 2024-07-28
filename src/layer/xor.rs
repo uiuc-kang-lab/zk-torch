@@ -1,7 +1,6 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
-use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
@@ -20,7 +19,8 @@ impl Layer for XorLayer {
       basic_block: Box::new(MulBasicBlock {}),
       N: 1,
     }));
-    let _ = graph.addNode(bool_check, vec![(-1, 0), (-2, 0)]);
+    let _ = graph.addNode(bool_check, vec![(-1, 0)]);
+    let _ = graph.addNode(bool_check, vec![(-2, 0)]);
     let sub_output = graph.addNode(sub, vec![(-1, 0), (-2, 0)]);
     let xor_output = graph.addNode(mul, vec![(sub_output, 0), (sub_output, 0)]); // XOR(a, b) = PointwiseMul((a - b), (a - b))
     graph.outputs.push((xor_output, 0));
