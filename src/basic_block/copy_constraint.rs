@@ -117,8 +117,8 @@ fn check_padding_partition(permutation: &ArrayD<Option<IxDyn>>, padding_partitio
 }
 
 // This BasicBlock implements Plonk's copy constraint protocol over the inputs and outputs (Sec. 5.2 and 8 of https://eprint.iacr.org/2019/953.pdf) [1].
-// It additionally supports checking that elements corresponding to None are zero to support padding.
 // permutation has the same shape as the output, and each index stores the index of the input array it equals to.
+// To support padding, padding_partitions contains pairs of (padding value, list of indices in the output containing that pad value)
 #[derive(Debug)]
 pub struct CopyConstraintBasicBlock {
   pub permutation: ArrayD<Option<IxDyn>>,
