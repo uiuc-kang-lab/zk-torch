@@ -1,9 +1,7 @@
 use super::BasicBlock;
 use crate::{
   basic_block::{Data, DataEnc, SRS},
-  onnx,
-  util,
-  PairingCheck, ProveVerifyCache,
+  onnx, util, PairingCheck, ProveVerifyCache,
 };
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
@@ -12,8 +10,8 @@ use ark_serialize::CanonicalSerialize;
 use ark_std::{One, UniformRand, Zero};
 use ndarray::ArrayD;
 use rand::{rngs::StdRng, SeedableRng};
-use tract_onnx::tract_core::num_traits::ops::bytes;
 use std::ops::{Add, Mul, Sub};
+use tract_onnx::tract_core::num_traits::ops::bytes;
 
 // BooleanCheckBasicBlock is a basic block that checks if all elements in inputs[0] are boolean values (0 or 1).
 // The high-level proving idea:
@@ -81,9 +79,11 @@ impl BasicBlock for BooleanCheckBasicBlock {
     let t_zeta_poly = DensePolynomial { coeffs: vec![t_poly_zeta] };
     let temp1 = &inputs[0].first().unwrap().poly.sub(&f_zeta_poly);
     let temp2 = &t_poly.sub(&t_zeta_poly);
-    let x_minus_zeta = DensePolynomial { coeffs: vec![-zeta, Fr::one()] };
+    let x_minus_zeta = DensePolynomial {
+      coeffs: vec![-zeta, Fr::one()],
+    };
     let h_poly = &temp1.add(&temp2.mul(&gamma_poly)) / &x_minus_zeta;
-    let h_poly_x = util::msm::<G1Projective>(&srs.X1A, &h_poly.coeffs) + srs.Y1P * r[1 ];
+    let h_poly_x = util::msm::<G1Projective>(&srs.X1A, &h_poly.coeffs) + srs.Y1P * r[1];
     proof_g1.push(h_poly_x);
 
     // blinding factor
@@ -94,25 +94,29 @@ impl BasicBlock for BooleanCheckBasicBlock {
   }
 
   fn verify(
-      &self,
-      srs: &SRS,
-      _model: &ArrayD<DataEnc>,
-      inputs: &Vec<&ArrayD<DataEnc>>,
-      _outputs: &Vec<&ArrayD<DataEnc>>,
-      proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
-      rng: &mut StdRng,
-      _cache: ProveVerifyCache,
-    ) -> Vec<PairingCheck> {
+    &self,
+    srs: &SRS,
+    _model: &ArrayD<DataEnc>,
+    inputs: &Vec<&ArrayD<DataEnc>>,
+    _outputs: &Vec<&ArrayD<DataEnc>>,
+    proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> Vec<PairingCheck> {
     let N = inputs[0].first().unwrap().len;
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
-    let [t_x, h_x, C] = proof.0[..] else { panic!("proof.0 should have 3 elements") };
+    let [t_x, h_x, C] = proof.0[..] else {
+      panic!("proof.0 should have 3 elements")
+    };
     let proof0_for_check = &proof.0[..1];
     let mut bytes = Vec::new();
     proof0_for_check.serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
     let zeta = Fr::rand(rng);
 
-    let [f_zeta, t_zeta] = proof.2[..] else { panic!("proof.2 should have 2 elements") };
+    let [f_zeta, t_zeta] = proof.2[..] else {
+      panic!("proof.2 should have 2 elements")
+    };
     let vanishing_poly = domain.vanishing_polynomial();
     let vanishing_poly_z = vanishing_poly.evaluate(&zeta);
     // verifier first checks that f(zeta) * (1 - f(zeta)) = t(zeta) * vanishing_poly(zeta)
@@ -131,14 +135,7 @@ impl BasicBlock for BooleanCheckBasicBlock {
     check_for_opening_at_z -= srs.X1A[0] * (f_zeta + gamma * t_zeta);
     check_for_opening_at_z += h_x * zeta;
 
-    let checks = vec![
-      (h_x, srs.X2A[1]),
-      (
-        (-check_for_opening_at_z).into(),
-        srs.X2A[0],
-      ),
-      (C.into(), srs.Y2A),
-    ];
+    let checks = vec![(h_x, srs.X2A[1]), ((-check_for_opening_at_z).into(), srs.X2A[0]), (C.into(), srs.Y2A)];
     vec![checks]
   }
 }
