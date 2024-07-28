@@ -129,7 +129,6 @@ impl Layer for SliceLayer {
 
     let (permutation, output_shape, input_shape_pad) = get_slice(&input_shapes[0], &mut starts, &mut ends, &mut axes, &mut steps);
 
-    // let padding_partitions = zero_padding_partition(&permutation);
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation,
       input_dim: IxDyn(&input_shape_pad),
