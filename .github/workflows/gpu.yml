@@ -32,4 +32,4 @@ jobs:
             cd "${{ secrets.GPU_ACTION_DIR }}/gh_actions/${{ steps.getshortsha.outputs.sha_short }}"
             python test_gpu_scripts/add_gpu_dependencies.py "${{ secrets.GPU_ACTION_DIR }}"
             mv test_gpu_scripts/test_gpu.sbatch ${{ steps.getshortsha.outputs.sha_short }}_test_gpu.sbatch
-            sbatch ${{ steps.getshortsha.outputs.sha_short }}_test_gpu.sbatch "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com" "${{ secrets.SMTP_PASSWORD }}"
+            sbatch -k ${{ steps.getshortsha.outputs.sha_short }}_test_gpu.sbatch "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com" "${{ secrets.SMTP_PASSWORD }}"

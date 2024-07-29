@@ -3,6 +3,7 @@ use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ndarray::{arr0, azip, ArrayD, IxDyn};
 use rand::rngs::StdRng;
+use rayon::prelude::*;
 
 #[derive(Debug)]
 pub struct ClipBasicBlock {

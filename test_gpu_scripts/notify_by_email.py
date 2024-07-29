@@ -3,6 +3,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import sys 
 
+print('begin to send email')
+
 email = str(sys.argv[1])
 smtp_password = str(sys.argv[2])
 
@@ -15,8 +17,11 @@ message = 'success'
 with open("zktorch_gh_action.out", "r") as f:
   contents = f.readlines()
 
+start_scan = False
 for c in contents:
-  if 'error' in c:
+  if 'Running `target/debug/zkml_proofs`' in c:
+    start_scan = True
+  if start_scan and 'error' in c:
     message = 'error found in the test'
     break
 
