@@ -17,6 +17,12 @@ use tract_onnx::tract_core::num_traits::ops::bytes;
 // The high-level proving idea:
 // Given that N elements in inputs are all boolean, we can encode them as a polynomial f(x), where f(omega^i) = 0 or 1 for all i in [0, N).
 // Then the bool check is equivalent to proving the existence of t(x), where t(x) = f(x) * (1 - f(x)) / (x^N - 1)
+// TODO (Similar to Copy Constraint BB): Currently the prover is insecure because it passes in
+// inputs and outputs to the verifier which do not withstand polynomial
+// interpolation attacks in the inputs and outputs arguments.
+// To fix this, we have to suppport a blinding scheme
+// that works with openings more generally and enable the Data and DataEnc
+// constructors to use the blinding scheme when appropriate.
 #[derive(Debug)]
 pub struct BooleanCheckBasicBlock;
 impl BasicBlock for BooleanCheckBasicBlock {
