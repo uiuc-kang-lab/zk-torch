@@ -3,6 +3,7 @@ use crate::graph::*;
 use crate::layer::Layer;
 use crate::util;
 use ark_bn254::Fr;
+use copy_constraint::zero_padding_partition;
 use ndarray::{ArrayD, Dim, IxDyn};
 use tract_onnx::pb::AttributeProto;
 
@@ -49,14 +50,17 @@ impl Layer for ScatterNDLayer {
     let indices = constants[1].unwrap();
 
     let (permutation_preserve, permutation_update) = get_masks(&input_shapes[0], &indices);
-
+    let padding_preserve = zero_padding_partition(&permutation_preserve);
+    let padding_update = zero_padding_partition(&permutation_update);
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation_preserve,
       input_dim: IxDyn(&input_shapes[0]),
+      padding_partitions: padding_preserve,
     }));
     let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation_update,
       input_dim: IxDyn(&input_shapes[1]),
+      padding_partitions: padding_update,
     }));
     let add = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(AddBasicBlock {}),

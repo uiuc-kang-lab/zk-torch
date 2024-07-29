@@ -31,19 +31,18 @@ fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&
   let setups = graph.setup(srs, &models);
 
   // Encode Data:
-  let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>)> = setups
-    .iter()
+  let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>)> = util::vec_iter(&setups)
     .map(|x| {
       (
-        x.0.iter().map(|y| (*y).into()).collect(),
-        x.1.iter().map(|y| (*y).into()).collect(),
-        x.2.iter().map(|y| (y.clone())).collect(),
+        util::vec_iter(&x.0).map(|y| (*y).into()).collect(),
+        util::vec_iter(&x.1).map(|y| (*y).into()).collect(),
+        util::vec_iter(&x.2).map(|y| (y.clone())).collect(),
       )
     })
     .collect();
   let setups = setups.iter().map(|x| (&x.0, &x.1, &x.2)).collect();
-  let modelsEnc: Vec<ArrayD<DataEnc>> = models.iter().map(|model| (**model).map(|x| DataEnc::new(srs, x))).collect();
-  let inputs: Vec<ArrayD<Data>> = inputs.iter().map(|input| convert_to_data(srs, input)).collect();
+  let modelsEnc: Vec<ArrayD<DataEnc>> = util::vec_iter(&models).map(|model| (**model).map(|x| DataEnc::new(srs, x))).collect();
+  let inputs: Vec<ArrayD<Data>> = util::vec_iter(inputs).map(|input| convert_to_data(srs, input)).collect();
   let inputs: Vec<&ArrayD<Data>> = inputs.iter().map(|input| input).collect();
   let inputsEnc: Vec<ArrayD<DataEnc>> = inputs.iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect();
   let outputs: Vec<Vec<&ArrayD<Fr>>> = outputs.iter().map(|output| output.iter().map(|x| x).collect()).collect();

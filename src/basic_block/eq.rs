@@ -9,14 +9,14 @@ use rand::rngs::StdRng;
 pub struct EqBasicBlock;
 impl BasicBlock for EqBasicBlock {
   fn prove(
-    &mut self,
+    &self,
     srs: &SRS,
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     _model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
-    _cache: &mut ProveVerifyCache,
+    _cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     assert!(inputs.len() == 2 && inputs[0].ndim() <= 1 && inputs[1].ndim() <= 1);
     // Blinding
@@ -32,7 +32,7 @@ impl BasicBlock for EqBasicBlock {
     _outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
-    _cache: &mut ProveVerifyCache,
+    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     // Verify f(x)+g(x)=h(x)
     vec![vec![

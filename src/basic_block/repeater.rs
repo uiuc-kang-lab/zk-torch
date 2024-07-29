@@ -1,9 +1,11 @@
 use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
-use crate::util;
+use crate::{ndarr_azip, util};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::univariate::DensePolynomial;
-use ndarray::{arr1, azip, s, ArrayD, Axis, Dimension, IxDyn, SliceInfo, SliceInfoElem};
+use itertools::multiunzip;
+use ndarray::{arr1, azip, par_azip, s, ArrayD, Axis, Dimension, IxDyn, SliceInfo, SliceInfoElem};
 use rand::rngs::StdRng;
+use rayon::prelude::*;
 
 #[derive(Debug)]
 pub struct RepeaterBasicBlock {
@@ -102,7 +104,7 @@ impl BasicBlock for RepeaterBasicBlock {
   fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     let temp = broadcastN::<Fr, Fr>(inputs, None, self.N);
     let temp = temp.map(|(subArrays, _)| {
-      let subArrays: Vec<_> = subArrays.iter().map(|y| y).collect();
+      let subArrays: Vec<_> = util::vec_iter(subArrays).map(|y| y).collect();
       self.basic_block.run(model, &subArrays)
     });
     let temp = temp.map(|x| x.iter().map(|y| y).collect());
@@ -111,13 +113,14 @@ impl BasicBlock for RepeaterBasicBlock {
   }
 
   fn encodeOutputs(&self, srs: &SRS, model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
-    let temp = broadcastN(inputs, Some(outputs), self.N - 1);
-    let temp = temp.map(|(localInputs, localOutputs)| {
+    let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
+    let mut empty = ArrayD::from_elem(temp.shape(), vec![]);
+    ndarr_azip!(((localInputs, localOutputs) in &mut temp, x in &mut empty) {
       let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
       let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
-      self.basic_block.encodeOutputs(srs, model, &localInputs, &localOutputs)
+      *x = self.basic_block.encodeOutputs(srs, model, &localInputs, &localOutputs);
     });
-    let temp = temp.map(|x| x.iter().map(|y| y).collect());
+    let temp = empty.map(|x| x.iter().map(|y| y).collect());
     let temp = temp.map(|x| x);
     combineArr(&temp)
   }
@@ -127,27 +130,30 @@ impl BasicBlock for RepeaterBasicBlock {
   }
 
   fn prove(
-    &mut self,
+    &self,
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
-    cache: &mut ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
-    let temp = broadcastN(inputs, Some(outputs), self.N - 1);
-    let temp = temp.map(|(localInputs, localOutputs)| {
+    let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
+    let mut empty = ArrayD::from_elem(temp.shape(), (vec![], vec![], vec![]));
+    ndarr_azip!(((localInputs, localOutputs) in &mut temp, x in &mut empty) {
       let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
       let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
-      self.basic_block.prove(srs, setup, model, &localInputs, &localOutputs, rng, cache)
+      let mut rng = rng.clone();
+      let tmp = self.basic_block.prove(srs, setup, model, &localInputs, &localOutputs, &mut rng, cache.clone());
+      *x = tmp;
     });
-    let mut proof = (vec![], vec![], vec![]);
-    temp.for_each(|(a, b, c)| {
-      proof.0.extend_from_slice(&a[..]);
-      proof.1.extend_from_slice(&b[..]);
-      proof.2.extend_from_slice(&c[..]);
-    });
+    let proof: (Vec<_>, Vec<_>, Vec<_>) = multiunzip(empty.into_iter());
+    let proof = (
+      proof.0.into_iter().flatten().collect(),
+      proof.1.into_iter().flatten().collect(),
+      proof.2.into_iter().flatten().collect(),
+    );
     proof
   }
 
@@ -159,9 +165,9 @@ impl BasicBlock for RepeaterBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
-    cache: &mut ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
-    let temp = broadcastN(inputs, Some(outputs), self.N - 1);
+    let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
 
     let l = temp.len();
     let divA = proof.0.len() / l;
@@ -176,16 +182,19 @@ impl BasicBlock for RepeaterBasicBlock {
         )
       })
       .collect();
-    let proofArr = ArrayD::from_shape_vec(temp.shape(), combined).unwrap();
+    let mut proofArr = ArrayD::from_shape_vec(temp.shape(), combined).unwrap();
 
-    let mut pairings = vec![];
-    azip!(((localInputs, localOutputs) in &temp, localProof in &proofArr){
+    let mut empty = ArrayD::from_elem(temp.shape(), vec![]);
+    ndarr_azip!(((localInputs, localOutputs) in &mut temp, localProof in &mut proofArr, x in &mut empty){
       let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
       let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
       let localProof = (&localProof.0.to_vec(), &localProof.1.to_vec(), &localProof.2.to_vec());
-      let mut temp = self.basic_block.verify(srs, model, &localInputs, &localOutputs, localProof, rng, cache);
-      pairings.append(&mut temp);
+      let mut rng = rng.clone();
+      let temp = self.basic_block.verify(srs, model, &localInputs, &localOutputs, localProof, &mut rng, cache.clone());
+      *x = temp;
     });
+    let pairings = empty.into_iter().flatten().collect();
+
     pairings
   }
 }

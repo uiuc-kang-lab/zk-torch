@@ -5,7 +5,11 @@ use crate::layer::Layer;
 use crate::onnx;
 use crate::util::pad;
 use ark_bn254::Fr;
+use ark_std::Zero;
+use copy_constraint::zero_padding_partition;
+use ndarray::Axis;
 use ndarray::{arr1, indices, ArrayD, Dim, Dimension, IxDyn};
+use std::collections::BTreeMap;
 use tract_onnx::pb::AttributeProto;
 
 fn splat_input(input_shape: &Vec<usize>, strides: &Vec<usize>, pads: &Vec<usize>, ci: usize, ch_dims: &Vec<usize>) -> Vec<Vec<Option<IxDyn>>> {
@@ -42,6 +46,39 @@ fn splat_input(input_shape: &Vec<usize>, strides: &Vec<usize>, pads: &Vec<usize>
   inp_cells
 }
 
+// Returns the padding partition where the non-zero padding value consists of all pad indices such that the last-axis subview containing it contains non-pad elements, and the zero padding value consists of all pad indices part of a last-axis subview containing only pad elements.
+fn max_padding_partitions(permutation: &ArrayD<Option<IxDyn>>, nonzero_val: Fr) -> BTreeMap<Fr, Vec<IxDyn>> {
+  let mut zero_indices = vec![];
+  let mut nonzero_indices = vec![];
+  for (i, subview) in permutation.axis_iter(Axis(permutation.ndim() - 1)).enumerate() {
+    // Check if all elements in the subview are None
+    if subview.iter().all(|x| x.is_none()) {
+      // Collect indices of None elements in the original array
+      for (idx, _) in subview.indexed_iter() {
+        let mut full_idx = idx.as_array_view().to_vec();
+        full_idx.push(i);
+        zero_indices.push(IxDyn(&full_idx));
+      }
+    } else {
+      for (idx, val) in subview.indexed_iter() {
+        if val.is_none() {
+          let mut full_idx = idx.as_array_view().to_vec();
+          full_idx.push(i);
+          nonzero_indices.push(IxDyn(&full_idx));
+        }
+      }
+    }
+  }
+  let mut partitions = BTreeMap::new();
+  if zero_indices.len() > 0 {
+    partitions.insert(Fr::zero(), zero_indices);
+  }
+  if nonzero_indices.len() > 0 {
+    partitions.insert(nonzero_val, nonzero_indices);
+  }
+  partitions
+}
+
 pub struct MaxPoolLayer;
 impl Layer for MaxPoolLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
@@ -64,9 +101,11 @@ impl Layer for MaxPoolLayer {
     let permutation = splat_input(&input_shapes[0], &strides, &pads, ch, &kernel_shape);
     let permutation_padded = splat_pad(&permutation);
     let input_shape_padded: Vec<_> = input_shapes[0].iter().map(|i| i.next_power_of_two()).collect();
+    let padding_partitions = max_padding_partitions(&permutation_padded, Fr::from(onnx::CQ_RANGE_LOWER));
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation_padded,
       input_dim: IxDyn(&input_shape_padded),
+      padding_partitions,
     }));
 
     // Prove max over each row
@@ -85,9 +124,11 @@ impl Layer for MaxPoolLayer {
     let reshape_inp_shape = vec![output_shape.iter().fold(1, |acc, &x| acc * x), 1];
     let reshape_permutation = reshape_permutation(&reshape_inp_shape, &output_shape);
     let reshape_inp_padded: Vec<_> = reshape_inp_shape.iter().map(|x| x.next_power_of_two()).collect();
+    let padding_partitions = zero_padding_partition(&reshape_permutation);
     let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: reshape_permutation,
       input_dim: IxDyn(&reshape_inp_padded),
+      padding_partitions,
     }));
 
     let r: Vec<_> = (0..-onnx::CQ_RANGE_LOWER).map(Fr::from).collect();

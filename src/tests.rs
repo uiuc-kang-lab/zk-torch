@@ -4,12 +4,14 @@ use ark_bn254::{Bn254, Fr, G1Affine, G2Affine};
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_poly::univariate::DensePolynomial;
 use ark_std::UniformRand;
-use ark_std::Zero;
+use ark_std::{One, Zero};
+use copy_constraint::zero_padding_partition;
 use ndarray::{arr0, concatenate, s, ArrayD, Axis, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 
-fn testBasicBlock<BB: BasicBlock>(mut basic_block: BB, srs: &SRS, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) {
+fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) {
   let mut rng = StdRng::from_entropy();
   let outputs = basic_block.run(model, inputs);
   let outputs: Vec<&ArrayD<Fr>> = outputs.iter().map(|x| x).collect();
@@ -26,8 +28,8 @@ fn testBasicBlock<BB: BasicBlock>(mut basic_block: BB, srs: &SRS, model: &ArrayD
   let outputs: Vec<ArrayD<Data>> = basic_block.encodeOutputs(srs, &model, &inputs, &outputs);
   let outputs: Vec<&ArrayD<Data>> = outputs.iter().map(|output| output).collect();
   let mut rng2 = rng.clone();
-  let mut cache = HashMap::new();
-  let proof = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng, &mut cache);
+  let cache = Arc::new(Mutex::new(HashMap::new()));
+  let proof = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng, cache.clone());
   let proof: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (
     proof.0.iter().map(|y| (*y).into()).collect(),
     proof.1.iter().map(|y| (*y).into()).collect(),
@@ -39,8 +41,8 @@ fn testBasicBlock<BB: BasicBlock>(mut basic_block: BB, srs: &SRS, model: &ArrayD
   let inputs: Vec<&ArrayD<DataEnc>> = inputs.iter().map(|input| input).collect();
   let outputs: Vec<ArrayD<DataEnc>> = outputs.iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect();
   let outputs: Vec<&ArrayD<DataEnc>> = outputs.iter().map(|output| output).collect();
-  let mut cache = HashMap::new();
-  let pairings = basic_block.verify(srs, &model, &inputs, &outputs, proof, &mut rng2, &mut cache);
+  let cache = Arc::new(Mutex::new(HashMap::new()));
+  let pairings = basic_block.verify(srs, &model, &inputs, &outputs, proof, &mut rng2, cache.clone());
   let pairings = pairings.iter().map(|x| x).collect();
   let pairings = util::combine_pairing_checks(&pairings);
   assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
@@ -129,56 +131,63 @@ fn test_max() {
 fn test_copy_constraint() {
   let srs = &ptau::load_file("challenge", 7, 7);
   let empty = ArrayD::zeros(IxDyn(&[0]));
+  let permutation = ArrayD::from_shape_vec(vec![4], vec![Some(IxDyn(&[3])), Some(IxDyn(&[2])), Some(IxDyn(&[1])), Some(IxDyn(&[0]))]).unwrap();
   // reverse
   testBasicBlock(
     CopyConstraintBasicBlock {
-      permutation: ArrayD::from_shape_vec(vec![4], vec![Some(IxDyn(&[3])), Some(IxDyn(&[2])), Some(IxDyn(&[1])), Some(IxDyn(&[0]))]).unwrap(),
+      permutation,
       input_dim: IxDyn(&[4]),
+      padding_partitions: BTreeMap::new(),
     },
     srs,
     &empty,
     &vec![&ArrayD::from_shape_vec(vec![4], (1..5).map(|x| Fr::from(x)).collect()).unwrap()],
   );
   // transpose
+  let permutation = ArrayD::from_shape_vec(
+    vec![2, 2],
+    vec![Some(IxDyn(&[1, 1])), Some(IxDyn(&[1, 0])), Some(IxDyn(&[0, 1])), Some(IxDyn(&[0, 0]))],
+  )
+  .unwrap();
   testBasicBlock(
     CopyConstraintBasicBlock {
-      permutation: ArrayD::from_shape_vec(
-        vec![2, 2],
-        vec![Some(IxDyn(&[1, 1])), Some(IxDyn(&[1, 0])), Some(IxDyn(&[0, 1])), Some(IxDyn(&[0, 0]))],
-      )
-      .unwrap(),
+      permutation,
       input_dim: IxDyn(&[2, 2]),
+      padding_partitions: BTreeMap::new(),
     },
     srs,
     &empty,
     &vec![&ArrayD::from_shape_vec(vec![2, 2], (1..5).map(|x| Fr::from(x)).collect()).unwrap()],
   );
   // 2d -> 3d
+  let permutation = ArrayD::from_shape_vec(
+    vec![2, 2, 4],
+    vec![
+      Some(IxDyn(&[1, 1])),
+      Some(IxDyn(&[2, 0])),
+      Some(IxDyn(&[3, 1])),
+      Some(IxDyn(&[0, 0])),
+      Some(IxDyn(&[1, 1])),
+      Some(IxDyn(&[2, 0])),
+      Some(IxDyn(&[3, 1])),
+      Some(IxDyn(&[0, 0])),
+      Some(IxDyn(&[1, 1])),
+      Some(IxDyn(&[2, 0])),
+      Some(IxDyn(&[3, 1])),
+      Some(IxDyn(&[0, 0])),
+      Some(IxDyn(&[1, 1])),
+      Some(IxDyn(&[2, 0])),
+      Some(IxDyn(&[3, 1])),
+      None,
+    ],
+  )
+  .unwrap();
+  let padding_partitions = zero_padding_partition(&permutation);
   testBasicBlock(
     CopyConstraintBasicBlock {
-      permutation: ArrayD::from_shape_vec(
-        vec![2, 2, 4],
-        vec![
-          Some(IxDyn(&[1, 1])),
-          Some(IxDyn(&[2, 0])),
-          Some(IxDyn(&[3, 1])),
-          Some(IxDyn(&[0, 0])),
-          Some(IxDyn(&[1, 1])),
-          Some(IxDyn(&[2, 0])),
-          Some(IxDyn(&[3, 1])),
-          Some(IxDyn(&[0, 0])),
-          Some(IxDyn(&[1, 1])),
-          Some(IxDyn(&[2, 0])),
-          Some(IxDyn(&[3, 1])),
-          Some(IxDyn(&[0, 0])),
-          Some(IxDyn(&[1, 1])),
-          Some(IxDyn(&[2, 0])),
-          Some(IxDyn(&[3, 1])),
-          Some(IxDyn(&[0, 0])),
-        ],
-      )
-      .unwrap(),
+      permutation,
       input_dim: IxDyn(&[4, 2]),
+      padding_partitions,
     },
     srs,
     &empty,
@@ -210,6 +219,10 @@ fn test_copy_constraint() {
       )
       .unwrap(),
       input_dim: IxDyn(&[2, 2, 4]),
+      padding_partitions: BTreeMap::from([
+        (Fr::zero(), vec![IxDyn(&[3, 0]), IxDyn(&[3, 1]), IxDyn(&[3, 2]), IxDyn(&[3, 3])]),
+        (Fr::one(), vec![IxDyn(&[0, 3]), IxDyn(&[1, 3]), IxDyn(&[2, 3])]),
+      ]),
     },
     srs,
     &empty,
@@ -229,6 +242,7 @@ fn test_copy_constraint() {
       )
       .unwrap(),
       input_dim: IxDyn(&[2, 1, 4]),
+      padding_partitions: BTreeMap::new(),
     },
     srs,
     &empty,

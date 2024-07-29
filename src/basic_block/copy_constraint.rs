@@ -21,8 +21,8 @@ use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::{
   cmp::{max, min},
-  collections::HashMap,
-  iter::{once, repeat},
+  collections::{BTreeMap, HashMap},
+  iter::{once, repeat, Map},
 };
 
 fn flat_index(shape: &IxDyn, idx: &Option<IxDyn>, N: usize) -> Option<(usize, usize)> {
@@ -63,7 +63,7 @@ fn construct_ssig(
   idxs: &[((usize, usize), Option<(usize, usize)>)],
   N: usize,
   last_dim: usize,
-  partitions: &HashMap<Option<(usize, usize)>, Vec<(usize, usize)>>,
+  partitions: &HashMap<Option<(usize, usize)>, Vec<Vec<(usize, usize)>>>,
   is_input: bool,
 ) -> Vec<Fr> {
   let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
@@ -73,11 +73,10 @@ fn construct_ssig(
       let inp_idx = if is_input { Some(*idx) } else { *perm_idx };
       let sigma = {
         let partition = partitions.get(&inp_idx).ok_or_else(|| format!("Key {:?} not found in the partition", inp_idx)).unwrap();
-        if let Some(pos) = partition.iter().position(|x| *x == *idx) {
-          Ok(partition[(pos + 1) % partition.len()])
-        } else {
-          Err(format!("Value {:?} not found in the list", *idx))
-        }
+        partition
+          .iter()
+          .enumerate()
+          .find_map(|(_, cycle)| cycle.iter().position(|&x| x == *idx).map(|pos| cycle[(pos + 1) % cycle.len()]))
       };
       let sigma = sigma.unwrap();
       let mut ssig = vec![Fr::from(sigma.0 as i32 + 1) * domain.element(sigma.1)];
@@ -90,23 +89,52 @@ fn construct_ssig(
     .collect()
 }
 
+// Returns the padding_partitions field for CopyConstraintBasicBlock when the given permutation padding elements are 0
+pub fn zero_padding_partition(permutation: &ArrayD<Option<IxDyn>>) -> BTreeMap<Fr, Vec<IxDyn>> {
+  let mut partition = vec![];
+  for (i, _) in permutation.indexed_iter() {
+    if permutation[&i] == None {
+      partition.push(i);
+    }
+  }
+  let mut padding_partition = BTreeMap::new();
+  if partition.len() > 0 {
+    padding_partition.insert(Fr::zero(), partition);
+  }
+  padding_partition
+}
+
+// Checks that padding partition corresponds to None values in permutation
+fn check_padding_partition(permutation: &ArrayD<Option<IxDyn>>, padding_partitions: &BTreeMap<Fr, Vec<IxDyn>>) -> bool {
+  for (_, p) in padding_partitions.iter() {
+    for idx in p {
+      if permutation[idx] != None {
+        return false;
+      }
+    }
+  }
+  true
+}
+
 // This BasicBlock implements Plonk's copy constraint protocol over the inputs and outputs (Sec. 5.2 and 8 of https://eprint.iacr.org/2019/953.pdf) [1].
-// It additionally supports checking that elements corresponding to None are zero to support padding.
 // permutation has the same shape as the output, and each index stores the index of the input array it equals to.
+// To support padding, padding_partitions contains pairs of (padding value, list of indices in the output containing that pad value)
 #[derive(Debug)]
 pub struct CopyConstraintBasicBlock {
   pub permutation: ArrayD<Option<IxDyn>>,
   pub input_dim: IxDyn,
+  pub padding_partitions: BTreeMap<Fr, Vec<IxDyn>>,
 }
 
 impl BasicBlock for CopyConstraintBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1 && inputs[0].dim() == self.input_dim);
+    assert!(check_padding_partition(&self.permutation, &self.padding_partitions));
     vec![ArrayD::from_shape_fn(self.permutation.shape(), |i| {
-      if let Some(idx) = &self.permutation[i] {
+      if let Some(idx) = &self.permutation[&i] {
         inputs[0][idx]
       } else {
-        Fr::zero()
+        *self.padding_partitions.iter().enumerate().find_map(|(_, (val, p))| p.iter().position(|x| *x == i).map(|_| val)).unwrap()
       }
     })]
   }
@@ -143,19 +171,23 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let mut partitions = HashMap::new();
     for i in indices(self.input_dim.clone()).into_iter() {
       let idx = flat_index(&self.input_dim, &Some(i), N);
-      partitions.entry(idx).or_insert_with(|| Vec::from([idx.unwrap()]));
+      partitions.entry(idx).or_insert_with(|| vec![Vec::from([idx.unwrap()])]);
     }
-    let mut pad = vec![];
     for (i, out_idx) in flat_outp_idxs.indexed_iter() {
       if let Some(perm_idx) = flat_perm_idxs[&i] {
-        partitions.entry(Some(perm_idx)).or_insert_with(|| Vec::from([perm_idx])).push(*out_idx);
-      } else {
-        pad.push(*out_idx);
+        let val = partitions.entry(Some(perm_idx)).or_insert_with(|| vec![Vec::from([perm_idx])]);
+        val[0].push(*out_idx);
       }
     }
-    if pad.len() > 0 {
-      partitions.insert(None, pad);
+    // Add padding partitions to partition
+    let mut pad_partitions = vec![];
+    for (_, p) in self.padding_partitions.iter() {
+      let flat_idxs: Vec<_> = p.iter().map(|i| flat_outp_idxs[i]).collect();
+      if flat_idxs.len() > 0 {
+        pad_partitions.push(flat_idxs);
+      }
     }
+    partitions.insert(None, pad_partitions);
 
     // Calculate S_sigma_js (p. 27 of [1])
     let inp_idxs: ArrayD<(usize, usize)> = ArrayD::from_shape_fn(self.input_dim.clone(), |i| flat_index(&self.input_dim, &Some(i), N).unwrap());
@@ -202,14 +234,14 @@ impl BasicBlock for CopyConstraintBasicBlock {
   }
 
   fn prove(
-    &mut self,
+    &self,
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     _model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
-    _cache: &mut ProveVerifyCache,
+    _cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let input = inputs[0];
     let output = outputs[0];
@@ -292,21 +324,19 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let one = DensePolynomial { coeffs: vec![Fr::one()] };
     let L0Z_poly = L0_poly.mul(&Z_poly.sub(&one));
 
-    // Calculate zero-pad check polynomial
-    let mut fj_none_idx = 0; // position in f_polys
-    let mut Lnone_poly = DensePolynomial::zero();
-    for i in indices(self.permutation.shape()) {
-      let idx = i.clone();
-      if self.permutation[i].is_none() {
-        let flat_none_idx = flat_index(&self.permutation.dim(), &Some(idx.clone()), N).unwrap();
-        let mut Lnone_evals = vec![Fr::zero(); N];
-        Lnone_evals[flat_none_idx.1] = Fr::one();
-        Lnone_poly = DensePolynomial {
-          coeffs: domain.ifft(&Lnone_evals),
-        };
-        fj_none_idx = flat_none_idx.0 + input.len();
-        break;
-      }
+    // Calculate pad check polynomials
+    // These polys check that the first idx of each padding partition contains the corresponding padding value. The rest of elements are enforced through the copy constraint polynomials
+    let mut pad_vals = vec![];
+    let mut fj_none_idxs = vec![]; // position in f_polys
+    let mut Lnone_polys = vec![];
+    for (val, partition) in self.padding_partitions.iter() {
+      let idx = &partition[0];
+      let flat_none_idx = flat_index(&self.permutation.dim(), &Some(idx.clone()), N).unwrap();
+      let mut Lnone = vec![Fr::zero(); N];
+      Lnone[flat_none_idx.1] = Fr::one();
+      pad_vals.push(val);
+      Lnone_polys.push(DensePolynomial { coeffs: domain.ifft(&Lnone) });
+      fj_none_idxs.push(flat_none_idx.0 + input.len());
     }
 
     // Calculate batched quotient for Z(x)f'(x) = Z(gx)g'(x) and above checks
@@ -328,9 +358,15 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let f1_poly = ft_polys.iter().fold(DensePolynomial::from_coefficients_vec(vec![Fr::one()]), |acc, x| acc.mul(x));
     let gt_polys: Vec<_> = fj_polys.iter().enumerate().map(|(i, x)| &ssig_polys[i].mul(&beta_poly) + x + gamma_poly.clone()).collect();
     let g1_poly = gt_polys.iter().fold(DensePolynomial::from_coefficients_vec(vec![Fr::one()]), |acc, x| acc.mul(x));
-    let t_poly = f1_poly.mul(&Z_poly).sub(&g1_poly.mul(&Zg_poly))
-      + L0Z_poly.mul(&alpha_poly)
-      + Lnone_poly.mul(&fj_polys[fj_none_idx]).mul(&alpha_poly).mul(&alpha_poly);
+
+    let alpha_pows = calc_pow(alpha, Lnone_polys.len() + 1);
+    let mut none_poly = DensePolynomial::<Fr>::zero();
+    for i in 0..pad_vals.len() {
+      let pow_alpha_poly = DensePolynomial::from_coefficients_vec(vec![alpha_pows[i + 1]]);
+      let pad_poly = &fj_polys[fj_none_idxs[i]] - &DensePolynomial::from_coefficients_vec(vec![*pad_vals[i]]);
+      none_poly = none_poly + Lnone_polys[i].mul(&pad_poly).mul(&pow_alpha_poly);
+    }
+    let t_poly = f1_poly.mul(&Z_poly).sub(&g1_poly.mul(&Zg_poly)) + L0Z_poly.mul(&alpha_poly) + none_poly;
     let t_poly = t_poly.divide_by_vanishing_poly(domain).unwrap().0;
     // TODO: We currently commit t entirely instead of splitting it into
     // smaller polynomials of degree <n done in the Plonk paper.
@@ -350,10 +386,11 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let omega = domain.group_gen();
     let Z_gz = Z_poly.evaluate(&(omega * zeta));
     let L0_z = L0_poly.evaluate(&zeta);
-    let Lnone_z = Lnone_poly.evaluate(&zeta);
+    let Lnone_zs: Vec<_> = Lnone_polys.iter().map(|p| p.evaluate(&zeta)).collect();
     let ssig_zs: Vec<_> = ssig_polys.iter().map(|p| p.evaluate(&zeta)).collect();
     let fj_zs: Vec<_> = fj_polys.iter().map(|p| p.evaluate(&zeta)).collect();
-    let mut evals = vec![Z_gz, L0_z, Lnone_z];
+    let mut evals = vec![Z_gz, L0_z];
+    evals.append(&mut Lnone_zs.clone());
     evals.append(&mut ssig_zs.clone());
     evals.append(&mut fj_zs.clone());
 
@@ -388,9 +425,15 @@ impl BasicBlock for CopyConstraintBasicBlock {
     };
 
     // Compute linearization polynomial r (p. 30 of [1])
+    let mut r_none_poly = DensePolynomial::<Fr>::zero();
+    for i in 0..Lnone_zs.len() {
+      let pad_val_poly = DensePolynomial::from_coefficients_vec(vec![*pad_vals[i]]);
+      r_none_poly = &r_none_poly
+        + &DensePolynomial::from_coefficients_vec(vec![Lnone_zs[i] * alpha_pows[i + 1]]).mul(&fj_polys[fj_none_idxs[i]].sub(&pad_val_poly));
+    }
     let r_poly = &(&lhs - &rhs) - &DensePolynomial::from_coefficients_vec(vec![zeta_pows[N - 1] - Fr::one()]).mul(&t_poly)
       + Z_poly.sub(&one).mul(&DensePolynomial::from_coefficients_vec(vec![alpha * L0_z]))
-      + fj_polys[fj_none_idx].mul(&DensePolynomial::from_coefficients_vec(vec![alpha * alpha * Lnone_z]));
+      + r_none_poly;
 
     // Calculate opening argument for W over a (W_zeta on p. 30 of [1])
     let v = Fr::rand(rng);
@@ -427,7 +470,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     outputs: &Vec<&ArrayD<DataEnc>>,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
-    _cache: &mut ProveVerifyCache,
+    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
     let N = max(inputs[0].first().unwrap().len, outputs[0].first().unwrap().len);
@@ -451,10 +494,10 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let fj_xs = &proof.0[m + 5..];
 
     // TODO: have verifier compute Lagrange basis evals
-    let [Z_gz, L0_z, Lnone_z] = proof.2[..3] else {
-      panic!("Wrong proof format")
-    };
-    let q1_evals = &proof.2[3..];
+    let [Z_gz, L0_z] = proof.2[..2] else { panic!("Wrong proof format") };
+    let none_len = self.padding_partitions.len();
+    let Lnone_zs = &proof.2[2..2 + none_len];
+    let q1_evals = &proof.2[2 + none_len..];
     let ssig_zs = &q1_evals[..m];
     let fj_zs = &q1_evals[m..];
 
@@ -490,15 +533,13 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let u = Fr::rand(rng);
 
     // Get none index for Lnone(x)f(x) = V(x)Q(x) check
-    let mut has_none = false;
-    let mut fj_none_idx = 0;
-    for i in indices(self.permutation.shape()) {
-      if self.permutation[i.clone()].is_none() {
-        let idx = flat_index(&self.permutation.dim(), &Some(i), N).unwrap();
-        fj_none_idx = idx.0 + input.len();
-        has_none = true;
-        break;
-      }
+    let mut pad_vals = vec![];
+    let mut fj_none_idxs = vec![];
+    for (val, partition) in self.padding_partitions.iter() {
+      let idx = &partition[0];
+      let flat_idx = flat_index(&self.permutation.dim(), &Some(idx.clone()), N).unwrap();
+      fj_none_idxs.push(flat_idx.0 + input.len());
+      pad_vals.push(val);
     }
 
     // Perform the batched check (p. 31 of [1])
@@ -509,9 +550,11 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let gt_z: Fr = gt_zs[..gt_zs.len() - 1].iter().product();
     let zeta_pows = calc_pow(zeta, N);
 
+    let alpha_pows = calc_pow(alpha, Lnone_zs.len() + 1);
     let mut D = Z_x * (ft_z + alpha * L0_z + u) - ssig_xs[ssig_xs.len() - 1] * beta * gt_z * Z_gz - t_x * (zeta_pows[N - 1] - Fr::one());
-    if has_none {
-      D = D + fj_xs[fj_none_idx] * alpha * alpha * Lnone_z;
+    for i in 0..pad_vals.len() {
+      let pad_x: G1Affine = (-srs.X1P[0] * pad_vals[i] + fj_xs[fj_none_idxs[i]]).into();
+      D = D + pad_x * alpha_pows[i + 1] * Lnone_zs[i];
     }
 
     let vs = calc_pow(v, ssig_xs.len() + fj_xs.len());
