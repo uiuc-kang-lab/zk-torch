@@ -57,6 +57,8 @@ fn flat_index(shape: &IxDyn, idx: &Option<IxDyn>, N: usize) -> Option<(usize, us
 // that should be the same over inputs and outputs.
 // idxs tuple (i, j) refers to the jth element in the ith polynomial based on
 // the flattened input or output ArrayD
+// For Some keys, the partitions value will contain a single vec containing all idx tuples corresponding to elements that should be equal to the key idx.
+// For None keys, the partitions value will contain a vec for each set of indices that should have the same output value.
 // If is_input, idxs is [(flat_idx of the input index, (0, 0))]. Otherwise,
 // idxs is [(flat_idx of the output, flat_idx of the permuted input idx)]
 fn construct_ssig(
