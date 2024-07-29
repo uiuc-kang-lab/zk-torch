@@ -74,6 +74,7 @@ fn testBasicBlocks() {
   testBasicBlock(AddBasicBlock {}, srs, &empty, &vec![&b, &a_0]);
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a_0, &b]);
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&b, &a_0]);
+  testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a_0, &a_0]);
   testBasicBlock(
     CQBasicBlock {
       setup: a.clone().into_dimensionality::<ndarray::Ix1>().unwrap(),
