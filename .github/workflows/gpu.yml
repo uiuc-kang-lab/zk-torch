@@ -15,7 +15,7 @@ jobs:
         id: getshortsha
         run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
       - name: Copy files over to the cluster
-        uses: garygrossgarten/github-action-scp@v0.9.0 
+        uses: garygrossgarten/github-action-scp@v0.6.0 
         with:
           local: .
           remote: "${{ secrets.GPU_ACTION_DIR }}/gh_actions/${{ steps.getshortsha.outputs.sha_short }}"
@@ -23,7 +23,7 @@ jobs:
           username: ${{ secrets.USR_NAME }}
           password: ${{ secrets.PASSWORD }}
       - name: Execute script to enqueue job in cluster
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v0.1.3
         with: 
           host: ${{ secrets.HOST_NAME }}
           username: ${{ secrets.USR_NAME }}
