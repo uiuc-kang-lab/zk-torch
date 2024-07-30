@@ -17,6 +17,7 @@ use tract_onnx::tract_core::num_traits::ops::bytes;
 // The high-level proving idea:
 // Given that N elements in inputs are all boolean, we can encode them as a polynomial f(x), where f(omega^i) = 0 or 1 for all i in [0, N).
 // Then the bool check is equivalent to proving the existence of t(x), where t(x) = f(x) * (1 - f(x)) / (x^N - 1)
+// (It’s because the N roots of x^N-1 are omega^i for all i in [0, N). This implies the existence of polynomial t(x). Otherwise, t(x) will not exist.)
 // Note: To ensure secure opening, we replace f(x) with g(x) = f(x) + r_f(x) * (x^N - 1), where r_f(x) is a polynomial of degree 2.
 #[derive(Debug)]
 pub struct BooleanCheckBasicBlock;
