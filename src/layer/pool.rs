@@ -12,7 +12,9 @@ use ndarray::{arr1, indices, ArrayD, Dim, Dimension, IxDyn};
 use std::collections::BTreeMap;
 use tract_onnx::pb::AttributeProto;
 
-fn splat_input(input_shape: &Vec<usize>, strides: &Vec<usize>, pads: &Vec<usize>, ci: usize, ch_dims: &Vec<usize>) -> Vec<Vec<Option<IxDyn>>> {
+// This constructs the permutation for CopyConstraintBasicBlock to be inputted into MaxProofBasicBlock. The output is a (product of output dims of the pool operation * input channels X product of kernel_dims) permutation where the rows correspond to one max operation, and each row contains the set of arguments to max.
+// ci is the number of input channels
+fn splat_input(input_shape: &Vec<usize>, strides: &Vec<usize>, pads: &Vec<usize>, ci: usize, kernel_dims: &Vec<usize>) -> Vec<Vec<Option<IxDyn>>> {
   let dims = input_shape[2..].to_vec();
   let mut padding = vec![[0, 0], [0, 0]];
   for i in 0..dims.len() {
@@ -24,19 +26,19 @@ fn splat_input(input_shape: &Vec<usize>, strides: &Vec<usize>, pads: &Vec<usize>
 
   let inp_pad = pad(&inp, &padding, &IxDyn::zeros(input_shape.len()));
 
-  let out_dims = out_hw(&dims, &strides, &ch_dims, &padding[2..].to_vec());
+  let out_dims = out_hw(&dims, &strides, &kernel_dims, &padding[2..].to_vec());
 
   let mut inp_cells = vec![];
   let mut input_row_idx = 0;
 
-  // (out_dims product * inp_channels x ch_dims product)
+  // (out_dims product * inp_channels x kernel_dims product)
   for batch in 0..inp.shape()[0] {
     for out_idx in indices(out_dims.clone()) {
       for ck in 0..ci {
         inp_cells.push(vec![]);
-        for ch_idx in indices(IxDyn(&ch_dims)) {
+        for kernel_idx in indices(IxDyn(&kernel_dims)) {
           let mut idx = vec![batch, ck];
-          idx.append(&mut (0..dims.len()).map(|i| out_idx[i] * strides[i] + ch_idx[i]).collect());
+          idx.append(&mut (0..dims.len()).map(|i| out_idx[i] * strides[i] + kernel_idx[i]).collect());
           inp_cells[input_row_idx].push(Some(inp_pad[IxDyn(&idx)].clone()));
         }
         input_row_idx += 1;
