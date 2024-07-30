@@ -53,4 +53,5 @@ define_nonlinear_layer!(SigmoidLayer, SigmoidBasicBlock);
 define_nonlinear_layer!(TanhLayer, TanhBasicBlock);
 define_nonlinear_layer!(CosLayer, CosBasicBlock);
 define_nonlinear_layer!(SinLayer, SinBasicBlock);
+define_nonlinear_layer!(TanLayer, TanBasicBlock);
 define_nonlinear_layer!(ReciprocalLayer, ReciprocalBasicBlock);
