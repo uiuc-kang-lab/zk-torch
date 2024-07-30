@@ -1,4 +1,5 @@
 use crate::graph::Graph;
+pub use and::AndLayer;
 pub use arithmetic::{AddLayer, SubLayer};
 use ark_bn254::Fr;
 pub use cast::CastLayer;
@@ -35,6 +36,7 @@ use tract_onnx::pb::AttributeProto;
 pub use transpose::TransposeLayer;
 pub use xor::XorLayer;
 
+pub mod and;
 pub mod arithmetic;
 pub mod cast;
 pub mod clip;

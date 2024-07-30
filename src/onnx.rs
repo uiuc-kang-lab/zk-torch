@@ -83,6 +83,10 @@ fn parse_onnx_constants<'a>(
         let tensor = tensor.into_array::<i64>().unwrap();
         Ok(tensor.map(|x| Fr::from(*x)))
       }
+      DatumType::Bool => {
+        let tensor = tensor.into_array::<bool>().unwrap();
+        Ok(tensor.map(|x| Fr::from(*x as i32)))
+      }
       _ => Err(format!("Unsupported constant type: {:?}", tensor.datum_type())),
     }
     .unwrap();
@@ -125,6 +129,7 @@ fn get_local_graph(
 ) -> (Graph, Vec<Vec<usize>>) {
   match op {
     "Add" => Ok(AddLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "And" => Ok(AndLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Mul" => Ok(MulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Cast" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Identity" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)), // Identity is equivalent to Cast in zk-torch
