@@ -53,9 +53,7 @@ fn max_padding_partitions(permutation: &ArrayD<Option<IxDyn>>, nonzero_val: Fr) 
   let mut zero_indices = vec![];
   let mut nonzero_indices = vec![];
   for (i, subview) in permutation.axis_iter(Axis(permutation.ndim() - 1)).enumerate() {
-    // Check if all elements in the subview are None
     if subview.iter().all(|x| x.is_none()) {
-      // Collect indices of None elements in the original array
       for (idx, _) in subview.indexed_iter() {
         let mut full_idx = idx.as_array_view().to_vec();
         full_idx.push(i);
