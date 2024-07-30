@@ -17,4 +17,4 @@ module load python/3.9.16
 export LIBCLANG_PATH=/projects/illinois/eng/cs/ddkang/bjchen4/gpu/llvm-project/build/lib
 srun --export=ALL cargo run --features gpu
 
-srun python3 test_gpu_scripts/notify_by_email.py "$1" "$2"
+srun python test_gpu_scripts/notify.py "$1" "$2"
