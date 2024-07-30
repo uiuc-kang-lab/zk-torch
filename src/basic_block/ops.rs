@@ -54,4 +54,5 @@ make_basic_block!(CeilBasicBlock, { |x: f32| { x.ceil() } });
 make_basic_block!(NegBasicBlock, { |x: f32| { -x } });
 make_basic_block!(CosBasicBlock, { |x: f32| { x.cos() } });
 make_basic_block!(SinBasicBlock, { |x: f32| { x.sin() } });
+make_basic_block!(TanBasicBlock, { |x: f32| { x.tan() } });
 make_basic_block!(ReciprocalBasicBlock, { |x: f32| { 1. / x } });

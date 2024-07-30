@@ -57,6 +57,8 @@ fn flat_index(shape: &IxDyn, idx: &Option<IxDyn>, N: usize) -> Option<(usize, us
 // that should be the same over inputs and outputs.
 // idxs tuple (i, j) refers to the jth element in the ith polynomial based on
 // the flattened input or output ArrayD
+// For Some keys, the partitions value will contain a single vec containing all idx tuples corresponding to elements that should be equal to the key idx.
+// For None keys, the partitions value will contain a vec for each set of indices that should have the same output value.
 // If is_input, idxs is [(flat_idx of the input index, (0, 0))]. Otherwise,
 // idxs is [(flat_idx of the output, flat_idx of the permuted input idx)]
 fn construct_ssig(
@@ -73,10 +75,7 @@ fn construct_ssig(
       let inp_idx = if is_input { Some(*idx) } else { *perm_idx };
       let sigma = {
         let partition = partitions.get(&inp_idx).ok_or_else(|| format!("Key {:?} not found in the partition", inp_idx)).unwrap();
-        partition
-          .iter()
-          .enumerate()
-          .find_map(|(_, cycle)| cycle.iter().position(|&x| x == *idx).map(|pos| cycle[(pos + 1) % cycle.len()]))
+        partition.iter().find_map(|cycle| cycle.iter().position(|&x| x == *idx).map(|pos| cycle[(pos + 1) % cycle.len()]))
       };
       let sigma = sigma.unwrap();
       let mut ssig = vec![Fr::from(sigma.0 as i32 + 1) * domain.element(sigma.1)];
@@ -134,7 +133,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
       if let Some(idx) = &self.permutation[&i] {
         inputs[0][idx]
       } else {
-        *self.padding_partitions.iter().enumerate().find_map(|(_, (val, p))| p.iter().position(|x| *x == i).map(|_| val)).unwrap()
+        *self.padding_partitions.iter().find_map(|(val, p)| p.iter().position(|x| *x == i).map(|_| val)).unwrap()
       }
     })]
   }
