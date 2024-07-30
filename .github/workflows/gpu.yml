@@ -34,4 +34,4 @@ jobs:
             mv test_gpu_scripts/test_gpu.sbatch ${{ steps.getshortsha.outputs.sha_short }}_test_gpu.sbatch
             module load anaconda/2023-Mar/3
             source activate slack
-            sbatch -k ${{ steps.getshortsha.outputs.sha_short }}_test_gpu.sbatch "${{ github.event.number }}" "${{ secrets.SLACK_TOKEN }}"
+            sbatch ${{ steps.getshortsha.outputs.sha_short }}_test_gpu.sbatch "${{ github.event.number }}" "${{ secrets.SLACK_TOKEN }}"
