@@ -21,7 +21,7 @@ client = WebClient(token=token)
 
 # Send a message
 client.chat_postMessage(
-    channel="bot-updates", 
+    channel="zk-torch-test-gpu", 
     text=message, 
     username="SLURM bot"
 )
