@@ -48,6 +48,8 @@ fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&
     .collect();
   let setups = setups.iter().map(|x| (&x.0, &x.1, &x.2)).collect();
   let modelsEnc: Vec<ArrayD<DataEnc>> = util::vec_iter(&models).map(|model| (**model).map(|x| DataEnc::new(srs, x))).collect();
+  let encode_model_time = start.elapsed();
+  println!("Time to encode model: {:?}", encode_model_time - setup_time);
   let inputs: Vec<ArrayD<Data>> = util::vec_iter(inputs).map(|input| convert_to_data(srs, input)).collect();
   let inputs: Vec<&ArrayD<Data>> = inputs.iter().map(|input| input).collect();
   let inputsEnc: Vec<ArrayD<DataEnc>> = inputs.iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect();
@@ -59,7 +61,7 @@ fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&
   let outputsEnc: Vec<Vec<ArrayD<DataEnc>>> =
     outputs.iter().map(|output| (**output).iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect()).collect();
   let encode_time = start.elapsed();
-  println!("Time to encode: {:?}", encode_time - setup_time);
+  println!("Time to encode i/o: {:?}", encode_time - encode_model_time);
 
   // Save files:
   let modelsEncBytes = bincode::serialize(&modelsEnc).unwrap();
