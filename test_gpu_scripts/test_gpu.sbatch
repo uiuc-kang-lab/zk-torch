@@ -14,7 +14,9 @@ module load cmake/3.26.3
 module load cuda/12.4
 module load python/3.9.16
 
+srun python test_gpu_scripts/notify_enqueue.py "$1" "$2"
+
 export LIBCLANG_PATH=/projects/illinois/eng/cs/ddkang/bjchen4/gpu/llvm-project/build/lib
 srun --export=ALL cargo run --features gpu
 
-srun python test_gpu_scripts/notify.py "$1" "$2"
+srun python test_gpu_scripts/notify_result.py "$1" "$2"

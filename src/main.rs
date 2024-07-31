@@ -118,4 +118,5 @@ fn main() {
   let models = models.iter().map(|x| x).collect();
   prove(&srs, &inputs, &mut graph, &models);
   verify(&srs, &graph);
+  println!("Cargo run was successful.");
 }
