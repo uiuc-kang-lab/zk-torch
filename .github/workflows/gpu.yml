@@ -15,7 +15,7 @@ jobs:
         uses: garygrossgarten/github-action-scp@release 
         with:
           local: .
-          remote: "${{ secrets.GPU_ACTION_DIR }}/gh_actions/${{ github.sha }}"
+          remote: "${{ secrets.GPU_ACTION_DIR }}/gh_actions/${{ github.event.pull_request.head.sha }}"
           host: ${{ secrets.HOST_NAME }}
           username: ${{ secrets.USR_NAME }}
           password: ${{ secrets.PASSWORD }}
@@ -30,9 +30,9 @@ jobs:
           username: ${{ secrets.USR_NAME }}
           password: ${{ secrets.PASSWORD }}
           script: | 
-            cd "${{ secrets.GPU_ACTION_DIR }}/gh_actions/${{ github.sha }}"
+            cd "${{ secrets.GPU_ACTION_DIR }}/gh_actions/${{ github.event.pull_request.head.sha }}"
             python test_gpu_scripts/add_gpu_dependencies.py "${{ secrets.GPU_ACTION_DIR }}"
-            mv test_gpu_scripts/test_gpu.sbatch ${{ github.sha }}_test_gpu.sbatch
+            mv test_gpu_scripts/test_gpu.sbatch ${{ github.event.pull_request.head.sha }}_test_gpu.sbatch
             module load anaconda/2023-Mar/3
             source activate slack
-            sbatch ${{ github.sha }}_test_gpu.sbatch "${{ github.event.number }}" "${{ secrets.SLACK_TOKEN }}" "${{ github.sha }}"
+            sbatch ${{ github.event.pull_request.head.sha }}_test_gpu.sbatch "${{ github.event.number }}" "${{ secrets.SLACK_TOKEN }}" "${{ github.event.pull_request.head.sha }}"
