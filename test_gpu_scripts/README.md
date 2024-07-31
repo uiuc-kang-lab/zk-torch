@@ -9,4 +9,4 @@ The workflow for testing gpu is in the `.github/workflows/gpu.yml`. The workflow
 4. name: Execute script to enqueue job: this ssh to CC. And it appends necessary dependencies for gpu testing and sends the sbatch job to CC SLURM node to test it
 
 ## Notes
-- The GitHub Actions may show error messages when CC network is not accessible. This is because the VM hosted by GitHub cannot access the CC network. In this case, the workflow will fail and the user will have to manually cancel the GitHub Actions workflow and re-run it when the network is accessible.
+- The GitHub Actions may show error messages (e.g., Error: Timed out while waiting for handshake) when CC network is not accessible. This is because the VM hosted by GitHub cannot access the CC network. In this case, the workflow will fail and the user will have to manually cancel the GitHub Actions workflow and re-run it when the network is accessible (i.e., click `Checks` tab and `Re-run all jobs` button under the PR).
