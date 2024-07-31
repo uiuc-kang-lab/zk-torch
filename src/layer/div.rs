@@ -13,7 +13,7 @@ impl Layer for DivLayer {
     let mut graph = Graph::new();
 
     if let Some(c) = constants[1] {
-      let c = onnx::SF_FLOAT * util::fr_to_int(*c.first().unwrap()) as f32;
+      let c = util::fr_to_int(*c.first().unwrap()) as f32 / onnx::SF_FLOAT as f32;
       let div = graph.addBB(Box::new(DivConstBasicBlock { c: c }));
       let div_check = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
