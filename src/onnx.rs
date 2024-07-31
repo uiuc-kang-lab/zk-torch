@@ -145,6 +145,7 @@ fn get_local_graph(
     "LSTM" => Ok(LSTMLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Neg" => Ok(NegLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Not" => Ok(NotLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Relu" => Ok(ReLULayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Flatten" => Ok(FlattenLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Gather" => Ok(GatherLayer::graph(&input_shapes, &node_constants, &node_attributes)),
@@ -174,6 +175,7 @@ fn get_local_graph(
     "Erf" => Ok(ErfLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Conv" => Ok(ConvLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "MaxPool" => Ok(MaxPoolLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Xor" => Ok(XorLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     _ => Err(format!("Unsupported onnx operation: {op}")),
   }
   .unwrap()

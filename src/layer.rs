@@ -20,6 +20,7 @@ pub use mul::MulLayer;
 use ndarray::ArrayD;
 pub use neg::NegLayer;
 pub use nonlinear::*;
+pub use not::NotLayer;
 pub use pow::PowLayer;
 pub use r#where::WhereLayer;
 pub use range::RangeLayer;
@@ -34,6 +35,7 @@ pub use squeeze::{SqueezeLayer, UnsqueezeLayer};
 pub use tile::TileLayer;
 use tract_onnx::pb::AttributeProto;
 pub use transpose::TransposeLayer;
+pub use xor::XorLayer;
 
 pub mod and;
 pub mod arithmetic;
@@ -54,6 +56,7 @@ pub mod matmul;
 pub mod mul;
 pub mod neg;
 pub mod nonlinear;
+pub mod not;
 pub mod pool;
 pub mod pow;
 pub mod range;
@@ -68,6 +71,7 @@ pub mod squeeze;
 pub mod tile;
 pub mod transpose;
 pub mod r#where;
+pub mod xor;
 
 pub trait Layer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>);
