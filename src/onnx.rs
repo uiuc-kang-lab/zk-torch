@@ -11,11 +11,11 @@ use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::{DatumType, Framework};
 use tract_onnx::tensor::load_tensor;
 
-pub const SF_LOG: usize = 9; //9
+pub const SF_LOG: usize = 4; //9
 pub const SF: usize = 1 << SF_LOG;
 pub const SF_FLOAT: f32 = (1 << SF_LOG) as f32;
-pub const CQ_RANGE: usize = 1 << 18; //12
-pub const CQ_RANGE_LOWER: i32 = -(1 << 17);
+pub const CQ_RANGE: usize = 1 << 16; //12
+pub const CQ_RANGE_LOWER: i32 = -(1 << 15);
 
 // This function is used for parsing the inputs of onnx models
 fn parse_onnx_inputs(onnx_graph: &pb::GraphProto) -> (HashMap<String, usize>, HashMap<String, Vec<usize>>) {
@@ -75,7 +75,7 @@ fn parse_onnx_constants<'a>(
         let tensor = tensor.into_array::<f32>().unwrap();
         Ok(tensor.map(|x| {
           let mut y = (*x * SF_FLOAT).round();
-          y = y.clamp(-(1 << 15) as f32, (1 << 15) as f32);
+          y = y.clamp(-(1 << 15) as f32, (1 << 16) as f32);
           Fr::from(y as i32)
         }))
       }
