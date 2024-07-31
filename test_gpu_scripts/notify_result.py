@@ -3,7 +3,7 @@ import sys
 
 pr_number = sys.argv[1]
 token = sys.argv[2]
-commit_hash = sys.argv[3]
+commit_hash = str(sys.argv[3])[:7]
 
 with open("zktorch_gh_action.out", "r") as f:
   contents = f.readlines()

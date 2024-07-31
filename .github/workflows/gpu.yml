@@ -11,14 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     steps: 
       - uses: actions/checkout@v4
-      - name: Get a short version of the GIT commit SHA to use in naming files
-        id: getshortsha
-        run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
       - name: Copy files over to the cluster
         uses: garygrossgarten/github-action-scp@release 
         with:
           local: .
-          remote: "${{ secrets.GPU_ACTION_DIR }}/gh_actions/${{ steps.getshortsha.outputs.sha_short }}"
+          remote: "${{ secrets.GPU_ACTION_DIR }}/gh_actions/${{ github.sha }}"
           host: ${{ secrets.HOST_NAME }}
           username: ${{ secrets.USR_NAME }}
           password: ${{ secrets.PASSWORD }}
@@ -33,9 +30,9 @@ jobs:
           username: ${{ secrets.USR_NAME }}
           password: ${{ secrets.PASSWORD }}
           script: | 
-            cd "${{ secrets.GPU_ACTION_DIR }}/gh_actions/${{ steps.getshortsha.outputs.sha_short }}"
+            cd "${{ secrets.GPU_ACTION_DIR }}/gh_actions/${{ github.sha }}"
             python test_gpu_scripts/add_gpu_dependencies.py "${{ secrets.GPU_ACTION_DIR }}"
-            mv test_gpu_scripts/test_gpu.sbatch ${{ steps.getshortsha.outputs.sha_short }}_test_gpu.sbatch
+            mv test_gpu_scripts/test_gpu.sbatch ${{ github.sha }}_test_gpu.sbatch
             module load anaconda/2023-Mar/3
             source activate slack
-            sbatch ${{ steps.getshortsha.outputs.sha_short }}_test_gpu.sbatch "${{ github.event.number }}" "${{ secrets.SLACK_TOKEN }}" "${{ steps.getshortsha.outputs.sha_short }}"
+            sbatch ${{ github.sha }}_test_gpu.sbatch "${{ github.event.number }}" "${{ secrets.SLACK_TOKEN }}" "${{ github.sha }}"

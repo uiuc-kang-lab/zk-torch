@@ -3,7 +3,7 @@ import sys
 
 pr_number = sys.argv[1]
 token = sys.argv[2]
-commit_hash = sys.argv[3]
+commit_hash = str(sys.argv[3])[:7]
 
 m = ' starts to run the gpu test for commit: ' + commit_hash + '. '
 note = 'If no message is sent after this, the test is either still running or being killed.'
