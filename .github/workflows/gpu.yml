@@ -23,7 +23,7 @@ jobs:
           username: ${{ secrets.USR_NAME }}
           password: ${{ secrets.PASSWORD }}
       - name: Execute script to enqueue job in cluster
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v0.1.3
         with: 
           host: ${{ secrets.HOST_NAME }}
           username: ${{ secrets.USR_NAME }}
