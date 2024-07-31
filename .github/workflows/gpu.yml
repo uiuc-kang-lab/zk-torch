@@ -22,7 +22,7 @@ jobs:
           host: ${{ secrets.HOST_NAME }}
           username: ${{ secrets.USR_NAME }}
           password: ${{ secrets.PASSWORD }}
-      - name: Sleep for 30 seconds
+      - name: Sleep for 1 minute
         uses: jakejarvis/wait-action@master
         with:
           time: '1m'
