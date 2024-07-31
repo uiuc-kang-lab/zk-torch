@@ -60,8 +60,7 @@ pub struct MaxLayer;
 impl Layer for MaxLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
-
-    // For now we only support the case when there are two inputs and the second input is a constant of a single element
+    // For now we only support the case when there are two inputs and the second input is a constant of a single element. The single element is compared element-wise with the first input
     if input_shapes.len() == 2 && input_shapes[1].len() == 1 && constants[1].is_some() {
       let constant = constants[1].unwrap().first().unwrap();
       let permutation = splat_input(&input_shapes[0]);
