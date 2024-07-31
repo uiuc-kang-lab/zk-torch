@@ -1,5 +1,5 @@
 # GPU Test
-`test_gpu_scripts` is a directory that contains scripts to test the GPU on the campus cluster. The scripts are used to test the GPU's performance and to ensure that the GPU is working correctly.
+`test_gpu_scripts` is a directory that contains scripts to test the GPU on the Illinois Campus Cluster. The scripts are used to ensure that the GPU feature is working correctly.
 
 ## Workflow
 The workflow for testing gpu is in the `.github/workflows/gpu.yml`. The workflow consists of the following steps:
@@ -8,5 +8,8 @@ The workflow for testing gpu is in the `.github/workflows/gpu.yml`. The workflow
 3. name: Copy files over to the cluster: this scp the repo on the VM to CC
 4. name: Execute script to enqueue job: this ssh to CC. And it appends necessary dependencies for gpu testing and sends the sbatch job to CC SLURM node to test it
 
+## Notice
+After 4., the user will receive a notice in our slack channel `#zk-torch-test-gpu` that the job has been submitted. Once the job is done, the user will receive another notice in the same channel.
+
 ## Notes
-- The GitHub Actions may show error messages (e.g., Error: Timed out while waiting for handshake) when CC network is not accessible. This is because the VM hosted by GitHub cannot access the CC network. In this case, the workflow will fail and the user will have to manually cancel the GitHub Actions workflow and re-run it when the network is accessible (i.e., click `Checks` tab and `Re-run all jobs` button under the PR).
+- The GitHub Actions may show error messages (e.g., Error: Timed out while waiting for handshake) sometimes. This is because the VM hosted by GitHub cannot access the Campus Cluster network. In this case, the workflow will fail and the user will have to re-run it when the Campus Cluster network is accessible (i.e., click `Checks` tab and `Re-run all jobs` button under the PR).
