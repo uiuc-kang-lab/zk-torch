@@ -7,8 +7,8 @@ use ark_std::UniformRand;
 use ark_std::{One, Zero};
 use copy_constraint::zero_padding_partition;
 use ndarray::{arr0, concatenate, s, ArrayD, Axis, IxDyn};
-use rand::{rngs::StdRng, SeedableRng};
 use std::collections::{BTreeMap, HashMap};
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::sync::{Arc, Mutex};
 
 fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) {
@@ -117,6 +117,10 @@ fn testBasicBlocks() {
   let min = 1.;
   let max = 8.;
   testBasicBlock(ClipBasicBlock { min, max }, srs, &empty, &vec![&a]);
+
+  // generate booleans
+  let a = ArrayD::from_shape_fn(IxDyn(&[4]), |_| Fr::from(rng.gen_range(0..2)));
+  testBasicBlock(BooleanCheckBasicBlock {}, srs, &empty, &vec![&a])
 }
 
 #[test]

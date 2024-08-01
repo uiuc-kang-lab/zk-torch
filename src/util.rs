@@ -1,4 +1,5 @@
 pub use arithmetic::*;
+pub use copy_constraint::*;
 pub use fft::*;
 pub use iter::*;
 pub use msm::*;
@@ -10,6 +11,7 @@ pub use shape::*;
 pub use verifier::*;
 
 pub mod arithmetic;
+pub mod copy_constraint;
 pub mod fft;
 pub mod iter;
 pub mod msm;

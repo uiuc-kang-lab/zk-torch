@@ -5,6 +5,7 @@ use crate::util;
 use ark_bn254::Fr;
 use ark_std::Zero;
 use ndarray::{arr1, ArrayD};
+use pool::MaxPoolLayer;
 use std::collections::HashMap;
 use tract_onnx::pb;
 use tract_onnx::pb::AttributeProto;
@@ -83,6 +84,10 @@ fn parse_onnx_constants<'a>(
         let tensor = tensor.into_array::<i64>().unwrap();
         Ok(tensor.map(|x| Fr::from(*x)))
       }
+      DatumType::Bool => {
+        let tensor = tensor.into_array::<bool>().unwrap();
+        Ok(tensor.map(|x| Fr::from(*x as i32)))
+      }
       _ => Err(format!("Unsupported constant type: {:?}", tensor.datum_type())),
     }
     .unwrap();
@@ -125,6 +130,7 @@ fn get_local_graph(
 ) -> (Graph, Vec<Vec<usize>>) {
   match op {
     "Add" => Ok(AddLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "And" => Ok(AndLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Mul" => Ok(MulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Cast" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Identity" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)), // Identity is equivalent to Cast in zk-torch
@@ -139,6 +145,7 @@ fn get_local_graph(
     "LSTM" => Ok(LSTMLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Neg" => Ok(NegLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Not" => Ok(NotLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Relu" => Ok(ReLULayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Flatten" => Ok(FlattenLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Gather" => Ok(GatherLayer::graph(&input_shapes, &node_constants, &node_attributes)),
@@ -168,6 +175,8 @@ fn get_local_graph(
     "Erf" => Ok(ErfLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Conv" => Ok(ConvLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Max" => Ok(MaxLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "MaxPool" => Ok(MaxPoolLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Xor" => Ok(XorLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     _ => Err(format!("Unsupported onnx operation: {op}")),
   }
   .unwrap()
