@@ -3,8 +3,9 @@
 use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ff::Field;
+use ark_ff::{Field, PrimeField};
 use ark_poly::{evaluations::univariate::Evaluations, univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
+use ark_serialize::Write;
 use ark_std::{
   ops::{Mul, Sub},
   One, UniformRand, Zero,
@@ -13,6 +14,7 @@ use ndarray::{Array1, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
+use std::fs::File;
 
 #[derive(Debug)]
 pub struct CQBasicBlock {
@@ -53,6 +55,16 @@ impl BasicBlock for CQBasicBlock {
     let mut setup = Q_i_x_1;
     setup.extend(L_i_x_1);
     setup.extend(L_i_0_x_1);
+
+    // create table_dict when setup
+    let mut table_dict = HashMap::new();
+    for i in 0..N {
+      table_dict.insert(util::fr_to_int(model.raw[i]), i);
+    }
+    let serialized = serde_json::to_string(&table_dict).unwrap();
+    let mut file = File::create(format!("setup/cq_table_dict_{:p}", self)).unwrap();
+    let _ = file.write_all(serialized.as_bytes());
+
     return (setup, vec![T_x_2], Vec::new());
   }
 
@@ -80,24 +92,23 @@ impl BasicBlock for CQBasicBlock {
     let L_i_0_x_1 = &setup.0[2 * N..];
     let m_i = {
       let mut cache = cache.lock().unwrap();
-      let CacheValues::CQTableDict(table_dict) =
-        cache.entry(format!("cq_table_dict_{:p}", self)).or_insert_with(|| CacheValues::CQTableDict(HashMap::new()))
-      else {
+      // load table_dict from cache or file
+      let CacheValues::CQTableDict(table_dict) = cache.entry(format!("cq_table_dict_{:p}", self)).or_insert_with(|| {
+        let content = std::fs::read_to_string(format!("setup/cq_table_dict_{:p}", self)).unwrap();
+        let table_dict: HashMap<i32, usize> = serde_json::from_str(&content).unwrap();
+        CacheValues::CQTableDict(table_dict)
+      }) else {
         panic!("Cache type error")
       };
-      if table_dict.len() == 0 {
-        for i in 0..N {
-          table_dict.insert(model.raw[i], i);
-        }
-      }
 
       // Calculate m
       let mut m_i = HashMap::new();
       for x in input.raw.iter() {
-        if !table_dict.contains_key(x) {
+        let x_int = util::fr_to_int(*x);
+        if !table_dict.contains_key(&x_int) {
           println!("{:?},{:?}", x, -*x);
         }
-        m_i.entry(table_dict.get(x).unwrap().clone()).and_modify(|y| *y += 1).or_insert(1);
+        m_i.entry(table_dict.get(&x_int).unwrap().clone()).and_modify(|y| *y += 1).or_insert(1);
       }
       m_i
     };

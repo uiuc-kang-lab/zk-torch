@@ -58,6 +58,7 @@ impl Graph {
     let mut outputsEnc = vec![vec![]; self.nodes.len()];
     self.nodes.iter().enumerate().for_each(|(i, n)| {
       println!("encoding {i} {:?}", self.basic_blocks[n.basic_block]);
+      let start = std::time::Instant::now();
       let myInputs = n
         .inputs
         .iter()
@@ -70,6 +71,8 @@ impl Graph {
         })
         .collect();
       outputsEnc[i] = self.basic_blocks[n.basic_block].encodeOutputs(srs, &models[n.basic_block], &myInputs, outputs[i]);
+      let encode_time = start.elapsed();
+      println!("Time to encode: {:?}", encode_time);
     });
     return outputsEnc;
   }
@@ -97,12 +100,12 @@ impl Graph {
     rng: &mut StdRng,
   ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> {
     let cache = Arc::new(Mutex::new(HashMap::new()));
-
-    self
+    let o = self
       .nodes
       .iter()
       .enumerate()
       .map(|(i, n)| {
+        let start = std::time::Instant::now();
         println!("proving {i} {:?}", self.basic_blocks[n.basic_block]);
         let myInputs = n
           .inputs
@@ -132,9 +135,12 @@ impl Graph {
         let mut bytes = Vec::new();
         proof.serialize_uncompressed(&mut bytes).unwrap();
         util::add_randomness(rng, bytes);
+        let encode_time = start.elapsed();
+        println!("Time to prove {:?}", encode_time);
         proof
       })
-      .collect()
+      .collect();
+    o
   }
 
   pub fn verify(

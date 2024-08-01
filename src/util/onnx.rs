@@ -8,9 +8,9 @@ use ark_bn254::Fr;
 use ark_std::Zero;
 use ndarray::ArrayD;
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use serde::Deserialize;
 use tract_onnx::pb::tensor_proto::DataType;
 use tract_onnx::prelude::Framework;
-use serde::Deserialize;
 
 // This function is used for generating fake inputs for onnx models
 // Fake inputs are random field (i.e., Fr) elements whose shapes and types match those described in the input tensors of an ONNX model.
@@ -58,7 +58,7 @@ pub fn generate_fake_inputs_for_onnx(filename: &str) -> Vec<ArrayD<Fr>> {
 
 #[derive(Deserialize, Debug)]
 struct InputData {
-    input_data: Vec<Vec<f64>>,
+  input_data: Vec<Vec<f64>>,
 }
 
 pub fn load_inputs_from_json_for_onnx(onnx_name: &str, json_name: &str) -> Vec<ArrayD<Fr>> {
@@ -85,26 +85,29 @@ pub fn load_inputs_from_json_for_onnx(onnx_name: &str, json_name: &str) -> Vec<A
         }
       })
       .collect::<Vec<_>>();
-    let val_num = &shape.iter().fold(1, |acc, x| acc * x);
 
     let input = match t.elem_type() {
       DataType::Float | DataType::Float16 | DataType::Double => {
-        let input: Vec<Fr> = json.input_data[i].iter().map(|x| {
-          let y = (*x * crate::onnx::SF_FLOAT as f64).round();
-          Fr::from(y as i32) } ).collect();
+        let input: Vec<Fr> = json.input_data[i]
+          .iter()
+          .map(|x| {
+            let y = (*x * crate::onnx::SF_FLOAT as f64).round();
+            Fr::from(y as i32)
+          })
+          .collect();
         input
-      }   
-      
+      }
+
       DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => {
-        let input: Vec<Fr> = json.input_data[i].iter().map(|x| { Fr::from(*x as i32) }).collect();
+        let input: Vec<Fr> = json.input_data[i].iter().map(|x| Fr::from(*x as i32)).collect();
         input
       }
       DataType::Uint8 | DataType::Uint16 | DataType::Uint32 | DataType::Uint64 => {
-        let input: Vec<Fr> = json.input_data[i].iter().map(|x| { Fr::from(*x as u32) }).collect();
+        let input: Vec<Fr> = json.input_data[i].iter().map(|x| Fr::from(*x as u32)).collect();
         input
       }
       DataType::Bool => {
-        let input: Vec<Fr> = json.input_data[i].iter().map(|x| { Fr::from(*x as u8) }).collect();
+        let input: Vec<Fr> = json.input_data[i].iter().map(|x| Fr::from(*x as u8)).collect();
         input
       }
       _ => panic!("Unsupported constant type: {:?}", t.elem_type()),
@@ -112,6 +115,6 @@ pub fn load_inputs_from_json_for_onnx(onnx_name: &str, json_name: &str) -> Vec<A
     let input = ArrayD::from_shape_vec(shape, input).unwrap();
     let input = pad_to_pow_of_two(&input, &Fr::zero());
     inputs.push(input);
-  } 
+  }
   inputs
 }

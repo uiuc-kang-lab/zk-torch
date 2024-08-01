@@ -5,6 +5,7 @@ use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{evaluations::univariate::Evaluations, univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
+use ark_serialize::Write;
 use ark_std::{
   ops::{Mul, Sub},
   One, UniformRand, Zero,
@@ -13,6 +14,7 @@ use ndarray::ArrayD;
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
+use std::fs::File;
 
 #[derive(Debug)]
 pub struct CQ2BasicBlock {
@@ -61,6 +63,18 @@ impl BasicBlock for CQ2BasicBlock {
 
     setup.extend(L_i_x_1);
     setup.extend(L_i_0_x_1);
+
+    // create table_dict when setup
+    let mut table_dict = HashMap::new();
+    for i in 0..N {
+      let m0_i = util::fr_to_int(model[0].raw[i]);
+      let m1_i = util::fr_to_int(model[1].raw[i]);
+      table_dict.insert(format!("{},{}", m0_i, m1_i), i);
+    }
+    let serialized = serde_json::to_string(&table_dict).unwrap();
+    let mut file = std::fs::File::create(format!("setup/cq2_table_dict_{:p}", self)).unwrap();
+    let _ = file.write_all(serialized.as_bytes());
+
     return (setup, setup2, Vec::new());
   }
 
@@ -95,21 +109,20 @@ impl BasicBlock for CQ2BasicBlock {
 
     let m_i = {
       let mut cache = cache.lock().unwrap();
-      let CacheValues::CQ2TableDict(table_dict) =
-        cache.entry(format!("cq2_table_dict_{:p}", self)).or_insert_with(|| CacheValues::CQ2TableDict(HashMap::new()))
-      else {
+      let CacheValues::CQ2TableDict(table_dict) = cache.entry(format!("cq2_table_dict_{:p}", self)).or_insert_with(|| {
+        let content = std::fs::read_to_string(format!("setup/cq2_table_dict_{:p}", self)).unwrap();
+        let table_dict: HashMap<String, usize> = serde_json::from_str(&content).unwrap();
+        CacheValues::CQ2TableDict(table_dict)
+      }) else {
         panic!("Cache type error")
       };
-      if table_dict.len() == 0 {
-        for i in 0..N {
-          table_dict.insert((model[0].raw[i], model[1].raw[i]), i);
-        }
-      }
 
       // Calculate m
       let mut m_i = HashMap::new();
       for x in inputs[0].raw.iter().zip(inputs[1].raw.iter()) {
-        let temp = (*x.0, *x.1);
+        let x0_i = util::fr_to_int(*x.0);
+        let x1_i = util::fr_to_int(*x.1);
+        let temp = format!("{},{}", x0_i, x1_i);
         if !table_dict.contains_key(&temp) {
           println!("{:?}", temp);
         }

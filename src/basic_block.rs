@@ -74,8 +74,8 @@ pub struct SRS {
 // During proofs and verifications, a cache is used to prevent recomputation.
 // These are the types of the elements in the cache.
 pub enum CacheValues {
-  CQTableDict(HashMap<Fr, usize>),
-  CQ2TableDict(HashMap<(Fr, Fr), usize>),
+  CQTableDict(HashMap<i32, usize>),
+  CQ2TableDict(HashMap<String, usize>),
   RLCRandom(Fr),
   Data(Data),
   G2(G2Affine),
