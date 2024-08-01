@@ -9,7 +9,7 @@ with open("zktorch_gh_action.out", "r") as f:
   contents = f.readlines()
 
 commit_str = ' (commit: ' + commit_hash + ')'
-message = 'error found when cargo run in event #' + str(pr_number) + commit_str
+message = 'error found when cargo test in event #' + str(pr_number) + commit_str
 
 # Check if log file exists
 try:
@@ -17,11 +17,11 @@ try:
     contents = f.readlines()
   # Check if the log file contains the string Cargo run was successful.
   for line in contents:
-    if "Cargo run was successful." in line:
-      message = 'Event #' + str(pr_number) + commit_str + ' successfully passed cargo run on CC gpu'
+    if "0 failed;" in line:
+      message = 'Event #' + str(pr_number) + commit_str + ' successfully passed cargo test on CC gpu'
       break
 except FileNotFoundError:
-  message = 'error found when cargo run in event #' + str(pr_number) + commit_str
+  message = 'error found when cargo test in event #' + str(pr_number) + commit_str
 
 # reference: https://www.datacamp.com/tutorial/how-to-send-slack-messages-with-python
 # Set up a WebClient with the Slack OAuth token
