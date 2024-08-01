@@ -1,5 +1,5 @@
 /*
- * Copy constraintutilities:
+ * Copy constraint utilities:
  * The functions are used for constructing the permutation and
  * padding_partitions fields in the CopyConstraintBasicBlock.
  */
