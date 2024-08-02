@@ -12,9 +12,11 @@ pub struct LessLayer;
 impl Layer for LessLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
     // Inputs: A, B
-    // Outputs: L = A < B
-    // Check 1: (A - B) * L - (1 - L) < 0
-    // Check 2: (A - B) * (1 - L) >= 0
+    // Outputs: L = (A < B); then 1 - L = (A >= B). We can view them as selection of indices.
+    // Check 1: (A - B) * L + (-1) * (1 - L) < 0 because A - B will always < 0 at indices of A < B and we set values at other indices as -1
+    // Check 1 is equivalent to (A - B) * L - (1 - L) < 0
+    // Check 2: 0 * L + (A - B) * (1 - L) >= 0 because A - B will always >= 0 at indices of A >= B and we set values at other indices as 0
+    // Check 2 is equivalent to (A - B) * (1 - L) >= 0
     let mut graph = Graph::new();
 
     let mul = graph.addBB(Box::new(RepeaterBasicBlock {
