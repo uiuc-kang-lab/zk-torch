@@ -29,13 +29,14 @@ pub use repeater::RepeaterBasicBlock;
 pub use reshape::ReshapeBasicBlock;
 pub use rope::RoPEBasicBlock;
 use serde::{Deserialize, Serialize};
+pub use sort::SortBasicBlock;
 pub use split::SplitBasicBlock;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-
 pub use sub::SubBasicBlock;
 pub use sum::SumBasicBlock;
 pub use transpose::TransposeBasicBlock;
+
 pub mod add;
 pub mod bool_check;
 pub mod clip;
@@ -57,6 +58,7 @@ pub mod range;
 pub mod repeater;
 pub mod reshape;
 pub mod rope;
+pub mod sort;
 pub mod split;
 pub mod sub;
 pub mod sum;
