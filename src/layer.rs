@@ -33,7 +33,7 @@ pub use softmax::SoftmaxLayer;
 pub use split::SplitLayer;
 pub use squeeze::{SqueezeLayer, UnsqueezeLayer};
 pub use tile::TileLayer;
-pub use topk::TopkLayer;
+pub use topk::TopKLayer;
 use tract_onnx::pb::AttributeProto;
 pub use transpose::TransposeLayer;
 pub use xor::XorLayer;

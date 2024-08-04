@@ -163,7 +163,7 @@ fn get_local_graph(
     "Transpose" => Ok(TransposeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Tan" => Ok(TanLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Tanh" => Ok(TanhLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "TopK" => Ok(TopkLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "TopK" => Ok(TopKLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Tile" => Ok(TileLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Shape" => Ok(ShapeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Sigmoid" => Ok(SigmoidLayer::graph(&input_shapes, &node_constants, &node_attributes)),

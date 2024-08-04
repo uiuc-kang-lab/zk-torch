@@ -15,7 +15,6 @@ fn get_topk_indices(sorted_data_shape: Vec<usize>, k: usize) -> ArrayD<Option<Ix
   output_shape[output_ndim - 1] = k;
   let padded_output_shape: Vec<_> = output_shape.iter().map(|x| util::next_pow(*x as u32) as usize).collect();
 
-  // first generate indices for the input tensor
   let topk_idx = ArrayD::from_shape_fn(output_shape.as_slice(), |index| Some(index.clone()));
   let padded_topk_idx = util::pad_to_pow_of_two(&topk_idx, &None);
   assert!(padded_topk_idx.shape() == padded_output_shape.as_slice());
@@ -23,10 +22,10 @@ fn get_topk_indices(sorted_data_shape: Vec<usize>, k: usize) -> ArrayD<Option<Ix
   padded_topk_idx
 }
 
-// TopkLayer is a layer that returns the top k elements of the input tensor along a given axis
+// TopKLayer is a layer that returns the top k elements of the input tensor along a given axis
 // The order of the elements is determined by the 'largest' attribute, the default '1' means descending
-pub struct TopkLayer;
-impl Layer for TopkLayer {
+pub struct TopKLayer;
+impl Layer for TopKLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let mut descending = true;
