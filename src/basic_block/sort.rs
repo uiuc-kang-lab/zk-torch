@@ -18,7 +18,7 @@ use std::ops::{Add, Mul, Sub};
 // SortBasicBlock is a basic block that sorts the input data in ascending or descending order.
 // It takes two inputs: the data and the original indices.
 // It returns three tensors: the sorted data, the sorted indices, and the values d used to prove that the sorted data is in descending/ascending order.
-// Note 1: please always remember to check that all values in d are >= 0 if descending, and <= 0 if ascending.
+// Note 1: please always remember to check that the first (len - 1) values in d are >= 0 if descending, and <= 0 if ascending.
 // Note 2: we need len to be passed in as a parameter because the data may be padded with zeros, and we need to ignore the padded zeros when sorting.
 #[derive(Debug)]
 pub struct SortBasicBlock {
@@ -58,6 +58,16 @@ impl BasicBlock for SortBasicBlock {
     vec![sorted_data, sorted_indices, d]
   }
 
+  // The high-level proving idea:
+  // Given that N elements in inputs, we can encode them as a poly f(x), where f(omega^i) for all i in [0, N).
+  // Similarly, let the sorted data poly be f_s(x).
+  // Then the sort check is equivalent to prove
+  // 1. there exists a one-to-one mapping between f(x) and f_s(x), i.e., f_s(sigma(omega^i))=f(omega^i) for all i in [0, N). sigma is a permutation.
+  // 2. for i in [0, len), the values d(omega^i) = f_s(omega * x) - f_s(x) are >= 0 if descending, and <= 0 if ascending.
+  // The prove function below is a little more complicated because we need:
+  // 1. to prove indices are sorted in the same way as data
+  // 2. to prove the values d are correct
+  // 3. to properly blind the data and indices as g polys because we will need to open them in the verify function
   fn prove(
     &self,
     srs: &SRS,
