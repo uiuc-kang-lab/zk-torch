@@ -175,6 +175,7 @@ fn get_local_graph(
     "Erf" => Ok(ErfLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Conv" => Ok(ConvLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Max" => Ok(MaxLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Min" => Ok(MinLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "MaxPool" => Ok(MaxPoolLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Xor" => Ok(XorLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     _ => Err(format!("Unsupported onnx operation: {op}")),

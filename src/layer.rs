@@ -16,7 +16,7 @@ pub use gather::GatherLayer;
 pub use gathernd::GatherNDLayer;
 pub use lstm::LSTMLayer;
 pub use matmul::MatMulLayer;
-pub use max::MaxLayer;
+pub use max::{MaxLayer, MinLayer};
 pub use mul::MulLayer;
 use ndarray::ArrayD;
 pub use neg::NegLayer;
