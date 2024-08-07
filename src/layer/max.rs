@@ -9,7 +9,7 @@ use ndarray::{concatenate, indices, ArrayD, Axis, Dim, Dimension, IxDyn};
 use std::collections::BTreeMap;
 use tract_onnx::pb::AttributeProto;
 
-// Returns the splat needed to pass into MaxProofBasicBlock. This produces a (product of input dims X 2) permutation where the first column corresponds to the input elements and the second column contains None for the constant values
+// Returns the splat needed to pass into MaxProofBasicBlock. This produces a (product of input dims X 2) permutation where the first column corresponds to the input elements and the second column contains cmp_val
 fn splat_input(input_shape: &Vec<usize>, cmp_val: Option<IxDyn>) -> ArrayD<Option<IxDyn>> {
   let inp_shape = Dim(IxDyn(input_shape));
   let inp = ArrayD::from_shape_vec(inp_shape.clone(), indices(inp_shape).into_iter().map(|x| Some(x.into_dyn())).collect()).unwrap();
