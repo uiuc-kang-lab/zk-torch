@@ -13,7 +13,7 @@ pub struct BatchNormLayer;
 impl Layer for BatchNormLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
-    
+
     let X_shape = input_shapes[0];
     let scale_shape = input_shapes[1];
     let bias_shape = input_shapes[2];
@@ -28,9 +28,9 @@ impl Layer for BatchNormLayer {
     // var: [C]
     assert!(X_shape[1] == scale_shape[0] && scale_shape[0] == bias_shape[0] && bias_shape[0] == mean_shape[0] && mean_shape[0] == var_shape[0]);
     assert!(scale_shape.len() == 1 && bias_shape.len() == 1 && mean_shape.len() == 1 && var_shape.len() == 1);
-    
+
     let training_mode_attr = attributes.iter().filter(|x| x.name == "training_mode").next();
-    let training_mode=  if let Some(x) = training_mode_attr {
+    let training_mode = if let Some(x) = training_mode_attr {
       // training_mode is provided
       x.i as i8
     } else {
@@ -54,14 +54,18 @@ impl Layer for BatchNormLayer {
       c: arr1(&vec![Fr::from(epsilon.round() as i32)]).into_dyn(),
     }));
     let scale_shape_padded = util::next_pow(scale_shape[0] as u32) as usize;
-    let reshape_1 = graph.addBB(Box::new(ReshapeBasicBlock { shape: vec![1, scale_shape_padded] }));
+    let reshape_1 = graph.addBB(Box::new(ReshapeBasicBlock {
+      shape: vec![1, scale_shape_padded],
+    }));
     let permutation = ((0..scale_shape_padded).collect(), vec![0]);
     let permute = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
       N: 2,
     }));
     let num_one = X_shape.len() - 2;
-    let reshape_2 = graph.addBB(Box::new(ReshapeBasicBlock { shape: vec![scale_shape_padded].into_iter().chain(vec![1; num_one]).collect() }));
+    let reshape_2 = graph.addBB(Box::new(ReshapeBasicBlock {
+      shape: vec![scale_shape_padded].into_iter().chain(vec![1; num_one]).collect(),
+    }));
     let sub = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(SubBasicBlock {}),
       N: 1,
@@ -137,13 +141,8 @@ impl Layer for BatchNormLayer {
       axis: 0,
       split: split_ind.clone(),
     }));
-    let split_x = graph.addBB(Box::new(SplitBasicBlock {
-      axis: 1,
-      split: split_ind,
-    }));
-    let concat = graph.addBB(Box::new(ConcatBasicBlock {
-      axis: 1,
-    }));
+    let split_x = graph.addBB(Box::new(SplitBasicBlock { axis: 1, split: split_ind }));
+    let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: 1 }));
 
     // output epsilon
     let epsilon_output = graph.addNode(epsilon, vec![]);
@@ -206,9 +205,9 @@ impl Layer for BatchNormLayer {
       tmp_outputs.push((change_SF_output, 0));
     }
     let concat_output = graph.addNode(concat, tmp_outputs);
-    
+
     // Step 6. scale * (X - mean) / sqrt(var + epsilon) + bias
-    let output = graph.addNode(add, vec![(concat_output, 0), (bias_output, 0)]); 
+    let output = graph.addNode(add, vec![(concat_output, 0), (bias_output, 0)]);
 
     graph.outputs.push((output, 0));
     (graph, vec![input_shapes[0].clone()])
