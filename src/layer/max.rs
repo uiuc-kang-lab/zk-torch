@@ -63,7 +63,7 @@ pub struct MinLayer;
 impl Layer for MinLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
-    // For now we only support the case when there are two inputs where the first input has ndim > 1 and the second input is a single element. The single element is compared element-wise with the first input
+    // For now we only support the case when there are two inputs where the first input has ndim > 1 and the second input is a single element. The single element is compared element-wise with the first input. This is its only use case in RetinaNet where the first input has the same dimensions as the Max output and second input comes from Shape -> Gather layers.
     if input_shapes.len() == 2 && input_shapes[1].len() == 1 && input_shapes[0].len() > 1 {
       // Overview:
       // Make another ArrayD the same size as the first input containing the second input so that they can be concatenated for CopyConstraint
