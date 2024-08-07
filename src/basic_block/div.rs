@@ -51,3 +51,22 @@ impl BasicBlock for DivConstBasicBlock {
     vec![arr1(&out).into_dyn()]
   }
 }
+
+#[derive(Debug)]
+pub struct ModConstBasicBlock {
+  pub c: u32,
+}
+impl BasicBlock for ModConstBasicBlock {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    assert!(inputs.len() == 1);
+
+    let out = util::array_into_iter(inputs[0])
+      .map(|x| {
+        let x = util::fr_to_int(*x) as u32;
+        Fr::from((x % self.c) as i64)
+      })
+      .collect::<Vec<_>>();
+
+    vec![arr1(&out).into_dyn()]
+  }
+}
