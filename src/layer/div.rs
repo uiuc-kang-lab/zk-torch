@@ -8,6 +8,8 @@ use ndarray::{Array1, ArrayD};
 use tract_onnx::pb::AttributeProto;
 
 // Define a macro to unify common behavior for DivLayer and ModLayer
+// when output_idx equals to 0, the layer returns the quotient. (Div)
+// when output_idx equals to 1, the layer returns the remainder. (Mod)
 macro_rules! create_division_layer {
   ($layer_name:ident, $const_block:ident, $output_idx:expr) => {
     pub struct $layer_name;
