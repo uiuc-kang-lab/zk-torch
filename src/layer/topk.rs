@@ -68,15 +68,9 @@ impl Layer for TopKLayer {
       N: 1,
     }));
 
-    if axis != input_shapes[0].len() - 1 {
-      todo!("TopkLayer: axis != - 1; not implemented yet");
-    }
-
-    let range_output = graph.addNode(range, vec![]);
-    let sort_output = graph.addNode(sort, vec![(-1, 0), (range_output, 0)]);
-    let _ = graph.addNode(one_to_one, vec![(-1, 0), (range_output, 0), (sort_output, 0), (sort_output, 1)]);
     let sorted_data_shape = input_shapes[0].clone();
     let padded_sorted_data_shape: Vec<_> = sorted_data_shape.iter().map(|x| util::next_pow(*x as u32) as usize).collect();
+    
     let permutation = get_topk_indices(sorted_data_shape.clone(), k);
     let padding_partitions = zero_padding_partition(&permutation);
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
@@ -84,19 +78,37 @@ impl Layer for TopKLayer {
       input_dim: IxDyn(&padded_sorted_data_shape),
       padding_partitions,
     }));
-    let topk_data_output = graph.addNode(cc, vec![(sort_output, 0)]);
-    let topk_indices_output = graph.addNode(cc, vec![(sort_output, 1)]);
 
-    let permutation_for_check = get_topk_indices(sorted_data_shape, data_len - 1);
-    let padding_partitions = zero_padding_partition(&permutation_for_check);
+    let permutation_for_ordered_check = get_topk_indices(sorted_data_shape, data_len - 1);
+    let padding_partitions = zero_padding_partition(&permutation_for_ordered_check);
     let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
-      permutation: permutation_for_check.clone(),
+      permutation: permutation_for_ordered_check.clone(),
       input_dim: IxDyn(&padded_sorted_data_shape),
       padding_partitions,
     }));
+
+    if axis != input_shapes[0].len() - 1 {
+      todo!("TopkLayer: axis != - 1; not implemented yet");
+    }
+
+    // The overview of the proving:
+    // 1. Create indices, a range from 0 to the length of the input tensor along the axis
+    // 2. Sort the input tensor and the corresponding indices (step 1.) along the axis
+    // 3. Check if the sorted tensor and sorted indices are 1-to-1 mapped from the input tensor and the indices
+    // 4. Check if the sorted tensor is ordered by checking if the difference between consecutive elements 
+    //    is non-negative (if descending) or non-positive (if ascending)
+    // 5. Copy the first k elements of the sorted tensor and the sorted indices
+    let range_output = graph.addNode(range, vec![]);
+    let sort_output = graph.addNode(sort, vec![(-1, 0), (range_output, 0)]);
+    let _ = graph.addNode(one_to_one, vec![(-1, 0), (range_output, 0), (sort_output, 0), (sort_output, 1)]);
+
     let diff_data_output = graph.addNode(ordered, vec![(sort_output, 0)]);
     let diff_data_output = graph.addNode(cc1, vec![(diff_data_output, 0)]);
     let _ = graph.addNode(range_check, vec![(diff_data_output, 0)]);
+
+    let topk_data_output = graph.addNode(cc, vec![(sort_output, 0)]);
+    let topk_indices_output = graph.addNode(cc, vec![(sort_output, 1)]);
+
     let mut output_shape = permutation.shape().to_vec();
 
     let output_ndim = output_shape.len();
