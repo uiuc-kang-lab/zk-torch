@@ -70,7 +70,7 @@ impl Layer for TopKLayer {
 
     let sorted_data_shape = input_shapes[0].clone();
     let padded_sorted_data_shape: Vec<_> = sorted_data_shape.iter().map(|x| util::next_pow(*x as u32) as usize).collect();
-    
+
     let permutation = get_topk_indices(sorted_data_shape.clone(), k);
     let padding_partitions = zero_padding_partition(&permutation);
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
@@ -95,7 +95,7 @@ impl Layer for TopKLayer {
     // 1. Create indices, a range from 0 to the length of the input tensor along the axis
     // 2. Sort the input tensor and the corresponding indices (step 1.) along the axis
     // 3. Check if the sorted tensor and sorted indices are 1-to-1 mapped from the input tensor and the indices
-    // 4. Check if the sorted tensor is ordered by checking if the difference between consecutive elements 
+    // 4. Check if the sorted tensor is ordered by checking if the difference between consecutive elements
     //    is non-negative (if descending) or non-positive (if ascending)
     // 5. Copy the first k elements of the sorted tensor and the sorted indices
     let range_output = graph.addNode(range, vec![]);
