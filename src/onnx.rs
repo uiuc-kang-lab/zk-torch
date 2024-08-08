@@ -134,6 +134,7 @@ fn get_local_graph(
     "Mul" => Ok(MulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Cast" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Identity" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)), // Identity is equivalent to Cast in zk-torch
+    "BatchNormalization" => Ok(BatchNormLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Ceil" => Ok(CeilLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Clip" => Ok(ClipLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Concat" => Ok(ConcatLayer::graph(&input_shapes, &node_constants, &node_attributes)),
@@ -142,6 +143,7 @@ fn get_local_graph(
     "Sin" => Ok(SinLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Sub" => Ok(SubLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Einsum" => Ok(EinsumLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Less" => Ok(LessLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "LSTM" => Ok(LSTMLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Neg" => Ok(NegLayer::graph(&input_shapes, &node_constants, &node_attributes)),
