@@ -27,7 +27,7 @@ impl BasicBlock for OrderedBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1 && inputs[0].ndim() == 1);
 
-    let mut sorted_data_shift_1 = util::array_into_iter(inputs[0]).skip(1).cloned().collect::<Vec<_>>();
+    let mut sorted_data_shift_1 = inputs[0].into_iter().skip(1).cloned().collect::<Vec<_>>();
     sorted_data_shift_1.push(Fr::zero());
     let sorted_data_shift_1 = arr1(&sorted_data_shift_1);
 

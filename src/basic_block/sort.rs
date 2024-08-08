@@ -34,7 +34,7 @@ impl BasicBlock for SortBasicBlock {
     let indices_tail = inputs[1].slice(s![self.len..]).iter().cloned().collect::<Vec<_>>();
 
     // Pair the data and indices
-    let mut paired: Vec<_> = util::array_into_iter(&data).zip(util::array_into_iter(&indices)).collect();
+    let mut paired: Vec<_> = data.into_iter().zip(indices.into_iter()).collect();
     // Sort by the first element of the tuple (data value)
     paired.sort_by_key(|&(data, _)| data);
     if self.descending {
@@ -43,7 +43,7 @@ impl BasicBlock for SortBasicBlock {
     }
 
     // Separate the sorted data and indices
-    let (sorted_data, sorted_indices): (Vec<_>, Vec<_>) = util::vec_iter(&paired).map(|(&data, &index)| (data, index)).unzip();
+    let (sorted_data, sorted_indices): (Vec<_>, Vec<_>) = util::vec_iter(&paired).map(|(data, index)| (data, index)).unzip();
     // Concatenate the sorted data and indices with the tail
     let sorted_data = sorted_data.into_iter().chain(data_tail).collect::<Vec<_>>();
     let sorted_indices = sorted_indices.into_iter().chain(indices_tail).collect::<Vec<_>>();
