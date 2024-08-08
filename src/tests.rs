@@ -126,6 +126,12 @@ fn testBasicBlocks() {
   let a = ArrayD::from_shape_vec(IxDyn(&[4]), vec![3, 4, 7, 1].into_iter().map(|x| Fr::from(x)).collect()).unwrap();
   let a_idx = ArrayD::from_shape_vec(IxDyn(&[4]), vec![0, 1, 2, 3].into_iter().map(|x| Fr::from(x)).collect()).unwrap();
   testBasicBlock(SortBasicBlock { descending: true, len: 4 }, srs, &empty, &vec![&a, &a_idx]);
+  let a = ArrayD::from_shape_vec(IxDyn(&[4]), vec![1, 2, 3, 4].into_iter().map(|x| Fr::from(x)).collect()).unwrap();
+  let a_ind = ArrayD::from_shape_vec(IxDyn(&[4]), vec![0, 1, 2, 3].into_iter().map(|x| Fr::from(x)).collect()).unwrap();
+  let b = ArrayD::from_shape_vec(IxDyn(&[4]), vec![4, 3, 2, 1].into_iter().map(|x| Fr::from(x)).collect()).unwrap();
+  let b_ind = ArrayD::from_shape_vec(IxDyn(&[4]), vec![3, 2, 1, 0].into_iter().map(|x| Fr::from(x)).collect()).unwrap();
+  testBasicBlock(OneToOneBasicBlock {}, srs, &empty, &vec![&a, &a_ind, &b, &b_ind]);
+  testBasicBlock(OrderedBasicBlock {}, srs, &empty, &vec![&b]);
 }
 
 #[test]

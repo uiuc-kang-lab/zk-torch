@@ -50,6 +50,14 @@ impl Layer for TopKLayer {
       }),
       N: 1,
     }));
+    let one_to_one = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(OneToOneBasicBlock {}),
+      N: 1,
+    }));
+    let ordered = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(OrderedBasicBlock {}),
+      N: 1,
+    }));
     let r: Vec<_> = if descending {
       (0..-onnx::CQ_RANGE_LOWER).map(Fr::from).collect()
     } else {
@@ -66,6 +74,7 @@ impl Layer for TopKLayer {
 
     let range_output = graph.addNode(range, vec![]);
     let sort_output = graph.addNode(sort, vec![(-1, 0), (range_output, 0)]);
+    let _ = graph.addNode(one_to_one, vec![(-1, 0), (range_output, 0), (sort_output, 0), (sort_output, 1)]);
     let sorted_data_shape = input_shapes[0].clone();
     let padded_sorted_data_shape: Vec<_> = sorted_data_shape.iter().map(|x| util::next_pow(*x as u32) as usize).collect();
     let permutation = get_topk_indices(sorted_data_shape.clone(), k);
@@ -85,7 +94,8 @@ impl Layer for TopKLayer {
       input_dim: IxDyn(&padded_sorted_data_shape),
       padding_partitions,
     }));
-    let diff_data_output = graph.addNode(cc1, vec![(sort_output, 2)]);
+    let diff_data_output = graph.addNode(ordered, vec![(sort_output, 0)]);
+    let diff_data_output = graph.addNode(cc1, vec![(diff_data_output, 0)]);
     let _ = graph.addNode(range_check, vec![(diff_data_output, 0)]);
     let mut output_shape = permutation.shape().to_vec();
 
