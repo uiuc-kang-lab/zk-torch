@@ -52,6 +52,8 @@ impl BasicBlock for OneToOneBasicBlock {
     let sorted_data = inputs[2].first().unwrap().raw.clone();
     let sorted_indices = inputs[3].first().unwrap().raw.clone();
 
+    // The reason we don't batch these g polys is that we need to use them separately for Z poly proving,
+    // it may be more time consuming to batch them here.
     // compute g(x) = f(x) + r_f(x) * (x^N - 1) for secure opening
     // r_f(x) is a polynomial of degree 2
     let r_f_poly = DensePolynomial {

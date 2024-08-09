@@ -18,7 +18,7 @@ use std::ops::{Add, Mul, Sub};
 // OrderedBasicBlock is a basic block that computes
 // d(omega^i) = f_s(x) - f_s(omega * x) for all i in [0, N)
 // which can be used to prove that the data (shape: (N,)) is ordered by checking
-// all d(omega^i) are non-negative if descending, or non-positive if ascending.
+// all d(omega^i) for i in [0, N-1) are non-negative if descending, or non-positive if ascending.
 // It takes one input: the sorted data tensor f_s.
 // It returns one tensor: the differences d.
 #[derive(Debug)]
@@ -28,7 +28,7 @@ impl BasicBlock for OrderedBasicBlock {
     assert!(inputs.len() == 1 && inputs[0].ndim() == 1);
 
     let mut sorted_data_shift_1 = inputs[0].into_iter().skip(1).cloned().collect::<Vec<_>>();
-    sorted_data_shift_1.push(Fr::zero());
+    sorted_data_shift_1.push(*inputs[0].first().unwrap());
     let sorted_data_shift_1 = arr1(&sorted_data_shift_1);
 
     // Outsource the range check of d to the caller
@@ -96,19 +96,12 @@ impl BasicBlock for OrderedBasicBlock {
       coeffs: g_s_poly.coeffs.iter().enumerate().map(|(i, x)| x * &domain.element(i)).collect(),
     };
 
-    // Calculate L0Z(x) = L0(x)(Z(x)-1) polynomial
-    let mut LN = vec![Fr::zero(); N];
-    LN[N - 1] = Fr::one();
-    let LN_poly = DensePolynomial { coeffs: domain.ifft(&LN) };
-    let one = DensePolynomial { coeffs: vec![Fr::one()] };
-    let LN_minus_one_poly = LN_poly.sub(&one);
-
     // Commit t
 
     // t constraints:
     // The following eqs should hold for all x in the domain_N:
-    // - [L_{N-1}(x)-1][g_d(x) + g_s(omega * x) - g_s(x)] = 0
-    let t_N_poly = LN_minus_one_poly.mul(&g_diff_poly.clone().add(g_s_omega_poly.clone()).sub(&g_s_poly));
+    // - g_d(x) + g_s(omega * x) - g_s(x) = 0
+    let t_N_poly = &g_diff_poly.clone().add(g_s_omega_poly.clone()).sub(&g_s_poly);
     let t_poly = t_N_poly.divide_by_vanishing_poly(domain).unwrap().0;
     let t_x = util::msm::<G1Projective>(&srs.X1A, &t_poly.coeffs);
 
@@ -233,14 +226,10 @@ impl BasicBlock for OrderedBasicBlock {
     let w = Fr::rand(rng);
     let w_pows = calc_pow(w, 2);
 
-    // Verify that t(zeta) * (zeta^N - 1) = L_{N-1}(zeta)-1][d(zeta) + g_s(omega * zeta) - g_s(zeta)]
+    // Verify that t(zeta) * (zeta^N - 1) = d(zeta) + g_s(omega * zeta) - g_s(zeta)
     let vanishing_poly = domain.vanishing_polynomial();
     let vanishing_poly_zeta = vanishing_poly.evaluate(&zeta);
-    let mut LN = vec![Fr::zero(); N];
-    LN[N - 1] = Fr::one();
-    let LN_poly = DensePolynomial { coeffs: domain.ifft(&LN) };
-    let LN_zeta = LN_poly.evaluate(&zeta);
-    assert!(t_zeta * vanishing_poly_zeta == (LN_zeta - Fr::one()) * (g_diff_zeta + g_s_omega_zeta - g_s_zeta));
+    assert!(t_zeta * vanishing_poly_zeta == g_diff_zeta + g_s_omega_zeta - g_s_zeta);
 
     // Verify openings are correct
     let v_pows = calc_pow(v, 3);
