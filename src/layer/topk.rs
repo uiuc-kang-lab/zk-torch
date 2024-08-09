@@ -109,7 +109,7 @@ impl Layer for TopKLayer {
     let topk_data_output = graph.addNode(cc, vec![(sort_output, 0)]);
     let topk_indices_output = graph.addNode(cc, vec![(sort_output, 1)]);
 
-    let mut output_shape = permutation.shape().to_vec();
+    let mut output_shape = input_shapes[0].clone();
 
     let output_ndim = output_shape.len();
     output_shape[output_ndim - 1] = k;
