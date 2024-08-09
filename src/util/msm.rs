@@ -21,12 +21,6 @@ use {
   icicle_cuda_runtime::memory::HostOrDeviceSlice,
 };
 
-#[cfg(feature = "gpu")]
-pub fn msm<G: GpuMsmProjective + std::clone::Clone + ark_ec::ScalarMul>(a: &[G::GpuMsmAffine], b: &[Fr]) -> G {
-  G::gpu_msm(a, b)
-}
-
-#[cfg(not(feature = "gpu"))]
 pub fn msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {
   cpu_msm(a, b)
 }
