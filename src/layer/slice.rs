@@ -133,7 +133,6 @@ impl Layer for SliceLayer {
       permutation,
       input_dim: IxDyn(&input_shape_pad),
       padding_partitions: HashMap::new(),
-      padding_values: vec![],
     }));
     let slice_output = graph.addNode(cc, vec![(-1, 0)]);
     graph.outputs.push((slice_output, 0));

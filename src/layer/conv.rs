@@ -5,7 +5,6 @@ use crate::onnx;
 use crate::util::pad;
 use crate::util::pad_to_pow_of_two;
 use ark_bn254::Fr;
-use ark_std::Zero;
 use copy_constraint::zero_padding_partition;
 use ndarray::indices;
 use ndarray::Dim;
@@ -132,8 +131,7 @@ impl Layer for ConvLayer {
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation_padded,
       input_dim: IxDyn(&input_shape_padded),
-      padding_partitions: padding_partitions,
-      padding_values: vec![Fr::zero()],
+      padding_partitions,
     }));
 
     // TODO: change to CQLin and commit splatted weights
@@ -144,8 +142,7 @@ impl Layer for ConvLayer {
     let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: weights_padded,
       input_dim: IxDyn(&weight_shape_padded),
-      padding_partitions: padding_partitions,
-      padding_values: vec![Fr::zero()],
+      padding_partitions,
     }));
     let matmul = graph.addBB(Box::new(MatMulBasicBlock {}));
 
@@ -179,8 +176,7 @@ impl Layer for ConvLayer {
     let cc2 = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: reshape_permutation,
       input_dim: IxDyn(&[permutation.len().next_power_of_two(), weights_splatted.len().next_power_of_two()]),
-      padding_partitions: padding_partitions,
-      padding_values: vec![Fr::zero()],
+      padding_partitions,
     }));
 
     let cc_output = graph.addNode(cc, vec![(-1, 0)]);

@@ -3,7 +3,6 @@ use crate::graph::*;
 use crate::layer::{squeeze::UnsqueezeBasicBlock, Layer};
 use crate::util;
 use ark_bn254::Fr;
-use ark_std::Zero;
 use copy_constraint::zero_padding_partition;
 use ndarray::{concatenate, ArrayD, Axis, IxDyn};
 use tract_onnx::pb::AttributeProto;
@@ -65,8 +64,7 @@ impl Layer for TileLayer {
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation,
       input_dim: IxDyn(&padded_input_shape),
-      padding_partitions: padding_partitions,
-      padding_values: vec![Fr::zero()],
+      padding_partitions,
     }));
     let tiled_output = graph.addNode(cc, vec![(input_index, 0)]);
     graph.outputs.push((tiled_output, 0));

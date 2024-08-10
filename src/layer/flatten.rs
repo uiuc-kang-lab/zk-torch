@@ -3,7 +3,6 @@ use crate::graph::*;
 use crate::layer::Layer;
 use crate::util;
 use ark_bn254::Fr;
-use ark_std::Zero;
 use copy_constraint::zero_padding_partition;
 use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
@@ -42,8 +41,7 @@ impl Layer for FlattenLayer {
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation,
       input_dim: IxDyn(&padded_input_shape),
-      padding_partitions: padding_partitions,
-      padding_values: vec![Fr::zero()],
+      padding_partitions,
     }));
 
     let output = graph.addNode(cc, vec![(-1, 0)]);

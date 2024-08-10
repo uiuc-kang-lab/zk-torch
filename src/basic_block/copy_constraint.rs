@@ -123,7 +123,6 @@ pub struct CopyConstraintBasicBlock {
   pub permutation: ArrayD<Option<IxDyn>>,
   pub input_dim: IxDyn,
   pub padding_partitions: HashMap<Fr, Vec<IxDyn>>,
-  pub padding_values: Vec<Fr>,
 }
 
 impl BasicBlock for CopyConstraintBasicBlock {
@@ -182,7 +181,9 @@ impl BasicBlock for CopyConstraintBasicBlock {
     }
     // Add padding partitions to partition
     let mut pad_partitions = vec![];
-    for v in self.padding_values.iter() {
+    let mut padding_values = self.padding_partitions.keys().collect::<Vec<_>>();
+    padding_values.sort();
+    for v in padding_values.iter() {
       let p = self.padding_partitions.get(v).unwrap();
       let flat_idxs: Vec<_> = p.iter().map(|i| flat_outp_idxs[i]).collect();
       if flat_idxs.len() > 0 {
@@ -331,7 +332,9 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let mut pad_vals = vec![];
     let mut fj_none_idxs = vec![]; // position in f_polys
     let mut Lnone_polys = vec![];
-    for val in self.padding_values.iter() {
+    let mut padding_values = self.padding_partitions.keys().cloned().collect::<Vec<_>>();
+    padding_values.sort();
+    for val in padding_values.iter() {
       let partition = &self.padding_partitions[val];
       let idx = &partition[0];
       let flat_none_idx = flat_index(&self.permutation.dim(), &Some(idx.clone()), N).unwrap();
@@ -497,8 +500,10 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let fj_xs = &proof.0[m + 5..];
 
     // TODO: have verifier compute Lagrange basis evals
+    let mut padding_values = self.padding_partitions.keys().cloned().collect::<Vec<_>>();
+    padding_values.sort();
     let [Z_gz, L0_z] = proof.2[..2] else { panic!("Wrong proof format") };
-    let none_len = self.padding_values.len();
+    let none_len = padding_values.len();
     let Lnone_zs = &proof.2[2..2 + none_len];
     let q1_evals = &proof.2[2 + none_len..];
     let ssig_zs = &q1_evals[..m];
@@ -538,7 +543,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // Get none index for Lnone(x)f(x) = V(x)Q(x) check
     let mut pad_vals = vec![];
     let mut fj_none_idxs = vec![];
-    for val in self.padding_values.iter() {
+    for val in padding_values.iter() {
       let partition = self.padding_partitions.get(val).unwrap();
       let idx = &partition[0];
       let flat_idx = flat_index(&self.permutation.dim(), &Some(idx.clone()), N).unwrap();
