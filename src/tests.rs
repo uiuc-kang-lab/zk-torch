@@ -8,7 +8,7 @@ use ark_std::{One, Zero};
 use copy_constraint::zero_padding_partition;
 use ndarray::{arr0, concatenate, s, ArrayD, Axis, IxDyn};
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) {
@@ -156,7 +156,8 @@ fn test_copy_constraint() {
     CopyConstraintBasicBlock {
       permutation,
       input_dim: IxDyn(&[4]),
-      padding_partitions: BTreeMap::new(),
+      padding_partitions: HashMap::new(),
+      padding_values: Vec::new(),
     },
     srs,
     &empty,
@@ -172,7 +173,8 @@ fn test_copy_constraint() {
     CopyConstraintBasicBlock {
       permutation,
       input_dim: IxDyn(&[2, 2]),
-      padding_partitions: BTreeMap::new(),
+      padding_partitions: HashMap::new(),
+      padding_values: Vec::new(),
     },
     srs,
     &empty,
@@ -206,7 +208,8 @@ fn test_copy_constraint() {
     CopyConstraintBasicBlock {
       permutation,
       input_dim: IxDyn(&[4, 2]),
-      padding_partitions,
+      padding_partitions: padding_partitions,
+      padding_values: vec![Fr::zero()],
     },
     srs,
     &empty,
@@ -238,10 +241,11 @@ fn test_copy_constraint() {
       )
       .unwrap(),
       input_dim: IxDyn(&[2, 2, 4]),
-      padding_partitions: BTreeMap::from([
+      padding_partitions: HashMap::from([
         (Fr::zero(), vec![IxDyn(&[3, 0]), IxDyn(&[3, 1]), IxDyn(&[3, 2]), IxDyn(&[3, 3])]),
         (Fr::one(), vec![IxDyn(&[0, 3]), IxDyn(&[1, 3]), IxDyn(&[2, 3])]),
       ]),
+      padding_values: vec![Fr::zero(), Fr::one()],
     },
     srs,
     &empty,
@@ -261,7 +265,8 @@ fn test_copy_constraint() {
       )
       .unwrap(),
       input_dim: IxDyn(&[2, 1, 4]),
-      padding_partitions: BTreeMap::new(),
+      padding_partitions: HashMap::new(),
+      padding_values: Vec::new(),
     },
     srs,
     &empty,

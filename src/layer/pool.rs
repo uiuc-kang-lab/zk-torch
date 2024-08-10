@@ -5,6 +5,7 @@ use crate::layer::Layer;
 use crate::onnx;
 use crate::util::{max_padding_partitions, pad};
 use ark_bn254::Fr;
+use ark_std::Zero;
 use copy_constraint::zero_padding_partition;
 use ndarray::{arr1, indices, ArrayD, Dim, Dimension, IxDyn};
 use tract_onnx::pb::AttributeProto;
@@ -67,11 +68,12 @@ impl Layer for MaxPoolLayer {
     let permutation = splat_input(&input_shapes[0], &strides, &pads, ch, &kernel_shape);
     let permutation_padded = splat_pad(&permutation);
     let input_shape_padded: Vec<_> = input_shapes[0].iter().map(|i| i.next_power_of_two()).collect();
-    let padding_partitions = max_padding_partitions(&permutation_padded, Fr::from(onnx::CQ_RANGE_LOWER));
+    let (padding_partitions, padding_vals) = max_padding_partitions(&permutation_padded, Fr::from(onnx::CQ_RANGE_LOWER));
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation_padded,
       input_dim: IxDyn(&input_shape_padded),
-      padding_partitions,
+      padding_partitions: padding_partitions,
+      padding_values: padding_vals,
     }));
 
     // Prove max over each row
@@ -94,7 +96,8 @@ impl Layer for MaxPoolLayer {
     let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: reshape_permutation,
       input_dim: IxDyn(&reshape_inp_padded),
-      padding_partitions,
+      padding_partitions: padding_partitions,
+      padding_values: vec![Fr::zero()],
     }));
 
     let r: Vec<_> = (0..-onnx::CQ_RANGE_LOWER).map(Fr::from).collect();

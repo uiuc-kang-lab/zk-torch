@@ -4,7 +4,7 @@ use crate::layer::Layer;
 use crate::util;
 use ark_bn254::Fr;
 use ndarray::{ArrayD, IxDyn};
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use tract_onnx::pb::AttributeProto;
 
 fn combinations<T: Clone>(vecs: &Vec<Vec<T>>) -> Vec<Vec<T>> {
@@ -132,7 +132,8 @@ impl Layer for SliceLayer {
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation,
       input_dim: IxDyn(&input_shape_pad),
-      padding_partitions: BTreeMap::new(),
+      padding_partitions: HashMap::new(),
+      padding_values: vec![],
     }));
     let slice_output = graph.addNode(cc, vec![(-1, 0)]);
     graph.outputs.push((slice_output, 0));

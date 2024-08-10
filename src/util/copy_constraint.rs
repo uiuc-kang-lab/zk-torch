@@ -7,11 +7,11 @@
 use ark_bn254::Fr;
 use ark_std::Zero;
 use ndarray::{ArrayD, Axis, Dimension, IxDyn};
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 // Returns the padding partition where the non-zero padding value consists of all pad indices such that the last-axis subview containing it contains non-pad elements, and the zero padding value consists of all pad indices part of a last-axis subview containing only pad elements.
 // If val is 0, then these will instead be combined.
-pub fn max_padding_partitions(permutation: &ArrayD<Option<IxDyn>>, val: Fr) -> BTreeMap<Fr, Vec<IxDyn>> {
+pub fn max_padding_partitions(permutation: &ArrayD<Option<IxDyn>>, val: Fr) -> (HashMap<Fr, Vec<IxDyn>>, Vec<Fr>) {
   let mut zero_indices = vec![];
   let mut nonzero_indices = vec![];
   for (i, subview) in permutation.axis_iter(Axis(permutation.ndim() - 1)).enumerate() {
@@ -31,16 +31,19 @@ pub fn max_padding_partitions(permutation: &ArrayD<Option<IxDyn>>, val: Fr) -> B
       }
     }
   }
-  let mut partitions = BTreeMap::new();
+  let mut partitions = HashMap::new();
+  let mut partition_vals = vec![];
   if val == Fr::zero() {
     zero_indices.append(&mut nonzero_indices);
   } else {
     if nonzero_indices.len() > 0 {
       partitions.insert(val, nonzero_indices);
+      partition_vals.push(val);
     }
   }
   if zero_indices.len() > 0 {
     partitions.insert(Fr::zero(), zero_indices);
+    partition_vals.push(Fr::zero());
   }
-  partitions
+  (partitions, partition_vals)
 }

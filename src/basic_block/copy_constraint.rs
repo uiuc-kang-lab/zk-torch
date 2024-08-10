@@ -89,14 +89,14 @@ fn construct_ssig(
 }
 
 // Returns the padding_partitions field for CopyConstraintBasicBlock when the given permutation padding elements are 0
-pub fn zero_padding_partition(permutation: &ArrayD<Option<IxDyn>>) -> BTreeMap<Fr, Vec<IxDyn>> {
+pub fn zero_padding_partition(permutation: &ArrayD<Option<IxDyn>>) -> HashMap<Fr, Vec<IxDyn>> {
   let mut partition = vec![];
   for (i, _) in permutation.indexed_iter() {
     if permutation[&i] == None {
       partition.push(i);
     }
   }
-  let mut padding_partition = BTreeMap::new();
+  let mut padding_partition = HashMap::new();
   if partition.len() > 0 {
     padding_partition.insert(Fr::zero(), partition);
   }
@@ -104,7 +104,7 @@ pub fn zero_padding_partition(permutation: &ArrayD<Option<IxDyn>>) -> BTreeMap<F
 }
 
 // Checks that padding partition corresponds to None values in permutation
-fn check_padding_partition(permutation: &ArrayD<Option<IxDyn>>, padding_partitions: &BTreeMap<Fr, Vec<IxDyn>>) -> bool {
+fn check_padding_partition(permutation: &ArrayD<Option<IxDyn>>, padding_partitions: &HashMap<Fr, Vec<IxDyn>>) -> bool {
   for (_, p) in padding_partitions.iter() {
     for idx in p {
       if permutation[idx] != None {
@@ -122,18 +122,20 @@ fn check_padding_partition(permutation: &ArrayD<Option<IxDyn>>, padding_partitio
 pub struct CopyConstraintBasicBlock {
   pub permutation: ArrayD<Option<IxDyn>>,
   pub input_dim: IxDyn,
-  pub padding_partitions: BTreeMap<Fr, Vec<IxDyn>>,
+  pub padding_partitions: HashMap<Fr, Vec<IxDyn>>,
+  pub padding_values: Vec<Fr>,
 }
 
 impl BasicBlock for CopyConstraintBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1 && inputs[0].dim() == self.input_dim);
     assert!(check_padding_partition(&self.permutation, &self.padding_partitions));
+    let tmp_hashmap: HashMap<IxDyn, Fr> = self.padding_partitions.iter().flat_map(|(k, v)| v.iter().map(|x| (x.clone(), *k))).collect();
     vec![ArrayD::from_shape_fn(self.permutation.shape(), |i| {
       if let Some(idx) = &self.permutation[&i] {
         inputs[0][idx]
       } else {
-        *self.padding_partitions.iter().find_map(|(val, p)| p.iter().position(|x| *x == i).map(|_| val)).unwrap()
+        tmp_hashmap[&i]
       }
     })]
   }
@@ -180,7 +182,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
     }
     // Add padding partitions to partition
     let mut pad_partitions = vec![];
-    for (_, p) in self.padding_partitions.iter() {
+    for v in self.padding_values.iter() {
+      let p = self.padding_partitions.get(v).unwrap();
       let flat_idxs: Vec<_> = p.iter().map(|i| flat_outp_idxs[i]).collect();
       if flat_idxs.len() > 0 {
         pad_partitions.push(flat_idxs);
@@ -328,7 +331,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let mut pad_vals = vec![];
     let mut fj_none_idxs = vec![]; // position in f_polys
     let mut Lnone_polys = vec![];
-    for (val, partition) in self.padding_partitions.iter() {
+    for val in self.padding_values.iter() {
+      let partition = &self.padding_partitions[val];
       let idx = &partition[0];
       let flat_none_idx = flat_index(&self.permutation.dim(), &Some(idx.clone()), N).unwrap();
       let mut Lnone = vec![Fr::zero(); N];
@@ -494,7 +498,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
 
     // TODO: have verifier compute Lagrange basis evals
     let [Z_gz, L0_z] = proof.2[..2] else { panic!("Wrong proof format") };
-    let none_len = self.padding_partitions.len();
+    let none_len = self.padding_values.len();
     let Lnone_zs = &proof.2[2..2 + none_len];
     let q1_evals = &proof.2[2 + none_len..];
     let ssig_zs = &q1_evals[..m];
@@ -534,7 +538,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // Get none index for Lnone(x)f(x) = V(x)Q(x) check
     let mut pad_vals = vec![];
     let mut fj_none_idxs = vec![];
-    for (val, partition) in self.padding_partitions.iter() {
+    for val in self.padding_values.iter() {
+      let partition = self.padding_partitions.get(val).unwrap();
       let idx = &partition[0];
       let flat_idx = flat_index(&self.permutation.dim(), &Some(idx.clone()), N).unwrap();
       fj_none_idxs.push(flat_idx.0 + input.len());

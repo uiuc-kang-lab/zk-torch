@@ -3,8 +3,9 @@ use crate::graph::*;
 use crate::layer::Layer;
 use crate::util;
 use ark_bn254::Fr;
-use copy_constraint::zero_padding_partition;
 use ark_std::iterable::Iterable;
+use ark_std::Zero;
+use copy_constraint::zero_padding_partition;
 use ndarray::Dimension;
 use ndarray::{ArrayD, Axis, IxDyn};
 use tract_onnx::pb::AttributeProto;
@@ -92,6 +93,7 @@ impl Layer for GatherNDLayer {
       permutation: permutation,
       input_dim: IxDyn(&padded_data_shape),
       padding_partitions: padding,
+      padding_values: vec![Fr::zero()],
     }));
 
     let output = graph.addNode(cc, vec![(-1, 0)]);
