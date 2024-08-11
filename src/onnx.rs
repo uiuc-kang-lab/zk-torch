@@ -153,6 +153,7 @@ fn get_local_graph(
     "Flatten" => Ok(FlattenLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Gather" => Ok(GatherLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "GatherND" => Ok(GatherNDLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Gemm" => Ok(GemmLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Range" => Ok(RangeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Reciprocal" => Ok(ReciprocalLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "ReduceMean" => Ok(ReduceMeanLayer::graph(&input_shapes, &node_constants, &node_attributes)),
