@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 use crate::graph::Graph;
-use ark_bn254::{Fr, G1Affine, G2Affine};
+use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::univariate::DensePolynomial;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use basic_block::*;
@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use sha3::{Digest, Keccak256};
 use std::fs::{self, File};
 use std::io::Read;
-use util::convert_to_data;
+use util::{convert_to_data, measure_file_size};
 mod basic_block;
 mod graph;
 mod layer;
@@ -21,16 +21,36 @@ mod ptau;
 mod tests;
 mod util;
 
-fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&ArrayD<Fr>>) {
-  // Run:
-  let outputs = graph.run(inputs, models);
+macro_rules! stat_println {
+  ($($arg:tt)*) => {
+      println!("============> {}", format_args!($($arg)*));
+  };
+}
 
+fn setup(srs: &SRS, graph: &Graph, models: &Vec<&ArrayD<Fr>>) {
+  let start = std::time::Instant::now();
   // Setup:
   let models: Vec<ArrayD<Data>> = models.par_iter().map(|model| convert_to_data(srs, model)).collect();
-  let models: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
-  let setups = graph.setup(srs, &models);
+  let models_ref: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
+  let setups = graph.setup(srs, &models_ref);
+  stat_println!("Time taken to setup and encode models: {:?}", start.elapsed());
+  // Save files:
+  setups.serialize_uncompressed(File::create("setups").unwrap()).unwrap();
+  let modelsBytes = bincode::serialize(&models).unwrap();
+  fs::write("models", &modelsBytes).unwrap();
+}
 
-  // Encode Data:
+fn run(inputs: &Vec<&ArrayD<Fr>>, graph: &Graph, models: &Vec<&ArrayD<Fr>>) -> Vec<Vec<ArrayD<Fr>>> {
+  let start = std::time::Instant::now();
+  // Run:
+  let outputs = graph.run(inputs, models);
+  stat_println!("Time taken to run: {:?}", start.elapsed());
+  outputs
+}
+
+fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, outputs: Vec<Vec<ArrayD<Fr>>>, graph: &mut Graph) {
+  // Load model and setup:
+  let setups = Vec::<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)>::deserialize_uncompressed(File::open("setups").unwrap()).unwrap();
   let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>)> = util::vec_iter(&setups)
     .map(|x| {
       (
@@ -41,6 +61,14 @@ fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&
     })
     .collect();
   let setups = setups.iter().map(|x| (&x.0, &x.1, &x.2)).collect();
+  
+  let mut modelsBytes = Vec::new();
+  File::open("models").unwrap().read_to_end(&mut modelsBytes).unwrap();
+  let models: Vec<ArrayD<Data>> = bincode::deserialize(&modelsBytes).unwrap();
+  let models: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
+
+  let start = std::time::Instant::now();
+  // Encode Data:
   let modelsEnc: Vec<ArrayD<DataEnc>> = util::vec_iter(&models).map(|model| (**model).map(|x| DataEnc::new(srs, x))).collect();
   let inputs: Vec<ArrayD<Data>> = util::vec_iter(inputs).map(|input| convert_to_data(srs, input)).collect();
   let inputs: Vec<&ArrayD<Data>> = inputs.iter().map(|input| input).collect();
@@ -52,6 +80,8 @@ fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&
   let outputs: Vec<&Vec<&ArrayD<Data>>> = outputs.iter().map(|x| x).collect();
   let outputsEnc: Vec<Vec<ArrayD<DataEnc>>> =
     outputs.iter().map(|output| (**output).iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect()).collect();
+  let encode_time = start.elapsed();
+  stat_println!("Time taken to encode I/O data: {:?}", encode_time);
 
   // Save files:
   let modelsEncBytes = bincode::serialize(&modelsEnc).unwrap();
@@ -71,7 +101,11 @@ fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, graph: &mut Graph, models: &Vec<&
   let mut rng = StdRng::from_seed(buf);
 
   // Prove:
+  let start = std::time::Instant::now();
   let proofs = graph.prove(srs, &setups, &models, &inputs, &outputs, &mut rng);
+  let prove_time = start.elapsed();
+  stat_println!("Time taken to prove: {:?}", prove_time);
+  stat_println!("Total time taken to prove: {:?}", encode_time + prove_time);
   proofs.serialize_uncompressed(File::create("proofs").unwrap()).unwrap();
 }
 
@@ -103,10 +137,12 @@ fn verify(srs: &SRS, graph: &Graph) {
   let mut rng = StdRng::from_seed(buf);
 
   // Verify:
+  let start = std::time::Instant::now();
   #[cfg(feature = "debug")]
   graph.verify_for_each_pairing(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng);
   #[cfg(not(feature = "debug"))]
   graph.verify(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng);
+  stat_println!("Time taken to verify: {:?}", start.elapsed());
 }
 
 fn main() {
@@ -116,7 +152,16 @@ fn main() {
   let fake_inputs = util::generate_fake_inputs_for_onnx(onnx_file_name);
   let inputs = fake_inputs.iter().map(|x| x).collect();
   let models = models.iter().map(|x| x).collect();
-  prove(&srs, &inputs, &mut graph, &models);
+  setup(&srs, &graph, &models);
+  let outputs = run(&inputs, &graph, &models);
+  prove(&srs, &inputs, outputs, &mut graph);
   verify(&srs, &graph);
+  // measure_proof_size
+  let _modelsEncSize = measure_file_size("modelsEnc");
+  let inputsEncSize = measure_file_size("inputsEnc");
+  let outputsEncSize = measure_file_size("outputsEnc");
+  let proofsSize = measure_file_size("proofs");
+  let totalSize = inputsEncSize + outputsEncSize + proofsSize;
+  stat_println!("Total proof size: {}", util::format_file_size(totalSize));
   println!("Cargo run was successful.");
 }
