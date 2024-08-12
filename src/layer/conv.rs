@@ -2,8 +2,7 @@ use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
 use crate::onnx;
-use crate::util::pad;
-use crate::util::pad_to_pow_of_two;
+use crate::util::{pad, pad_to_pow_of_two, reshape_permutation};
 use ark_bn254::Fr;
 use copy_constraint::zero_padding_partition;
 use ndarray::indices;
@@ -77,20 +76,6 @@ pub fn splat_pad(input: &Vec<Vec<Option<IxDyn>>>) -> ArrayD<Option<IxDyn>> {
   let flattened_inp: Vec<_> = input.into_iter().flat_map(|x| x.iter().map(|y| y.clone())).collect();
   let flattened_inp = ArrayD::from_shape_vec(IxDyn(&vec![outp_size, conv_size]), flattened_inp).unwrap();
   pad_to_pow_of_two(&flattened_inp, &None)
-}
-
-// Returns the permutation for CopyConstraintBasicBlock for a reshape operation given the unpadded input and output shapes
-pub fn reshape_permutation(input_shape: &Vec<usize>, output_shape: &Vec<usize>) -> ArrayD<Option<IxDyn>> {
-  let reshape = ArrayD::from_shape_fn(IxDyn(&input_shape), |i| Some(i));
-
-  let reshape_output = reshape.into_shape(IxDyn(&output_shape)).unwrap();
-
-  let mut padding = vec![];
-  for i in 0..output_shape.len() {
-    padding.push([0, output_shape[i].next_power_of_two() - output_shape[i]]);
-  }
-  let reshape_padded = pad(&reshape_output, &padding, &None);
-  reshape_padded
 }
 
 pub struct ConvLayer;

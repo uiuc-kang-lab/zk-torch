@@ -1,9 +1,9 @@
 use crate::basic_block::*;
 use crate::graph::*;
-use crate::layer::conv::{out_hw, reshape_permutation, splat_pad};
+use crate::layer::conv::{out_hw, splat_pad};
 use crate::layer::Layer;
 use crate::onnx;
-use crate::util::{max_padding_partitions, pad};
+use crate::util::{max_padding_partitions, pad, reshape_permutation};
 use ark_bn254::Fr;
 use copy_constraint::zero_padding_partition;
 use ndarray::{arr1, indices, ArrayD, Dim, Dimension, IxDyn};

@@ -9,6 +9,8 @@ use ark_std::Zero;
 use ndarray::{ArrayD, Axis, Dimension, IxDyn};
 use std::collections::HashMap;
 
+use super::pad_to_pow_of_two;
+
 // Returns the padding partition where the non-zero padding value consists of all pad indices such that the last-axis subview containing it contains non-pad elements, and the zero padding value consists of all pad indices part of a last-axis subview containing only pad elements.
 // If val is 0, then these will instead be combined.
 pub fn max_padding_partitions(permutation: &ArrayD<Option<IxDyn>>, val: Fr) -> HashMap<Fr, Vec<IxDyn>> {
@@ -43,4 +45,14 @@ pub fn max_padding_partitions(permutation: &ArrayD<Option<IxDyn>>, val: Fr) -> H
     partitions.insert(Fr::zero(), zero_indices);
   }
   partitions
+}
+
+// Returns the permutation for CopyConstraintBasicBlock for a reshape operation given the unpadded input and output shapes
+pub fn reshape_permutation(input_shape: &Vec<usize>, output_shape: &Vec<usize>) -> ArrayD<Option<IxDyn>> {
+  let reshape = ArrayD::from_shape_fn(IxDyn(&input_shape), |i| Some(i));
+
+  let reshape_output = reshape.into_shape(IxDyn(&output_shape)).unwrap();
+
+  let reshape_padded = pad_to_pow_of_two(&reshape_output, &None);
+  reshape_padded
 }
