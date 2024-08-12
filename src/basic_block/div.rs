@@ -39,6 +39,7 @@ pub struct DivConstBasicBlock {
 impl BasicBlock for DivConstBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1);
+    let shape = inputs[0].shape();
 
     let out = util::array_into_iter(inputs[0])
       .map(|x| {
@@ -48,7 +49,7 @@ impl BasicBlock for DivConstBasicBlock {
       })
       .collect::<Vec<_>>();
 
-    vec![arr1(&out).into_dyn()]
+    vec![ArrayD::from_shape_vec(shape, out).unwrap()]
   }
 }
 
@@ -59,6 +60,7 @@ pub struct ModConstBasicBlock {
 impl BasicBlock for ModConstBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1);
+    let shape = inputs[0].shape();
 
     let out = util::array_into_iter(inputs[0])
       .map(|x| {
@@ -67,6 +69,6 @@ impl BasicBlock for ModConstBasicBlock {
       })
       .collect::<Vec<_>>();
 
-    vec![arr1(&out).into_dyn()]
+    vec![ArrayD::from_shape_vec(shape, out).unwrap()]
   }
 }

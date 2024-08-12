@@ -22,7 +22,7 @@ pub use mul::MulLayer;
 use ndarray::ArrayD;
 pub use neg::NegLayer;
 pub use nonlinear::*;
-pub use norm::BatchNormLayer;
+pub use norm::{BatchNormLayer, InstanceNormLayer};
 pub use not::NotLayer;
 pub use pow::PowLayer;
 pub use r#where::WhereLayer;

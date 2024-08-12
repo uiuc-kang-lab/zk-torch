@@ -134,6 +134,7 @@ fn get_local_graph(
     "Mul" => Ok(MulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Cast" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Identity" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)), // Identity is equivalent to Cast in zk-torch
+    "InstanceNormalization" => Ok(InstanceNormLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "BatchNormalization" => Ok(BatchNormLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Ceil" => Ok(CeilLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Clip" => Ok(ClipLayer::graph(&input_shapes, &node_constants, &node_attributes)),
