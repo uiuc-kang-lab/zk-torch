@@ -2,8 +2,8 @@
  * Serialization utilities for converting between serde and ark_serialize.
  * And other file I/O utilities.
  */
-use std::fs::File;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use std::fs::File;
 
 // For serialization, ArrayD uses serde while G1Affine uses ark_serialize.
 // In order to bridge between the two, the following code snippet is used:
@@ -40,12 +40,12 @@ pub fn format_file_size(bytes: u64) -> String {
   const GB: f64 = MB * 1024.0;
 
   if bytes as f64 >= GB {
-      format!("{:.2} GB", bytes as f64 / GB)
+    format!("{:.2} GB", bytes as f64 / GB)
   } else if bytes as f64 >= MB {
-      format!("{:.2} MB", bytes as f64 / MB)
+    format!("{:.2} MB", bytes as f64 / MB)
   } else if bytes as f64 >= KB {
-      format!("{:.2} KB", bytes as f64 / KB)
+    format!("{:.2} KB", bytes as f64 / KB)
   } else {
-      format!("{} bytes", bytes)
+    format!("{} bytes", bytes)
   }
 }

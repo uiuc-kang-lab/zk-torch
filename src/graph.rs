@@ -8,6 +8,7 @@ use ark_poly::univariate::DensePolynomial;
 use ark_serialize::CanonicalSerialize;
 use ark_std::Zero;
 use ndarray::ArrayD;
+use plonky2::{timed, util::timing::TimingTree};
 use rand::rngs::StdRng;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -54,10 +55,12 @@ impl Graph {
     models: &Vec<&ArrayD<Data>>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&Vec<&ArrayD<Fr>>>,
+    timing: &mut TimingTree,
   ) -> Vec<Vec<ArrayD<Data>>> {
     let mut outputsEnc = vec![vec![]; self.nodes.len()];
     self.nodes.iter().enumerate().for_each(|(i, n)| {
-      println!("encoding {i} {:?}", self.basic_blocks[n.basic_block]);
+      let encode_id = format!("encoding node {i} {:?}", self.basic_blocks[n.basic_block]);
+      println!("{}", encode_id);
       let myInputs = n
         .inputs
         .iter()
@@ -69,7 +72,11 @@ impl Graph {
           }
         })
         .collect();
-      outputsEnc[i] = self.basic_blocks[n.basic_block].encodeOutputs(srs, &models[n.basic_block], &myInputs, outputs[i]);
+      outputsEnc[i] = timed!(
+        timing,
+        &encode_id,
+        self.basic_blocks[n.basic_block].encodeOutputs(srs, &models[n.basic_block], &myInputs, outputs[i])
+      );
     });
     return outputsEnc;
   }
@@ -95,6 +102,7 @@ impl Graph {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&Vec<&ArrayD<Data>>>,
     rng: &mut StdRng,
+    timing: &mut TimingTree,
   ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> {
     let cache = Arc::new(Mutex::new(HashMap::new()));
 
@@ -103,7 +111,8 @@ impl Graph {
       .iter()
       .enumerate()
       .map(|(i, n)| {
-        println!("proving {i} {:?}", self.basic_blocks[n.basic_block]);
+        let prove_id = format!("proving {i} {:?}", self.basic_blocks[n.basic_block]);
+        println!("{}", prove_id);
         let myInputs = n
           .inputs
           .iter()
@@ -115,14 +124,18 @@ impl Graph {
             }
           })
           .collect();
-        let proof = self.basic_blocks[n.basic_block].prove(
-          srs,
-          setups[n.basic_block],
-          models[n.basic_block],
-          &myInputs,
-          outputs[i],
-          rng,
-          cache.clone(),
+        let proof = timed!(
+          timing,
+          &prove_id,
+          self.basic_blocks[n.basic_block].prove(
+            srs,
+            setups[n.basic_block],
+            models[n.basic_block],
+            &myInputs,
+            outputs[i],
+            rng,
+            cache.clone(),
+          )
         );
         let proof: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (
           proof.0.iter().map(|x| (*x).into()).collect(),
