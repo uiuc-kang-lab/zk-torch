@@ -1,9 +1,10 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
-use crate::util;
+use crate::util::{self, get_reshape_indices};
+use copy_constraint::zero_padding_partition;
 use ark_bn254::Fr;
-use ndarray::{ArrayD, Axis};
+use ndarray::{ArrayD, Axis, IxDyn};
 use tract_onnx::pb::AttributeProto;
 
 // Squeeze the input tensor by removing all dimensions of size 1.
@@ -39,24 +40,15 @@ impl Layer for SqueezeLayer {
       let output = graph.addNode(reshape, vec![(-1, 0)]);
       graph.outputs.push((output, 0));
     } else {
-      // startShape.last() < endShape.last()
-      // the last dimension is squeezed
-      let n = startShape.len();
-      let mut a = startShape[n - 2];
-      assert!(*endShape.last().unwrap() == a);
-      a = util::next_pow(a as u32) as usize;
-      let permutation = (vec![0], (0..a).collect());
-      let permute = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
-        N: 2,
+      let permutation = get_reshape_indices(startShape.clone(), endShape.clone());
+      let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
+        permutation: permutation.clone(),
+        input_dim: IxDyn(&startShape),
+        padding_partitions: zero_padding_partition(&permutation),
       }));
-      let intermediateShape = endShape.iter().map(|&x| util::next_pow(x as u32) as usize).collect();
-      let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: intermediateShape }));
-      let intermediate = graph.addNode(permute, vec![(-1, 0)]);
-      let output = graph.addNode(reshape, vec![(intermediate, 0)]);
+      let output = graph.addNode(cc, vec![(-1, 0)]);
       graph.outputs.push((output, 0));
     }
-
     (graph, vec![endShape])
   }
 }

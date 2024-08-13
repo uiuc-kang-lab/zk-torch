@@ -118,3 +118,82 @@ impl Layer for TopKLayer {
     (graph, vec![output_shape; 2])
   }
 }
+
+// ArgMaxLayer is a layer that returns the top 1 index of the input tensor along a given axis
+pub struct ArgMaxLayer;
+impl Layer for ArgMaxLayer {
+  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+    let mut graph = Graph::new();
+    let descending = true;
+    let axis: isize = attributes.iter().filter(|x| x.name == "axis").next().unwrap().i as isize;
+    let axis = (if axis < 0 { input_shapes[0].len() as isize + axis } else { axis }) as usize;
+
+    let range = graph.addBB(Box::new(RangeConstBasicBlock {
+      start: 0,
+      limit: util::next_pow(input_shapes[0][axis] as u32) as i32,
+      delta: 1,
+    }));
+    let data_len = input_shapes[0][axis];
+    let sort = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(SortBasicBlock {
+        descending: descending,
+        len: data_len,
+      }),
+      N: 1,
+    }));
+    let one_to_one = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(OneToOneBasicBlock {}),
+      N: 1,
+    }));
+    let ordered = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(OrderedBasicBlock {}),
+      N: 1,
+    }));
+    let r: Vec<_> = (0..-onnx::CQ_RANGE_LOWER).map(Fr::from).collect();
+    let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(CQBasicBlock { setup: arr1(&r) }),
+      N: 1,
+    }));
+
+    let sorted_data_shape = input_shapes[0].clone();
+    let padded_sorted_data_shape: Vec<_> = sorted_data_shape.iter().map(|x| util::next_pow(*x as u32) as usize).collect();
+
+    let permutation = get_topk_indices(sorted_data_shape.clone(), 1);
+    let padding_partitions = zero_padding_partition(&permutation);
+    let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
+      permutation: permutation.clone(),
+      input_dim: IxDyn(&padded_sorted_data_shape),
+      padding_partitions: padding_partitions,
+    }));
+
+    let permutation_for_ordered_check = get_topk_indices(sorted_data_shape, data_len - 1);
+    let padding_partitions = zero_padding_partition(&permutation_for_ordered_check);
+    let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
+      permutation: permutation_for_ordered_check.clone(),
+      input_dim: IxDyn(&padded_sorted_data_shape),
+      padding_partitions: padding_partitions,
+    }));
+
+    if axis != input_shapes[0].len() - 1 {
+      todo!("ArgMaxLayer: axis != - 1; not implemented yet");
+    }
+
+    // The proving is similar to the TopKLayer, but we only need to copy the top 1 element
+    let range_output = graph.addNode(range, vec![]);
+    let sort_output = graph.addNode(sort, vec![(-1, 0), (range_output, 0)]);
+    let _ = graph.addNode(one_to_one, vec![(-1, 0), (range_output, 0), (sort_output, 0), (sort_output, 1)]);
+
+    let diff_data_output = graph.addNode(ordered, vec![(sort_output, 0)]);
+    let diff_data_output = graph.addNode(cc1, vec![(diff_data_output, 0)]);
+    let _ = graph.addNode(range_check, vec![(diff_data_output, 0)]);
+
+    let top1_indices_output = graph.addNode(cc, vec![(sort_output, 1)]);
+
+    let mut output_shape = input_shapes[0].clone();
+
+    let output_ndim = output_shape.len();
+    output_shape[output_ndim - 1] = 1;
+    graph.outputs.push((top1_indices_output, 0));
+    (graph, vec![output_shape])
+  }
+}

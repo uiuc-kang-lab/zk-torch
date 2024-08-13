@@ -131,6 +131,7 @@ fn get_local_graph(
   match op {
     "Add" => Ok(AddLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "And" => Ok(AndLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "ArgMax" => Ok(ArgMaxLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Mul" => Ok(MulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Cast" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Identity" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)), // Identity is equivalent to Cast in zk-torch
