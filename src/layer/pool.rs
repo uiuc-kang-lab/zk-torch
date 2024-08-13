@@ -3,7 +3,7 @@ use crate::graph::*;
 use crate::layer::conv::{out_hw, splat_pad};
 use crate::layer::Layer;
 use crate::onnx;
-use crate::util::{max_padding_partitions, pad, reshape_permutation};
+use crate::util::{get_reshape_indices, max_padding_partitions, pad};
 use ark_bn254::Fr;
 use copy_constraint::zero_padding_partition;
 use ndarray::{arr1, indices, ArrayD, Dim, Dimension, IxDyn};
@@ -88,7 +88,7 @@ impl Layer for MaxPoolLayer {
     let mut output_shape = input_shapes[0][..2].to_vec();
     output_shape.append(&mut out_hw(&dims, &strides, &kernel_shape, &padding[2..].to_vec(), false));
     let reshape_inp_shape = vec![output_shape.iter().fold(1, |acc, &x| acc * x), 1];
-    let reshape_permutation = reshape_permutation(&reshape_inp_shape, &output_shape);
+    let reshape_permutation = get_reshape_indices(reshape_inp_shape.clone(), output_shape.clone());
     let reshape_inp_padded: Vec<_> = reshape_inp_shape.iter().map(|x| x.next_power_of_two()).collect();
     let padding_partitions = zero_padding_partition(&reshape_permutation);
     let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {

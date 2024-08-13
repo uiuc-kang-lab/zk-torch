@@ -2,7 +2,7 @@ use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
 use crate::onnx;
-use crate::util::{pad, pad_to_pow_of_two, reshape_permutation};
+use crate::util::{get_reshape_indices, pad, pad_to_pow_of_two};
 use ark_bn254::Fr;
 use copy_constraint::zero_padding_partition;
 use ndarray::indices;
@@ -214,7 +214,7 @@ macro_rules! create_conv_layer {
         let cout = if $is_transpose { weight_shape[1] } else { weight_shape[0] };
         let mut output_shape = vec![1, cout];
         output_shape.append(&mut out_dims);
-        let reshape_permutation = reshape_permutation(&vec![permutation.len(), weights_splatted.len()], &output_shape);
+        let reshape_permutation = get_reshape_indices(vec![permutation.len(), weights_splatted.len()], output_shape.clone());
         let padding_partitions = zero_padding_partition(&reshape_permutation);
         let cc2 = graph.addBB(Box::new(CopyConstraintBasicBlock {
           permutation: reshape_permutation,

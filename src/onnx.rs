@@ -134,6 +134,7 @@ fn get_local_graph(
     "Mul" => Ok(MulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Cast" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Identity" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)), // Identity is equivalent to Cast in zk-torch
+    "InstanceNormalization" => Ok(InstanceNormLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "BatchNormalization" => Ok(BatchNormLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Ceil" => Ok(CeilLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Clip" => Ok(ClipLayer::graph(&input_shapes, &node_constants, &node_attributes)),
@@ -153,6 +154,7 @@ fn get_local_graph(
     "Flatten" => Ok(FlattenLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Gather" => Ok(GatherLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "GatherND" => Ok(GatherNDLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Gemm" => Ok(GemmLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Range" => Ok(RangeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Reciprocal" => Ok(ReciprocalLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "ReduceMean" => Ok(ReduceMeanLayer::graph(&input_shapes, &node_constants, &node_attributes)),

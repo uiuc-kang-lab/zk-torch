@@ -2,7 +2,7 @@ use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
 use crate::onnx;
-use crate::util::{max_padding_partitions, pad_to_pow_of_two, reshape_permutation};
+use crate::util::{get_reshape_indices, max_padding_partitions, pad_to_pow_of_two};
 use ark_bn254::Fr;
 use copy_constraint::zero_padding_partition;
 use ndarray::{concatenate, indices, ArrayD, Axis, Dim, Dimension, IxDyn};
@@ -39,7 +39,7 @@ impl Layer for MaxLayer {
         N: 1,
       }));
       let reshape_shape = &vec![input_shapes[0].iter().product(), 1];
-      let reshape_permutation = reshape_permutation(&reshape_shape, &input_shapes[0]);
+      let reshape_permutation = get_reshape_indices(reshape_shape.clone(), input_shapes[0].clone());
       let padding_partitions = zero_padding_partition(&reshape_permutation);
       let reshape_shape_pad: Vec<_> = reshape_shape.iter().map(|i| i.next_power_of_two()).collect();
       let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
@@ -111,7 +111,7 @@ impl Layer for MinLayer {
       }));
 
       let reshape_shape = &vec![input_shapes[0].iter().product(), 1];
-      let reshape_permutation = reshape_permutation(&reshape_shape, &input_shapes[0]);
+      let reshape_permutation = get_reshape_indices(reshape_shape.clone(), input_shapes[0].clone());
       let padding_partitions = zero_padding_partition(&reshape_permutation);
       let reshape_shape_pad: Vec<_> = reshape_shape.iter().map(|i| i.next_power_of_two()).collect();
       let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
