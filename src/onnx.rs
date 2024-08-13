@@ -178,6 +178,7 @@ fn get_local_graph(
     "Unsqueeze" => Ok(UnsqueezeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Erf" => Ok(ErfLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Conv" => Ok(ConvLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "ConvTranspose" => Ok(ConvTransposeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Max" => Ok(MaxLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Min" => Ok(MinLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "MaxPool" => Ok(MaxPoolLayer::graph(&input_shapes, &node_constants, &node_attributes)),

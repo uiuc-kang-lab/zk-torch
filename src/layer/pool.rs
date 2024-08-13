@@ -23,7 +23,7 @@ fn splat_input(input_shape: &Vec<usize>, strides: &Vec<usize>, pads: &Vec<usize>
 
   let inp_pad = pad(&inp, &padding, &IxDyn::zeros(input_shape.len()));
 
-  let out_dims = out_hw(&dims, &strides, &kernel_dims, &padding[2..].to_vec());
+  let out_dims = out_hw(&dims, &strides, &kernel_dims, &padding[2..].to_vec(), false);
 
   let mut inp_cells = vec![];
   let mut input_row_idx = 0;
@@ -86,7 +86,7 @@ impl Layer for MaxPoolLayer {
       padding.push([pads[i], pads[dims.len() + i]]);
     }
     let mut output_shape = input_shapes[0][..2].to_vec();
-    output_shape.append(&mut out_hw(&dims, &strides, &kernel_shape, &padding[2..].to_vec()));
+    output_shape.append(&mut out_hw(&dims, &strides, &kernel_shape, &padding[2..].to_vec(), false));
     let reshape_inp_shape = vec![output_shape.iter().fold(1, |acc, &x| acc * x), 1];
     let reshape_permutation = reshape_permutation(&reshape_inp_shape, &output_shape);
     let reshape_inp_padded: Vec<_> = reshape_inp_shape.iter().map(|x| x.next_power_of_two()).collect();
