@@ -122,215 +122,127 @@ pub fn splat_pad(input: &Vec<Vec<Option<IxDyn>>>) -> ArrayD<Option<IxDyn>> {
   pad_to_pow_of_two(&flattened_inp, &None)
 }
 
-pub struct ConvLayer;
-impl Layer for ConvLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
-    let mut graph = Graph::new();
-    let weight_shape = input_shapes[1];
-    let dims = input_shapes[0][2..].to_vec();
-    let ch_dims = weight_shape[2..].to_vec();
+macro_rules! create_conv_layer {
+  ($layer_name:ident, $is_transpose:expr) => {
+    pub struct $layer_name;
 
-    let strides = match attributes.iter().filter(|x| x.name == "strides").next() {
-      Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
-      None => vec![1; dims.len()],
-    };
-    let pads = match attributes.iter().filter(|x| x.name == "pads").next() {
-      Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
-      None => vec![0; 2 * dims.len()],
-    };
-    let _dilations = match attributes.iter().filter(|x| x.name == "dilations").next() {
-      Some(v) => v
-        .ints
-        .iter()
-        .map(|x| {
-          if *x != 1 {
-            panic!("dilations != 1 not supported");
+    impl Layer for $layer_name {
+      fn graph(
+        input_shapes: &Vec<&Vec<usize>>,
+        _constants: &Vec<Option<&ArrayD<Fr>>>,
+        attributes: &Vec<&AttributeProto>,
+      ) -> (Graph, Vec<Vec<usize>>) {
+        let mut graph = Graph::new();
+        let weight_shape = input_shapes[1];
+        let dims = input_shapes[0][2..].to_vec();
+        let ch_dims = weight_shape[2..].to_vec();
+
+        let strides = match attributes.iter().filter(|x| x.name == "strides").next() {
+          Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
+          None => vec![1; dims.len()],
+        };
+        let pads = match attributes.iter().filter(|x| x.name == "pads").next() {
+          Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
+          None => vec![0; 2 * dims.len()],
+        };
+        let _dilations = match attributes.iter().filter(|x| x.name == "dilations").next() {
+          Some(v) => v
+            .ints
+            .iter()
+            .map(|x| {
+              if *x != 1 {
+                panic!("dilations != 1 not supported");
+              }
+              *x as usize
+            })
+            .collect(),
+          None => vec![1; dims.len() - 2],
+        };
+
+        // Splat input
+        let ci = if $is_transpose { weight_shape[0] } else { weight_shape[1] };
+        let permutation = splat_input(&input_shapes[0], &strides, &pads, ci, &ch_dims, $is_transpose);
+        let permutation_padded = splat_pad(&permutation);
+        let input_shape_padded: Vec<_> = input_shapes[0].iter().map(|i| i.next_power_of_two()).collect();
+        let padding_partitions = zero_padding_partition(&permutation_padded);
+        let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
+          permutation: permutation_padded,
+          input_dim: IxDyn(&input_shape_padded),
+          padding_partitions,
+        }));
+
+        // TODO: change to CQLin and commit splatted weights
+        let weights_splatted = splat_weights(&weight_shape, $is_transpose);
+        let weights_padded = splat_pad(&weights_splatted);
+        let weight_shape_padded: Vec<_> = weight_shape.iter().map(|i| i.next_power_of_two()).collect();
+        let padding_partitions = zero_padding_partition(&weights_padded);
+        let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
+          permutation: weights_padded,
+          input_dim: IxDyn(&weight_shape_padded),
+          padding_partitions,
+        }));
+        let matmul = graph.addBB(Box::new(MatMulBasicBlock {}));
+
+        let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
+          input_SF: onnx::SF_LOG * 2,
+          output_SF: onnx::SF_LOG,
+        }));
+        let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
+          basic_block: Box::new(CQBasicBlock {
+            setup: Array1::from_iter(onnx::CQ_RANGE_LOWER..-onnx::CQ_RANGE_LOWER).map(|x| Fr::from(*x)),
+          }),
+          N: 1,
+        }));
+
+        // Add bias
+        let add = graph.addBB(Box::new(RepeaterBasicBlock {
+          basic_block: Box::new(AddBasicBlock {}),
+          N: 1,
+        }));
+
+        // Reshape matmul into output shape
+        let mut padding = vec![];
+        let pads = if $is_transpose {
+          conv_transpose_pads(&pads, &ch_dims)
+        } else {
+          pads.clone()
+        };
+        for i in 0..dims.len() {
+          padding.push([pads[i], pads[dims.len() + i]]);
+        }
+        let mut out_dims = out_hw(&dims, &strides, &ch_dims, &padding, $is_transpose);
+        let cout = if $is_transpose { weight_shape[1] } else { weight_shape[0] };
+        let mut output_shape = vec![1, cout];
+        output_shape.append(&mut out_dims);
+        let reshape_permutation = reshape_permutation(&vec![permutation.len(), weights_splatted.len()], &output_shape);
+        let padding_partitions = zero_padding_partition(&reshape_permutation);
+        let cc2 = graph.addBB(Box::new(CopyConstraintBasicBlock {
+          permutation: reshape_permutation,
+          input_dim: IxDyn(&[permutation.len().next_power_of_two(), weights_splatted.len().next_power_of_two()]),
+          padding_partitions,
+        }));
+
+        let cc_output = graph.addNode(cc, vec![(-1, 0)]);
+        let cc1_output = graph.addNode(cc1, vec![(-2, 0)]);
+        let cqlin_output = graph.addNode(matmul, vec![(cc_output, 0), (cc1_output, 0)]);
+        let change_SF_output = graph.addNode(change_SF, vec![(cqlin_output, 0)]);
+        let _ = graph.addNode(change_SF_check, vec![(change_SF_output, 0)]);
+
+        // Add bias if it exists
+        let add_output = {
+          if input_shapes.len() > 2 {
+            graph.addNode(add, vec![(change_SF_output, 0), (-3, 0)])
+          } else {
+            change_SF_output
           }
-          *x as usize
-        })
-        .collect(),
-      None => vec![1; dims.len() - 2],
-    };
-
-    // Splat input
-    let permutation = splat_input(&input_shapes[0], &strides, &pads, weight_shape[1], &ch_dims, false);
-    let permutation_padded = splat_pad(&permutation);
-    let input_shape_padded: Vec<_> = input_shapes[0].iter().map(|i| i.next_power_of_two()).collect();
-    let padding_partitions = zero_padding_partition(&permutation_padded);
-    let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
-      permutation: permutation_padded,
-      input_dim: IxDyn(&input_shape_padded),
-      padding_partitions,
-    }));
-
-    // TODO: change to CQLin and commit splatted weights
-    let weights_splatted = splat_weights(&weight_shape, false);
-    let weights_padded = splat_pad(&weights_splatted);
-    let weight_shape_padded: Vec<_> = weight_shape.iter().map(|i| i.next_power_of_two()).collect();
-    let padding_partitions = zero_padding_partition(&weights_padded);
-    let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
-      permutation: weights_padded,
-      input_dim: IxDyn(&weight_shape_padded),
-      padding_partitions,
-    }));
-    let matmul = graph.addBB(Box::new(MatMulBasicBlock {}));
-
-    let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-      input_SF: onnx::SF_LOG * 2,
-      output_SF: onnx::SF_LOG,
-    }));
-    let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQBasicBlock {
-        setup: Array1::from_iter(onnx::CQ_RANGE_LOWER..-onnx::CQ_RANGE_LOWER).map(|x| Fr::from(*x)),
-      }),
-      N: 1,
-    }));
-
-    // Add bias
-    let add = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(AddBasicBlock {}),
-      N: 1,
-    }));
-
-    // Reshape matmul into output shape
-    let mut padding = vec![];
-    for i in 0..dims.len() {
-      padding.push([pads[i], pads[dims.len() + i]]);
-    }
-    let mut out_dims = out_hw(&dims, &strides, &ch_dims, &padding, false);
-    let mut output_shape = vec![1, weight_shape[0]];
-    output_shape.append(&mut out_dims);
-    let reshape_permutation = reshape_permutation(&vec![permutation.len(), weights_splatted.len()], &output_shape);
-    let padding_partitions = zero_padding_partition(&reshape_permutation);
-    let cc2 = graph.addBB(Box::new(CopyConstraintBasicBlock {
-      permutation: reshape_permutation,
-      input_dim: IxDyn(&[permutation.len().next_power_of_two(), weights_splatted.len().next_power_of_two()]),
-      padding_partitions,
-    }));
-
-    let cc_output = graph.addNode(cc, vec![(-1, 0)]);
-    let cc1_output = graph.addNode(cc1, vec![(-2, 0)]);
-    let cqlin_output = graph.addNode(matmul, vec![(cc_output, 0), (cc1_output, 0)]);
-    let change_SF_output = graph.addNode(change_SF, vec![(cqlin_output, 0)]);
-    let _ = graph.addNode(change_SF_check, vec![(change_SF_output, 0)]);
-
-    // Add bias if it exists
-    let add_output = {
-      if input_shapes.len() > 2 {
-        graph.addNode(add, vec![(change_SF_output, 0), (-3, 0)])
-      } else {
-        change_SF_output
+        };
+        let cc2_output = graph.addNode(cc2, vec![(add_output, 0)]);
+        graph.outputs.push((cc2_output, 0));
+        (graph, vec![output_shape])
       }
-    };
-    let cc2_output = graph.addNode(cc2, vec![(add_output, 0)]);
-    graph.outputs.push((cc2_output, 0));
-    (graph, vec![output_shape])
-  }
+    }
+  };
 }
 
-pub struct ConvTransposeLayer;
-impl Layer for ConvTransposeLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
-    let mut graph = Graph::new();
-    let weight_shape = input_shapes[1];
-    let dims = input_shapes[0][2..].to_vec();
-    let ch_dims = weight_shape[2..].to_vec();
-
-    let strides = match attributes.iter().filter(|x| x.name == "strides").next() {
-      Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
-      None => vec![1; dims.len()],
-    };
-    let pads = match attributes.iter().filter(|x| x.name == "pads").next() {
-      Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
-      None => vec![0; 2 * dims.len()],
-    };
-    let _dilations = match attributes.iter().filter(|x| x.name == "dilations").next() {
-      Some(v) => v
-        .ints
-        .iter()
-        .map(|x| {
-          if *x != 1 {
-            panic!("dilations != 1 not supported");
-          }
-          *x as usize
-        })
-        .collect(),
-      None => vec![1; dims.len() - 2],
-    };
-
-    // Splat input
-    let permutation = splat_input(&input_shapes[0], &strides, &pads, weight_shape[0], &ch_dims, true);
-    let permutation_padded = splat_pad(&permutation);
-    let input_shape_padded: Vec<_> = input_shapes[0].iter().map(|i| i.next_power_of_two()).collect();
-    let padding_partitions = zero_padding_partition(&permutation_padded);
-    let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
-      permutation: permutation_padded,
-      input_dim: IxDyn(&input_shape_padded),
-      padding_partitions,
-    }));
-
-    // TODO: change to CQLin and commit splatted weights
-    let weights_splatted = splat_weights(&weight_shape, true);
-    let weights_padded = splat_pad(&weights_splatted);
-    let weight_shape_padded: Vec<_> = weight_shape.iter().map(|i| i.next_power_of_two()).collect();
-    let padding_partitions = zero_padding_partition(&weights_padded);
-    let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
-      permutation: weights_padded,
-      input_dim: IxDyn(&weight_shape_padded),
-      padding_partitions,
-    }));
-    let matmul = graph.addBB(Box::new(MatMulBasicBlock {}));
-
-    let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-      input_SF: onnx::SF_LOG * 2,
-      output_SF: onnx::SF_LOG,
-    }));
-    let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQBasicBlock {
-        setup: Array1::from_iter(onnx::CQ_RANGE_LOWER..-onnx::CQ_RANGE_LOWER).map(|x| Fr::from(*x)),
-      }),
-      N: 1,
-    }));
-
-    // Add bias
-    let add = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(AddBasicBlock {}),
-      N: 1,
-    }));
-
-    // Reshape matmul into output shape
-    let pads = conv_transpose_pads(&pads, &ch_dims);
-    let mut padding = vec![];
-    for i in 0..dims.len() {
-      padding.push([pads[i], pads[dims.len() + i]]);
-    }
-    let mut out_dims = out_hw(&dims, &strides, &ch_dims, &padding, true);
-    let mut output_shape = vec![1, weight_shape[1]];
-    output_shape.append(&mut out_dims);
-    let reshape_permutation = reshape_permutation(&vec![permutation.len(), weights_splatted.len()], &output_shape);
-    let padding_partitions = zero_padding_partition(&reshape_permutation);
-    let cc2 = graph.addBB(Box::new(CopyConstraintBasicBlock {
-      permutation: reshape_permutation,
-      input_dim: IxDyn(&[permutation.len().next_power_of_two(), weights_splatted.len().next_power_of_two()]),
-      padding_partitions,
-    }));
-
-    let cc_output = graph.addNode(cc, vec![(-1, 0)]);
-    let cc1_output = graph.addNode(cc1, vec![(-2, 0)]);
-    let cqlin_output = graph.addNode(matmul, vec![(cc_output, 0), (cc1_output, 0)]);
-    let change_SF_output = graph.addNode(change_SF, vec![(cqlin_output, 0)]);
-    let _ = graph.addNode(change_SF_check, vec![(change_SF_output, 0)]);
-
-    // Add bias if it exists
-    let add_output = {
-      if input_shapes.len() > 2 {
-        graph.addNode(add, vec![(change_SF_output, 0), (-3, 0)])
-      } else {
-        change_SF_output
-      }
-    };
-    let cc2_output = graph.addNode(cc2, vec![(add_output, 0)]);
-    graph.outputs.push((cc2_output, 0));
-    (graph, vec![output_shape])
-  }
-}
+create_conv_layer!(ConvLayer, false);
+create_conv_layer!(ConvTransposeLayer, true);
