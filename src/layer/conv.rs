@@ -2,10 +2,8 @@ use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
 use crate::onnx;
-use crate::util::pad;
-use crate::util::pad_to_pow_of_two;
+use crate::util;
 use ark_bn254::Fr;
-use copy_constraint::zero_padding_partition;
 use ndarray::indices;
 use ndarray::Dim;
 use ndarray::Dimension;
@@ -27,7 +25,7 @@ fn splat_input(input_shape: &Vec<usize>, strides: &Vec<usize>, pads: &Vec<usize>
   let inp_shape = Dim(IxDyn(input_shape));
   let inp = ArrayD::from_shape_vec(inp_shape.clone(), indices(inp_shape).into_iter().map(|x| x.into_dyn()).collect()).unwrap();
 
-  let inp_pad = pad(&inp, &padding, &IxDyn::zeros(input_shape.len()));
+  let inp_pad = util::pad(&inp, &padding, &IxDyn::zeros(input_shape.len()));
 
   let out_dims = out_hw(&dims, &strides, &ch_dims, &padding[2..].to_vec());
 
@@ -76,7 +74,7 @@ pub fn splat_pad(input: &Vec<Vec<Option<IxDyn>>>) -> ArrayD<Option<IxDyn>> {
   let conv_size = input[0].len();
   let flattened_inp: Vec<_> = input.into_iter().flat_map(|x| x.iter().map(|y| y.clone())).collect();
   let flattened_inp = ArrayD::from_shape_vec(IxDyn(&vec![outp_size, conv_size]), flattened_inp).unwrap();
-  pad_to_pow_of_two(&flattened_inp, &None)
+  util::pad_to_pow_of_two(&flattened_inp, &None)
 }
 
 // Returns the permutation for CopyConstraintBasicBlock for a reshape operation given the unpadded input and output shapes
@@ -89,7 +87,7 @@ pub fn reshape_permutation(input_shape: &Vec<usize>, output_shape: &Vec<usize>) 
   for i in 0..output_shape.len() {
     padding.push([0, output_shape[i].next_power_of_two() - output_shape[i]]);
   }
-  let reshape_padded = pad(&reshape_output, &padding, &None);
+  let reshape_padded = util::pad(&reshape_output, &padding, &None);
   reshape_padded
 }
 
@@ -127,7 +125,7 @@ impl Layer for ConvLayer {
     let permutation = splat_input(&input_shapes[0], &strides, &pads, weight_shape[1], &ch_dims);
     let permutation_padded = splat_pad(&permutation);
     let input_shape_padded: Vec<_> = input_shapes[0].iter().map(|i| i.next_power_of_two()).collect();
-    let padding_partitions = zero_padding_partition(&permutation_padded);
+    let padding_partitions = util::zero_padding_partition(&permutation_padded);
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation_padded,
       input_dim: IxDyn(&input_shape_padded),
@@ -138,7 +136,7 @@ impl Layer for ConvLayer {
     let weights_splatted = splat_weights(&weight_shape);
     let weights_padded = splat_pad(&weights_splatted);
     let weight_shape_padded: Vec<_> = weight_shape.iter().map(|i| i.next_power_of_two()).collect();
-    let padding_partitions = zero_padding_partition(&weights_padded);
+    let padding_partitions = util::zero_padding_partition(&weights_padded);
     let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: weights_padded,
       input_dim: IxDyn(&weight_shape_padded),
@@ -172,7 +170,7 @@ impl Layer for ConvLayer {
     let mut output_shape = vec![1, weight_shape[0]];
     output_shape.append(&mut out_dims);
     let reshape_permutation = reshape_permutation(&vec![permutation.len(), weights_splatted.len()], &output_shape);
-    let padding_partitions = zero_padding_partition(&reshape_permutation);
+    let padding_partitions = util::zero_padding_partition(&reshape_permutation);
     let cc2 = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: reshape_permutation,
       input_dim: IxDyn(&[permutation.len().next_power_of_two(), weights_splatted.len().next_power_of_two()]),

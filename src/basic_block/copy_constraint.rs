@@ -88,21 +88,6 @@ fn construct_ssig(
     .collect()
 }
 
-// Returns the padding_partitions field for CopyConstraintBasicBlock when the given permutation padding elements are 0
-pub fn zero_padding_partition(permutation: &ArrayD<Option<IxDyn>>) -> HashMap<Fr, Vec<IxDyn>> {
-  let mut partition = vec![];
-  for (i, _) in permutation.indexed_iter() {
-    if permutation[&i] == None {
-      partition.push(i);
-    }
-  }
-  let mut padding_partition = HashMap::new();
-  if partition.len() > 0 {
-    padding_partition.insert(Fr::zero(), partition);
-  }
-  padding_partition
-}
-
 // Checks that padding partition corresponds to None values in permutation
 fn check_padding_partition(permutation: &ArrayD<Option<IxDyn>>, padding_partitions: &HashMap<Fr, Vec<IxDyn>>) -> bool {
   for (_, p) in padding_partitions.iter() {

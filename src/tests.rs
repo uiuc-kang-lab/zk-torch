@@ -5,7 +5,6 @@ use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_poly::univariate::DensePolynomial;
 use ark_std::UniformRand;
 use ark_std::{One, Zero};
-use copy_constraint::zero_padding_partition;
 use ndarray::{arr0, concatenate, s, ArrayD, Axis, IxDyn};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::collections::HashMap;
@@ -201,7 +200,7 @@ fn test_copy_constraint() {
     ],
   )
   .unwrap();
-  let padding_partitions = zero_padding_partition(&permutation);
+  let padding_partitions = util::zero_padding_partition(&permutation);
   testBasicBlock(
     CopyConstraintBasicBlock {
       permutation,
