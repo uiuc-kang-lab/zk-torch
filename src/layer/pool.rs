@@ -5,6 +5,7 @@ use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
+use copy_constraint::zero_padding_partition;
 use ndarray::{arr1, indices, ArrayD, Dim, Dimension, IxDyn};
 use tract_onnx::pb::AttributeProto;
 
@@ -89,7 +90,7 @@ impl Layer for MaxPoolLayer {
     let reshape_inp_shape = vec![output_shape.iter().fold(1, |acc, &x| acc * x), 1];
     let reshape_permutation = reshape_permutation(&reshape_inp_shape, &output_shape);
     let reshape_inp_padded: Vec<_> = reshape_inp_shape.iter().map(|x| x.next_power_of_two()).collect();
-    let padding_partitions = util::zero_padding_partition(&reshape_permutation);
+    let padding_partitions = zero_padding_partition(&reshape_permutation);
     let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: reshape_permutation,
       input_dim: IxDyn(&reshape_inp_padded),

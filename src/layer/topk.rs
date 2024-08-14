@@ -4,6 +4,7 @@ use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
+use copy_constraint::zero_padding_partition;
 use ndarray::{arr1, ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
 
@@ -71,7 +72,7 @@ impl Layer for TopKLayer {
     let padded_sorted_data_shape: Vec<_> = sorted_data_shape.iter().map(|x| util::next_pow(*x as u32) as usize).collect();
 
     let permutation = get_topk_indices(sorted_data_shape.clone(), k);
-    let padding_partitions = util::zero_padding_partition(&permutation);
+    let padding_partitions = zero_padding_partition(&permutation);
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation.clone(),
       input_dim: IxDyn(&padded_sorted_data_shape),
@@ -79,7 +80,7 @@ impl Layer for TopKLayer {
     }));
 
     let permutation_for_ordered_check = get_topk_indices(sorted_data_shape, data_len - 1);
-    let padding_partitions = util::zero_padding_partition(&permutation_for_ordered_check);
+    let padding_partitions = zero_padding_partition(&permutation_for_ordered_check);
     let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation_for_ordered_check.clone(),
       input_dim: IxDyn(&padded_sorted_data_shape),

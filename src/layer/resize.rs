@@ -4,6 +4,7 @@ use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
+use copy_constraint::zero_padding_partition;
 use ndarray::Dimension;
 use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
@@ -73,7 +74,7 @@ impl Layer for ResizeLayer {
     let permutation = util::pad_to_pow_of_two(&permutation, &None);
 
     let input_shape_padded: Vec<_> = input_shapes[0].iter().map(|i| i.next_power_of_two()).collect();
-    let padding_partitions = util::zero_padding_partition(&permutation);
+    let padding_partitions = zero_padding_partition(&permutation);
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation,
       input_dim: IxDyn(&input_shape_padded),

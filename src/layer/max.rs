@@ -4,6 +4,7 @@ use crate::layer::{conv::reshape_permutation, Layer};
 use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
+use copy_constraint::zero_padding_partition;
 use ndarray::{concatenate, indices, ArrayD, Axis, Dim, Dimension, IxDyn};
 use std::collections::HashMap;
 use tract_onnx::pb::AttributeProto;
@@ -39,7 +40,7 @@ impl Layer for MaxLayer {
       }));
       let reshape_shape = &vec![input_shapes[0].iter().product(), 1];
       let reshape_permutation = reshape_permutation(&reshape_shape, &input_shapes[0]);
-      let padding_partitions = util::zero_padding_partition(&reshape_permutation);
+      let padding_partitions = zero_padding_partition(&reshape_permutation);
       let reshape_shape_pad: Vec<_> = reshape_shape.iter().map(|i| i.next_power_of_two()).collect();
       let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
         permutation: reshape_permutation,
@@ -111,7 +112,7 @@ impl Layer for MinLayer {
 
       let reshape_shape = &vec![input_shapes[0].iter().product(), 1];
       let reshape_permutation = reshape_permutation(&reshape_shape, &input_shapes[0]);
-      let padding_partitions = util::zero_padding_partition(&reshape_permutation);
+      let padding_partitions = zero_padding_partition(&reshape_permutation);
       let reshape_shape_pad: Vec<_> = reshape_shape.iter().map(|i| i.next_power_of_two()).collect();
       let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
         permutation: reshape_permutation,
