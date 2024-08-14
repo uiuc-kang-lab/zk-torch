@@ -1,9 +1,10 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::{squeeze::UnsqueezeBasicBlock, Layer};
-use crate::util;
+use crate::util::{self, get_reshape_indices};
 use ark_bn254::Fr;
-use ndarray::ArrayD;
+use copy_constraint::zero_padding_partition;
+use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
 
 pub struct ReshapeLayer;
@@ -24,49 +25,23 @@ impl Layer for ReshapeLayer {
       let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: endShape.clone() }));
       let output = graph.addNode(reshape, vec![(-1, 0)]);
       graph.outputs.push((output, 0));
-    } else if startShape.last() > endShape.last() {
-      let n = endShape.len();
-      let (mut a, mut b) = (endShape[n - 2], endShape[n - 1]);
-      assert!(*startShape.last().unwrap() == a * b);
-      let mut intermediateShape = endShape[..n - 2].to_vec();
-      intermediateShape.push(1);
-      intermediateShape.push(*startShape.last().unwrap());
-      intermediateShape.iter_mut().for_each(|x| *x = util::next_pow(*x as u32) as usize);
-      let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: intermediateShape }));
-      (a, b) = (util::next_pow(a as u32) as usize, util::next_pow(b as u32) as usize);
-      let permutation = ((0..a).map(|x| x * b).collect(), (0..b).collect());
-      let permute = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
-        N: 2,
-      }));
-      let intermediate = graph.addNode(reshape, vec![(-1, 0)]);
-      let output = graph.addNode(permute, vec![(intermediate, 0)]);
-      graph.outputs.push((output, 0));
-    } else {
-      let n = startShape.len();
-      if n >= 2 {
-        let (mut a, mut b) = (startShape[n - 2], startShape[n - 1]);
-        assert!(*endShape.last().unwrap() == a * b);
-        (a, b) = (util::next_pow(a as u32) as usize, util::next_pow(b as u32) as usize);
-        let permutation = (vec![0], (0..a * b).collect());
-        let permute = graph.addBB(Box::new(RepeaterBasicBlock {
-          basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
-          N: 2,
-        }));
-        let intermediateShape = endShape.iter().map(|&x| util::next_pow(x as u32) as usize).collect();
-        let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: intermediateShape }));
-        let intermediate = graph.addNode(permute, vec![(-1, 0)]);
-        let output = graph.addNode(reshape, vec![(intermediate, 0)]);
-        graph.outputs.push((output, 0));
-      } else {
-        // special case: arr0 --> [1,1,...]
-        let unsq = graph.addBB(Box::new(UnsqueezeBasicBlock {}));
-        let mut unsq_output = graph.addNode(unsq, vec![(-1, 0)]);
-        for _ in 0..endShape.len() - 1 {
-          unsq_output = graph.addNode(unsq, vec![(unsq_output, 0)]);
-        }
-        graph.outputs.push((unsq_output, 0));
+    } else if startShape.len() == 0 {
+      // special case: arr0 --> [1,1,...]
+      let unsq = graph.addBB(Box::new(UnsqueezeBasicBlock {}));
+      let mut unsq_output = graph.addNode(unsq, vec![(-1, 0)]);
+      for _ in 0..endShape.len() - 1 {
+        unsq_output = graph.addNode(unsq, vec![(unsq_output, 0)]);
       }
+      graph.outputs.push((unsq_output, 0));
+    } else {
+      let permutation = get_reshape_indices(startShape.clone(), endShape.clone());
+      let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
+        permutation: permutation.clone(),
+        input_dim: IxDyn(&startShape),
+        padding_partitions: zero_padding_partition(&permutation),
+      }));
+      let output = graph.addNode(cc, vec![(-1, 0)]);
+      graph.outputs.push((output, 0));
     }
 
     (graph, vec![endShape])

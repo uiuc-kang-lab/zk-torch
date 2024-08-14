@@ -2,8 +2,8 @@ use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
 use crate::util::{self, get_reshape_indices};
-use copy_constraint::zero_padding_partition;
 use ark_bn254::Fr;
+use copy_constraint::zero_padding_partition;
 use ndarray::{ArrayD, Axis, IxDyn};
 use tract_onnx::pb::AttributeProto;
 

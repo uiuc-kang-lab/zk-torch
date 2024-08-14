@@ -43,7 +43,7 @@ impl Layer for ReduceMeanLayer {
       basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
       N: 2,
     }));
-    
+
     let sum = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(SumBasicBlock {}),
       N: 1,
