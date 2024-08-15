@@ -115,6 +115,7 @@ fn create_output_indices<'a>(
       basic_block: graph.basic_blocks.len(),
       inputs: vec![],
     });
+    graph.layer_names.push(format!("Const {}", name.to_string()));
     graph.basic_blocks.push(Box::new(ConstBasicBlock {}));
   }
 
@@ -238,6 +239,7 @@ fn update_graph_w_local_graph(
         })
         .collect(),
     });
+    graph.layer_names.push(format!("Op {}", node.name.clone()));
   }
   // tracking output_idx of local_graph
   for (i, output) in node.output.iter().enumerate() {
@@ -262,6 +264,7 @@ fn process_node(
 ) {
   // match onnx operation
   let op = node.op_type.as_str();
+  println!("Compiling ONNX node: {op}");
   let input_shapes: Vec<_> = node.input.iter().map(|x| shapes.get(x)).collect();
   let input_shapes = input_shapes.into_iter().filter_map(|x| x).collect::<Vec<_>>(); // hack: we ignore optional inputs
   let node_constants = node.input.iter().map(|x| passed_constants.get(x).or(constants_hashmap.get(x).map(|&y| &models[y]))).collect();
@@ -277,11 +280,10 @@ fn process_node(
       .output
       .iter()
       .zip(local_graph.outputs.iter())
-      .zip(output_shapes.clone())
-      .for_each(|((output_str, &(nodeX, nodeY)), output_shape)| {
+      .for_each(|(output_str, &(nodeX, nodeY))| {
         passed_constants.insert(
           output_str.to_string(),
-          util::slice_nd_array(outputs[nodeX as usize][nodeY].clone(), &output_shape),
+          util::pad_to_pow_of_two(&outputs[nodeX as usize][nodeY].clone(), &Fr::zero()),
         );
       });
   }
@@ -291,9 +293,10 @@ fn process_node(
 
   // handle a special case (op == "Shape")
   if op == "Shape" {
+    let shape = arr1(&input_shapes[0].iter().map(|&x| Fr::from(x as i32)).collect::<Vec<_>>()).into_dyn();
     passed_constants.insert(
       (&node.output[0]).to_string(),
-      arr1(&input_shapes[0].iter().map(|&x| Fr::from(x as i32)).collect::<Vec<_>>()).into_dyn(),
+      util::pad_to_pow_of_two(&shape, &Fr::zero()),
     );
   }
 
@@ -315,6 +318,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
 
   let mut graph = Graph {
     basic_blocks: vec![],
+    layer_names: vec![],
     nodes: vec![],
     outputs: vec![],
   };

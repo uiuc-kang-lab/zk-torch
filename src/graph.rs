@@ -22,6 +22,7 @@ pub struct Node {
 #[derive(Debug)]
 pub struct Graph {
   pub basic_blocks: Vec<Box<dyn BasicBlock>>,
+  pub layer_names: Vec<String>,
   pub nodes: Vec<Node>,
   pub outputs: Vec<(i32, usize)>,
 }
@@ -30,7 +31,7 @@ impl Graph {
   pub fn run(&self, inputs: &Vec<&ArrayD<Fr>>, models: &Vec<&ArrayD<Fr>>) -> Vec<Vec<ArrayD<Fr>>> {
     let mut outputs = vec![vec![]; self.nodes.len()];
     self.nodes.iter().enumerate().for_each(|(i, n)| {
-      println!("running {i} {:?}", self.basic_blocks[n.basic_block]);
+      println!("{} | running {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
       let myInputs = n
         .inputs
         .iter()
@@ -59,7 +60,7 @@ impl Graph {
   ) -> Vec<Vec<ArrayD<Data>>> {
     let mut outputsEnc = vec![vec![]; self.nodes.len()];
     self.nodes.iter().enumerate().for_each(|(i, n)| {
-      let encode_id = format!("encoding node {i} {:?}", self.basic_blocks[n.basic_block]);
+      let encode_id = format!("{} | encoding node {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
       println!("{}", encode_id);
       let myInputs = n
         .inputs
@@ -111,7 +112,7 @@ impl Graph {
       .iter()
       .enumerate()
       .map(|(i, n)| {
-        let prove_id = format!("proving {i} {:?}", self.basic_blocks[n.basic_block]);
+        let prove_id = format!("{} | proving {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
         println!("{}", prove_id);
         let myInputs = n
           .inputs
@@ -166,7 +167,7 @@ impl Graph {
       .iter()
       .enumerate()
       .map(|(i, n)| {
-        println!("verifying {i} {:?}", self.basic_blocks[n.basic_block]);
+        println!("{} | verifying {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
         let myInputs = n
           .inputs
           .iter()
@@ -235,6 +236,7 @@ impl Graph {
   pub fn new() -> Self {
     Graph {
       basic_blocks: vec![],
+      layer_names: vec![],
       nodes: vec![],
       outputs: vec![],
     }
@@ -250,6 +252,7 @@ impl Graph {
       basic_block: basic_block,
       inputs: inputs,
     });
+    self.layer_names.push("Precomputation".to_string());
     (self.nodes.len() - 1) as i32
   }
 }
