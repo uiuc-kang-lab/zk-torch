@@ -264,7 +264,7 @@ fn process_node(
 ) {
   // match onnx operation
   let op = node.op_type.as_str();
-  println!("Compiling ONNX node: {op}");
+  println!("Compiling ONNX node: {}", op.name);
   let input_shapes: Vec<_> = node.input.iter().map(|x| shapes.get(x)).collect();
   let input_shapes = input_shapes.into_iter().filter_map(|x| x).collect::<Vec<_>>(); // hack: we ignore optional inputs
   let node_constants = node.input.iter().map(|x| passed_constants.get(x).or(constants_hashmap.get(x).map(|&y| &models[y]))).collect();
