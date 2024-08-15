@@ -12,6 +12,7 @@ use ndarray::IxDyn;
 use ndarray::{Array1, ArrayD};
 use tract_onnx::pb::AttributeProto;
 
+// Returns output dimensions given the actual padding amount
 pub fn out_hw(dims: &Vec<usize>, strides: &Vec<usize>, ch_dims: &Vec<usize>, padding: &Vec<[usize; 2]>, is_transpose: bool) -> Vec<usize> {
   if is_transpose {
     dims
@@ -24,21 +25,24 @@ pub fn out_hw(dims: &Vec<usize>, strides: &Vec<usize>, ch_dims: &Vec<usize>, pad
   }
 }
 
+// Output the actual padding amount added to the input (kernel_size - 1 - pads)
 fn conv_transpose_pads(pads: &Vec<usize>, ch_dims: &Vec<usize>) -> Vec<usize> {
   pads.iter().enumerate().map(|(i, x)| ch_dims[i % ch_dims.len()] - 1 - *x).collect()
 }
 
+// Splats inputs into shape (out_dims product x inp_channels * kernel_dims product) such that each row corresponds to a flattened kernel row in the splatted weights
+// In the case of ci = 1 (input channels), the row should correspond to the flattened bottom plane in this visualization: https://github.com/vdumoulin/conv_arithmetic/blob/master/README.md
 fn splat_input(
   input_shape: &Vec<usize>,
   strides: &Vec<usize>,
   pads: &Vec<usize>,
   ci: usize,
-  ch_dims: &Vec<usize>,
+  kernel_dims: &Vec<usize>,
   is_transpose: bool,
 ) -> Vec<Vec<Option<IxDyn>>> {
   let dims = input_shape[2..].to_vec();
   let pads = if is_transpose {
-    conv_transpose_pads(pads, ch_dims)
+    conv_transpose_pads(pads, kernel_dims)
   } else {
     pads.clone()
   };
@@ -47,7 +51,7 @@ fn splat_input(
     padding.push([pads[i], pads[dims.len() + i]]);
   }
 
-  let out_dims = out_hw(&dims, &strides, &ch_dims, &padding[2..].to_vec(), is_transpose);
+  let out_dims = out_hw(&dims, &strides, &kernel_dims, &padding[2..].to_vec(), is_transpose);
   let inp = if is_transpose {
     // if stride > 1, expand input by stride amount
     let mut pre_pad_dims: Vec<_> = out_dims.iter().zip(pads.iter()).map(|(x, y)| x - y).collect();
@@ -72,12 +76,12 @@ fn splat_input(
   let mut inp_cells = vec![];
   let mut input_row_idx = 0;
 
-  // (out_dims product x inp_channels * ch_dims product)
+  // (out_dims product x inp_channels * kernel_dims product)
   for batch in 0..inp.shape()[0] {
     for out_idx in indices(out_dims.clone()) {
       inp_cells.push(vec![]);
       for ck in 0..ci {
-        for ch_idx in indices(IxDyn(&ch_dims)) {
+        for ch_idx in indices(IxDyn(&kernel_dims)) {
           let mut idx = vec![batch, ck];
           if is_transpose {
             idx.append(&mut (0..dims.len()).map(|i| out_idx[i] + ch_idx[i]).collect());
@@ -93,12 +97,15 @@ fn splat_input(
   inp_cells
 }
 
+// Splats weights into shape (out_channels x inp_channels * kernel_dims product) such that each row corresponds to flattened kernels for each input channel
 fn splat_weights(weights_shape: &Vec<usize>, is_transpose: bool) -> Vec<Vec<Option<IxDyn>>> {
   let mut weights_cells = vec![];
   let mut weight_row_idx = 0;
 
+  // Input and output channel positions are swapped between Conv and ConvTranspose
   let out_channels = if is_transpose { weights_shape[1] } else { weights_shape[0] };
   let in_channels = if is_transpose { weights_shape[0] } else { weights_shape[1] };
+  // (out_channels x inp_channels * kernel_dims product)
   for chan_out in 0..out_channels {
     weights_cells.push(vec![]);
     for ck in 0..in_channels {
@@ -122,6 +129,12 @@ pub fn splat_pad(input: &Vec<Vec<Option<IxDyn>>>) -> ArrayD<Option<IxDyn>> {
   pad_to_pow_of_two(&flattened_inp, &None)
 }
 
+// The overview of the proving:
+// 1. Splat inputs into (out_dims product x inp_channels * kernel_dims product)
+// 2. Splat weights into (out_channels x inp_channels * kernel_dims product)
+// 3. Perform matmul between inputs and weights with the resulting shape (out_dims product x out_channels). Each element corresponds to an element of the final output
+// 4. Scale down and add bias if it exists
+// 5. Reshape into the final output shape
 macro_rules! create_conv_layer {
   ($layer_name:ident, $is_transpose:expr) => {
     pub struct $layer_name;
