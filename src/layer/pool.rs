@@ -3,7 +3,7 @@ use crate::graph::*;
 use crate::layer::conv::{out_hw, splat_pad};
 use crate::layer::Layer;
 use crate::onnx;
-use crate::util::{get_reshape_indices, max_padding_partitions, pad};
+use crate::util;
 use ark_bn254::Fr;
 use copy_constraint::zero_padding_partition;
 use ndarray::{arr1, indices, ArrayD, Dim, Dimension, IxDyn};
@@ -21,7 +21,7 @@ fn splat_input(input_shape: &Vec<usize>, strides: &Vec<usize>, pads: &Vec<usize>
   let inp_shape = Dim(IxDyn(input_shape));
   let inp = ArrayD::from_shape_vec(inp_shape.clone(), indices(inp_shape).into_iter().map(|x| x.into_dyn()).collect()).unwrap();
 
-  let inp_pad = pad(&inp, &padding, &IxDyn::zeros(input_shape.len()));
+  let inp_pad = util::pad(&inp, &padding, &IxDyn::zeros(input_shape.len()));
 
   let out_dims = out_hw(&dims, &strides, &kernel_dims, &padding[2..].to_vec(), false);
 
@@ -67,7 +67,7 @@ impl Layer for MaxPoolLayer {
     let permutation = splat_input(&input_shapes[0], &strides, &pads, ch, &kernel_shape);
     let permutation_padded = splat_pad(&permutation);
     let input_shape_padded: Vec<_> = input_shapes[0].iter().map(|i| i.next_power_of_two()).collect();
-    let padding_partitions = max_padding_partitions(&permutation_padded, Fr::from(onnx::CQ_RANGE_LOWER));
+    let padding_partitions = util::max_padding_partitions(&permutation_padded, Fr::from(onnx::CQ_RANGE_LOWER));
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation_padded,
       input_dim: IxDyn(&input_shape_padded),
@@ -88,7 +88,7 @@ impl Layer for MaxPoolLayer {
     let mut output_shape = input_shapes[0][..2].to_vec();
     output_shape.append(&mut out_hw(&dims, &strides, &kernel_shape, &padding[2..].to_vec(), false));
     let reshape_inp_shape = vec![output_shape.iter().fold(1, |acc, &x| acc * x), 1];
-    let reshape_permutation = get_reshape_indices(reshape_inp_shape.clone(), output_shape.clone());
+    let reshape_permutation = util::get_reshape_indices(reshape_inp_shape.clone(), output_shape.clone());
     let reshape_inp_padded: Vec<_> = reshape_inp_shape.iter().map(|x| x.next_power_of_two()).collect();
     let padding_partitions = zero_padding_partition(&reshape_permutation);
     let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {

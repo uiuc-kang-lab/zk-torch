@@ -15,6 +15,7 @@ module load cuda/12.4
 module load python/3.9.16
 
 srun python test_gpu_scripts/notify_enqueue.py "$1" "$2" "$3"
+srun rustup override set nightly
 
 export LIBCLANG_PATH=/projects/illinois/eng/cs/ddkang/bjchen4/gpu/llvm-project/build/lib
 srun --export=ALL cargo run --features gpu

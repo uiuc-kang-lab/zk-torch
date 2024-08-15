@@ -165,6 +165,7 @@ fn get_local_graph(
     "Split" => Ok(SplitLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Sqrt" => Ok(SqrtLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Reshape" => Ok(ReshapeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Resize" => Ok(ResizeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Transpose" => Ok(TransposeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Tan" => Ok(TanLayer::graph(&input_shapes, &node_constants, &node_attributes)),
     "Tanh" => Ok(TanhLayer::graph(&input_shapes, &node_constants, &node_attributes)),

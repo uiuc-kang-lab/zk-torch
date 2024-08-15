@@ -11,6 +11,9 @@ ark-poly = {version = "0.4", features = ["parallel"]}
 ark-bn254 = "0.4"
 ark-serialize = { version = "0.4", features = ["derive"] }
 serde = { version = "1.0.201", features = ["derive"] }
+log = { version = "0.4.14", default-features = false }
+env_logger = { version = "0.10" }
+plonky2 = { version = "0.2.2", features = ["timing"]}
 rand = "0.8.5"
 rayon = "1"
 ndarray = { version = "0.15.6", features = ["serde", "rayon"] }

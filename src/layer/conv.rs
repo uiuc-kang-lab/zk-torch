@@ -2,7 +2,7 @@ use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
 use crate::onnx;
-use crate::util::{get_reshape_indices, pad, pad_to_pow_of_two};
+use crate::util;
 use ark_bn254::Fr;
 use copy_constraint::zero_padding_partition;
 use ndarray::indices;
@@ -71,7 +71,7 @@ fn splat_input(
     let inp_shape = Dim(IxDyn(input_shape));
     ArrayD::from_shape_vec(inp_shape.clone(), indices(inp_shape).into_iter().map(|x| Some(x.into_dyn())).collect()).unwrap()
   };
-  let inp_pad = pad(&inp, &padding, &None);
+  let inp_pad = util::pad(&inp, &padding, &None);
 
   let mut inp_cells = vec![];
   let mut input_row_idx = 0;
@@ -126,7 +126,7 @@ pub fn splat_pad(input: &Vec<Vec<Option<IxDyn>>>) -> ArrayD<Option<IxDyn>> {
   let conv_size = input[0].len();
   let flattened_inp: Vec<_> = input.into_iter().flat_map(|x| x.iter().map(|y| y.clone())).collect();
   let flattened_inp = ArrayD::from_shape_vec(IxDyn(&vec![outp_size, conv_size]), flattened_inp).unwrap();
-  pad_to_pow_of_two(&flattened_inp, &None)
+  util::pad_to_pow_of_two(&flattened_inp, &None)
 }
 
 // The overview of the proving:
@@ -227,7 +227,7 @@ macro_rules! create_conv_layer {
         let cout = if $is_transpose { weight_shape[1] } else { weight_shape[0] };
         let mut output_shape = vec![1, cout];
         output_shape.append(&mut out_dims);
-        let reshape_permutation = get_reshape_indices(vec![permutation.len(), weights_splatted.len()], output_shape.clone());
+        let reshape_permutation = util::get_reshape_indices(vec![permutation.len(), weights_splatted.len()], output_shape.clone());
         let padding_partitions = zero_padding_partition(&reshape_permutation);
         let cc2 = graph.addBB(Box::new(CopyConstraintBasicBlock {
           permutation: reshape_permutation,
