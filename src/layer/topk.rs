@@ -4,7 +4,6 @@ use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
-use copy_constraint::zero_padding_partition;
 use ndarray::{arr1, ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
 
@@ -72,19 +71,17 @@ impl Layer for TopKLayer {
     let padded_sorted_data_shape: Vec<_> = sorted_data_shape.iter().map(|x| util::next_pow(*x as u32) as usize).collect();
 
     let permutation = get_topk_indices(sorted_data_shape.clone(), k);
-    let padding_partitions = zero_padding_partition(&permutation);
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation.clone(),
       input_dim: IxDyn(&padded_sorted_data_shape),
-      padding_partitions,
+      padding_partition: copy_constraint::PaddingEnum::Zero,
     }));
 
     let permutation_for_ordered_check = get_topk_indices(sorted_data_shape, data_len - 1);
-    let padding_partitions = zero_padding_partition(&permutation_for_ordered_check);
     let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation_for_ordered_check.clone(),
       input_dim: IxDyn(&padded_sorted_data_shape),
-      padding_partitions,
+      padding_partition: copy_constraint::PaddingEnum::Zero,
     }));
 
     if axis != input_shapes[0].len() - 1 {
@@ -135,10 +132,7 @@ impl Layer for ArgMaxLayer {
     }));
     let data_len = input_shapes[0][axis];
     let sort = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(SortBasicBlock {
-        descending: descending,
-        len: data_len,
-      }),
+      basic_block: Box::new(SortBasicBlock { descending, len: data_len }),
       N: 1,
     }));
     let one_to_one = graph.addBB(Box::new(RepeaterBasicBlock {
@@ -159,19 +153,17 @@ impl Layer for ArgMaxLayer {
     let padded_sorted_data_shape: Vec<_> = sorted_data_shape.iter().map(|x| util::next_pow(*x as u32) as usize).collect();
 
     let permutation = get_topk_indices(sorted_data_shape.clone(), 1);
-    let padding_partitions = zero_padding_partition(&permutation);
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
-      permutation: permutation.clone(),
+      permutation,
       input_dim: IxDyn(&padded_sorted_data_shape),
-      padding_partitions: padding_partitions,
+      padding_partition: copy_constraint::PaddingEnum::Zero,
     }));
 
     let permutation_for_ordered_check = get_topk_indices(sorted_data_shape, data_len - 1);
-    let padding_partitions = zero_padding_partition(&permutation_for_ordered_check);
     let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
-      permutation: permutation_for_ordered_check.clone(),
+      permutation: permutation_for_ordered_check,
       input_dim: IxDyn(&padded_sorted_data_shape),
-      padding_partitions: padding_partitions,
+      padding_partition: copy_constraint::PaddingEnum::Zero,
     }));
 
     if axis != input_shapes[0].len() - 1 {
