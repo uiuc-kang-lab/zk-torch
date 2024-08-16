@@ -145,8 +145,8 @@ fn main() {
   // please export RUST_LOG=debug; the debug logs for timing will be printed
   env_logger::init();
 
-  let srs = &ptau::load_file("challenge14", 14, 14);
-  let onnx_file_name = "convtranspose.onnx";
+  let srs = &ptau::load_file("challenge", 7, 7);
+  let onnx_file_name = "sample.onnx";
   let (mut graph, models) = onnx::load_file(onnx_file_name);
   let fake_inputs = util::generate_fake_inputs_for_onnx(onnx_file_name);
   let inputs = fake_inputs.iter().map(|x| x).collect();
