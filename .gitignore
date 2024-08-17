@@ -6,3 +6,6 @@ inputsEnc
 modelsEnc
 outputsEnc
 proofs
+setups
+models
+layer_setup/*
