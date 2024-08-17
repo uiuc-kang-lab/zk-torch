@@ -5,6 +5,7 @@ use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{evaluations::univariate::Evaluations, univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{
   ops::{Mul, Sub},
   One, UniformRand, Zero,
@@ -13,6 +14,7 @@ use ndarray::ArrayD;
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
+use std::fs::File;
 
 #[derive(Debug)]
 pub struct CQ2BasicBlock {
@@ -29,6 +31,15 @@ impl BasicBlock for CQ2BasicBlock {
   }
 
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+    let file_name = format!("{}.setup", util::hash_str(&format!("{self:?}")));
+    let file_path = format!("layer_setup/{}", file_name);
+    if util::file_exists(&file_path) {
+      println!("CQ2: Loading layer setup from file: {}", file_path);
+      let setups =
+        Vec::<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)>::deserialize_uncompressed(File::open(&file_path).unwrap()).unwrap();
+      return setups.first().unwrap().clone();
+    }
+
     assert!(model.ndim() == 1 && model.len() == 2);
     let N = model[0].raw.len();
     let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
@@ -61,7 +72,9 @@ impl BasicBlock for CQ2BasicBlock {
 
     setup.extend(L_i_x_1);
     setup.extend(L_i_0_x_1);
-    return (setup, setup2, Vec::new());
+    let setups = vec![(setup, setup2, Vec::new())];
+    setups.serialize_uncompressed(File::create(file_path).unwrap()).unwrap();
+    return setups.first().unwrap().clone();
   }
 
   fn prove(

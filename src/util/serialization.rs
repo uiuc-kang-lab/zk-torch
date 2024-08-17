@@ -3,7 +3,9 @@
  * And other file I/O utilities.
  */
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use std::fs::File;
+use std::collections::hash_map::DefaultHasher;
+use std::fs::{self, File};
+use std::hash::{Hash, Hasher};
 
 // For serialization, ArrayD uses serde while G1Affine uses ark_serialize.
 // In order to bridge between the two, the following code snippet is used:
@@ -48,4 +50,15 @@ pub fn format_file_size(bytes: u64) -> String {
   } else {
     format!("{} bytes", bytes)
   }
+}
+
+pub fn hash_str(s: &str) -> String {
+  let mut hasher = DefaultHasher::new();
+  s.hash(&mut hasher);
+  let hash_value = hasher.finish();
+  hash_value.to_string()
+}
+
+pub fn file_exists(path: &str) -> bool {
+  fs::metadata(path).is_ok()
 }
