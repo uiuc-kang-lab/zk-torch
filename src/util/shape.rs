@@ -3,6 +3,7 @@
  * The functions are used for shape-related operations, such as
  * slicing and padding arrays.
  */
+#![allow(dead_code)]
 use ark_bn254::Fr;
 use ndarray::{ArrayD, Axis, IxDyn, Slice, SliceInfo};
 

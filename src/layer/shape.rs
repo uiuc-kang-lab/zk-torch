@@ -1,7 +1,9 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
+use crate::util;
 use ark_bn254::Fr;
+use ark_std::Zero;
 use ndarray::{arr1, ArrayD};
 use tract_onnx::pb::AttributeProto;
 
@@ -11,7 +13,8 @@ impl BasicBlock for ShapeBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     let shape: Vec<_> = inputs[0].shape().iter().map(|&x| Fr::from(x as i32)).collect();
     let shape = arr1(&shape).into_dyn();
-    vec![shape]
+    let padded_shape = util::pad_to_pow_of_two(&shape, &Fr::zero());
+    vec![padded_shape]
   }
 }
 

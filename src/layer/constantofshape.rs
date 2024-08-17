@@ -15,10 +15,11 @@ impl Layer for ConstOfShapeLayer {
 
     let value = Fr::from(attributes.iter().filter(|x| x.name == "value").next().unwrap().i);
     let endShape: Vec<usize> = constants[0].unwrap().as_slice().unwrap().iter().map(|x| util::fr_to_int(*x) as usize).filter(|x| *x != 0).collect();
+    let endShape_padded: Vec<usize> = endShape.iter().map(|&x| util::next_pow(x as u32) as usize).collect();
 
     let constantOfShape = graph.addBB(Box::new(ConstOfShapeBasicBlock {
       c: value,
-      shape: endShape.clone(),
+      shape: endShape_padded.clone(),
     }));
     let output = graph.addNode(constantOfShape, vec![]);
     graph.outputs.push((output, 0));

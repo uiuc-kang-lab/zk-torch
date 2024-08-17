@@ -75,6 +75,9 @@ fn parse_onnx_constants<'a>(
       DatumType::F32 => {
         let tensor = tensor.into_array::<f32>().unwrap();
         Ok(tensor.map(|x| {
+          if *x < 1e-10 && *x > 0.0 {
+            return Fr::from(1);
+          }
           let mut y = (*x * SF_FLOAT).round();
           y = y.clamp(-(1 << 15) as f32, (1 << 15) as f32);
           Fr::from(y as i32)
@@ -239,7 +242,8 @@ fn update_graph_w_local_graph(
         })
         .collect(),
     });
-    graph.layer_names.push(format!("Op {}", node.name.clone()));
+    let name = if node.name.clone() == "" { node.op_type.to_string() } else { node.name.clone() };
+    graph.layer_names.push(format!("Op {}", name));
   }
   // tracking output_idx of local_graph
   for (i, output) in node.output.iter().enumerate() {
@@ -276,16 +280,12 @@ fn process_node(
     let node_inputs: Vec<_> = node_constants.iter().map(|&x| x.unwrap().clone()).collect();
     let node_inputs = node_inputs.iter().map(|x| x).collect();
     let outputs = local_graph.run(&node_inputs, &vec![&arr1(&[]).into_dyn(); local_graph.basic_blocks.len()]);
-    node
-      .output
-      .iter()
-      .zip(local_graph.outputs.iter())
-      .for_each(|(output_str, &(nodeX, nodeY))| {
-        passed_constants.insert(
-          output_str.to_string(),
-          util::pad_to_pow_of_two(&outputs[nodeX as usize][nodeY].clone(), &Fr::zero()),
-        );
-      });
+    node.output.iter().zip(local_graph.outputs.iter()).for_each(|(output_str, &(nodeX, nodeY))| {
+      passed_constants.insert(
+        output_str.to_string(),
+        outputs[nodeX as usize][nodeY].clone(),
+      );
+    });
   }
 
   // update graph with local graph
@@ -294,10 +294,7 @@ fn process_node(
   // handle a special case (op == "Shape")
   if op == "Shape" {
     let shape = arr1(&input_shapes[0].iter().map(|&x| Fr::from(x as i32)).collect::<Vec<_>>()).into_dyn();
-    passed_constants.insert(
-      (&node.output[0]).to_string(),
-      util::pad_to_pow_of_two(&shape, &Fr::zero()),
-    );
+    passed_constants.insert((&node.output[0]).to_string(), util::pad_to_pow_of_two(&shape, &Fr::zero()));
   }
 
   // update shapes
