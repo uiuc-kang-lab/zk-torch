@@ -25,7 +25,8 @@ mod util;
 
 fn setup(srs: &SRS, graph: &Graph, models: &Vec<&ArrayD<Fr>>, timing: &mut TimingTree) {
   // Setup:
-  let models: Vec<ArrayD<Data>> = util::vec_iter(&models)
+  let models: Vec<ArrayD<Data>> = models
+    .par_iter()
     .enumerate()
     .map(|(i, model)| {
       let bb = &graph.basic_blocks[i];
