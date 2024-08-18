@@ -3,7 +3,6 @@ use crate::graph::*;
 use crate::layer::{squeeze::UnsqueezeBasicBlock, Layer};
 use crate::util::{self, get_reshape_indices};
 use ark_bn254::Fr;
-use copy_constraint::zero_padding_partition;
 use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
 
@@ -38,7 +37,7 @@ impl Layer for ReshapeLayer {
       let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
         permutation: permutation.clone(),
         input_dim: IxDyn(&startShape),
-        padding_partitions: zero_padding_partition(&permutation),
+        padding_partition: copy_constraint::PaddingEnum::Zero,
       }));
       let output = graph.addNode(cc, vec![(-1, 0)]);
       graph.outputs.push((output, 0));

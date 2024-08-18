@@ -132,7 +132,7 @@ impl Layer for SliceLayer {
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation,
       input_dim: IxDyn(&input_shape_pad),
-      padding_partitions: HashMap::new(),
+      padding_partition: copy_constraint::PaddingEnum::Zero,
     }));
     let slice_output = graph.addNode(cc, vec![(-1, 0)]);
     graph.outputs.push((slice_output, 0));

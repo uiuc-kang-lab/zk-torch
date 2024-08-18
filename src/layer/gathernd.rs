@@ -4,7 +4,6 @@ use crate::layer::Layer;
 use crate::util;
 use ark_bn254::Fr;
 use ark_std::iterable::Iterable;
-use copy_constraint::zero_padding_partition;
 use ndarray::Dimension;
 use ndarray::{ArrayD, Axis, IxDyn};
 use tract_onnx::pb::AttributeProto;
@@ -86,12 +85,11 @@ impl Layer for GatherNDLayer {
     let padded_data_shape: Vec<_> = data_shape.iter().map(|&x| util::next_pow(x as u32) as usize).collect();
 
     let (permutation, output_shape) = get_gathernd_masks(&data_shape, &indices, batch_dims);
-    let padding = zero_padding_partition(&permutation);
 
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
-      permutation: permutation,
+      permutation,
       input_dim: IxDyn(&padded_data_shape),
-      padding_partitions: padding,
+      padding_partition: copy_constraint::PaddingEnum::Zero,
     }));
 
     let output = graph.addNode(cc, vec![(-1, 0)]);

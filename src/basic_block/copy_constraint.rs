@@ -22,6 +22,7 @@ use rayon::prelude::*;
 use std::{
   cmp::{max, min},
   collections::{BTreeMap, HashMap},
+  default,
   iter::{once, repeat, Map},
 };
 
@@ -89,7 +90,7 @@ fn construct_ssig(
 }
 
 // Returns the padding_partitions field for CopyConstraintBasicBlock when the given permutation padding elements are 0
-pub fn zero_padding_partition(permutation: &ArrayD<Option<IxDyn>>) -> HashMap<Fr, Vec<IxDyn>> {
+fn zero_padding_partition(permutation: &ArrayD<Option<IxDyn>>) -> HashMap<Fr, Vec<IxDyn>> {
   let mut partition = vec![];
   for (i, _) in permutation.indexed_iter() {
     if permutation[&i] == None {
@@ -103,16 +104,56 @@ pub fn zero_padding_partition(permutation: &ArrayD<Option<IxDyn>>) -> HashMap<Fr
   padding_partition
 }
 
-// Checks that padding partition corresponds to None values in permutation
-fn check_padding_partition(permutation: &ArrayD<Option<IxDyn>>, padding_partitions: &HashMap<Fr, Vec<IxDyn>>) -> bool {
-  for (_, p) in padding_partitions.iter() {
-    for idx in p {
-      if permutation[idx] != None {
-        return false;
+// Returns the padding partition where the non-zero padding value consists of all pad indices such that the last-axis subview containing it contains non-pad elements, and the zero padding value consists of all pad indices part of a last-axis subview containing only pad elements.
+// If val is 0, then these will instead be combined.
+fn max_padding_partitions(permutation: &ArrayD<Option<IxDyn>>, val: Fr) -> HashMap<Fr, Vec<IxDyn>> {
+  let mut zero_indices = vec![];
+  let mut nonzero_indices = vec![];
+  for (i, subview) in permutation.axis_iter(Axis(permutation.ndim() - 1)).enumerate() {
+    if subview.iter().all(|x| x.is_none()) {
+      for (idx, _) in subview.indexed_iter() {
+        let mut full_idx = idx.as_array_view().to_vec();
+        full_idx.push(i);
+        zero_indices.push(IxDyn(&full_idx));
+      }
+    } else {
+      for (idx, val) in subview.indexed_iter() {
+        if val.is_none() {
+          let mut full_idx = idx.as_array_view().to_vec();
+          full_idx.push(i);
+          nonzero_indices.push(IxDyn(&full_idx));
+        }
       }
     }
   }
-  true
+  let mut partitions = HashMap::new();
+  if val == Fr::zero() {
+    zero_indices.append(&mut nonzero_indices);
+  } else {
+    if nonzero_indices.len() > 0 {
+      partitions.insert(val, nonzero_indices);
+    }
+  }
+  if zero_indices.len() > 0 {
+    partitions.insert(Fr::zero(), zero_indices);
+  }
+  partitions
+}
+
+// Determines the scheme for padding partitions: pairs of (padding value, list of indices in the output containing that pad value)
+#[derive(Debug, Default)]
+pub enum PaddingEnum {
+  #[default]
+  Zero,
+  Max(Fr),
+}
+
+// Gets padding partition based on the enum value
+fn get_padding_partition(permutation: &ArrayD<Option<IxDyn>>, pad_type: &PaddingEnum) -> HashMap<Fr, Vec<IxDyn>> {
+  match pad_type {
+    PaddingEnum::Zero => zero_padding_partition(permutation),
+    PaddingEnum::Max(val) => max_padding_partitions(permutation, *val),
+  }
 }
 
 // This BasicBlock implements Plonk's copy constraint protocol over the inputs and outputs (Sec. 5.2 and 8 of https://eprint.iacr.org/2019/953.pdf) [1].
@@ -122,14 +163,14 @@ fn check_padding_partition(permutation: &ArrayD<Option<IxDyn>>, padding_partitio
 pub struct CopyConstraintBasicBlock {
   pub permutation: ArrayD<Option<IxDyn>>,
   pub input_dim: IxDyn,
-  pub padding_partitions: HashMap<Fr, Vec<IxDyn>>,
+  pub padding_partition: PaddingEnum,
 }
 
 impl BasicBlock for CopyConstraintBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1 && inputs[0].dim() == self.input_dim);
-    assert!(check_padding_partition(&self.permutation, &self.padding_partitions));
-    let tmp_hashmap: HashMap<IxDyn, Fr> = self.padding_partitions.iter().flat_map(|(k, v)| v.iter().map(|x| (x.clone(), *k))).collect();
+    let padding_partitions = get_padding_partition(&self.permutation, &self.padding_partition);
+    let tmp_hashmap: HashMap<IxDyn, Fr> = padding_partitions.iter().flat_map(|(k, v)| v.iter().map(|x| (x.clone(), *k))).collect();
     vec![ArrayD::from_shape_fn(self.permutation.shape(), |i| {
       if let Some(idx) = &self.permutation[&i] {
         inputs[0][idx]
@@ -181,10 +222,11 @@ impl BasicBlock for CopyConstraintBasicBlock {
     }
     // Add padding partitions to partition
     let mut pad_partitions = vec![];
-    let mut padding_values = self.padding_partitions.keys().collect::<Vec<_>>();
+    let padding_partitions = get_padding_partition(&self.permutation, &self.padding_partition);
+    let mut padding_values = padding_partitions.keys().collect::<Vec<_>>();
     padding_values.sort();
     for v in padding_values.iter() {
-      let p = self.padding_partitions.get(v).unwrap();
+      let p = padding_partitions.get(v).unwrap();
       let flat_idxs: Vec<_> = p.iter().map(|i| flat_outp_idxs[i]).collect();
       if flat_idxs.len() > 0 {
         pad_partitions.push(flat_idxs);
@@ -332,10 +374,11 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let mut pad_vals = vec![];
     let mut fj_none_idxs = vec![]; // position in f_polys
     let mut Lnone_polys = vec![];
-    let mut padding_values = self.padding_partitions.keys().cloned().collect::<Vec<_>>();
+    let padding_partitions = get_padding_partition(&self.permutation, &self.padding_partition);
+    let mut padding_values = padding_partitions.keys().cloned().collect::<Vec<_>>();
     padding_values.sort();
     for val in padding_values.iter() {
-      let partition = &self.padding_partitions[val];
+      let partition = &padding_partitions[val];
       let idx = &partition[0];
       let flat_none_idx = flat_index(&self.permutation.dim(), &Some(idx.clone()), N).unwrap();
       let mut Lnone = vec![Fr::zero(); N];
@@ -500,7 +543,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let fj_xs = &proof.0[m + 5..];
 
     // TODO: have verifier compute Lagrange basis evals
-    let mut padding_values = self.padding_partitions.keys().cloned().collect::<Vec<_>>();
+    let padding_partitions = get_padding_partition(&self.permutation, &self.padding_partition);
+    let mut padding_values = padding_partitions.keys().cloned().collect::<Vec<_>>();
     padding_values.sort();
     let [Z_gz, L0_z] = proof.2[..2] else { panic!("Wrong proof format") };
     let none_len = padding_values.len();
@@ -544,7 +588,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let mut pad_vals = vec![];
     let mut fj_none_idxs = vec![];
     for val in padding_values.iter() {
-      let partition = self.padding_partitions.get(val).unwrap();
+      let partition = padding_partitions.get(val).unwrap();
       let idx = &partition[0];
       let flat_idx = flat_index(&self.permutation.dim(), &Some(idx.clone()), N).unwrap();
       fj_none_idxs.push(flat_idx.0 + input.len());

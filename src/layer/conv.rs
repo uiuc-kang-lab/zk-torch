@@ -4,7 +4,6 @@ use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
-use copy_constraint::zero_padding_partition;
 use ndarray::indices;
 use ndarray::Dim;
 use ndarray::Dimension;
@@ -177,22 +176,20 @@ macro_rules! create_conv_layer {
         let permutation = splat_input(&input_shapes[0], &strides, &pads, ci, &ch_dims, $is_transpose);
         let permutation_padded = splat_pad(&permutation);
         let input_shape_padded: Vec<_> = input_shapes[0].iter().map(|i| i.next_power_of_two()).collect();
-        let padding_partitions = zero_padding_partition(&permutation_padded);
         let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
           permutation: permutation_padded,
           input_dim: IxDyn(&input_shape_padded),
-          padding_partitions,
+          padding_partition: copy_constraint::PaddingEnum::Zero,
         }));
 
         // TODO: change to CQLin and commit splatted weights
         let weights_splatted = splat_weights(&weight_shape, $is_transpose);
         let weights_padded = splat_pad(&weights_splatted);
         let weight_shape_padded: Vec<_> = weight_shape.iter().map(|i| i.next_power_of_two()).collect();
-        let padding_partitions = zero_padding_partition(&weights_padded);
         let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
           permutation: weights_padded,
           input_dim: IxDyn(&weight_shape_padded),
-          padding_partitions,
+          padding_partition: copy_constraint::PaddingEnum::Zero,
         }));
         let matmul = graph.addBB(Box::new(MatMulBasicBlock {}));
 
@@ -228,11 +225,10 @@ macro_rules! create_conv_layer {
         let mut output_shape = vec![1, cout];
         output_shape.append(&mut out_dims);
         let reshape_permutation = util::get_reshape_indices(vec![permutation.len(), weights_splatted.len()], output_shape.clone());
-        let padding_partitions = zero_padding_partition(&reshape_permutation);
         let cc2 = graph.addBB(Box::new(CopyConstraintBasicBlock {
           permutation: reshape_permutation,
           input_dim: IxDyn(&[permutation.len().next_power_of_two(), weights_splatted.len().next_power_of_two()]),
-          padding_partitions,
+          padding_partition: copy_constraint::PaddingEnum::Zero,
         }));
 
         let cc_output = graph.addNode(cc, vec![(-1, 0)]);

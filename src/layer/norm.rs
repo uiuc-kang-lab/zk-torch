@@ -4,7 +4,6 @@ use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
-use copy_constraint::zero_padding_partition;
 use ndarray::{arr1, Array1, ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
 use util::copy_constraint::get_reshape_indices;
@@ -253,11 +252,10 @@ impl Layer for InstanceNormLayer {
     ];
     let permutation = get_reshape_indices(X_shape.to_vec(), x_shape_for_mean);
     let padded_input_shape: Vec<_> = X_shape.iter().map(|x| util::next_pow(*x as u32) as usize).collect();
-    let padding_partitions = zero_padding_partition(&permutation);
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation,
       input_dim: IxDyn(&padded_input_shape),
-      padding_partitions,
+      padding_partition: copy_constraint::PaddingEnum::Zero,
     }));
 
     let sum = graph.addBB(Box::new(RepeaterBasicBlock {
