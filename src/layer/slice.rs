@@ -4,7 +4,6 @@ use crate::layer::Layer;
 use crate::util;
 use ark_bn254::Fr;
 use ndarray::{ArrayD, IxDyn};
-use copy_constraint::zero_padding_partition;
 use tract_onnx::pb::AttributeProto;
 
 fn combinations<T: Clone>(vecs: &Vec<Vec<T>>) -> Vec<Vec<T>> {
@@ -124,11 +123,10 @@ impl Layer for SliceLayer {
       .collect();
 
     let (permutation, output_shape, input_shape_pad) = get_slice(&input_shapes[0], &mut starts, &mut ends, &mut axes, &mut steps);
-    let padding_partitions = zero_padding_partition(&permutation);
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation,
       input_dim: IxDyn(&input_shape_pad),
-      padding_partitions
+      padding_partition: copy_constraint::PaddingEnum::Zero,
     }));
     let slice_output = graph.addNode(cc, vec![(-1, 0)]);
     graph.outputs.push((slice_output, 0));

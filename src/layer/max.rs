@@ -4,9 +4,7 @@ use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
-use copy_constraint::zero_padding_partition;
 use ndarray::{concatenate, indices, ArrayD, Axis, Dim, Dimension, IxDyn};
-use std::collections::HashMap;
 use tract_onnx::pb::AttributeProto;
 
 // Returns the splat needed to pass into MaxProofBasicBlock. This produces a (product of input dims X 2) permutation where the first column corresponds to the input elements and the second column contains cmp_val
@@ -28,11 +26,10 @@ impl Layer for MaxLayer {
       let constant = constants[1].unwrap().first().unwrap();
       let permutation = splat_input(&input_shapes[0], None);
       let input_shape_padded: Vec<_> = input_shapes[0].iter().map(|i| i.next_power_of_two()).collect();
-      let padding_partitions = util::max_padding_partitions(&permutation, *constant);
       let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
         permutation,
         input_dim: IxDyn(&input_shape_padded),
-        padding_partitions,
+        padding_partition: copy_constraint::PaddingEnum::Max(*constant),
       }));
       let max = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(MaxProofBasicBlock {}),
@@ -40,12 +37,11 @@ impl Layer for MaxLayer {
       }));
       let reshape_shape = &vec![input_shapes[0].iter().product(), 1];
       let reshape_permutation = util::get_reshape_indices(reshape_shape.clone(), input_shapes[0].clone());
-      let padding_partitions = zero_padding_partition(&reshape_permutation);
       let reshape_shape_pad: Vec<_> = reshape_shape.iter().map(|i| i.next_power_of_two()).collect();
       let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
         permutation: reshape_permutation,
         input_dim: IxDyn(&reshape_shape_pad),
-        padding_partitions,
+        padding_partition: copy_constraint::PaddingEnum::Zero,
       }));
 
       let cc_output = graph.addNode(cc, vec![(-1, 0)]);
@@ -78,7 +74,7 @@ impl Layer for MinLayer {
       let extend_second_input = graph.addBB(Box::new(CopyConstraintBasicBlock {
         permutation: extended_second_input,
         input_dim: IxDyn(&[1]),
-        padding_partitions: HashMap::new(),
+        padding_partition: copy_constraint::PaddingEnum::Zero,
       }));
 
       let concat_inputs = graph.addBB(Box::new(ConcatBasicBlock { axis: 0 }));
@@ -94,7 +90,7 @@ impl Layer for MinLayer {
       let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
         permutation,
         input_dim: IxDyn(&concat_shape),
-        padding_partitions: HashMap::new(),
+        padding_partition: copy_constraint::PaddingEnum::Zero,
       }));
 
       let neg = graph.addBB(Box::new(RepeaterBasicBlock {
@@ -112,12 +108,11 @@ impl Layer for MinLayer {
 
       let reshape_shape = &vec![input_shapes[0].iter().product(), 1];
       let reshape_permutation = util::get_reshape_indices(reshape_shape.clone(), input_shapes[0].clone());
-      let padding_partitions = zero_padding_partition(&reshape_permutation);
       let reshape_shape_pad: Vec<_> = reshape_shape.iter().map(|i| i.next_power_of_two()).collect();
       let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
         permutation: reshape_permutation,
         input_dim: IxDyn(&reshape_shape_pad),
-        padding_partitions,
+        padding_partition: copy_constraint::PaddingEnum::Zero,
       }));
 
       let second_input = graph.addNode(extend_second_input, vec![(-2, 0)]);

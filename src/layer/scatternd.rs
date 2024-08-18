@@ -3,7 +3,6 @@ use crate::graph::*;
 use crate::layer::Layer;
 use crate::util;
 use ark_bn254::Fr;
-use copy_constraint::zero_padding_partition;
 use ndarray::{ArrayD, Axis, Dim, IxDyn};
 use tract_onnx::pb::AttributeProto;
 
@@ -79,19 +78,17 @@ impl Layer for ScatterNDLayer {
     let indices = constants[1].unwrap();
 
     let (permutation_preserve, permutation_update) = get_masks(&input_shapes[0], &indices);
-    let padding_preserve = zero_padding_partition(&permutation_preserve);
-    let padding_update = zero_padding_partition(&permutation_update);
     let input_shape_0_padded: Vec<_> = input_shapes[0].iter().map(|x| util::next_pow(*x as u32) as usize).collect();
     let input_shape_2_padded: Vec<_> = input_shapes[2].iter().map(|x| util::next_pow(*x as u32) as usize).collect();
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation_preserve,
       input_dim: IxDyn(&input_shape_0_padded),
-      padding_partitions: padding_preserve,
+      padding_partitions: copy_constraint::PaddingEnum::Zero,
     }));
     let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation_update,
       input_dim: IxDyn(&input_shape_2_padded),
-      padding_partitions: padding_update,
+      padding_partitions: copy_constraint::PaddingEnum::Zero,
     }));
     let add = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(AddBasicBlock {}),
