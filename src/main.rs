@@ -7,11 +7,14 @@ use ark_poly::univariate::DensePolynomial;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use basic_block::*;
 use ndarray::ArrayD;
+use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use sha3::{Digest, Keccak256};
+use std::env;
 use std::fs::{self, File};
 use std::io::Read;
+use std::path::Path;
 use util::{convert_to_data, measure_file_size};
 mod basic_block;
 mod graph;
@@ -23,6 +26,28 @@ mod ptau;
 mod tests;
 mod util;
 
+// Define a static CONFIG that holds the loaded configuration
+static CONFIG: Lazy<util::Config> = Lazy::new(|| {
+  let args: Vec<String> = env::args().collect();
+  if args.len() != 2 {
+    panic!("Usage: cargo run -- <config file>");
+  }
+  let mut file = File::open(&args[1]).expect("Could not open config");
+  let mut contents = String::new();
+  file.read_to_string(&mut contents).expect("Could not read config");
+
+  serde_yaml::from_str(&contents).expect("Could not parse config")
+});
+
+static LAYER_SETUP_DIR: Lazy<String> = Lazy::new(|| {
+  let dir = format!(
+    "layer_setup/{}_{}_{}",
+    CONFIG.sf.scale_factor_log, CONFIG.sf.cq_range_log, CONFIG.sf.cq_range_lower_log
+  );
+  assert!(Path::new(&dir).exists() || fs::create_dir_all(&dir).is_ok());
+  dir
+});
+
 fn setup(srs: &SRS, graph: &Graph, models: &Vec<&ArrayD<Fr>>, timing: &mut TimingTree) {
   // Setup:
   let models: Vec<ArrayD<Data>> = models
@@ -32,7 +57,7 @@ fn setup(srs: &SRS, graph: &Graph, models: &Vec<&ArrayD<Fr>>, timing: &mut Timin
       let bb = &graph.basic_blocks[i];
       let bb_name = format!("{bb:?}");
       let file_name = format!("{}.model", util::hash_str(&format!("{bb_name:?}")));
-      let file_path = format!("layer_setup/{}", file_name);
+      let file_path = format!("{}/{}", *LAYER_SETUP_DIR, file_name);
       if util::file_exists(&file_path) {
         println!("CQs: Loading layer model from file: {}", file_path);
         let mut modelBytes = Vec::new();
@@ -53,9 +78,9 @@ fn setup(srs: &SRS, graph: &Graph, models: &Vec<&ArrayD<Fr>>, timing: &mut Timin
   let models_ref: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
   let setups = timed!(timing, "setup and encode models", graph.setup(srs, &models_ref));
   // Save files:
-  setups.serialize_uncompressed(File::create("setups").unwrap()).unwrap();
+  setups.serialize_uncompressed(File::create(&CONFIG.prover.setup_path).unwrap()).unwrap();
   let modelsBytes = bincode::serialize(&models).unwrap();
-  fs::write("models", &modelsBytes).unwrap();
+  fs::write(&CONFIG.prover.model_path, &modelsBytes).unwrap();
 }
 
 fn run(inputs: &Vec<&ArrayD<Fr>>, graph: &Graph, models: &Vec<&ArrayD<Fr>>, timing: &mut TimingTree) -> Vec<Vec<ArrayD<Fr>>> {
@@ -66,7 +91,8 @@ fn run(inputs: &Vec<&ArrayD<Fr>>, graph: &Graph, models: &Vec<&ArrayD<Fr>>, timi
 fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, outputs: Vec<Vec<ArrayD<Fr>>>, graph: &mut Graph, timing: &mut TimingTree) {
   // Load model and setup:
   let setups =
-    Vec::<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)>::deserialize_uncompressed(File::open("setups").unwrap()).unwrap();
+    Vec::<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)>::deserialize_uncompressed(File::open(&CONFIG.prover.setup_path).unwrap())
+      .unwrap();
   let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>)> = util::vec_iter(&setups)
     .map(|x| {
       (
@@ -79,7 +105,7 @@ fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, outputs: Vec<Vec<ArrayD<Fr>>>, gr
   let setups = setups.iter().map(|x| (&x.0, &x.1, &x.2)).collect();
 
   let mut modelsBytes = Vec::new();
-  File::open("models").unwrap().read_to_end(&mut modelsBytes).unwrap();
+  File::open(&CONFIG.prover.model_path).unwrap().read_to_end(&mut modelsBytes).unwrap();
   let models: Vec<ArrayD<Data>> = bincode::deserialize(&modelsBytes).unwrap();
   let models: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
 
@@ -104,9 +130,9 @@ fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, outputs: Vec<Vec<ArrayD<Fr>>>, gr
   let modelsEncBytes = bincode::serialize(&modelsEnc).unwrap();
   let inputsEncBytes = bincode::serialize(&inputsEnc).unwrap();
   let outputsEncBytes = bincode::serialize(&outputsEnc).unwrap();
-  fs::write("modelsEnc", &modelsEncBytes).unwrap();
-  fs::write("inputsEnc", &inputsEncBytes).unwrap();
-  fs::write("outputsEnc", &outputsEncBytes).unwrap();
+  fs::write(&CONFIG.prover.enc_model_path, &modelsEncBytes).unwrap();
+  fs::write(&CONFIG.prover.enc_input_path, &inputsEncBytes).unwrap();
+  fs::write(&CONFIG.prover.enc_output_path, &outputsEncBytes).unwrap();
 
   // Fiat-Shamir:
   let mut hasher = Keccak256::new();
@@ -119,23 +145,24 @@ fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, outputs: Vec<Vec<ArrayD<Fr>>>, gr
 
   // Prove:
   let proofs = timed!(timing, "prove", graph.prove(srs, &setups, &models, &inputs, &outputs, &mut rng, timing));
-  proofs.serialize_uncompressed(File::create("proofs").unwrap()).unwrap();
+  proofs.serialize_uncompressed(File::create(&CONFIG.prover.proof_path).unwrap()).unwrap();
 }
 
 fn verify(srs: &SRS, graph: &Graph, timing: &mut TimingTree) {
   // Read Files:
-  let proofs = Vec::<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)>::deserialize_uncompressed_unchecked(File::open("proofs").unwrap()).unwrap();
+  let proofs =
+    Vec::<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)>::deserialize_uncompressed_unchecked(File::open(&CONFIG.verifier.proof_path).unwrap()).unwrap();
   let proofs = proofs.iter().map(|x| (&x.0, &x.1, &x.2)).collect();
   let mut modelsEncBytes = Vec::new();
-  File::open("modelsEnc").unwrap().read_to_end(&mut modelsEncBytes).unwrap();
+  File::open(&CONFIG.verifier.enc_model_path).unwrap().read_to_end(&mut modelsEncBytes).unwrap();
   let modelsEnc: Vec<ArrayD<DataEnc>> = bincode::deserialize(&modelsEncBytes).unwrap();
   let modelsEnc: Vec<&ArrayD<DataEnc>> = modelsEnc.iter().map(|model| model).collect();
   let mut inputsEncBytes = Vec::new();
-  File::open("inputsEnc").unwrap().read_to_end(&mut inputsEncBytes).unwrap();
+  File::open(&CONFIG.verifier.enc_input_path).unwrap().read_to_end(&mut inputsEncBytes).unwrap();
   let inputsEnc: Vec<ArrayD<DataEnc>> = bincode::deserialize(&inputsEncBytes).unwrap();
   let inputsEnc: Vec<&ArrayD<DataEnc>> = inputsEnc.iter().map(|input| input).collect();
   let mut outputsEncBytes = Vec::new();
-  File::open("outputsEnc").unwrap().read_to_end(&mut outputsEncBytes).unwrap();
+  File::open(&CONFIG.verifier.enc_output_path).unwrap().read_to_end(&mut outputsEncBytes).unwrap();
   let outputsEnc: Vec<Vec<ArrayD<DataEnc>>> = bincode::deserialize(&outputsEncBytes).unwrap();
   let outputsEnc: Vec<Vec<&ArrayD<DataEnc>>> = outputsEnc.iter().map(|output| output.iter().map(|x| x).collect()).collect();
   let outputsEnc: Vec<&Vec<&ArrayD<DataEnc>>> = outputsEnc.iter().map(|x| x).collect();
@@ -170,8 +197,8 @@ fn main() {
   // please export RUST_LOG=debug; the debug logs for timing will be printed
   env_logger::init();
 
-  let srs = &ptau::load_file("challenge", 7, 7);
-  let onnx_file_name = "sample.onnx";
+  let srs = &ptau::load_file(&CONFIG.ptau.ptau_path, CONFIG.ptau.pow_len_log, CONFIG.ptau.loaded_pow_len_log);
+  let onnx_file_name = &CONFIG.onnx.model_path;
   let (mut graph, models) = onnx::load_file(onnx_file_name);
   let fake_inputs = util::generate_fake_inputs_for_onnx(onnx_file_name);
   let inputs = fake_inputs.iter().map(|x| x).collect();
@@ -180,11 +207,12 @@ fn main() {
   let outputs = run(&inputs, &graph, &models, &mut timing);
   prove(&srs, &inputs, outputs, &mut graph, &mut timing);
   verify(&srs, &graph, &mut timing);
+
   // measure proof size
-  measure_file_size("modelsEnc");
-  measure_file_size("inputsEnc");
-  measure_file_size("outputsEnc");
-  measure_file_size("proofs");
+  measure_file_size(&CONFIG.prover.enc_model_path);
+  measure_file_size(&CONFIG.prover.enc_input_path);
+  measure_file_size(&CONFIG.prover.enc_output_path);
+  measure_file_size(&CONFIG.prover.proof_path);
   timing.print();
   println!("Cargo run was successful.");
 }

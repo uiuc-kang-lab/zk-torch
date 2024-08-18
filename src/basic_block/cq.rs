@@ -1,11 +1,11 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use crate::onnx;
 use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{evaluations::univariate::Evaluations, univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{
   ops::{Mul, Sub},
   One, UniformRand, Zero,
@@ -27,15 +27,6 @@ impl BasicBlock for CQBasicBlock {
   }
 
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
-    let file_name = format!("{}.setup", util::hash_str(&format!("{self:?}")));
-    let file_path = format!("layer_setup/{}", file_name);
-    if util::file_exists(&file_path) {
-      println!("CQ: Loading layer setup from file: {}", file_path);
-      let setups =
-        Vec::<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)>::deserialize_uncompressed(File::open(&file_path).unwrap()).unwrap();
-      return setups.first().unwrap().clone();
-    }
-
     assert!(model.len() == 1);
     let model = &model.first().unwrap();
     let N = model.raw.len();
@@ -64,9 +55,7 @@ impl BasicBlock for CQBasicBlock {
     let mut setup = Q_i_x_1;
     setup.extend(L_i_x_1);
     setup.extend(L_i_0_x_1);
-    let setups = vec![(setup, vec![T_x_2], Vec::new())];
-    setups.serialize_uncompressed(File::create(file_path).unwrap()).unwrap();
-    return setups.first().unwrap().clone();
+    return (setup, vec![T_x_2], Vec::new());
   }
 
   fn prove(

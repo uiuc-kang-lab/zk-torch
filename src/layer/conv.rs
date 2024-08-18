@@ -197,12 +197,12 @@ macro_rules! create_conv_layer {
         let matmul = graph.addBB(Box::new(MatMulBasicBlock {}));
 
         let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-          input_SF: onnx::SF_LOG * 2,
-          output_SF: onnx::SF_LOG,
+          input_SF: *onnx::SF_LOG * 2,
+          output_SF: *onnx::SF_LOG,
         }));
         let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
           basic_block: Box::new(CQBasicBlock {
-            setup: Array1::from_iter(onnx::CQ_RANGE_LOWER..-onnx::CQ_RANGE_LOWER).map(|x| Fr::from(*x)),
+            setup: Array1::from_iter(*onnx::CQ_RANGE_LOWER..-*onnx::CQ_RANGE_LOWER).map(|x| Fr::from(*x)),
           }),
           N: 1,
         }));

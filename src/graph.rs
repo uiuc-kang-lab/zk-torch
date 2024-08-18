@@ -1,16 +1,18 @@
 #![allow(dead_code)]
 use crate::basic_block::*;
 use crate::util;
+use crate::{CONFIG, LAYER_SETUP_DIR};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_poly::univariate::DensePolynomial;
-use ark_serialize::CanonicalSerialize;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::Zero;
 use ndarray::ArrayD;
 use plonky2::{timed, util::timing::TimingTree};
 use rand::rngs::StdRng;
 use std::collections::HashMap;
+use std::fs::File;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
@@ -90,7 +92,27 @@ impl Graph {
       .enumerate()
       .map(|(i, (b, m))| {
         println!("setting up {:?} {:?}", i, b);
-        b.setup(srs, *m)
+        let bb_name = format!("{b:?}");
+        let save_cq_layer_setup = CONFIG.prover.enable_layer_setup && (bb_name.contains("CQ2BasicBlock") || bb_name.contains("CQBasicBlock"));
+        if save_cq_layer_setup {
+          let file_name = format!("{}.setup", util::hash_str(&format!("{bb_name:?}")));
+          let file_path = format!("{}/{}", *LAYER_SETUP_DIR, file_name);
+          if util::file_exists(&file_path) {
+            println!("CQ setup exists: Loading layer setup from file: {}", file_path);
+            let setups =
+              Vec::<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)>::deserialize_uncompressed(File::open(&file_path).unwrap())
+                .unwrap();
+            return setups.first().unwrap().clone();
+          }
+        }
+        let setup = b.setup(srs, *m);
+        let setups = vec![setup];
+        if save_cq_layer_setup {
+          let file_name = format!("{}.setup", util::hash_str(&format!("{bb_name:?}")));
+          let file_path = format!("{}/{}", *LAYER_SETUP_DIR, file_name);
+          setups.serialize_uncompressed(File::create(file_path).unwrap()).unwrap();
+        }
+        return setups.first().unwrap().clone();
       })
       .collect()
   }

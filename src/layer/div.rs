@@ -29,7 +29,7 @@ macro_rules! create_division_layer {
 
           // Convert the constant to a floating-point number
           let c_value = util::fr_to_int(*c.first().unwrap()) as f32;
-          let c_value = if $output_idx == 0 { c_value / onnx::SF_FLOAT as f32 } else { c_value };
+          let c_value = if $output_idx == 0 { c_value / *onnx::SF_FLOAT as f32 } else { c_value };
 
           // Add a basic block for division/modulo by a constant
           let const_block = graph.addBB(Box::new($const_block { c: c_value as _ }));
@@ -37,7 +37,7 @@ macro_rules! create_division_layer {
           // Add a basic block for range checking with custom setup
           let const_check = graph.addBB(Box::new(RepeaterBasicBlock {
             basic_block: Box::new(CQ2BasicBlock {
-              setup: Some((Box::new($const_block { c: c_value as _ }), onnx::CQ_RANGE_LOWER, onnx::CQ_RANGE)),
+              setup: Some((Box::new($const_block { c: c_value as _ }), *onnx::CQ_RANGE_LOWER, *onnx::CQ_RANGE)),
             }),
             N: 1,
           }));
@@ -60,21 +60,21 @@ macro_rules! create_division_layer {
 
         // Create a basic block for division with scalar values
         let div = graph.addBB(Box::new(RepeaterBasicBlock {
-          basic_block: Box::new(DivScalarBasicBlock { output_SF: onnx::SF }),
+          basic_block: Box::new(DivScalarBasicBlock { output_SF: *onnx::SF }),
           N: 1,
         }));
 
         // Add a range check basic block for ensuring the remainder is non-negative
         let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
           basic_block: Box::new(CQBasicBlock {
-            setup: Array1::from_iter(0..-onnx::CQ_RANGE_LOWER).map(|x| Fr::from(*x as i32)),
+            setup: Array1::from_iter(0..-*onnx::CQ_RANGE_LOWER).map(|x| Fr::from(*x as i32)),
           }),
           N: 1,
         }));
 
         // Create basic blocks for multiplication by constants and scalars
         let mul_SF2 = graph.addBB(Box::new(RepeaterBasicBlock {
-          basic_block: Box::new(MulConstBasicBlock { c: onnx::SF * 2 }),
+          basic_block: Box::new(MulConstBasicBlock { c: *onnx::SF * 2 }),
           N: 1,
         }));
 

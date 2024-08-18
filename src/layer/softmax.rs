@@ -16,18 +16,18 @@ impl Layer for SoftmaxLayer {
       N: 1,
     }));
     let exp = graph.addBB(Box::new(ExpBasicBlock {
-      input_SF: onnx::SF_LOG,
-      output_SF: onnx::SF_LOG,
+      input_SF: *onnx::SF_LOG,
+      output_SF: *onnx::SF_LOG,
     }));
     let exp_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(ExpBasicBlock {
-            input_SF: onnx::SF_LOG,
-            output_SF: onnx::SF_LOG,
+            input_SF: *onnx::SF_LOG,
+            output_SF: *onnx::SF_LOG,
           }),
-          -(onnx::CQ_RANGE as i32),
-          onnx::CQ_RANGE,
+          -(*onnx::CQ_RANGE as i32),
+          *onnx::CQ_RANGE,
         )),
       }),
       N: 1,
@@ -37,18 +37,18 @@ impl Layer for SoftmaxLayer {
       N: 1,
     }));
     let log = graph.addBB(Box::new(LogBasicBlock {
-      input_SF: onnx::SF_LOG,
-      output_SF: onnx::SF_LOG,
+      input_SF: *onnx::SF_LOG,
+      output_SF: *onnx::SF_LOG,
     }));
     let log_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(LogBasicBlock {
-            input_SF: onnx::SF_LOG,
-            output_SF: onnx::SF_LOG,
+            input_SF: *onnx::SF_LOG,
+            output_SF: *onnx::SF_LOG,
           }),
           0,
-          onnx::CQ_RANGE,
+          *onnx::CQ_RANGE,
         )),
       }),
       N: 1,

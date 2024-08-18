@@ -35,7 +35,9 @@ impl Layer for MaxLayer {
         padding_partitions,
       }));
       let max = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(MaxProofBasicBlock {}),
+        basic_block: Box::new(MaxProofBasicBlock {
+          cq_range_lower: *onnx::CQ_RANGE_LOWER,
+        }),
         N: 1,
       }));
       let reshape_shape = &vec![input_shapes[0].iter().product(), 1];
@@ -99,14 +101,16 @@ impl Layer for MinLayer {
 
       let neg = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(NegBasicBlock {
-          input_SF: onnx::SF,
-          output_SF: onnx::SF,
+          input_SF: *onnx::SF,
+          output_SF: *onnx::SF,
         }),
         N: 1,
       }));
 
       let max = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(MaxProofBasicBlock {}),
+        basic_block: Box::new(MaxProofBasicBlock {
+          cq_range_lower: *onnx::CQ_RANGE_LOWER,
+        }),
         N: 1,
       }));
 

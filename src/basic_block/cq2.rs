@@ -31,15 +31,6 @@ impl BasicBlock for CQ2BasicBlock {
   }
 
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
-    let file_name = format!("{}.setup", util::hash_str(&format!("{self:?}")));
-    let file_path = format!("layer_setup/{}", file_name);
-    if util::file_exists(&file_path) {
-      println!("CQ2: Loading layer setup from file: {}", file_path);
-      let setups =
-        Vec::<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)>::deserialize_uncompressed(File::open(&file_path).unwrap()).unwrap();
-      return setups.first().unwrap().clone();
-    }
-
     assert!(model.ndim() == 1 && model.len() == 2);
     let N = model[0].raw.len();
     let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
@@ -72,9 +63,7 @@ impl BasicBlock for CQ2BasicBlock {
 
     setup.extend(L_i_x_1);
     setup.extend(L_i_0_x_1);
-    let setups = vec![(setup, setup2, Vec::new())];
-    setups.serialize_uncompressed(File::create(file_path).unwrap()).unwrap();
-    return setups.first().unwrap().clone();
+    return (setup, setup2, Vec::new());
   }
 
   fn prove(

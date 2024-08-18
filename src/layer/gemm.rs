@@ -64,27 +64,27 @@ impl Layer for GemmLayer {
       N: 2,
     }));
     let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-      input_SF: onnx::SF_LOG * 2,
-      output_SF: onnx::SF_LOG,
+      input_SF: *onnx::SF_LOG * 2,
+      output_SF: *onnx::SF_LOG,
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(ChangeSFBasicBlock {
-            input_SF: onnx::SF_LOG * 2,
-            output_SF: onnx::SF_LOG,
+            input_SF: *onnx::SF_LOG * 2,
+            output_SF: *onnx::SF_LOG,
           }),
-          onnx::CQ_RANGE_LOWER,
-          onnx::CQ_RANGE,
+          *onnx::CQ_RANGE_LOWER,
+          *onnx::CQ_RANGE,
         )),
       }),
       N: 1,
     }));
     let alpha = graph.addBB(Box::new(Const2BasicBlock {
-      c: arr1(&vec![Fr::from((alpha * onnx::SF_FLOAT) as i64)]).into_dyn(),
+      c: arr1(&vec![Fr::from((alpha * *onnx::SF_FLOAT) as i64)]).into_dyn(),
     }));
     let beta = graph.addBB(Box::new(Const2BasicBlock {
-      c: arr1(&vec![Fr::from((beta * onnx::SF_FLOAT) as i64)]).into_dyn(),
+      c: arr1(&vec![Fr::from((beta * *onnx::SF_FLOAT) as i64)]).into_dyn(),
     }));
 
     let M_pad = util::next_pow(M as u32) as usize;

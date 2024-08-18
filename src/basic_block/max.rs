@@ -31,16 +31,18 @@ impl BasicBlock for MaxBasicBlock {
 }
 
 #[derive(Debug)]
-pub struct MaxProofBasicBlock;
+pub struct MaxProofBasicBlock {
+  pub cq_range_lower: i32,
+}
 
 // This max includes a proof. The first output is the max and second output is a vector of max - x for all input values x. The second output is needed because it is necessary to perform a range check on the second output.
 impl BasicBlock for MaxProofBasicBlock {
   // Returns the max of the input and max - x for all x in input
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(inputs.len() == 1 && inputs[0].ndim() == 1);
-    let cq_max = Fr::from(-onnx::CQ_RANGE_LOWER);
+    let cq_max = Fr::from(-self.cq_range_lower);
     let max_arr = inputs[0]
-      .fold_axis(Axis(0), Fr::from(onnx::CQ_RANGE_LOWER), |max, y| {
+      .fold_axis(Axis(0), Fr::from(self.cq_range_lower), |max, y| {
         if (*y < cq_max && *y > *max) || (*max > cq_max && *y < cq_max) || (*y > cq_max && *max > cq_max && *y > *max) {
           *y
         } else {

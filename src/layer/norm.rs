@@ -50,7 +50,7 @@ impl Layer for BatchNormLayer {
       // epsilon is not provided, use the default value
       1e-5
     };
-    epsilon *= onnx::SF_FLOAT;
+    epsilon *= *onnx::SF_FLOAT;
 
     let epsilon = graph.addBB(Box::new(Const2BasicBlock {
       c: arr1(&vec![Fr::from(epsilon.round() as i32)]).into_dyn(),
@@ -77,52 +77,52 @@ impl Layer for BatchNormLayer {
       N: 1,
     }));
     let sqrt = graph.addBB(Box::new(SqrtBasicBlock {
-      input_SF: onnx::SF_LOG * 2,
-      output_SF: onnx::SF_LOG,
+      input_SF: *onnx::SF_LOG * 2,
+      output_SF: *onnx::SF_LOG,
     }));
     let sqrt_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(SqrtBasicBlock {
-            input_SF: onnx::SF_LOG * 2,
-            output_SF: onnx::SF_LOG,
+            input_SF: *onnx::SF_LOG * 2,
+            output_SF: *onnx::SF_LOG,
           }),
-          onnx::CQ_RANGE_LOWER,
-          onnx::CQ_RANGE,
+          *onnx::CQ_RANGE_LOWER,
+          *onnx::CQ_RANGE,
         )),
       }),
       N: 1,
     }));
     let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-      input_SF: onnx::SF_LOG * 2,
-      output_SF: onnx::SF_LOG,
+      input_SF: *onnx::SF_LOG * 2,
+      output_SF: *onnx::SF_LOG,
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(ChangeSFBasicBlock {
-            input_SF: onnx::SF_LOG * 2,
-            output_SF: onnx::SF_LOG,
+            input_SF: *onnx::SF_LOG * 2,
+            output_SF: *onnx::SF_LOG,
           }),
-          onnx::CQ_RANGE_LOWER,
-          onnx::CQ_RANGE,
+          *onnx::CQ_RANGE_LOWER,
+          *onnx::CQ_RANGE,
         )),
       }),
       N: 1,
     }));
 
     let div = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(DivScalarBasicBlock { output_SF: onnx::SF }),
+      basic_block: Box::new(DivScalarBasicBlock { output_SF: *onnx::SF }),
       N: 1,
     }));
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
-        setup: Array1::from_iter(0..onnx::CQ_RANGE).map(|x| Fr::from(*x as i32)),
+        setup: Array1::from_iter(0..*onnx::CQ_RANGE).map(|x| Fr::from(*x as i32)),
       }),
       N: 1,
     }));
     let mul_SF2 = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MulConstBasicBlock { c: onnx::SF * 2 }),
+      basic_block: Box::new(MulConstBasicBlock { c: *onnx::SF * 2 }),
       N: 1,
     }));
     let mul_2 = graph.addBB(Box::new(RepeaterBasicBlock {
@@ -243,7 +243,7 @@ impl Layer for InstanceNormLayer {
       // epsilon is not provided, use the default value
       1e-5
     };
-    epsilon *= onnx::SF_FLOAT;
+    epsilon *= *onnx::SF_FLOAT;
 
     // X_shape_for_mean: [N, C, D1 * D2 * ... * DN]
     let x_shape_for_mean = vec![
@@ -273,8 +273,8 @@ impl Layer for InstanceNormLayer {
           Box::new(DivConstBasicBlock {
             c: X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y) as f32,
           }),
-          onnx::CQ_RANGE_LOWER,
-          onnx::CQ_RANGE,
+          *onnx::CQ_RANGE_LOWER,
+          *onnx::CQ_RANGE,
         )),
       }),
       N: 1,
@@ -315,52 +315,52 @@ impl Layer for InstanceNormLayer {
       N: 1,
     }));
     let sqrt = graph.addBB(Box::new(SqrtBasicBlock {
-      input_SF: onnx::SF_LOG * 2,
-      output_SF: onnx::SF_LOG,
+      input_SF: *onnx::SF_LOG * 2,
+      output_SF: *onnx::SF_LOG,
     }));
     let sqrt_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(SqrtBasicBlock {
-            input_SF: onnx::SF_LOG * 2,
-            output_SF: onnx::SF_LOG,
+            input_SF: *onnx::SF_LOG * 2,
+            output_SF: *onnx::SF_LOG,
           }),
-          onnx::CQ_RANGE_LOWER,
-          onnx::CQ_RANGE,
+          *onnx::CQ_RANGE_LOWER,
+          *onnx::CQ_RANGE,
         )),
       }),
       N: 1,
     }));
     let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-      input_SF: onnx::SF_LOG * 2,
-      output_SF: onnx::SF_LOG,
+      input_SF: *onnx::SF_LOG * 2,
+      output_SF: *onnx::SF_LOG,
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(ChangeSFBasicBlock {
-            input_SF: onnx::SF_LOG * 2,
-            output_SF: onnx::SF_LOG,
+            input_SF: *onnx::SF_LOG * 2,
+            output_SF: *onnx::SF_LOG,
           }),
-          onnx::CQ_RANGE_LOWER,
-          onnx::CQ_RANGE,
+          *onnx::CQ_RANGE_LOWER,
+          *onnx::CQ_RANGE,
         )),
       }),
       N: 1,
     }));
 
     let div = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(DivScalarBasicBlock { output_SF: onnx::SF }),
+      basic_block: Box::new(DivScalarBasicBlock { output_SF: *onnx::SF }),
       N: 1,
     }));
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
-        setup: Array1::from_iter(0..onnx::CQ_RANGE).map(|x| Fr::from(*x as i32)),
+        setup: Array1::from_iter(0..*onnx::CQ_RANGE).map(|x| Fr::from(*x as i32)),
       }),
       N: 1,
     }));
     let mul_SF2 = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MulConstBasicBlock { c: onnx::SF * 2 }),
+      basic_block: Box::new(MulConstBasicBlock { c: *onnx::SF * 2 }),
       N: 1,
     }));
     let mul_2 = graph.addBB(Box::new(RepeaterBasicBlock {

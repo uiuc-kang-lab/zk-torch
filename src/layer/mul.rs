@@ -20,18 +20,18 @@ impl Layer for MulLayer {
       N: 1,
     }));
     let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-      input_SF: onnx::SF_LOG * 2,
-      output_SF: onnx::SF_LOG,
+      input_SF: *onnx::SF_LOG * 2,
+      output_SF: *onnx::SF_LOG,
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(ChangeSFBasicBlock {
-            input_SF: onnx::SF_LOG * 2,
-            output_SF: onnx::SF_LOG,
+            input_SF: *onnx::SF_LOG * 2,
+            output_SF: *onnx::SF_LOG,
           }),
-          onnx::CQ_RANGE_LOWER,
-          onnx::CQ_RANGE,
+          *onnx::CQ_RANGE_LOWER,
+          *onnx::CQ_RANGE,
         )),
       }),
       N: 1,

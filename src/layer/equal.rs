@@ -35,7 +35,7 @@ impl Layer for EqualLayer {
       N: 1,
     }));
 
-    let r: Vec<_> = (onnx::CQ_RANGE_LOWER..-onnx::CQ_RANGE_LOWER + 1).filter(|&x| x != 0).map(Fr::from).collect();
+    let r: Vec<_> = (*onnx::CQ_RANGE_LOWER..-*onnx::CQ_RANGE_LOWER + 1).filter(|&x| x != 0).map(Fr::from).collect();
     let nonzero_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock { setup: arr1(&r) }),
       N: 1,

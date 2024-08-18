@@ -59,8 +59,8 @@ impl Layer for ReduceMeanLayer {
           Box::new(DivConstBasicBlock {
             c: input_shapes[0][input_shapes[0].len() - 1] as f32,
           }),
-          onnx::CQ_RANGE_LOWER,
-          onnx::CQ_RANGE,
+          *onnx::CQ_RANGE_LOWER,
+          *onnx::CQ_RANGE,
         )),
       }),
       N: 1,

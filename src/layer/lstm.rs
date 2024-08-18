@@ -113,18 +113,18 @@ impl Layer for LSTMLayer {
         N: 2,
       }));
       let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-        input_SF: onnx::SF_LOG * 2,
-        output_SF: onnx::SF_LOG,
+        input_SF: *onnx::SF_LOG * 2,
+        output_SF: *onnx::SF_LOG,
       }));
       let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
           setup: Some((
             Box::new(ChangeSFBasicBlock {
-              input_SF: onnx::SF_LOG * 2,
-              output_SF: onnx::SF_LOG,
+              input_SF: *onnx::SF_LOG * 2,
+              output_SF: *onnx::SF_LOG,
             }),
-            onnx::CQ_RANGE_LOWER,
-            onnx::CQ_RANGE,
+            *onnx::CQ_RANGE_LOWER,
+            *onnx::CQ_RANGE,
           )),
         }),
         N: 1,
@@ -190,18 +190,18 @@ impl Layer for LSTMLayer {
 
       // sublayer 11: Sigmoid for input gate
       let sigmoid = graph.addBB(Box::new(SigmoidBasicBlock {
-        input_SF: onnx::SF_LOG * 2,
-        output_SF: onnx::SF_LOG,
+        input_SF: *onnx::SF_LOG * 2,
+        output_SF: *onnx::SF_LOG,
       }));
       let sigmoid_check = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
           setup: Some((
             Box::new(SigmoidBasicBlock {
-              input_SF: onnx::SF_LOG * 2,
-              output_SF: onnx::SF_LOG,
+              input_SF: *onnx::SF_LOG * 2,
+              output_SF: *onnx::SF_LOG,
             }),
-            onnx::CQ_RANGE_LOWER,
-            onnx::CQ_RANGE,
+            *onnx::CQ_RANGE_LOWER,
+            *onnx::CQ_RANGE,
           )),
         }),
         N: 1,
@@ -219,18 +219,18 @@ impl Layer for LSTMLayer {
 
       // sublayer 14: Tanh for candidate memory
       let tanh = graph.addBB(Box::new(TanhBasicBlock {
-        input_SF: onnx::SF_LOG * 2,
-        output_SF: onnx::SF_LOG,
+        input_SF: *onnx::SF_LOG * 2,
+        output_SF: *onnx::SF_LOG,
       }));
       let tanh_check = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
           setup: Some((
             Box::new(TanhBasicBlock {
-              input_SF: onnx::SF_LOG * 2,
-              output_SF: onnx::SF_LOG,
+              input_SF: *onnx::SF_LOG * 2,
+              output_SF: *onnx::SF_LOG,
             }),
-            onnx::CQ_RANGE_LOWER,
-            onnx::CQ_RANGE,
+            *onnx::CQ_RANGE_LOWER,
+            *onnx::CQ_RANGE,
           )),
         }),
         N: 1,
