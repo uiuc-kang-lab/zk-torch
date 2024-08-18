@@ -75,7 +75,9 @@ fn parse_onnx_constants<'a>(
       DatumType::F32 => {
         let tensor = tensor.into_array::<f32>().unwrap();
         Ok(tensor.map(|x| {
+          // handle the case where the constant is very close to zero (i.e., epsilon to prevent division by zero)
           if *x < 1e-10 && *x > 0.0 {
+            // the reason we use 1 here is because it is the smallest positive value that can be represented in the field
             return Fr::from(1);
           }
           let mut y = (*x * SF_FLOAT).round();
