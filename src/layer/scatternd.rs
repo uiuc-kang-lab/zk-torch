@@ -83,12 +83,12 @@ impl Layer for ScatterNDLayer {
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation_preserve,
       input_dim: IxDyn(&input_shape_0_padded),
-      padding_partitions: copy_constraint::PaddingEnum::Zero,
+      padding_partition: copy_constraint::PaddingEnum::Zero,
     }));
     let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation_update,
       input_dim: IxDyn(&input_shape_2_padded),
-      padding_partitions: copy_constraint::PaddingEnum::Zero,
+      padding_partition: copy_constraint::PaddingEnum::Zero,
     }));
     let add = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(AddBasicBlock {}),
