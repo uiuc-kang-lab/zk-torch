@@ -5,7 +5,6 @@ use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{evaluations::univariate::Evaluations, univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{
   ops::{Mul, Sub},
   One, UniformRand, Zero,
@@ -14,7 +13,6 @@ use ndarray::ArrayD;
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
-use std::fs::File;
 
 #[derive(Debug)]
 pub struct CQ2BasicBlock {
