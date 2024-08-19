@@ -186,10 +186,6 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let last_outp_dim = output_dim[output_dim.ndim() - 1];
     let N = max(last_inp_dim, last_outp_dim);
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
-    let mut L_i_x_1 = srs.X1P[..N].to_vec();
-    util::ifft_in_place(domain, &mut L_i_x_1);
-    let mut L_i_x_2 = srs.X2P[..N].to_vec();
-    util::ifft_in_place(domain, &mut L_i_x_2);
 
     // Indices of the output permutation elements
     // Offset output indices by the size of the input shape
@@ -261,21 +257,9 @@ impl BasicBlock for CopyConstraintBasicBlock {
     );
     let ssig_polys: Vec<_> = ssig.iter().map(|x| DensePolynomial::from_coefficients_vec(domain.ifft(x))).collect();
 
-    // Get Lagrange basis from first None element
-    let mut none_idx = 0;
-    for i in indices(self.permutation.shape()) {
-      let idx = i.clone();
-      if self.permutation[i].is_none() {
-        none_idx = N / last_outp_dim * idx[self.permutation.shape().len() - 1];
-        break;
-      }
-    }
+    let ssig_xs: Vec<_> = ssig_polys.iter().map(|x| util::msm::<G1Projective>(&srs.X1A, &x.coeffs)).collect();
 
-    let mut ssig_xs: Vec<_> = ssig_polys.iter().map(|x| util::msm::<G1Projective>(&srs.X1A, &x.coeffs)).collect();
-    let mut proof_0 = vec![L_i_x_1[0], L_i_x_1[none_idx]];
-    proof_0.append(&mut ssig_xs);
-
-    return (proof_0, vec![L_i_x_2[0], L_i_x_2[none_idx]], ssig_polys);
+    return (ssig_xs, vec![], ssig_polys);
   }
 
   fn prove(
@@ -504,11 +488,11 @@ impl BasicBlock for CopyConstraintBasicBlock {
     proof.append(&mut vec![W_x, W_gx]);
     proof.push(srs.X1P[0] * (r * (zeta_pows[N - 1] - Fr::one())));
 
-    let mut ssig_xs = setup.0[2..].iter().map(|x| Into::<G1Projective>::into(*x)).collect();
+    let mut ssig_xs = setup.0.iter().map(|x| Into::<G1Projective>::into(*x)).collect();
     proof.append(&mut ssig_xs);
     proof.append(&mut fj_xs);
 
-    return (proof, vec![setup.1[0].into(), setup.1[1].into()], evals);
+    return (proof, vec![], evals);
   }
 
   fn verify(
