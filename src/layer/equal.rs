@@ -12,7 +12,7 @@ impl Layer for EqualLayer {
   fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let one = graph.addBB(Box::new(Const2BasicBlock {
-      c: arr1(&vec![Fr::from(1); *input_shapes[0].last().unwrap()]).into_dyn(),
+      c: arr1(&vec![Fr::from(1); util::next_pow(*input_shapes[0].last().unwrap() as u32) as usize]).into_dyn(),
     }));
     let sub = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(SubBasicBlock {}),

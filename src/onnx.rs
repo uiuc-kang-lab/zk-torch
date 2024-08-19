@@ -77,6 +77,11 @@ fn parse_onnx_constants<'a>(
       DatumType::F32 => {
         let tensor = tensor.into_array::<f32>().unwrap();
         Ok(tensor.map(|x| {
+          // handle the case where the constant is very close to zero (i.e., epsilon to prevent division by zero)
+          if *x < 1e-10 && *x > 0.0 {
+            // the reason we use 1 here is because it is the smallest positive value that can be represented in the field
+            return Fr::from(1);
+          }
           let mut y = (*x * *SF_FLOAT).round();
           y = y.clamp(-(1 << 15) as f32, (1 << 15) as f32);
           Fr::from(y as i32)
@@ -241,7 +246,8 @@ fn update_graph_w_local_graph(
         })
         .collect(),
     });
-    graph.layer_names.push(format!("Op {}", node.name.clone()));
+    let name = if node.name.clone() == "" { node.op_type.to_string() } else { node.name.clone() };
+    graph.layer_names.push(format!("Op {}", name));
   }
   // tracking output_idx of local_graph
   for (i, output) in node.output.iter().enumerate() {
@@ -281,7 +287,7 @@ fn process_node(
     node.output.iter().zip(local_graph.outputs.iter()).for_each(|(output_str, &(nodeX, nodeY))| {
       passed_constants.insert(
         output_str.to_string(),
-        util::pad_to_pow_of_two(&outputs[nodeX as usize][nodeY].clone(), &Fr::zero()),
+        outputs[nodeX as usize][nodeY].clone(),
       );
     });
   }

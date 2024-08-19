@@ -36,24 +36,33 @@ pub struct RangeConstBasicBlock {
 }
 impl BasicBlock for RangeConstBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    let element_num = max(0, ((self.limit - self.start) + self.delta - 1) / self.delta);
     let mut r = vec![];
     let mut x = self.start;
     while x < self.limit {
       r.push(Fr::from(x));
       x += self.delta;
     }
+    let element_num_pad = util::next_pow(element_num as u32) as usize;
+    while r.len() < element_num_pad {
+      r.push(Fr::zero());
+    }
     vec![arr1(&r).into_dyn()]
   }
 
   fn setup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     let element_num = max(0, ((self.limit - self.start) + self.delta - 1) / self.delta);
-    let domain = GeneralEvaluationDomain::<Fr>::new(element_num as usize).unwrap();
+    let element_num_pad = util::next_pow(element_num as u32) as usize;
+    let domain = GeneralEvaluationDomain::<Fr>::new(element_num_pad.clone() as usize).unwrap();
 
     let mut r = vec![];
     let mut x = self.start;
     while x < self.limit {
       r.push(Fr::from(x));
       x += self.delta;
+    }
+    while r.len() < element_num_pad {
+      r.push(Fr::zero());
     }
     let range_poly = DensePolynomial::from_coefficients_vec(domain.ifft(&r));
     let range_x = util::msm::<G1Projective>(&srs.X1A, &range_poly.coeffs);

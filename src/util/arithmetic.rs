@@ -25,6 +25,9 @@ pub fn calc_pow(alpha: Fr, n: usize) -> Vec<Fr> {
 }
 
 pub fn next_pow(n: u32) -> u32 {
+  if n == 0 {
+    return 1;
+  }
   let mut v = n;
   v -= 1;
   v |= v >> 1;

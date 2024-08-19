@@ -4,7 +4,6 @@ use crate::layer::Layer;
 use crate::util;
 use ark_bn254::Fr;
 use ndarray::{ArrayD, IxDyn};
-use std::collections::HashMap;
 use tract_onnx::pb::AttributeProto;
 
 fn combinations<T: Clone>(vecs: &Vec<Vec<T>>) -> Vec<Vec<T>> {
@@ -35,7 +34,6 @@ fn get_slice(
 ) -> (ArrayD<Option<IxDyn>>, Vec<usize>, Vec<usize>) {
   let rank = input_dim.len();
   let mut result_idx = vec![vec![]; rank];
-  let mut result_shape = vec![0; rank];
   let mut real_output_shape = vec![0; rank];
   let mut real_ends = ends.clone();
 
@@ -57,24 +55,21 @@ fn get_slice(
   for (i, &axis) in axes.iter().enumerate() {
     let step = steps[i];
     let mut start = starts[i];
-    let mut end = ends[i];
+    let end = ends[i];
     let mut real_end = real_ends[i];
     if end > input_shape_pad[i] {
-      end = input_shape_pad[i];
       real_end = input_dim[i];
     }
-    while start < end {
+    while start < real_end {
       result_idx[axis].push(start);
-      result_shape[axis] += 1;
-      if start < real_end {
-        real_output_shape[axis] += 1;
-      }
+      real_output_shape[axis] += 1;
       start += step;
     }
   }
   let combination_result = combinations(&result_idx);
   let f = combination_result.iter().map(|v| Some(IxDyn(v))).collect();
-  let result = ArrayD::from_shape_vec(result_shape, f).unwrap();
+  let result = ArrayD::from_shape_vec(real_output_shape.clone(), f).unwrap();
+  let result = util::pad_to_pow_of_two(&result, &None);
   (result, real_output_shape, input_shape_pad)
 }
 
@@ -128,7 +123,6 @@ impl Layer for SliceLayer {
       .collect();
 
     let (permutation, output_shape, input_shape_pad) = get_slice(&input_shapes[0], &mut starts, &mut ends, &mut axes, &mut steps);
-
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation,
       input_dim: IxDyn(&input_shape_pad),

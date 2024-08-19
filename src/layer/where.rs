@@ -1,6 +1,7 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
+use crate::util;
 use ark_bn254::Fr;
 use ndarray::{arr1, ArrayD};
 use tract_onnx::pb::AttributeProto;
@@ -20,7 +21,7 @@ impl Layer for WhereLayer {
       N: 1,
     }));
     let one = graph.addBB(Box::new(Const2BasicBlock {
-      c: arr1(&vec![Fr::from(1); *input_shapes[0].last().unwrap()]).into_dyn(),
+      c: arr1(&vec![Fr::from(1); util::next_pow(*input_shapes[0].last().unwrap() as u32) as usize]).into_dyn(),
     }));
     let add = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(AddBasicBlock {}),

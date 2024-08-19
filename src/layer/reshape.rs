@@ -34,9 +34,10 @@ impl Layer for ReshapeLayer {
       graph.outputs.push((unsq_output, 0));
     } else {
       let permutation = get_reshape_indices(startShape.clone(), endShape.clone());
+      let startShape_padded: Vec<_> = startShape.iter().map(|x| util::next_pow(*x as u32) as usize).collect();
       let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
         permutation: permutation.clone(),
-        input_dim: IxDyn(&startShape),
+        input_dim: IxDyn(&startShape_padded),
         padding_partition: copy_constraint::PaddingEnum::Zero,
       }));
       let output = graph.addNode(cc, vec![(-1, 0)]);

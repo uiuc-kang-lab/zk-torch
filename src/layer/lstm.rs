@@ -4,6 +4,7 @@ use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
+use ark_std::Zero;
 use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;
 
@@ -35,7 +36,7 @@ impl Layer for LSTMLayer {
 
     let mut graph = Graph::new();
     // sublayer 1: Split X to X_t
-    let split = vec![1; seq_length];
+    let split = vec![1; util::next_pow(seq_length as u32) as usize];
     let split_X_bb = graph.addBB(Box::new(SplitBasicBlock {
       axis: 0,
       split: split.clone(),
@@ -276,7 +277,17 @@ impl Layer for LSTMLayer {
       H_list.push(H_t);
     }
 
-    // sublayer 21: Concat H_list
+    for _t in 0..util::next_pow(seq_length as u32) as usize - seq_length {
+      // sublayer 21: Pad H_t with zeros
+      let constantOfShape = graph.addBB(Box::new(ConstOfShapeBasicBlock {
+        c: Fr::zero(),
+        shape: vec![1, num_directions, batch_size, hidden_size].iter().map(|&x| util::next_pow(x as u32) as usize).collect(),
+      }));
+      let H_t_pad = graph.addNode(constantOfShape, vec![]);
+      H_list.push(H_t_pad);
+    }
+
+    // sublayer 22: Concat H_list
     let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: 0 }));
     let output = graph.addNode(concat, H_list.iter().map(|&H_t| (H_t, 0)).collect());
 

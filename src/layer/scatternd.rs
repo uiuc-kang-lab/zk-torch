@@ -3,12 +3,14 @@ use crate::graph::*;
 use crate::layer::Layer;
 use crate::util;
 use ark_bn254::Fr;
-use ndarray::{ArrayD, Dim, IxDyn};
+use ndarray::{ArrayD, Axis, Dim, IxDyn};
 use tract_onnx::pb::AttributeProto;
 
 fn get_masks(input_shape: &[usize], indices: &ArrayD<Fr>) -> (ArrayD<Option<IxDyn>>, ArrayD<Option<IxDyn>>) {
-  let mut preserve = ArrayD::from_shape_fn(input_shape, |index| Some(index));
-  let mut update = ArrayD::from_shape_fn(input_shape, |_| None);
+  let preserve = ArrayD::from_shape_fn(input_shape, |index| Some(index));
+  let update = ArrayD::from_shape_fn(input_shape, |_| None);
+  let mut preserve = util::pad_to_pow_of_two(&preserve, &None);
+  let mut update = util::pad_to_pow_of_two(&update, &None);
   let indices_usize = indices.map(|x| util::fr_to_int(*x) as usize);
   let indices_shape = indices.shape();
   let update_indices = &indices_shape[..indices_shape.len() - 1];
@@ -16,11 +18,38 @@ fn get_masks(input_shape: &[usize], indices: &ArrayD<Fr>) -> (ArrayD<Option<IxDy
   let mut current_index = vec![];
   let mut all_indices = vec![];
   ndindex(update_indices, &mut current_index, &mut all_indices);
+  let update_indices = indices_usize.lanes(Axis(indices_usize.ndim() - 1));
+  for (idx, update_idx) in all_indices.iter().zip(update_indices) {
+    if update_idx.len() > input_shape.len() {
+      // use only the first n elements of update_idx, where n is the length of input_shape
+      let mut new_update_idx = update_idx.to_vec();
+      new_update_idx.truncate(input_shape.len());
+      let copy_update_idx = Dim(new_update_idx.to_vec());
+      let copy_idx = Dim(idx.clone());
+      preserve[copy_update_idx.clone()] = None;
+      update[copy_update_idx] = Some(copy_idx.clone());
+    } else if update_idx.len() < input_shape.len() {
+      let input_shape_extra_dims = input_shape[input_shape.len() - update_idx.len()..].to_vec();
+      let mut current_index = vec![];
+      let mut extra_indices = vec![];
+      ndindex(&input_shape_extra_dims, &mut current_index, &mut extra_indices);
+      for extra_idx in extra_indices {
+        // concat the extra indices to the update_idx
+        let mut new_update_idx = update_idx.to_vec();
+        new_update_idx.extend(extra_idx.clone());
+        let copy_update_idx = Dim(new_update_idx.to_vec());
+        // concat the extra indices to the idx
+        let mut new_idx = idx.to_vec();
+        new_idx.extend(extra_idx);
+        let copy_idx = Dim(new_idx.to_vec());
 
-  for idx in all_indices {
-    let update_index = indices_usize[Dim(idx.clone())];
-    preserve[Dim(update_index)] = None;
-    update[Dim(update_index)] = Some(Dim(idx));
+        preserve[copy_update_idx.clone()] = None;
+        update[copy_update_idx] = Some(copy_idx.clone());
+      }
+    } else {
+      preserve[Dim(update_idx.to_vec())] = None;
+      update[Dim(update_idx.to_vec())] = Some(Dim(idx.clone()));
+    }
   }
 
   (preserve, update)
@@ -49,14 +78,16 @@ impl Layer for ScatterNDLayer {
     let indices = constants[1].unwrap();
 
     let (permutation_preserve, permutation_update) = get_masks(&input_shapes[0], &indices);
+    let input_shape_0_padded: Vec<_> = input_shapes[0].iter().map(|x| util::next_pow(*x as u32) as usize).collect();
+    let input_shape_2_padded: Vec<_> = input_shapes[2].iter().map(|x| util::next_pow(*x as u32) as usize).collect();
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation_preserve,
-      input_dim: IxDyn(&input_shapes[0]),
+      input_dim: IxDyn(&input_shape_0_padded),
       padding_partition: copy_constraint::PaddingEnum::Zero,
     }));
     let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation: permutation_update,
-      input_dim: IxDyn(&input_shapes[1]),
+      input_dim: IxDyn(&input_shape_2_padded),
       padding_partition: copy_constraint::PaddingEnum::Zero,
     }));
     let add = graph.addBB(Box::new(RepeaterBasicBlock {
