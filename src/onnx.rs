@@ -11,6 +11,7 @@ use pool::MaxPoolLayer;
 use std::collections::HashMap;
 use tract_onnx::pb;
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::Datum;
 use tract_onnx::prelude::{DatumType, Framework};
 use tract_onnx::tensor::load_tensor;
 
@@ -56,7 +57,7 @@ fn parse_onnx_constants<'a>(
 ) -> (
   impl Iterator<Item = (String, &'a pb::TensorProto)> + 'a,
   HashMap<String, usize>,
-  Vec<ArrayD<Fr>>,
+  Vec<(ArrayD<Fr>, DatumType)>,
 ) {
   let onnx = tract_onnx::onnx();
   let constants = onnx_graph.initializer.iter().map(|tensor| (tensor.name.clone(), tensor)).chain(
@@ -73,27 +74,30 @@ fn parse_onnx_constants<'a>(
 
   for (name, tensor) in constants.clone() {
     let tensor = load_tensor(&*onnx.provider, tensor, None).unwrap();
-    let tensor = match tensor.datum_type() {
+    let (tensor, data_type) = match tensor.datum_type() {
       DatumType::F32 => {
         let tensor = tensor.into_array::<f32>().unwrap();
-        Ok(tensor.map(|x| {
-          // handle the case where the constant is very close to zero (i.e., epsilon to prevent division by zero)
-          if *x < 1e-10 && *x > 0.0 {
-            // the reason we use 1 here is because it is the smallest positive value that can be represented in the field
-            return Fr::from(1);
-          }
-          let mut y = (*x * *SF_FLOAT).round();
-          y = y.clamp(-(1 << 15) as f32, (1 << 15) as f32);
-          Fr::from(y as i32)
-        }))
+        Ok((
+          tensor.map(|x| {
+            // handle the case where the constant is very close to zero (i.e., epsilon to prevent division by zero)
+            if *x < 1e-10 && *x > 0.0 {
+              // the reason we use 1 here is because it is the smallest positive value that can be represented in the field
+              return Fr::from(1);
+            }
+            let mut y = (*x * *SF_FLOAT).round();
+            y = y.clamp(-(1 << 15) as f32, (1 << 15) as f32);
+            Fr::from(y as i32)
+          }),
+          DatumType::F32,
+        ))
       }
       DatumType::I64 => {
         let tensor = tensor.into_array::<i64>().unwrap();
-        Ok(tensor.map(|x| Fr::from(*x)))
+        Ok((tensor.map(|x| Fr::from(*x)), DatumType::I64))
       }
       DatumType::Bool => {
         let tensor = tensor.into_array::<bool>().unwrap();
-        Ok(tensor.map(|x| Fr::from(*x as i32)))
+        Ok((tensor.map(|x| Fr::from(*x as i32)), DatumType::Bool))
       }
       _ => Err(format!("Unsupported constant type: {:?}", tensor.datum_type())),
     }
@@ -102,7 +106,7 @@ fn parse_onnx_constants<'a>(
     shapes.insert(name.clone(), tensor.shape().to_vec());
     let tensor = util::pad_to_pow_of_two(&tensor, &Fr::zero());
     constants_hashmap.insert(name.clone(), idx);
-    models.push(tensor);
+    models.push((tensor, data_type));
     idx += 1;
   }
 
@@ -133,7 +137,7 @@ fn create_output_indices<'a>(
 fn get_local_graph(
   op: &str,
   input_shapes: &Vec<&Vec<usize>>,
-  node_constants: &Vec<Option<&ArrayD<Fr>>>,
+  node_constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
   node_attributes: Vec<&AttributeProto>,
 ) -> (Graph, Vec<Vec<usize>>) {
   match op {
@@ -208,7 +212,7 @@ fn update_graph_w_local_graph(
   input_idx: &HashMap<String, usize>,
   outputs_idx: &mut HashMap<String, Vec<(i32, usize)>>,
   basic_blocks_idx: &mut HashMap<String, usize>,
-  models: &mut Vec<ArrayD<Fr>>,
+  models: &mut Vec<(ArrayD<Fr>, DatumType)>,
 ) {
   // pushing basicblocks and models in a local graph to update graph.basic_blocks and models
   let mut local_block_idx = vec![];
@@ -218,7 +222,7 @@ fn update_graph_w_local_graph(
     let idx = *basic_blocks_idx.entry(name).or_insert_with(|| graph.basic_blocks.len());
     local_block_idx.push(idx);
     if idx == graph.basic_blocks.len() {
-      models.push(basic_block.genModel());
+      models.push((basic_block.genModel(), DatumType::I64));
       graph.basic_blocks.push(basic_block);
     }
   }
@@ -246,7 +250,11 @@ fn update_graph_w_local_graph(
         })
         .collect(),
     });
-    let name = if node.name.clone() == "" { node.op_type.to_string() } else { node.name.clone() };
+    let name = if node.name.clone() == "" {
+      node.op_type.to_string()
+    } else {
+      node.name.clone()
+    };
     graph.layer_names.push(format!("Op {}", name));
   }
   // tracking output_idx of local_graph
@@ -264,7 +272,7 @@ fn process_node(
   graph: &mut Graph,
   shapes: &mut HashMap<String, Vec<usize>>,
   constants_hashmap: &HashMap<String, usize>,
-  models: &mut Vec<ArrayD<Fr>>,
+  models: &mut Vec<(ArrayD<Fr>, DatumType)>,
   passed_constants: &mut HashMap<String, ArrayD<Fr>>,
   input_idx: &HashMap<String, usize>,
   outputs_idx: &mut HashMap<String, Vec<(i32, usize)>>,
@@ -275,20 +283,27 @@ fn process_node(
   println!("Compiling ONNX node: {}", node.name);
   let input_shapes: Vec<_> = node.input.iter().map(|x| shapes.get(x)).collect();
   let input_shapes = input_shapes.into_iter().filter_map(|x| x).collect::<Vec<_>>(); // hack: we ignore optional inputs
-  let node_constants = node.input.iter().map(|x| passed_constants.get(x).or(constants_hashmap.get(x).map(|&y| &models[y]))).collect();
+  let node_constants = node
+    .input
+    .iter()
+    .map(|x| {
+      if let Some(a) = passed_constants.get(x) {
+        Some((a, DatumType::I64))
+      } else {
+        constants_hashmap.get(x).map(|&y| (&models[y].0, models[y].1))
+      }
+    })
+    .collect();
   let node_attributes = node.attribute.iter().map(|x| x).collect();
   let (local_graph, output_shapes) = get_local_graph(op, &input_shapes, &node_constants, node_attributes);
 
   // compute precomputable constants (these are constants that can be computed without proving)
   if node_constants.iter().all(|&x| x.is_some()) {
     let node_inputs: Vec<_> = node_constants.iter().map(|&x| x.unwrap().clone()).collect();
-    let node_inputs = node_inputs.iter().map(|x| x).collect();
+    let node_inputs = node_inputs.iter().map(|x| x.0).collect();
     let outputs = local_graph.run(&node_inputs, &vec![&arr1(&[]).into_dyn(); local_graph.basic_blocks.len()]);
     node.output.iter().zip(local_graph.outputs.iter()).for_each(|(output_str, &(nodeX, nodeY))| {
-      passed_constants.insert(
-        output_str.to_string(),
-        outputs[nodeX as usize][nodeY].clone(),
-      );
+      passed_constants.insert(output_str.to_string(), outputs[nodeX as usize][nodeY].clone());
     });
   }
 
@@ -310,7 +325,7 @@ fn process_node(
 // This function is used for loading onnx models and returning the graph and models
 // - Graph: the graph of zk-torch BasicBlocks after parsing the onnx layers
 // - Models: input tensors required for generating a setup for each BasicBlock
-pub fn load_file(filename: &str) -> (Graph, Vec<ArrayD<Fr>>) {
+pub fn load_file(filename: &str) -> (Graph, Vec<(ArrayD<Fr>, DatumType)>) {
   let onnx = tract_onnx::onnx();
   let onnx_graph = onnx.proto_model_for_path(filename).unwrap().graph.unwrap();
 

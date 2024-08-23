@@ -5,6 +5,7 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 macro_rules! define_arithmetic_layer {
   ($struct_name:ident, $basic_block:ident) => {
@@ -13,7 +14,7 @@ macro_rules! define_arithmetic_layer {
     impl Layer for $struct_name {
       fn graph(
         input_shapes: &Vec<&Vec<usize>>,
-        _constants: &Vec<Option<&ArrayD<Fr>>>,
+        _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
         _attributes: &Vec<&AttributeProto>,
       ) -> (Graph, Vec<Vec<usize>>) {
         let mut graph = Graph::new();

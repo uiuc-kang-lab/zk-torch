@@ -5,6 +5,7 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 fn get_permutation(input_shape: &[usize], axis: usize) -> (ArrayD<Option<IxDyn>>, Vec<usize>) {
   assert!(axis < input_shape.len());
@@ -26,7 +27,11 @@ fn get_permutation(input_shape: &[usize], axis: usize) -> (ArrayD<Option<IxDyn>>
 // If input tensor has shape (d_0, d_1, ..., d_n) then the output will have shape (d_0 × d_1 × ... × d_{axis-1}, d_{axis} × d_{axis+1} × ... × dn).
 pub struct FlattenLayer;
 impl Layer for FlattenLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
 
     let axis: isize = attributes.iter().filter(|x| x.name == "axis").next().unwrap().i as isize;

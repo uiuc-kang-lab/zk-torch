@@ -7,6 +7,7 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::{arr1, indices, ArrayD, Dim, Dimension, IxDyn};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 // This constructs the permutation for CopyConstraintBasicBlock to be inputted into MaxProofBasicBlock. The output is a (product of output dims of the pool operation * input channels X product of kernel_dims) permutation where the rows correspond to one max operation, and each row contains the set of arguments to max.
 // ci is the number of input channels
@@ -46,7 +47,11 @@ fn splat_input(input_shape: &Vec<usize>, strides: &Vec<usize>, pads: &Vec<usize>
 
 pub struct MaxPoolLayer;
 impl Layer for MaxPoolLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let dims = input_shapes[0][2..].to_vec();
 

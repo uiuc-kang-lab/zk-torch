@@ -5,10 +5,15 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::{arr1, ArrayD};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 pub struct WhereLayer;
 impl Layer for WhereLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    _attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     //condition, X, Y
     //condition * X + (1-condition) * Y
     let mut graph = Graph::new();

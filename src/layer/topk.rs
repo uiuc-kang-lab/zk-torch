@@ -6,6 +6,7 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::{arr1, ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 // Helper function to get the indices of the topk tensor
 fn get_topk_indices(sorted_data_shape: Vec<usize>, k: usize) -> ArrayD<Option<IxDyn>> {
@@ -25,10 +26,14 @@ fn get_topk_indices(sorted_data_shape: Vec<usize>, k: usize) -> ArrayD<Option<Ix
 // The order of the elements is determined by the 'largest' attribute, the default '1' means descending
 pub struct TopKLayer;
 impl Layer for TopKLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let mut descending = true;
-    let k = constants[1].unwrap().as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).collect::<Vec<_>>()[0] as usize;
+    let k = constants[1].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).collect::<Vec<_>>()[0] as usize;
     let axis: isize = attributes.iter().filter(|x| x.name == "axis").next().unwrap().i as isize;
     let axis = (if axis < 0 { input_shapes[0].len() as isize + axis } else { axis }) as usize;
     let largest = attributes.iter().filter(|x| x.name == "largest").next().unwrap().i as usize;
@@ -119,7 +124,11 @@ impl Layer for TopKLayer {
 // ArgMaxLayer is a layer that returns the top 1 index of the input tensor along a given axis
 pub struct ArgMaxLayer;
 impl Layer for ArgMaxLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let descending = true;
     let axis: isize = attributes.iter().filter(|x| x.name == "axis").next().unwrap().i as isize;

@@ -5,14 +5,19 @@ use crate::util::{self, get_reshape_indices};
 use ark_bn254::Fr;
 use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 pub struct ReshapeLayer;
 impl Layer for ReshapeLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    _attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
 
     let startShape = input_shapes[0];
-    let mut endShape: Vec<_> = constants[1].unwrap().as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).filter(|x| *x != 0).collect();
+    let mut endShape: Vec<_> = constants[1].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).filter(|x| *x != 0).collect();
     if let Some(i) = endShape.iter().position(|&x| x == -1) {
       let a = input_shapes[0].iter().fold(1, |x, &y| x * y) as i32;
       let b = endShape.iter().fold(-1, |x, &y| x * y);

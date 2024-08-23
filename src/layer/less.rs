@@ -6,11 +6,16 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::{arr1, ArrayD};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 // Less layer performs `less`, an element-wise logical comparison of two tensors.
 pub struct LessLayer;
 impl Layer for LessLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    _attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     // Inputs: A, B
     // Outputs: L = (A < B); then 1 - L = (A >= B). We can view them as selection of indices.
     // Check 1: (A - B) * L + (-1) * (1 - L) < 0 because A - B will always < 0 at indices of A < B and we set values at other indices as -1

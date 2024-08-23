@@ -10,6 +10,7 @@ use ndarray::Dimension;
 use ndarray::IxDyn;
 use ndarray::{Array1, ArrayD};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 // Returns output dimensions given the actual padding amount
 pub fn out_hw(dims: &Vec<usize>, strides: &Vec<usize>, ch_dims: &Vec<usize>, padding: &Vec<[usize; 2]>, is_transpose: bool) -> Vec<usize> {
@@ -141,7 +142,7 @@ macro_rules! create_conv_layer {
     impl Layer for $layer_name {
       fn graph(
         input_shapes: &Vec<&Vec<usize>>,
-        _constants: &Vec<Option<&ArrayD<Fr>>>,
+        _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
         attributes: &Vec<&AttributeProto>,
       ) -> (Graph, Vec<Vec<usize>>) {
         let mut graph = Graph::new();

@@ -202,7 +202,7 @@ fn main() {
   let (mut graph, models) = onnx::load_file(onnx_file_name);
   let fake_inputs = util::generate_fake_inputs_for_onnx(onnx_file_name);
   let inputs = fake_inputs.iter().map(|x| x).collect();
-  let models = models.iter().map(|x| x).collect();
+  let models = models.iter().map(|x| &x.0).collect();
   setup(&srs, &graph, &models, &mut timing);
   let outputs = run(&inputs, &graph, &models, &mut timing);
   prove(&srs, &inputs, outputs, &mut graph, &mut timing);

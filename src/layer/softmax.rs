@@ -5,10 +5,15 @@ use crate::onnx;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 pub struct SoftmaxLayer;
 impl Layer for SoftmaxLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    _attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let max = graph.addBB(Box::new(MaxBasicBlock {}));
     let sub = graph.addBB(Box::new(RepeaterBasicBlock {

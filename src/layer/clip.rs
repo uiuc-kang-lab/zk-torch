@@ -6,13 +6,18 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 pub struct ClipLayer;
 impl Layer for ClipLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    _attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
-    let min = util::fr_to_int(constants[1].unwrap().as_slice().unwrap()[0]) as f32;
-    let max = util::fr_to_int(constants[2].unwrap().as_slice().unwrap()[0]) as f32;
+    let min = util::fr_to_int(constants[1].unwrap().0.as_slice().unwrap()[0]) as f32;
+    let max = util::fr_to_int(constants[2].unwrap().0.as_slice().unwrap()[0]) as f32;
 
     let clip = graph.addBB(Box::new(ClipBasicBlock { min: min, max: max }));
     let clip_output = graph.addNode(clip, vec![(-1, 0)]);

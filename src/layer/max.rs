@@ -6,6 +6,7 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::{concatenate, indices, ArrayD, Axis, Dim, Dimension, IxDyn};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 // Returns the splat needed to pass into MaxProofBasicBlock. This produces a (product of input dims X 2) permutation where the first column corresponds to the input elements and the second column contains cmp_val
 fn splat_input(input_shape: &Vec<usize>, cmp_val: Option<IxDyn>) -> ArrayD<Option<IxDyn>> {
@@ -19,11 +20,15 @@ fn splat_input(input_shape: &Vec<usize>, cmp_val: Option<IxDyn>) -> ArrayD<Optio
 
 pub struct MaxLayer;
 impl Layer for MaxLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    _attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     // For now we only support the case when there are two inputs and the second input is a constant of a single element. The single element is compared element-wise with the first input
     if input_shapes.len() == 2 && input_shapes[1].len() == 1 && constants[1].is_some() {
-      let constant = constants[1].unwrap().first().unwrap();
+      let constant = constants[1].unwrap().0.first().unwrap();
       let permutation = splat_input(&input_shapes[0], None);
       let input_shape_padded: Vec<_> = input_shapes[0].iter().map(|i| i.next_power_of_two()).collect();
       let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
@@ -59,7 +64,11 @@ impl Layer for MaxLayer {
 
 pub struct MinLayer;
 impl Layer for MinLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    _attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     // For now we only support the case when there are two inputs where the first input has ndim > 1 and the second input is a single element. The single element is compared element-wise with the first input. This is its only use case in RetinaNet where the first input has the same dimensions as the Max output and second input comes from Shape -> Gather layers.
     if input_shapes.len() == 2 && input_shapes[1].len() == 1 && input_shapes[0].len() > 1 {

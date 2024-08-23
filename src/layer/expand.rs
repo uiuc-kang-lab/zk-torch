@@ -6,6 +6,7 @@ use ark_bn254::Fr;
 use ark_std::One;
 use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 #[derive(Debug)]
 pub struct ExpandBasicBlock;
@@ -19,8 +20,12 @@ impl BasicBlock for ExpandBasicBlock {
 
 pub struct ExpandLayer;
 impl Layer for ExpandLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
-    let newShape: Vec<_> = constants[1].unwrap().as_slice().unwrap().iter().map(|&x| util::fr_to_int(x) as usize).filter(|x| *x != 0).collect();
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    _attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
+    let newShape: Vec<_> = constants[1].unwrap().0.as_slice().unwrap().iter().map(|&x| util::fr_to_int(x) as usize).filter(|x| *x != 0).collect();
     let mut graph = Graph::new();
     if *input_shapes[0].last().unwrap() == *newShape.clone().last().unwrap() {
       let expand = graph.addBB(Box::new(ExpandBasicBlock {}));
@@ -43,7 +48,7 @@ impl Layer for ExpandLayer {
       };
       graph.outputs.push((expand_output, 0));
     }
-    
+
     (graph, vec![newShape])
   }
 }

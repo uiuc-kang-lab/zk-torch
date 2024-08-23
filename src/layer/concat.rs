@@ -6,6 +6,7 @@ use ark_bn254::Fr;
 use ark_std::Zero;
 use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 // This function returns N outputs where N is the number of inputs.
 // Each output is an array with the same shape as the final concatenation array.
@@ -37,7 +38,11 @@ fn get_concat_indices(input_shapes: &Vec<&Vec<usize>>, output_shape: &Vec<usize>
 // Otherwise, we directly concatenate the input arrays.
 pub struct ConcatLayer;
 impl Layer for ConcatLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
 
     // Extract the 'axis' attribute and adjust for negative values
@@ -90,7 +95,7 @@ impl Layer for ConcatLayer {
 
       let n_input = input_shapes.len();
       let n_input_padded = util::next_pow(n_input as u32) as usize;
-      
+
       let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: axis as usize }));
       let mut concat_input: Vec<_> = (0..n_input).map(|i| (-(i as i32 + 1), 0)).collect();
       for _ in 0..n_input_padded - n_input {

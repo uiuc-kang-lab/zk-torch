@@ -5,6 +5,7 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::{ArrayD, Axis, Dim, IxDyn};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 fn get_masks(input_shape: &[usize], indices: &ArrayD<Fr>) -> (ArrayD<Option<IxDyn>>, ArrayD<Option<IxDyn>>) {
   let preserve = ArrayD::from_shape_fn(input_shape, |index| Some(index));
@@ -72,10 +73,14 @@ fn ndindex(shape: &[usize], current_index: &mut Vec<usize>, all_indices: &mut Ve
 // https://onnx.ai/onnx/operators/onnx__ScatterND.html
 pub struct ScatterNDLayer;
 impl Layer for ScatterNDLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    _attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     // TODO: handle cases when attribute is not none
-    let indices = constants[1].unwrap();
+    let indices = constants[1].unwrap().0;
 
     let (permutation_preserve, permutation_update) = get_masks(&input_shapes[0], &indices);
     let input_shape_0_padded: Vec<_> = input_shapes[0].iter().map(|x| util::next_pow(*x as u32) as usize).collect();

@@ -5,10 +5,15 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 pub struct RangeLayer;
 impl Layer for RangeLayer {
-  fn graph(_input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    _input_shapes: &Vec<&Vec<usize>>,
+    constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    _attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let mut all_are_constant = true;
 
@@ -22,9 +27,9 @@ impl Layer for RangeLayer {
 
     let mut length = 0;
     if all_are_constant {
-      let start = util::fr_to_int(constants[0].unwrap().as_slice().unwrap()[0]);
-      let limit = util::fr_to_int(constants[1].unwrap().as_slice().unwrap()[0]);
-      let delta = util::fr_to_int(constants[2].unwrap().as_slice().unwrap()[0]);
+      let start = util::fr_to_int(constants[0].unwrap().0.as_slice().unwrap()[0]);
+      let limit = util::fr_to_int(constants[1].unwrap().0.as_slice().unwrap()[0]);
+      let delta = util::fr_to_int(constants[2].unwrap().0.as_slice().unwrap()[0]);
 
       // all fields are constant
       let range = graph.addBB(Box::new(RangeConstBasicBlock {

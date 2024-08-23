@@ -6,6 +6,7 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::{Array1, ArrayD};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 // Define a macro to unify common behavior for DivLayer and ModLayer
 // when output_idx equals to 0, the layer returns the quotient. (Div)
@@ -16,20 +17,29 @@ macro_rules! create_division_layer {
 
     impl Layer for $layer_name {
       fn graph(
-        input_shapes: &Vec<&Vec<usize>>,      // Input shapes for the layer
-        constants: &Vec<Option<&ArrayD<Fr>>>, // Constants used in the layer
-        _attributes: &Vec<&AttributeProto>,   // Attributes for the layer (not used in this implementation)
+        input_shapes: &Vec<&Vec<usize>>,                   // Input shapes for the layer
+        constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>, // Constants used in the layer
+        _attributes: &Vec<&AttributeProto>,                // Attributes for the layer (not used in this implementation)
       ) -> (Graph, Vec<Vec<usize>>) {
         let mut graph = Graph::new(); // Create a new computational graph
 
         // Check if the second input is a constant
         if let Some(c) = constants[1] {
           // Assert the length of the constant is 1
-          assert!(c.len() == 1);
+          assert!(c.0.len() == 1);
 
           // Convert the constant to a floating-point number
-          let c_value = util::fr_to_int(*c.first().unwrap()) as f32;
-          let c_value = if $output_idx == 0 { c_value / *onnx::SF_FLOAT as f32 } else { c_value };
+          let c_value = util::fr_to_int(*c.0.first().unwrap()) as f32;
+          let c_value = match c.1 {
+            DatumType::I64 => c_value,
+            _ => {
+              if $output_idx == 0 {
+                c_value / *onnx::SF_FLOAT as f32
+              } else {
+                c_value
+              }
+            }
+          };
 
           // Add a basic block for division/modulo by a constant
           let const_block = graph.addBB(Box::new($const_block { c: c_value as _ }));
