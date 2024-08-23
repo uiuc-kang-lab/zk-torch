@@ -30,7 +30,16 @@ macro_rules! create_division_layer {
 
           // Convert the constant to a floating-point number
           let c_value = util::fr_to_int(*c.0.first().unwrap()) as f32;
-          let c_value = if $output_idx == 0 { c_value / *onnx::SF_FLOAT as f32 } else { c_value };
+          let c_value = match c.1 {
+            DatumType::I64 => c_value,
+            _ => {
+              if $output_idx == 0 {
+                c_value / *onnx::SF_FLOAT as f32
+              } else {
+                c_value
+              }
+            }
+          };
 
           // Add a basic block for division/modulo by a constant
           let const_block = graph.addBB(Box::new($const_block { c: c_value as _ }));
