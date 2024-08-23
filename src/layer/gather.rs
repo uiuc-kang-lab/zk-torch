@@ -5,6 +5,7 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::{ArrayD, Axis};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 #[derive(Debug)]
 pub struct GatherBasicBlock;
@@ -24,7 +25,11 @@ impl BasicBlock for GatherBasicBlock {
 
 pub struct GatherLayer;
 impl Layer for GatherLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    _attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let gather = graph.addBB(Box::new(GatherBasicBlock {}));
     let output = graph.addNode(gather, vec![(-1, 0), (-2, 0)]);

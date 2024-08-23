@@ -7,6 +7,7 @@ use ark_std::iterable::Iterable;
 use ndarray::Dimension;
 use ndarray::{ArrayD, Axis, IxDyn};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 // array: the N-dimensional array
 // n_minus_1_index: the index of the N-1 dimension
@@ -59,14 +60,18 @@ fn get_gathernd_masks(input_shape: &[usize], indices: &ArrayD<usize>, batch_dims
 // reference (v13): https://onnx.ai/onnx/operators/onnx__GatherND.html
 pub struct GatherNDLayer;
 impl Layer for GatherNDLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
 
     let indices = if constants[1].is_none() {
       // we cannot handle non-constant indices because we need to know the shape of the indices to compile graph in zk-torch
       panic!("GatherNDLayer: indices must be a constant");
     } else {
-      constants[1].unwrap().map(|x| util::fr_to_int(*x) as usize)
+      constants[1].unwrap().0.map(|x| util::fr_to_int(*x) as usize)
     };
 
     // attributes may contain batch_dims, but we only support batch_dims = 0 for now

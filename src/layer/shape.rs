@@ -6,6 +6,7 @@ use ark_bn254::Fr;
 use ark_std::Zero;
 use ndarray::{arr1, ArrayD};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 #[derive(Debug)]
 pub struct ShapeBasicBlock;
@@ -20,7 +21,11 @@ impl BasicBlock for ShapeBasicBlock {
 
 pub struct ShapeLayer;
 impl Layer for ShapeLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    _attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let shape = graph.addBB(Box::new(ShapeBasicBlock {}));
     let shape_output = graph.addNode(shape, vec![(-1, 0)]);

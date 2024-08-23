@@ -6,6 +6,7 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::{arr1, ArrayD};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 // Gemm computes Y = alpha * A' * B' + beta * C, where
 // the first input tensor A has shape (M, K) or (K, M),
@@ -15,7 +16,11 @@ use tract_onnx::pb::AttributeProto;
 // A will be transposed to A' before doing the computation if attribute transA is non-zero, same for B and transB.
 pub struct GemmLayer;
 impl Layer for GemmLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
 
     let alpha = if attributes.iter().any(|x| x.name == "alpha") {

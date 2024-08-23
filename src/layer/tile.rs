@@ -5,6 +5,7 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::{concatenate, ArrayD, Axis, IxDyn};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 // Helper function to get the indices of the tiled tensor
 fn get_tile_indices(input_shape: Vec<usize>, repeats: Vec<usize>) -> ArrayD<Option<IxDyn>> {
@@ -30,9 +31,13 @@ fn get_tile_indices(input_shape: Vec<usize>, repeats: Vec<usize>) -> ArrayD<Opti
 // reference: https://numpy.org/doc/stable/reference/generated/numpy.tile.html
 pub struct TileLayer;
 impl Layer for TileLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    _attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
-    let repeats: Vec<_> = constants[1].unwrap().as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).collect();
+    let repeats: Vec<_> = constants[1].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).collect();
     let mut repeats: Vec<_> = repeats.iter().map(|x| *x as usize).collect();
 
     let mut input_shape = input_shapes[0].clone();

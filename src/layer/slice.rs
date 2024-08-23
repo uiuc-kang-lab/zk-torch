@@ -5,6 +5,7 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 fn combinations<T: Clone>(vecs: &Vec<Vec<T>>) -> Vec<Vec<T>> {
   // Recursive function to generate combinations
@@ -76,17 +77,21 @@ fn get_slice(
 // https://onnx.ai/onnx/operators/onnx__Slice.html
 pub struct SliceLayer;
 impl Layer for SliceLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    _attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
-    let starts: Vec<_> = constants[1].unwrap().as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).collect();
-    let ends: Vec<_> = constants[2].unwrap().as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).collect();
+    let starts: Vec<_> = constants[1].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).collect();
+    let ends: Vec<_> = constants[2].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).collect();
     // steps and axes might be optional
     let axes: Vec<_> = match constants.get(3) {
-      Some(x) => x.unwrap().as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).collect(),
+      Some(x) => x.unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).collect(),
       None => (0..input_shapes[0].len()).map(|x| x as i32).collect(),
     };
     let mut steps: Vec<_> = match constants.get(4) {
-      Some(x) => x.unwrap().as_slice().unwrap().iter().map(|x| util::fr_to_int(*x) as usize).collect(),
+      Some(x) => x.unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x) as usize).collect(),
       None => vec![1; starts.len()],
     };
     let mut axes: Vec<_> = axes

@@ -6,13 +6,18 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::{arr1, Array1, ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 use util::copy_constraint::get_reshape_indices;
 
 // BatchNormLayer is a struct that represents a batch normalization layer, which computes
 // Y = (X - input_mean) * scale / sqrt(input_var + epsilon) + bias
 pub struct BatchNormLayer;
 impl Layer for BatchNormLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
 
     let X_shape = input_shapes[0];
@@ -220,7 +225,11 @@ impl Layer for BatchNormLayer {
 // where mean and var are computed per instance per channel
 pub struct InstanceNormLayer;
 impl Layer for InstanceNormLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
 
     let X_shape = input_shapes[0];

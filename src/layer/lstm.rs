@@ -7,11 +7,16 @@ use ark_bn254::Fr;
 use ark_std::Zero;
 use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 // reference: https://github.com/onnx/onnx/blob/main/onnx/backend/test/case/node/lstm.py
 pub struct LSTMLayer;
 impl Layer for LSTMLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    _attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     // currently, we do not support P (peepholes)
     assert!(input_shapes.len() == 6); // X, W, R, B, initial_h, initial_c
 

@@ -5,6 +5,7 @@ use crate::util::{self, get_reshape_indices};
 use ark_bn254::Fr;
 use ndarray::{ArrayD, Axis, IxDyn};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 // Squeeze the input tensor by removing all dimensions of size 1.
 // If axes is provided, remove the dimensions specified by axes.
@@ -12,7 +13,11 @@ use tract_onnx::pb::AttributeProto;
 // If the last dimension is squeezed, we need to permute the tensor before reshaping because the last dimension affects the commitment.
 pub struct SqueezeLayer;
 impl Layer for SqueezeLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
 
     let axes_result = attributes.iter().filter(|x| x.name == "axes").next();
@@ -68,7 +73,11 @@ impl BasicBlock for UnsqueezeBasicBlock {
 // Otherwise, when the last dimension is not unsqueezed or an arr0 is unsqueezed (special case), we can directly reshape it.
 pub struct UnsqueezeLayer;
 impl Layer for UnsqueezeLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
 
     let axis: isize = attributes.iter().filter(|x| x.name == "axes").next().unwrap().ints[0] as isize;

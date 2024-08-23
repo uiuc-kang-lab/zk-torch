@@ -7,6 +7,7 @@ use ark_bn254::Fr;
 use ndarray::ArrayD;
 use std::collections::HashMap;
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 fn parse_einsum(equation: &str) -> (Vec<String>, Vec<String>) {
   // Helper function to map letters to a standard set while preserving "..."
@@ -149,7 +150,11 @@ fn vector_inner_product(graph: &mut Graph, _input_shapes: &Vec<&Vec<usize>>) -> 
 // Other equations are not supported yet.
 pub struct EinsumLayer;
 impl Layer for EinsumLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let equation = &attributes.iter().filter(|x| x.name == "equation").next().unwrap().s;
     let equation = std::str::from_utf8(&equation).unwrap();

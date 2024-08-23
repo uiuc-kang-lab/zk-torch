@@ -6,11 +6,16 @@ use ark_bn254::Fr;
 use ark_std::Zero;
 use ndarray::{arr1, ArrayD};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 pub struct NegLayer;
 
 impl Layer for NegLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, _attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    _attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
     let zero = graph.addBB(Box::new(Const2BasicBlock {
       c: arr1(&vec![Fr::zero(); *input_shapes[0].last().unwrap()]).into_dyn(),

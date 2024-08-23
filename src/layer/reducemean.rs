@@ -6,12 +6,17 @@ use crate::util;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 // ReduceMeanLayer is a layer that returns the mean of the input tensor along one or two given axis/axes
 // More than two axes is not supported for now
 pub struct ReduceMeanLayer;
 impl Layer for ReduceMeanLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
 
     let axes: Vec<_> = match attributes.iter().filter(|x| x.name == "axes").next() {

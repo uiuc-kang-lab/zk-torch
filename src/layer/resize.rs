@@ -7,6 +7,7 @@ use ark_bn254::Fr;
 use ndarray::Dimension;
 use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
+use tract_onnx::prelude::DatumType;
 
 // Assumes nearest_mode = floor
 fn resize_permutation(input_shape: &Vec<usize>, scales: &Vec<f32>) -> (Vec<usize>, ArrayD<Option<IxDyn>>) {
@@ -23,7 +24,11 @@ fn resize_permutation(input_shape: &Vec<usize>, scales: &Vec<f32>) -> (Vec<usize
 pub struct ResizeLayer;
 // Only supports coordinate_transformation_mode = asymmetric, mode = nearest, and nearest_mode = floor
 impl Layer for ResizeLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
 
     let ctm = match attributes.iter().filter(|x| x.name == "coordinate_transformation_mode").next() {
@@ -66,7 +71,7 @@ impl Layer for ResizeLayer {
       panic!("Resize has invalid nearest_mode string");
     };
     // scales is a float, so it will have been scaled by onnx::SF by the onnx compiler. This assumes that dividing by onnx::SF will recover the original value
-    let scales: Vec<_> = constants[2].unwrap().iter().map(|x| util::fr_to_int(*x) as f32 / *onnx::SF as f32).collect();
+    let scales: Vec<_> = constants[2].unwrap().0.iter().map(|x| util::fr_to_int(*x) as f32 / *onnx::SF as f32).collect();
     assert!(scales.len() == input_shapes[0].len());
 
     let (output_shape, permutation) = resize_permutation(input_shapes[0], &scales);

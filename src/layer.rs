@@ -39,7 +39,7 @@ pub use split::SplitLayer;
 pub use squeeze::{SqueezeLayer, UnsqueezeLayer};
 pub use tile::TileLayer;
 pub use topk::{ArgMaxLayer, TopKLayer};
-use tract_onnx::pb::AttributeProto;
+use tract_onnx::{pb::AttributeProto, prelude::DatumType};
 pub use transpose::TransposeLayer;
 pub use xor::XorLayer;
 
@@ -86,5 +86,9 @@ pub mod r#where;
 pub mod xor;
 
 pub trait Layer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>);
+  fn graph(
+    input_shapes: &Vec<&Vec<usize>>,
+    constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>);
 }
