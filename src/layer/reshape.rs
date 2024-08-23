@@ -19,9 +19,13 @@ impl Layer for ReshapeLayer {
       endShape[i] = a / b;
     }
     let endShape: Vec<_> = endShape.iter().map(|&x| x as usize).filter(|x| *x != 0).collect();
+    let endShape_padded: Vec<_> = endShape.iter().map(|&x| util::next_pow(x as u32) as usize).collect();
+    let startShape_padded: Vec<_> = startShape.iter().map(|&x| util::next_pow(x as u32) as usize).collect();
+    // check if the product of startShape_padded is equal to the product of endShape_padded
+    let equal = startShape_padded.iter().fold(1, |x, &y| x * y) == endShape_padded.iter().fold(1, |x, &y| x * y);
 
-    if startShape.last() == endShape.last() {
-      let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: endShape.clone() }));
+    if equal && (startShape.last() == endShape.last()) {
+      let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: endShape_padded.clone() }));
       let output = graph.addNode(reshape, vec![(-1, 0)]);
       graph.outputs.push((output, 0));
     } else if startShape.len() == 0 {
@@ -34,7 +38,6 @@ impl Layer for ReshapeLayer {
       graph.outputs.push((unsq_output, 0));
     } else {
       let permutation = get_reshape_indices(startShape.clone(), endShape.clone());
-      let startShape_padded: Vec<_> = startShape.iter().map(|x| util::next_pow(*x as u32) as usize).collect();
       let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
         permutation: permutation.clone(),
         input_dim: IxDyn(&startShape_padded),

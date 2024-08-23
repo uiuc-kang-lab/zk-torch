@@ -12,7 +12,7 @@ use tract_onnx::pb::AttributeProto;
 // If the last dimension is squeezed, we need to permute the tensor before reshaping because the last dimension affects the commitment.
 pub struct SqueezeLayer;
 impl Layer for SqueezeLayer {
-  fn graph(input_shapes: &Vec<&Vec<usize>>, _constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
+  fn graph(input_shapes: &Vec<&Vec<usize>>, constants: &Vec<Option<&ArrayD<Fr>>>, attributes: &Vec<&AttributeProto>) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
 
     let axes_result = attributes.iter().filter(|x| x.name == "axes").next();
@@ -22,7 +22,10 @@ impl Layer for SqueezeLayer {
       axes = x.ints.iter().map(|x| *x as i64).collect();
     } else {
       // axes is not provided
-      axes = input_shapes[0].iter().enumerate().filter(|(_, x)| **x == 1).map(|(i, _)| i as i64).collect();
+      axes = match constants.get(1) {
+        Some(x) => x.unwrap().iter().map(|x| util::fr_to_int(*x) as i64).collect(),
+        _ => input_shapes[0].iter().enumerate().filter(|(_, x)| **x == 1).map(|(i, _)| i as i64).collect(),
+      };
     }
 
     // map negative axes to positive
@@ -39,10 +42,11 @@ impl Layer for SqueezeLayer {
       let output = graph.addNode(reshape, vec![(-1, 0)]);
       graph.outputs.push((output, 0));
     } else {
+      let startShape_padded: Vec<_> = startShape.iter().map(|&x| util::next_pow(x as u32) as usize).collect();
       let permutation = get_reshape_indices(startShape.clone(), endShape.clone());
       let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
         permutation: permutation.clone(),
-        input_dim: IxDyn(&startShape),
+        input_dim: IxDyn(&startShape_padded),
         padding_partition: copy_constraint::PaddingEnum::Zero,
       }));
       let output = graph.addNode(cc, vec![(-1, 0)]);
