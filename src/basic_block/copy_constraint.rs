@@ -66,19 +66,15 @@ fn construct_ssig(
   idxs: &[((usize, usize), Option<(usize, usize)>)],
   N: usize,
   last_dim: usize,
-  partitions: &HashMap<Option<(usize, usize)>, Vec<Vec<(usize, usize)>>>,
+  sigma_map: &HashMap<Option<(usize, usize)>, HashMap<(usize, usize), (usize, usize)>>,
   is_input: bool,
 ) -> Vec<Fr> {
   let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
   idxs
-    .iter()
+    .par_iter()
     .flat_map(|(idx, perm_idx)| {
       let inp_idx = if is_input { Some(*idx) } else { *perm_idx };
-      let sigma = {
-        let partition = partitions.get(&inp_idx).ok_or_else(|| format!("Key {:?} not found in the partition", inp_idx)).unwrap();
-        partition.iter().find_map(|cycle| cycle.iter().position(|&x| x == *idx).map(|pos| cycle[(pos + 1) % cycle.len()]))
-      };
-      let sigma = sigma.unwrap();
+      let sigma = sigma_map.get(&inp_idx).unwrap().get(idx).unwrap();
       let mut ssig = vec![Fr::from(sigma.0 as i32 + 1) * domain.element(sigma.1)];
       // Permute each filler element to itself
       let spacing = N / last_dim;
@@ -240,9 +236,21 @@ impl BasicBlock for CopyConstraintBasicBlock {
     Zip::from(&mut inp_arr).and(&inp_idxs).for_each(|r, &a| {
       *r = (a, None);
     });
+    let sigma_map: HashMap<Option<(usize, usize)>, HashMap<(usize, usize), (usize, usize)>> = partitions
+      .par_iter()
+      .map(|(&inp_idx, partition)| {
+        let v = partition.iter().flat_map(move |cycle| {
+          cycle.iter().enumerate().map(move |(pos, &x)| {
+              let next_pos = (pos + 1) % cycle.len();
+              (x, (cycle[next_pos].0, cycle[next_pos].1))
+          })
+        }).collect();
+        (inp_idx, v)
+      })
+      .collect();
     let mut ssig: Vec<Vec<Fr>> = inp_arr
       .map_axis(Axis(self.input_dim.ndim() - 1), |x| {
-        construct_ssig(x.as_slice().unwrap(), N, last_inp_dim, &partitions, true)
+        construct_ssig(x.as_slice().unwrap(), N, last_inp_dim, &sigma_map, true)
       })
       .into_iter()
       .collect();
@@ -254,12 +262,12 @@ impl BasicBlock for CopyConstraintBasicBlock {
     ssig.append(
       &mut outp_arr
         .map_axis(Axis(output_dim.ndim() - 1), |x| {
-          construct_ssig(x.as_slice().unwrap(), N, last_outp_dim, &partitions, false)
+          construct_ssig(x.as_slice().unwrap(), N, last_outp_dim, &sigma_map, false)
         })
         .into_iter()
         .collect(),
     );
-    let ssig_polys: Vec<_> = ssig.iter().map(|x| DensePolynomial::from_coefficients_vec(domain.ifft(x))).collect();
+    let ssig_polys: Vec<_> = ssig.par_iter().map(|x| DensePolynomial::from_coefficients_vec(domain.ifft(x))).collect();
 
     // Get Lagrange basis from first None element
     let mut none_idx = 0;
@@ -271,7 +279,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
       }
     }
 
-    let mut ssig_xs: Vec<_> = ssig_polys.iter().map(|x| util::msm::<G1Projective>(&srs.X1A, &x.coeffs)).collect();
+    let mut ssig_xs: Vec<_> = ssig_polys.par_iter().map(|x| util::msm::<G1Projective>(&srs.X1A, &x.coeffs)).collect();
     let mut proof_0 = vec![L_i_x_1[0], L_i_x_1[none_idx]];
     proof_0.append(&mut ssig_xs);
 
@@ -393,11 +401,11 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let alpha_poly = DensePolynomial::from_coefficients_vec(vec![alpha]);
     // Compute Z(omega * X) polynomial
     let Zg_poly = DensePolynomial {
-      coeffs: Z_poly.coeffs.iter().enumerate().map(|(i, x)| x * &domain.element(i)).collect(),
+      coeffs: Z_poly.coeffs.par_iter().enumerate().map(|(i, x)| x * &domain.element(i)).collect(),
     };
     // These have the extra beta * X + gamma etc. terms that appear in Z, t, r (seen as terms of t on p. 29 of [1])
     let ft_polys: Vec<_> = fj_polys
-      .iter()
+      .par_iter()
       .enumerate()
       .map(|(i, x)| {
         let id_poly = DensePolynomial::from_coefficients_vec(vec![Fr::zero(), beta * Fr::from((i + 1) as i32)]);
@@ -405,7 +413,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
       })
       .collect();
     let f1_poly = ft_polys.iter().fold(DensePolynomial::from_coefficients_vec(vec![Fr::one()]), |acc, x| acc.mul(x));
-    let gt_polys: Vec<_> = fj_polys.iter().enumerate().map(|(i, x)| &ssig_polys[i].mul(&beta_poly) + x + gamma_poly.clone()).collect();
+    let gt_polys: Vec<_> = fj_polys.par_iter().enumerate().map(|(i, x)| &ssig_polys[i].mul(&beta_poly) + x + gamma_poly.clone()).collect();
     let g1_poly = gt_polys.iter().fold(DensePolynomial::from_coefficients_vec(vec![Fr::one()]), |acc, x| acc.mul(x));
 
     let alpha_pows = calc_pow(alpha, Lnone_polys.len() + 1);
