@@ -11,9 +11,10 @@ pub struct AndLayer;
 impl Layer for AndLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    _input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let bool_check = graph.addBB(Box::new(BooleanCheckBasicBlock {}));
     let mul = graph.addBB(Box::new(RepeaterBasicBlock {
@@ -42,6 +43,6 @@ impl Layer for AndLayer {
     };
 
     graph.outputs.push((and_output, 0));
-    (graph, vec![util::broadcastDims(input_shapes, 0)])
+    (graph, vec![util::broadcastDims(input_shapes, 0)], vec![DatumType::Bool])
   }
 }

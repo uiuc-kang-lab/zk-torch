@@ -14,9 +14,10 @@ macro_rules! define_nonlinear_layer {
     impl Layer for $struct_name {
       fn graph(
         input_shapes: &Vec<&Vec<usize>>,
+        input_types: &Vec<DatumType>,
         _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
         _attributes: &Vec<&AttributeProto>,
-      ) -> (Graph, Vec<Vec<usize>>) {
+      ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
         let mut graph = Graph::new();
         let layer = graph.addBB(Box::new($basic_block {
           input_SF: *onnx::SF_LOG,
@@ -38,7 +39,7 @@ macro_rules! define_nonlinear_layer {
         let layer_output = graph.addNode(layer, vec![(-1, 0)]);
         let _ = graph.addNode(layer_check, vec![(-1, 0), (layer_output, 0)]);
         graph.outputs.push((layer_output, 0));
-        (graph, vec![input_shapes[0].clone()])
+        (graph, vec![input_shapes[0].clone()], vec![input_types[0]])
       }
     }
   };

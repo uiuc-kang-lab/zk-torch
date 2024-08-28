@@ -13,9 +13,10 @@ pub struct LessLayer;
 impl Layer for LessLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    _input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     // Inputs: A, B
     // Outputs: L = (A < B); then 1 - L = (A >= B). We can view them as selection of indices.
     // Check 1: (A - B) * L + (-1) * (1 - L) < 0 because A - B will always < 0 at indices of A < B and we set values at other indices as -1
@@ -60,6 +61,6 @@ impl Layer for LessLayer {
     let _ = graph.addNode(negative_check, vec![(check1_output, 0)]);
     let _ = graph.addNode(non_negative_check, vec![(check2_output, 0)]);
     graph.outputs.push((less_output, 0));
-    (graph, vec![util::broadcastDims(input_shapes, 0)])
+    (graph, vec![util::broadcastDims(input_shapes, 0)], vec![DatumType::Bool])
   }
 }

@@ -142,9 +142,10 @@ macro_rules! create_conv_layer {
     impl Layer for $layer_name {
       fn graph(
         input_shapes: &Vec<&Vec<usize>>,
+        input_types: &Vec<DatumType>,
         _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
         attributes: &Vec<&AttributeProto>,
-      ) -> (Graph, Vec<Vec<usize>>) {
+      ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
         let mut graph = Graph::new();
         let weight_shape = input_shapes[1];
         let dims = input_shapes[0][2..].to_vec();
@@ -248,7 +249,7 @@ macro_rules! create_conv_layer {
         };
         let cc2_output = graph.addNode(cc2, vec![(add_output, 0)]);
         graph.outputs.push((cc2_output, 0));
-        (graph, vec![output_shape])
+        (graph, vec![output_shape], vec![input_types[0]])
       }
     }
   };

@@ -75,9 +75,10 @@ pub struct ScatterNDLayer;
 impl Layer for ScatterNDLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     // TODO: handle cases when attribute is not none
     let indices = constants[1].unwrap().0;
@@ -105,6 +106,6 @@ impl Layer for ScatterNDLayer {
     let add_output = graph.addNode(add, vec![(data_to_preserve, 0), (data_to_update, 0)]);
     graph.outputs.push((add_output, 0));
 
-    (graph, vec![input_shapes[0].clone()])
+    (graph, vec![input_shapes[0].clone()], vec![input_types[0]])
   }
 }

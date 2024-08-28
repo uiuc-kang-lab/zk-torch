@@ -22,9 +22,10 @@ pub static CQ_RANGE: Lazy<usize> = Lazy::new(|| 1 << CONFIG.sf.cq_range_log);
 pub static CQ_RANGE_LOWER: Lazy<i32> = Lazy::new(|| -(1 << CONFIG.sf.cq_range_lower_log));
 
 // This function is used for parsing the inputs of onnx models
-fn parse_onnx_inputs(onnx_graph: &pb::GraphProto) -> (HashMap<String, usize>, HashMap<String, Vec<usize>>) {
+fn parse_onnx_inputs(onnx_graph: &pb::GraphProto) -> (HashMap<String, usize>, HashMap<String, Vec<usize>>, HashMap<String, DatumType>) {
   let mut input_idx = HashMap::new();
   let mut shapes = HashMap::new();
+  let mut types = HashMap::new();
 
   for (idx, i) in onnx_graph.input.iter().enumerate() {
     input_idx.insert(i.name.clone(), idx);
@@ -45,9 +46,10 @@ fn parse_onnx_inputs(onnx_graph: &pb::GraphProto) -> (HashMap<String, usize>, Ha
         })
         .collect::<Vec<_>>(),
     );
+    types.insert(i.name.clone(), util::datatype_to_datumtype(t.elem_type));
   }
 
-  (input_idx, shapes)
+  (input_idx, shapes, types)
 }
 
 // This function is used for parsing the constants of onnx models
@@ -137,68 +139,69 @@ fn create_output_indices<'a>(
 fn get_local_graph(
   op: &str,
   input_shapes: &Vec<&Vec<usize>>,
+  input_types: &Vec<DatumType>,
   node_constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
   node_attributes: Vec<&AttributeProto>,
-) -> (Graph, Vec<Vec<usize>>) {
+) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
   match op {
-    "Add" => Ok(AddLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "And" => Ok(AndLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "ArgMax" => Ok(ArgMaxLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Mul" => Ok(MulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Cast" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Identity" => Ok(CastLayer::graph(&input_shapes, &node_constants, &node_attributes)), // Identity is equivalent to Cast in zk-torch
-    "InstanceNormalization" => Ok(InstanceNormLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "BatchNormalization" => Ok(BatchNormLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Ceil" => Ok(CeilLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Clip" => Ok(ClipLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Concat" => Ok(ConcatLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "ConstantOfShape" => Ok(ConstOfShapeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Cos" => Ok(CosLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Sin" => Ok(SinLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Sub" => Ok(SubLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Einsum" => Ok(EinsumLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Less" => Ok(LessLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "LSTM" => Ok(LSTMLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Mod" => Ok(ModLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Neg" => Ok(NegLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Not" => Ok(NotLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Relu" => Ok(ReLULayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Flatten" => Ok(FlattenLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Gather" => Ok(GatherLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "GatherND" => Ok(GatherNDLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Gemm" => Ok(GemmLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Range" => Ok(RangeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Reciprocal" => Ok(ReciprocalLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "ReduceMean" => Ok(ReduceMeanLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Pow" => Ok(PowLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Div" => Ok(DivLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "ScatterND" => Ok(ScatterNDLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Slice" => Ok(SliceLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Split" => Ok(SplitLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Sqrt" => Ok(SqrtLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Reshape" => Ok(ReshapeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Resize" => Ok(ResizeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Transpose" => Ok(TransposeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Tan" => Ok(TanLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Tanh" => Ok(TanhLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "TopK" => Ok(TopKLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Tile" => Ok(TileLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Shape" => Ok(ShapeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Sigmoid" => Ok(SigmoidLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Equal" => Ok(EqualLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Where" => Ok(WhereLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Expand" => Ok(ExpandLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Softmax" => Ok(SoftmaxLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Squeeze" => Ok(SqueezeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Unsqueeze" => Ok(UnsqueezeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Erf" => Ok(ErfLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Conv" => Ok(ConvLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "ConvTranspose" => Ok(ConvTransposeLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Max" => Ok(MaxLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Min" => Ok(MinLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "MaxPool" => Ok(MaxPoolLayer::graph(&input_shapes, &node_constants, &node_attributes)),
-    "Xor" => Ok(XorLayer::graph(&input_shapes, &node_constants, &node_attributes)),
+    "Add" => Ok(AddLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "And" => Ok(AndLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "ArgMax" => Ok(ArgMaxLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Mul" => Ok(MulLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Cast" => Ok(CastLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Identity" => Ok(CastLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)), // Identity is equivalent to Cast in zk-torch
+    "InstanceNormalization" => Ok(InstanceNormLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "BatchNormalization" => Ok(BatchNormLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Ceil" => Ok(CeilLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Clip" => Ok(ClipLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Concat" => Ok(ConcatLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "ConstantOfShape" => Ok(ConstOfShapeLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Cos" => Ok(CosLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Sin" => Ok(SinLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Sub" => Ok(SubLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Einsum" => Ok(EinsumLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Less" => Ok(LessLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "LSTM" => Ok(LSTMLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Mod" => Ok(ModLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Neg" => Ok(NegLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Not" => Ok(NotLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Relu" => Ok(ReLULayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Flatten" => Ok(FlattenLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Gather" => Ok(GatherLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "GatherND" => Ok(GatherNDLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Gemm" => Ok(GemmLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Range" => Ok(RangeLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Reciprocal" => Ok(ReciprocalLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "ReduceMean" => Ok(ReduceMeanLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Pow" => Ok(PowLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Div" => Ok(DivLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "ScatterND" => Ok(ScatterNDLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Slice" => Ok(SliceLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Split" => Ok(SplitLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Sqrt" => Ok(SqrtLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Reshape" => Ok(ReshapeLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Resize" => Ok(ResizeLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Transpose" => Ok(TransposeLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Tan" => Ok(TanLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Tanh" => Ok(TanhLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "TopK" => Ok(TopKLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Tile" => Ok(TileLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Shape" => Ok(ShapeLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Sigmoid" => Ok(SigmoidLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Equal" => Ok(EqualLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Where" => Ok(WhereLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Expand" => Ok(ExpandLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Softmax" => Ok(SoftmaxLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Squeeze" => Ok(SqueezeLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Unsqueeze" => Ok(UnsqueezeLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Erf" => Ok(ErfLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Conv" => Ok(ConvLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "ConvTranspose" => Ok(ConvTransposeLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Max" => Ok(MaxLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Min" => Ok(MinLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "MaxPool" => Ok(MaxPoolLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Xor" => Ok(XorLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     _ => Err(format!("Unsupported onnx operation: {op}")),
   }
   .unwrap()
@@ -271,6 +274,7 @@ fn process_node(
   node: &pb::NodeProto,
   graph: &mut Graph,
   shapes: &mut HashMap<String, Vec<usize>>,
+  types: &mut HashMap<String, DatumType>,
   constants_hashmap: &HashMap<String, usize>,
   models: &mut Vec<(ArrayD<Fr>, DatumType)>,
   passed_constants: &mut HashMap<String, ArrayD<Fr>>,
@@ -283,6 +287,9 @@ fn process_node(
   println!("Compiling ONNX node: {}", node.name);
   let input_shapes: Vec<_> = node.input.iter().map(|x| shapes.get(x)).collect();
   let input_shapes = input_shapes.into_iter().filter_map(|x| x).collect::<Vec<_>>(); // hack: we ignore optional inputs
+  let input_types: Vec<_> = node.input.iter().map(|x| types.get(x)).collect();
+  let input_types = input_types.into_iter().filter_map(|opt| opt.map(|x| *x)).collect::<Vec<_>>();
+  println!("input_types {:?}", input_types);
   let node_constants = node
     .input
     .iter()
@@ -295,7 +302,8 @@ fn process_node(
     })
     .collect();
   let node_attributes = node.attribute.iter().map(|x| x).collect();
-  let (local_graph, output_shapes) = get_local_graph(op, &input_shapes, &node_constants, node_attributes);
+  let (local_graph, output_shapes, output_types) = get_local_graph(op, &input_shapes, &input_types, &node_constants, node_attributes);
+  println!("output_types {:?}", output_types);
 
   // compute precomputable constants (these are constants that can be computed without proving)
   if node_constants.iter().all(|&x| x.is_some()) {
@@ -317,8 +325,9 @@ fn process_node(
   }
 
   // update shapes
-  node.output.iter().zip(output_shapes).for_each(|(output, shape)| {
+  node.output.iter().zip(output_shapes).zip(output_types).for_each(|((output, shape), t)| {
     shapes.insert(output.clone(), shape);
+    types.insert(output.clone(), t);
   });
 }
 
@@ -329,7 +338,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<(ArrayD<Fr>, DatumType)>) {
   let onnx = tract_onnx::onnx();
   let onnx_graph = onnx.proto_model_for_path(filename).unwrap().graph.unwrap();
 
-  let (input_idx, mut shapes) = parse_onnx_inputs(&onnx_graph);
+  let (input_idx, mut shapes, mut types) = parse_onnx_inputs(&onnx_graph);
   let (constants, constants_hashmap, mut models) = parse_onnx_constants(&onnx_graph, &mut shapes);
 
   let mut graph = Graph {
@@ -348,6 +357,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<(ArrayD<Fr>, DatumType)>) {
       node,
       &mut graph,
       &mut shapes,
+      &mut types,
       &constants_hashmap,
       &mut models,
       &mut passed_constants,

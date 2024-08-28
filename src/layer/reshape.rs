@@ -11,9 +11,10 @@ pub struct ReshapeLayer;
 impl Layer for ReshapeLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
 
     let startShape = input_shapes[0];
@@ -30,7 +31,9 @@ impl Layer for ReshapeLayer {
     let equal = startShape_padded.iter().fold(1, |x, &y| x * y) == endShape_padded.iter().fold(1, |x, &y| x * y);
 
     if equal && (startShape.last() == endShape.last()) {
-      let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: endShape_padded.clone() }));
+      let reshape = graph.addBB(Box::new(ReshapeBasicBlock {
+        shape: endShape_padded.clone(),
+      }));
       let output = graph.addNode(reshape, vec![(-1, 0)]);
       graph.outputs.push((output, 0));
     } else if startShape.len() == 0 {
@@ -52,6 +55,6 @@ impl Layer for ReshapeLayer {
       graph.outputs.push((output, 0));
     }
 
-    (graph, vec![endShape])
+    (graph, vec![endShape], vec![input_types[0]])
   }
 }

@@ -28,9 +28,10 @@ pub struct TopKLayer;
 impl Layer for TopKLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let mut descending = true;
     let k = constants[1].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).collect::<Vec<_>>()[0] as usize;
@@ -117,7 +118,7 @@ impl Layer for TopKLayer {
     output_shape[output_ndim - 1] = k;
     graph.outputs.push((topk_data_output, 0));
     graph.outputs.push((topk_indices_output, 0));
-    (graph, vec![output_shape; 2])
+    (graph, vec![output_shape; 2], vec![input_types[0], DatumType::I64])
   }
 }
 
@@ -126,9 +127,10 @@ pub struct ArgMaxLayer;
 impl Layer for ArgMaxLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    _input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let descending = true;
     let axis: isize = attributes.iter().filter(|x| x.name == "axis").next().unwrap().i as isize;
@@ -195,6 +197,6 @@ impl Layer for ArgMaxLayer {
     let output_ndim = output_shape.len();
     output_shape[output_ndim - 1] = 1;
     graph.outputs.push((top1_indices_output, 0));
-    (graph, vec![output_shape])
+    (graph, vec![output_shape], vec![DatumType::I64])
   }
 }

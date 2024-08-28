@@ -11,9 +11,10 @@ pub struct TransposeLayer;
 impl Layer for TransposeLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
 
     let axes: Vec<_> = attributes.iter().filter(|x| x.name == "perm").next().unwrap().ints.iter().map(|x| *x as usize).collect();
@@ -45,6 +46,6 @@ impl Layer for TransposeLayer {
       todo!()
     }
 
-    (graph, vec![endShape])
+    (graph, vec![endShape], vec![input_types[0]])
   }
 }

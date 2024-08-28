@@ -88,7 +88,8 @@ pub mod xor;
 pub trait Layer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>);
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>);
 }

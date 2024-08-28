@@ -18,9 +18,10 @@ pub struct GemmLayer;
 impl Layer for GemmLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
 
     let alpha = if attributes.iter().any(|x| x.name == "alpha") {
@@ -133,6 +134,6 @@ impl Layer for GemmLayer {
     graph.outputs.push((output, 0));
 
     let output_shape = vec![M, N];
-    (graph, vec![output_shape])
+    (graph, vec![output_shape], vec![input_types[0]])
   }
 }

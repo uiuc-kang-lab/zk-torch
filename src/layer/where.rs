@@ -11,9 +11,10 @@ pub struct WhereLayer;
 impl Layer for WhereLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     //condition, X, Y
     //condition * X + (1-condition) * Y
     let mut graph = Graph::new();
@@ -43,6 +44,6 @@ impl Layer for WhereLayer {
     let mul2_output = graph.addNode(if input_shapes[2].len() == 0 { mul_scalar } else { mul }, vec![(sub_output, 0), (-3, 0)]);
     let add_output = graph.addNode(add, vec![(mul1_output, 0), (mul2_output, 0)]);
     graph.outputs.push((add_output, 0));
-    (graph, vec![input_shapes[0].clone()])
+    (graph, vec![input_shapes[0].clone()], vec![input_types[0]])
   }
 }

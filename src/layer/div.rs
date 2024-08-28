@@ -17,10 +17,11 @@ macro_rules! create_division_layer {
 
     impl Layer for $layer_name {
       fn graph(
-        input_shapes: &Vec<&Vec<usize>>,                   // Input shapes for the layer
+        input_shapes: &Vec<&Vec<usize>>, // Input shapes for the layer
+        input_types: &Vec<DatumType>,
         constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>, // Constants used in the layer
         _attributes: &Vec<&AttributeProto>,                // Attributes for the layer (not used in this implementation)
-      ) -> (Graph, Vec<Vec<usize>>) {
+      ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
         let mut graph = Graph::new(); // Create a new computational graph
 
         // Check if the second input is a constant
@@ -62,7 +63,7 @@ macro_rules! create_division_layer {
           graph.outputs.push((const_output, 0));
 
           // Return the graph and updated input shapes
-          return (graph, vec![input_shapes[0].clone()]);
+          return (graph, vec![input_shapes[0].clone()], vec![input_types[0]]);
         }
 
         // Assert that the second input has only one element
@@ -150,7 +151,7 @@ macro_rules! create_division_layer {
         graph.outputs.push((div_output, $output_idx));
 
         // Return the constructed graph and the updated input shapes
-        (graph, vec![input_shapes[0].clone()])
+        (graph, vec![input_shapes[0].clone()], vec![input_types[0]])
       }
     }
   };

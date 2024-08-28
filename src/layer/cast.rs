@@ -1,6 +1,8 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
+use crate::util;
+use crate::util::datumtype_to_sf;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;
@@ -10,13 +12,24 @@ pub struct CastLayer;
 impl Layer for CastLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
-    _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+    attributes: &Vec<&AttributeProto>,
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
-    let id = graph.addBB(Box::new(IdBasicBlock {}));
+    let to = match attributes.iter().filter(|x| x.name == "to").next() {
+      Some(v) => vec![util::datatype_to_datumtype(v.i as i32)],
+      None => vec![input_types[0]],
+    };
+    let input_SF = datumtype_to_sf(input_types[0]);
+    let output_SF = datumtype_to_sf(to[0]);
+    let id = if input_SF == output_SF {
+      graph.addBB(Box::new(IdBasicBlock {}))
+    } else {
+      graph.addBB(Box::new(ChangeSFBasicBlock { input_SF, output_SF }))
+    };
     let id_output = graph.addNode(id, vec![(-1, 0)]);
     graph.outputs.push((id_output, 0));
-    (graph, vec![input_shapes[0].clone()])
+    (graph, vec![input_shapes[0].clone()], to)
   }
 }

@@ -11,9 +11,10 @@ pub struct PowLayer;
 impl Layer for PowLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     assert!(constants[1].unwrap().0.first().unwrap() == &Fr::from(2 * *onnx::SF as u32));
     let mul = graph.addBB(Box::new(RepeaterBasicBlock {
@@ -41,6 +42,6 @@ impl Layer for PowLayer {
     let change_SF_output = graph.addNode(change_SF, vec![(mul_output, 0)]);
     let _ = graph.addNode(change_SF_check, vec![(mul_output, 0), (change_SF_output, 0)]);
     graph.outputs.push((change_SF_output, 0));
-    (graph, vec![input_shapes[0].clone()])
+    (graph, vec![input_shapes[0].clone()], vec![input_types[0]])
   }
 }

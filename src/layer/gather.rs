@@ -27,15 +27,16 @@ pub struct GatherLayer;
 impl Layer for GatherLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let gather = graph.addBB(Box::new(GatherBasicBlock {}));
     let output = graph.addNode(gather, vec![(-1, 0), (-2, 0)]);
     graph.outputs.push((output, 0));
     let mut output_shape = input_shapes[1].clone();
     output_shape.extend_from_slice(&input_shapes[0][1..]);
-    (graph, vec![output_shape])
+    (graph, vec![output_shape], vec![input_types[0]])
   }
 }

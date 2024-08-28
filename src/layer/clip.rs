@@ -12,9 +12,10 @@ pub struct ClipLayer;
 impl Layer for ClipLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let min = util::fr_to_int(constants[1].unwrap().0.as_slice().unwrap()[0]) as f32;
     let max = util::fr_to_int(constants[2].unwrap().0.as_slice().unwrap()[0]) as f32;
@@ -31,6 +32,6 @@ impl Layer for ClipLayer {
 
     graph.outputs.push((clip_output, 0));
 
-    (graph, vec![input_shapes[0].clone()])
+    (graph, vec![input_shapes[0].clone()], vec![input_types[0]])
   }
 }

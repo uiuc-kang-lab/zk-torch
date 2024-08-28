@@ -14,9 +14,10 @@ pub struct LSTMLayer;
 impl Layer for LSTMLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     // currently, we do not support P (peepholes)
     assert!(input_shapes.len() == 6); // X, W, R, B, initial_h, initial_c
 
@@ -307,6 +308,7 @@ impl Layer for LSTMLayer {
         vec![num_directions, batch_size, hidden_size],
         vec![num_directions, batch_size, hidden_size],
       ],
+      vec![input_types[0]; 3],
     )
   }
 }

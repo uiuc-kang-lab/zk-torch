@@ -13,9 +13,10 @@ pub struct NegLayer;
 impl Layer for NegLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let zero = graph.addBB(Box::new(Const2BasicBlock {
       c: arr1(&vec![Fr::zero(); *input_shapes[0].last().unwrap()]).into_dyn(),
@@ -27,6 +28,6 @@ impl Layer for NegLayer {
     let zero_output = graph.addNode(zero, vec![]);
     let layer_output = graph.addNode(layer, vec![(zero_output, 0), (-1, 0)]);
     graph.outputs.push((layer_output, 0));
-    (graph, vec![util::broadcastDims(input_shapes, 0)])
+    (graph, vec![util::broadcastDims(input_shapes, 0)], vec![input_types[0]])
   }
 }

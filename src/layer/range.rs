@@ -11,9 +11,10 @@ pub struct RangeLayer;
 impl Layer for RangeLayer {
   fn graph(
     _input_shapes: &Vec<&Vec<usize>>,
+    _input_types: &Vec<DatumType>,
     constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let mut all_are_constant = true;
 
@@ -49,6 +50,6 @@ impl Layer for RangeLayer {
       panic!("Don't support non-constant range yet");
     }
 
-    (graph, vec![vec![length]])
+    (graph, vec![vec![length]], vec![constants[0].unwrap().1])
   }
 }

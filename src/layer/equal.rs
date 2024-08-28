@@ -12,9 +12,10 @@ pub struct EqualLayer;
 impl Layer for EqualLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    _input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let one = graph.addBB(Box::new(Const2BasicBlock {
       c: arr1(&vec![Fr::from(1); util::next_pow(*input_shapes[0].last().unwrap() as u32) as usize]).into_dyn(),
@@ -60,6 +61,6 @@ impl Layer for EqualLayer {
     let _nonzero_check = graph.addNode(nonzero_check, vec![(add_output, 0)]);
 
     graph.outputs.push((equal_output, 0));
-    (graph, vec![util::broadcastDims(input_shapes, 0)])
+    (graph, vec![util::broadcastDims(input_shapes, 0)], vec![DatumType::Bool])
   }
 }

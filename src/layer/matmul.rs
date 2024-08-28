@@ -12,9 +12,10 @@ pub struct MatMulLayer;
 impl Layer for MatMulLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let n = input_shapes[1].len();
     let (mut a, mut b) = (input_shapes[1][n - 2], input_shapes[1][n - 1]);
@@ -60,6 +61,6 @@ impl Layer for MatMulLayer {
     } else {
       output_shape.push(input_shapes[1][input_shapes[1].len() - 1]);
     }
-    (graph, vec![output_shape])
+    (graph, vec![output_shape], vec![input_types[0]])
   }
 }

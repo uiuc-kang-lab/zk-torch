@@ -15,9 +15,10 @@ pub struct BatchNormLayer;
 impl Layer for BatchNormLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
 
     let X_shape = input_shapes[0];
@@ -216,7 +217,7 @@ impl Layer for BatchNormLayer {
     let output = graph.addNode(add, vec![(concat_output, 0), (bias_output, 0)]);
 
     graph.outputs.push((output, 0));
-    (graph, vec![input_shapes[0].clone()])
+    (graph, vec![input_shapes[0].clone()], vec![input_types[0]])
   }
 }
 
@@ -227,9 +228,10 @@ pub struct InstanceNormLayer;
 impl Layer for InstanceNormLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
 
     let X_shape = input_shapes[0];
@@ -487,6 +489,6 @@ impl Layer for InstanceNormLayer {
     let output = graph.addNode(add, vec![(concat_output, 0), (bias_output, 0)]);
 
     graph.outputs.push((output, 0));
-    (graph, vec![input_shapes[0].clone()])
+    (graph, vec![input_shapes[0].clone()], vec![input_types[0]])
   }
 }

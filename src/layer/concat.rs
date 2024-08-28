@@ -40,9 +40,10 @@ pub struct ConcatLayer;
 impl Layer for ConcatLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
 
     // Extract the 'axis' attribute and adjust for negative values
@@ -105,6 +106,6 @@ impl Layer for ConcatLayer {
       graph.outputs.push((concat_output, 0));
     }
 
-    (graph, vec![outputShape])
+    (graph, vec![outputShape], vec![input_types[0]])
   }
 }

@@ -62,9 +62,10 @@ pub struct GatherNDLayer;
 impl Layer for GatherNDLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
 
     let indices = if constants[1].is_none() {
@@ -100,6 +101,6 @@ impl Layer for GatherNDLayer {
     let output = graph.addNode(cc, vec![(-1, 0)]);
     graph.outputs.push((output, 0));
 
-    (graph, vec![output_shape])
+    (graph, vec![output_shape], vec![input_types[0]])
   }
 }

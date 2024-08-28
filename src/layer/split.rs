@@ -11,9 +11,10 @@ pub struct SplitLayer;
 impl Layer for SplitLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
 
     // This code is for Opset 11; in the latest version of ONNX, "split" is in inputs instead of the attributes
@@ -74,6 +75,7 @@ impl Layer for SplitLayer {
       }
     }
 
-    (graph, outputShapes)
+    let num_outputs = outputShapes.len();
+    (graph, outputShapes, vec![input_types[0]; num_outputs])
   }
 }
