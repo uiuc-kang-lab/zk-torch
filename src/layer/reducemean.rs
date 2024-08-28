@@ -14,9 +14,10 @@ pub struct ReduceMeanLayer;
 impl Layer for ReduceMeanLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
 
     let axes: Vec<_> = match attributes.iter().filter(|x| x.name == "axes").next() {
@@ -83,12 +84,12 @@ impl Layer for ReduceMeanLayer {
       let mut outputShape = input_shapes[0].clone();
       outputShape[input_shapes[0].len() - 1] = 1;
       outputShape[input_shapes[0].len() - 2] = 1;
-      (graph, vec![outputShape])
+      (graph, vec![outputShape], vec![input_types[0]])
     } else if axes.len() == 1 {
       graph.outputs.push((div_output, 0));
       let mut outputShape = input_shapes[0].clone();
       outputShape[input_shapes[0].len() - 1] = 1;
-      (graph, vec![outputShape])
+      (graph, vec![outputShape], vec![input_types[0]])
     } else {
       panic!("Only support reducing along one or two axis");
     }

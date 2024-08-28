@@ -11,9 +11,10 @@ pub struct SoftmaxLayer;
 impl Layer for SoftmaxLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let max = graph.addBB(Box::new(MaxBasicBlock {}));
     let sub = graph.addBB(Box::new(RepeaterBasicBlock {
@@ -76,6 +77,6 @@ impl Layer for SoftmaxLayer {
     let _ = graph.addNode(exp_check, vec![(sub_output_2, 0), (exp_output_2, 0)]);
     graph.outputs.push((exp_output_2, 0));
 
-    (graph, vec![input_shapes[0].clone()])
+    (graph, vec![input_shapes[0].clone()], vec![input_types[0]])
   }
 }

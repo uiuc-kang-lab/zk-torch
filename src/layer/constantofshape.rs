@@ -13,9 +13,10 @@ pub struct ConstOfShapeLayer;
 impl Layer for ConstOfShapeLayer {
   fn graph(
     _input_shapes: &Vec<&Vec<usize>>,
+    _input_types: &Vec<DatumType>,
     constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
 
     let value = Fr::from(attributes.iter().filter(|x| x.name == "value").next().unwrap().i);
@@ -28,6 +29,6 @@ impl Layer for ConstOfShapeLayer {
     }));
     let output = graph.addNode(constantOfShape, vec![]);
     graph.outputs.push((output, 0));
-    (graph, vec![endShape])
+    (graph, vec![endShape], vec![DatumType::I64])
   }
 }

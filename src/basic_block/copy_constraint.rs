@@ -58,27 +58,21 @@ fn flat_index(shape: &IxDyn, idx: &Option<IxDyn>, N: usize) -> Option<(usize, us
 // that should be the same over inputs and outputs.
 // idxs tuple (i, j) refers to the jth element in the ith polynomial based on
 // the flattened input or output ArrayD
-// For Some keys, the partitions value will contain a single vec containing all idx tuples corresponding to elements that should be equal to the key idx.
-// For None keys, the partitions value will contain a vec for each set of indices that should have the same output value.
 // If is_input, idxs is [(flat_idx of the input index, (0, 0))]. Otherwise,
 // idxs is [(flat_idx of the output, flat_idx of the permuted input idx)]
 fn construct_ssig(
   idxs: &[((usize, usize), Option<(usize, usize)>)],
   N: usize,
   last_dim: usize,
-  partitions: &HashMap<Option<(usize, usize)>, Vec<Vec<(usize, usize)>>>,
+  sigma_map: &HashMap<Option<(usize, usize)>, HashMap<(usize, usize), (usize, usize)>>,
   is_input: bool,
 ) -> Vec<Fr> {
   let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
   idxs
-    .iter()
+    .par_iter()
     .flat_map(|(idx, perm_idx)| {
       let inp_idx = if is_input { Some(*idx) } else { *perm_idx };
-      let sigma = {
-        let partition = partitions.get(&inp_idx).ok_or_else(|| format!("Key {:?} not found in the partition", inp_idx)).unwrap();
-        partition.iter().find_map(|cycle| cycle.iter().position(|&x| x == *idx).map(|pos| cycle[(pos + 1) % cycle.len()]))
-      };
-      let sigma = sigma.unwrap();
+      let sigma = sigma_map.get(&inp_idx).unwrap().get(idx).unwrap();
       let mut ssig = vec![Fr::from(sigma.0 as i32 + 1) * domain.element(sigma.1)];
       // Permute each filler element to itself
       let spacing = N / last_dim;
@@ -190,10 +184,6 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let last_outp_dim = output_dim[output_dim.ndim() - 1];
     let N = max(last_inp_dim, last_outp_dim);
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
-    let mut L_i_x_1 = srs.X1P[..N].to_vec();
-    util::ifft_in_place(domain, &mut L_i_x_1);
-    let mut L_i_x_2 = srs.X2P[..N].to_vec();
-    util::ifft_in_place(domain, &mut L_i_x_2);
 
     // Indices of the output permutation elements
     // Offset output indices by the size of the input shape
@@ -244,9 +234,29 @@ impl BasicBlock for CopyConstraintBasicBlock {
     Zip::from(&mut inp_arr).and(&inp_idxs).for_each(|r, &a| {
       *r = (a, None);
     });
+    // Construct sigma_map because this data structure is more efficient than directly iterating over partitions
+    // Take the first copy constraint in ResNet18 as a concrete example: it took about 3 sec for the below code to run
+    // while iterating over partitions directly took about 1187 sec.
+    // For Some keys, the map value will contain a hashmap containing all idx tuples corresponding to the sigma value.
+    // For None keys, the map value will contain a hashmap for each set of indices that should have the same sigma value.
+    let sigma_map: HashMap<Option<(usize, usize)>, HashMap<(usize, usize), (usize, usize)>> = partitions
+      .par_iter()
+      .map(|(&inp_idx, partition)| {
+        let v = partition
+          .iter()
+          .flat_map(move |cycle| {
+            cycle.iter().enumerate().map(move |(pos, &x)| {
+              let next_pos = (pos + 1) % cycle.len();
+              (x, (cycle[next_pos].0, cycle[next_pos].1))
+            })
+          })
+          .collect();
+        (inp_idx, v)
+      })
+      .collect();
     let mut ssig: Vec<Vec<Fr>> = inp_arr
       .map_axis(Axis(self.input_dim.ndim() - 1), |x| {
-        construct_ssig(x.as_slice().unwrap(), N, last_inp_dim, &partitions, true)
+        construct_ssig(x.as_slice().unwrap(), N, last_inp_dim, &sigma_map, true)
       })
       .into_iter()
       .collect();
@@ -258,28 +268,16 @@ impl BasicBlock for CopyConstraintBasicBlock {
     ssig.append(
       &mut outp_arr
         .map_axis(Axis(output_dim.ndim() - 1), |x| {
-          construct_ssig(x.as_slice().unwrap(), N, last_outp_dim, &partitions, false)
+          construct_ssig(x.as_slice().unwrap(), N, last_outp_dim, &sigma_map, false)
         })
         .into_iter()
         .collect(),
     );
-    let ssig_polys: Vec<_> = ssig.iter().map(|x| DensePolynomial::from_coefficients_vec(domain.ifft(x))).collect();
+    let ssig_polys: Vec<_> = ssig.par_iter().map(|x| DensePolynomial::from_coefficients_vec(domain.ifft(x))).collect();
 
-    // Get Lagrange basis from first None element
-    let mut none_idx = 0;
-    for i in indices(self.permutation.shape()) {
-      let idx = i.clone();
-      if self.permutation[i].is_none() {
-        none_idx = N / last_outp_dim * idx[self.permutation.shape().len() - 1];
-        break;
-      }
-    }
+    let ssig_xs: Vec<_> = ssig_polys.iter().map(|x| util::msm::<G1Projective>(&srs.X1A, &x.coeffs)).collect();
 
-    let mut ssig_xs: Vec<_> = ssig_polys.iter().map(|x| util::msm::<G1Projective>(&srs.X1A, &x.coeffs)).collect();
-    let mut proof_0 = vec![L_i_x_1[0], L_i_x_1[none_idx]];
-    proof_0.append(&mut ssig_xs);
-
-    return (proof_0, vec![L_i_x_2[0], L_i_x_2[none_idx]], ssig_polys);
+    return (ssig_xs, vec![], ssig_polys);
   }
 
   fn prove(
@@ -397,11 +395,11 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let alpha_poly = DensePolynomial::from_coefficients_vec(vec![alpha]);
     // Compute Z(omega * X) polynomial
     let Zg_poly = DensePolynomial {
-      coeffs: Z_poly.coeffs.iter().enumerate().map(|(i, x)| x * &domain.element(i)).collect(),
+      coeffs: Z_poly.coeffs.par_iter().enumerate().map(|(i, x)| x * &domain.element(i)).collect(),
     };
     // These have the extra beta * X + gamma etc. terms that appear in Z, t, r (seen as terms of t on p. 29 of [1])
     let ft_polys: Vec<_> = fj_polys
-      .iter()
+      .par_iter()
       .enumerate()
       .map(|(i, x)| {
         let id_poly = DensePolynomial::from_coefficients_vec(vec![Fr::zero(), beta * Fr::from((i + 1) as i32)]);
@@ -409,7 +407,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
       })
       .collect();
     let f1_poly = ft_polys.iter().fold(DensePolynomial::from_coefficients_vec(vec![Fr::one()]), |acc, x| acc.mul(x));
-    let gt_polys: Vec<_> = fj_polys.iter().enumerate().map(|(i, x)| &ssig_polys[i].mul(&beta_poly) + x + gamma_poly.clone()).collect();
+    let gt_polys: Vec<_> = fj_polys.par_iter().enumerate().map(|(i, x)| &ssig_polys[i].mul(&beta_poly) + x + gamma_poly.clone()).collect();
     let g1_poly = gt_polys.iter().fold(DensePolynomial::from_coefficients_vec(vec![Fr::one()]), |acc, x| acc.mul(x));
 
     let alpha_pows = calc_pow(alpha, Lnone_polys.len() + 1);
@@ -508,11 +506,11 @@ impl BasicBlock for CopyConstraintBasicBlock {
     proof.append(&mut vec![W_x, W_gx]);
     proof.push(srs.X1P[0] * (r * (zeta_pows[N - 1] - Fr::one())));
 
-    let mut ssig_xs = setup.0[2..].iter().map(|x| Into::<G1Projective>::into(*x)).collect();
+    let mut ssig_xs = setup.0.iter().map(|x| Into::<G1Projective>::into(*x)).collect();
     proof.append(&mut ssig_xs);
     proof.append(&mut fj_xs);
 
-    return (proof, vec![setup.1[0].into(), setup.1[1].into()], evals);
+    return (proof, vec![], evals);
   }
 
   fn verify(

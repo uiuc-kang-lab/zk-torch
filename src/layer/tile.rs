@@ -33,9 +33,10 @@ pub struct TileLayer;
 impl Layer for TileLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let repeats: Vec<_> = constants[1].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).collect();
     let mut repeats: Vec<_> = repeats.iter().map(|x| *x as usize).collect();
@@ -72,6 +73,6 @@ impl Layer for TileLayer {
     let tiled_output = graph.addNode(cc, vec![(input_index, 0)]);
     graph.outputs.push((tiled_output, 0));
 
-    (graph, vec![padded_output_shape])
+    (graph, vec![padded_output_shape], vec![input_types[0]])
   }
 }

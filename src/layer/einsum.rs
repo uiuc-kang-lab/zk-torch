@@ -152,9 +152,10 @@ pub struct EinsumLayer;
 impl Layer for EinsumLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let equation = &attributes.iter().filter(|x| x.name == "equation").next().unwrap().s;
     let equation = std::str::from_utf8(&equation).unwrap();
@@ -164,12 +165,12 @@ impl Layer for EinsumLayer {
     if input_eqs == vec!["a", "b"] && output_eq == vec!["ab"] {
       assert!(input_shapes[0].len() == 1 && input_shapes[1].len() == 1);
       let output_shape = vector_outer_product(&mut graph, input_shapes);
-      (graph, vec![output_shape])
+      (graph, vec![output_shape], vec![input_types[0]])
     // vector inner product
     } else if input_eqs == vec!["a", "a"] && output_eq.len() == 0 {
       assert!(input_shapes[0].len() == 1 && input_shapes[1].len() == 1);
       let output_shape = vector_inner_product(&mut graph, input_shapes);
-      (graph, vec![output_shape])
+      (graph, vec![output_shape], vec![input_types[0]])
     } else {
       panic!("EinsumLayer not implemented for equation {:?}", equation);
     }

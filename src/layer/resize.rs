@@ -26,9 +26,10 @@ pub struct ResizeLayer;
 impl Layer for ResizeLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
 
     let ctm = match attributes.iter().filter(|x| x.name == "coordinate_transformation_mode").next() {
@@ -86,6 +87,6 @@ impl Layer for ResizeLayer {
     let cc_output = graph.addNode(cc, vec![(-1, 0)]);
     graph.outputs.push((cc_output, 0));
 
-    (graph, vec![output_shape])
+    (graph, vec![output_shape], vec![input_types[0]])
   }
 }

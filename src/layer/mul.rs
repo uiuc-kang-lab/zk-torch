@@ -12,9 +12,10 @@ pub struct MulLayer;
 impl Layer for MulLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     println!("input_shapes: {:?}", input_shapes);
     println!("constants {:?}", constants);
@@ -75,9 +76,15 @@ impl Layer for MulLayer {
       graph.addNode(mul_basicblock, vec![(-1, 0), (-2, 0)])
     };
 
-    let change_SF_output = graph.addNode(change_SF, vec![(mul_output, 0)]);
-    let _ = graph.addNode(change_SF_check, vec![(mul_output, 0), (change_SF_output, 0)]);
-    graph.outputs.push((change_SF_output, 0));
-    (graph, vec![util::broadcastDims(input_shapes, 0)])
+    if input_types[0].is_float() {
+      let change_SF_output = graph.addNode(change_SF, vec![(mul_output, 0)]);
+      let _ = graph.addNode(change_SF_check, vec![(mul_output, 0), (change_SF_output, 0)]);
+      graph.outputs.push((change_SF_output, 0));
+    } else if input_types[0].is_integer() {
+      graph.outputs.push((mul_output, 0));
+    } else {
+      panic!("Mul input type {:?} is not supported", input_types[0]);
+    }
+    (graph, vec![util::broadcastDims(input_shapes, 0)], vec![input_types[0]])
   }
 }

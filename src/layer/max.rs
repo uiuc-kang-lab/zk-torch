@@ -22,9 +22,10 @@ pub struct MaxLayer;
 impl Layer for MaxLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     // For now we only support the case when there are two inputs and the second input is a constant of a single element. The single element is compared element-wise with the first input
     if input_shapes.len() == 2 && input_shapes[1].len() == 1 && constants[1].is_some() {
@@ -58,7 +59,7 @@ impl Layer for MaxLayer {
     } else {
       panic!("MaxLayer only supports having two inputs where the second input is a constant")
     }
-    (graph, vec![input_shapes[0].clone()])
+    (graph, vec![input_shapes[0].clone()], vec![input_types[0]])
   }
 }
 
@@ -66,9 +67,10 @@ pub struct MinLayer;
 impl Layer for MinLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     // For now we only support the case when there are two inputs where the first input has ndim > 1 and the second input is a single element. The single element is compared element-wise with the first input. This is its only use case in RetinaNet where the first input has the same dimensions as the Max output and second input comes from Shape -> Gather layers.
     if input_shapes.len() == 2 && input_shapes[1].len() == 1 && input_shapes[0].len() > 1 {
@@ -139,6 +141,6 @@ impl Layer for MinLayer {
     } else {
       panic!("MinLayer only supports having two inputs where the first input has ndim > 1 and the second input is a single element")
     }
-    (graph, vec![input_shapes[0].clone()])
+    (graph, vec![input_shapes[0].clone()], vec![input_types[0]])
   }
 }

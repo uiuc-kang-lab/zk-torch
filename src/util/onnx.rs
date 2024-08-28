@@ -1,3 +1,4 @@
+use crate::onnx;
 /*
  * ONNX utilities:
  * The function(s) are used for ONNX-related operations.
@@ -9,7 +10,7 @@ use ark_std::Zero;
 use ndarray::ArrayD;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use tract_onnx::pb::tensor_proto::DataType;
-use tract_onnx::prelude::Framework;
+use tract_onnx::prelude::{DatumType, Framework};
 
 // This function is used for generating fake inputs for onnx models
 // Fake inputs are random field (i.e., Fr) elements whose shapes and types match those described in the input tensors of an ONNX model.
@@ -52,4 +53,24 @@ pub fn generate_fake_inputs_for_onnx(filename: &str) -> Vec<ArrayD<Fr>> {
     inputs.push(input);
   }
   inputs
+}
+
+// Converts ints for the DataType enum into DatumType
+// https://docs.rs/tract-onnx/latest/tract_onnx/pb/tensor_proto/enum.DataType.html
+pub fn datatype_to_datumtype(t: i32) -> DatumType {
+  match t {
+    1 => DatumType::F32,
+    7 => DatumType::I64,
+    9 => DatumType::Bool,
+    _ => panic!("DatumType {:?} not supported", t),
+  }
+}
+
+pub fn datumtype_to_sf(t: DatumType) -> usize {
+  match t {
+    DatumType::I64 => 1,
+    DatumType::Bool => 1,
+    DatumType::F32 => *onnx::SF,
+    _ => panic!("DatumType {:?} not supported", t),
+  }
 }

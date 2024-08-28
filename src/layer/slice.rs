@@ -79,9 +79,10 @@ pub struct SliceLayer;
 impl Layer for SliceLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let starts: Vec<_> = constants[1].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).collect();
     let ends: Vec<_> = constants[2].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).collect();
@@ -136,6 +137,6 @@ impl Layer for SliceLayer {
     let slice_output = graph.addNode(cc, vec![(-1, 0)]);
     graph.outputs.push((slice_output, 0));
 
-    (graph, vec![output_shape])
+    (graph, vec![output_shape], vec![input_types[0]])
   }
 }

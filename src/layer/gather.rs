@@ -28,9 +28,10 @@ pub struct GatherLayer;
 impl Layer for GatherLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
+    input_types: &Vec<DatumType>,
     constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
-  ) -> (Graph, Vec<Vec<usize>>) {
+  ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let mut indices_output = -2;
     println!("constants {:?}", constants);
@@ -47,7 +48,6 @@ impl Layer for GatherLayer {
     println!("input_shapes {:?}", input_shapes);
     let mut output_shape = input_shapes[1].clone();
     output_shape.extend_from_slice(&input_shapes[0][1..]);
-    println!("output_shape: {:?}", output_shape);
-    (graph, vec![output_shape])
+    (graph, vec![output_shape], vec![input_types[0]])
   }
 }

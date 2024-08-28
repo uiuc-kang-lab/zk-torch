@@ -14,9 +14,10 @@ macro_rules! define_arithmetic_layer {
     impl Layer for $struct_name {
       fn graph(
         input_shapes: &Vec<&Vec<usize>>,
+        input_types: &Vec<DatumType>,
         _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
         _attributes: &Vec<&AttributeProto>,
-      ) -> (Graph, Vec<Vec<usize>>) {
+      ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
         let mut graph = Graph::new();
         let layer = graph.addBB(Box::new(RepeaterBasicBlock {
           basic_block: Box::new($basic_block {}),
@@ -24,7 +25,7 @@ macro_rules! define_arithmetic_layer {
         }));
         let layer_output = graph.addNode(layer, vec![(-1, 0), (-2, 0)]);
         graph.outputs.push((layer_output, 0));
-        (graph, vec![util::broadcastDims(input_shapes, 0)])
+        (graph, vec![util::broadcastDims(input_shapes, 0)], vec![input_types[0]])
       }
     }
   };
