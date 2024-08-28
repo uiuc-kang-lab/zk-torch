@@ -488,7 +488,6 @@ impl Layer for InstanceNormLayer {
     // Step 6. scale * (X - mean) / sqrt(var + epsilon) + bias
     let output = graph.addNode(add, vec![(concat_output, 0), (bias_output, 0)]);
 
-    println!("output_shape: {:?}", input_shapes[0]);
     graph.outputs.push((output, 0));
     (graph, vec![input_shapes[0].clone()], vec![input_types[0]])
   }

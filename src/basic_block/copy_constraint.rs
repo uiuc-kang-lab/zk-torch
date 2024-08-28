@@ -162,8 +162,6 @@ pub struct CopyConstraintBasicBlock {
 
 impl BasicBlock for CopyConstraintBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    println!("input len, input dim {:?}, {:?} {:?}", inputs.len(), inputs[0].dim(), self.input_dim);
-    println!("inputs {:?}", inputs);
     assert!(inputs.len() <= 2 && inputs[0].dim() == self.input_dim);
     let padding_partitions = get_padding_partition(&self.permutation, &self.padding_partition);
     let tmp_hashmap: HashMap<IxDyn, Fr> = padding_partitions.iter().flat_map(|(k, v)| v.iter().map(|x| (x.clone(), *k))).collect();
@@ -174,7 +172,6 @@ impl BasicBlock for CopyConstraintBasicBlock {
         tmp_hashmap[&i]
       }
     });
-    println!("cc output: {:?}", outp);
     vec![outp]
   }
 

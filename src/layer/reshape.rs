@@ -18,7 +18,6 @@ impl Layer for ReshapeLayer {
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
 
-    println!("input shapes {:?}, constants {:?}", input_shapes, constants);
     let startShape = input_shapes[0];
     let allowzero = match attributes.iter().filter(|x| x.name == "allowzero").next() {
       Some(v) => v.i,
@@ -63,7 +62,6 @@ impl Layer for ReshapeLayer {
       endShape[i] = a / b;
     }
     let endShape: Vec<_> = endShape.iter().map(|&x| x as usize).filter(|x| *x != 0).collect();
-    println!("start end {:?} {:?}", startShape, endShape);
     let endShape_padded: Vec<_> = endShape.iter().map(|&x| util::next_pow(x as u32) as usize).collect();
     let startShape_padded: Vec<_> = startShape.iter().map(|&x| util::next_pow(x as u32) as usize).collect();
     // check if the product of startShape_padded is equal to the product of endShape_padded
@@ -94,7 +92,6 @@ impl Layer for ReshapeLayer {
       graph.outputs.push((output, 0));
     }
 
-    println!("output_shape: {:?}", endShape);
     (graph, vec![endShape], vec![input_types[0]])
   }
 }

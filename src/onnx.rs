@@ -32,19 +32,19 @@ fn parse_onnx_inputs(onnx_graph: &pb::GraphProto) -> (HashMap<String, usize>, Ha
     let tract_onnx::pb::type_proto::Value::TensorType(t) = i.r#type.as_ref().unwrap().value.as_ref().unwrap();
     shapes.insert(
       i.name.clone(),
-      vec![1, 4, 4, 4], // t.shape
-                        //   .as_ref()
-                        //   .unwrap()
-                        //   .dim
-                        //   .iter()
-                        //   .map(|x| {
-                        //     if let tract_onnx::pb::tensor_shape_proto::dimension::Value::DimValue(x) = x.value.as_ref().unwrap() {
-                        //       *x as usize
-                        //     } else {
-                        //       panic!("Unknown dimension") // we currently can only support constant dimensions
-                        //     }
-                        //   })
-                        //   .collect::<Vec<_>>(),
+      t.shape
+        .as_ref()
+        .unwrap()
+        .dim
+        .iter()
+        .map(|x| {
+          if let tract_onnx::pb::tensor_shape_proto::dimension::Value::DimValue(x) = x.value.as_ref().unwrap() {
+            *x as usize
+          } else {
+            panic!("Unknown dimension") // we currently can only support constant dimensions
+          }
+        })
+        .collect::<Vec<_>>(),
     );
     types.insert(i.name.clone(), util::datatype_to_datumtype(t.elem_type));
   }
@@ -289,7 +289,6 @@ fn process_node(
   let input_shapes = input_shapes.into_iter().filter_map(|x| x).collect::<Vec<_>>(); // hack: we ignore optional inputs
   let input_types: Vec<_> = node.input.iter().map(|x| types.get(x)).collect();
   let input_types = input_types.into_iter().filter_map(|opt| opt.map(|x| *x)).collect::<Vec<_>>();
-  println!("input_types {:?}", input_types);
   let node_constants = node
     .input
     .iter()
@@ -303,7 +302,6 @@ fn process_node(
     .collect();
   let node_attributes = node.attribute.iter().map(|x| x).collect();
   let (local_graph, output_shapes, output_types) = get_local_graph(op, &input_shapes, &input_types, &node_constants, node_attributes);
-  println!("output_types {:?}", output_types);
 
   // compute precomputable constants (these are constants that can be computed without proving)
   if node_constants.iter().all(|&x| x.is_some()) {

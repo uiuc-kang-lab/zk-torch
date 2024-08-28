@@ -19,7 +19,6 @@ impl BasicBlock for GatherBasicBlock {
     let mut shape = inputs[1].shape().to_vec();
     shape.extend_from_slice(&inputs[0].shape()[1..]);
     let v = ArrayD::from_shape_vec(shape, v).unwrap();
-    println!("output: {:?}", v);
     vec![v]
   }
 }
@@ -34,8 +33,6 @@ impl Layer for GatherLayer {
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let mut indices_output = -2;
-    println!("constants {:?}", constants);
-    println!("constant dim {:?}", constants[1].unwrap().0.ndim());
     if input_shapes[1].len() == 0 {
       let indices = graph.addBB(Box::new(Const2BasicBlock {
         c: constants[1].unwrap().0.clone(),
@@ -45,7 +42,6 @@ impl Layer for GatherLayer {
     let gather = graph.addBB(Box::new(GatherBasicBlock {}));
     let output = graph.addNode(gather, vec![(-1, 0), (indices_output, 0)]);
     graph.outputs.push((output, 0));
-    println!("input_shapes {:?}", input_shapes);
     let mut output_shape = input_shapes[1].clone();
     output_shape.extend_from_slice(&input_shapes[0][1..]);
     (graph, vec![output_shape], vec![input_types[0]])

@@ -31,8 +31,6 @@ impl Layer for ShapeLayer {
     let shape = graph.addBB(Box::new(ShapeBasicBlock {}));
     let shape_output = graph.addNode(shape, vec![(-1, 0)]);
     graph.outputs.push((shape_output, 0));
-    println!("shape: {:?}", input_shapes[0]);
-    println!("output_shape: {:?}", input_shapes[0].len());
     (graph, vec![vec![input_shapes[0].len()]], vec![DatumType::I64])
   }
 }

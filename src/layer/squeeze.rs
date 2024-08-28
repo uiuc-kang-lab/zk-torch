@@ -86,7 +86,6 @@ impl Layer for UnsqueezeLayer {
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
 
-    println!("constants: {:?}", constants);
     let axis: isize = match attributes.iter().filter(|x| x.name == "axes").next() {
       Some(v) => v.ints[0] as isize,
       None => util::fr_to_int(constants[1].unwrap().0[0]) as isize,
@@ -107,7 +106,6 @@ impl Layer for UnsqueezeLayer {
         }
       })
       .collect();
-    println!("start end {:?} {:?}", startShape, endShape);
 
     if startShape.last() == endShape.last() {
       let reshape = graph.addBB(Box::new(ReshapeBasicBlock {

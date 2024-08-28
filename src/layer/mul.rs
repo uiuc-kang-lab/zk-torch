@@ -17,14 +17,11 @@ impl Layer for MulLayer {
     _attributes: &Vec<&AttributeProto>,
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
-    println!("input_shapes: {:?}", input_shapes);
-    println!("constants {:?}", constants);
     let mul = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(MulBasicBlock {}),
       N: 1,
     }));
     let mul_scalar = if input_shapes[0].len() == input_shapes[1].len() && input_shapes[0].len() == 0 {
-      println!("mul 1");
       graph.addBB(Box::new(MulScalarBasicBlock {}))
     } else {
       graph.addBB(Box::new(RepeaterBasicBlock {
