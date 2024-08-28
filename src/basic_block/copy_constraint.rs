@@ -168,16 +168,20 @@ pub struct CopyConstraintBasicBlock {
 
 impl BasicBlock for CopyConstraintBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    assert!(inputs.len() == 1 && inputs[0].dim() == self.input_dim);
+    println!("input len, input dim {:?}, {:?} {:?}", inputs.len(), inputs[0].dim(), self.input_dim);
+    println!("inputs {:?}", inputs);
+    assert!(inputs.len() <= 2 && inputs[0].dim() == self.input_dim);
     let padding_partitions = get_padding_partition(&self.permutation, &self.padding_partition);
     let tmp_hashmap: HashMap<IxDyn, Fr> = padding_partitions.iter().flat_map(|(k, v)| v.iter().map(|x| (x.clone(), *k))).collect();
-    vec![ArrayD::from_shape_fn(self.permutation.shape(), |i| {
+    let outp = ArrayD::from_shape_fn(self.permutation.shape(), |i| {
       if let Some(idx) = &self.permutation[&i] {
         inputs[0][idx]
       } else {
         tmp_hashmap[&i]
       }
-    })]
+    });
+    println!("cc output: {:?}", outp);
+    vec![outp]
   }
 
   fn setup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {

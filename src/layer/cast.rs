@@ -17,6 +17,7 @@ impl Layer for CastLayer {
     let id = graph.addBB(Box::new(IdBasicBlock {}));
     let id_output = graph.addNode(id, vec![(-1, 0)]);
     graph.outputs.push((id_output, 0));
+    println!("output_shapes {:?}", input_shapes[0]);
     (graph, vec![input_shapes[0].clone()])
   }
 }

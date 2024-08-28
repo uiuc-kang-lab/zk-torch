@@ -60,6 +60,7 @@ impl Layer for MatMulLayer {
     } else {
       output_shape.push(input_shapes[1][input_shapes[1].len() - 1]);
     }
+    println!("output_shape: {:?}", output_shape);
     (graph, vec![output_shape])
   }
 }

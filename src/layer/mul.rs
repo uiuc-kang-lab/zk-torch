@@ -12,24 +12,31 @@ pub struct MulLayer;
 impl Layer for MulLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
-    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
   ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
+    println!("input_shapes: {:?}", input_shapes);
+    println!("constants {:?}", constants);
     let mul = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(MulBasicBlock {}),
       N: 1,
     }));
-    let mul_scalar = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MulScalarBasicBlock {}),
-      N: 1,
-    }));
+    let mul_scalar = if input_shapes[0].len() == input_shapes[1].len() && input_shapes[0].len() == 0 {
+      println!("mul 1");
+      graph.addBB(Box::new(MulScalarBasicBlock {}))
+    } else {
+      graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(MulScalarBasicBlock {}),
+        N: 1,
+      }))
+    };
     let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
       input_SF: *onnx::SF_LOG * 2,
       output_SF: *onnx::SF_LOG,
     }));
-    let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQ2BasicBlock {
+    let change_SF_check = if input_shapes[0].len() == input_shapes[1].len() && input_shapes[0].len() == 0 {
+      graph.addBB(Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(ChangeSFBasicBlock {
             input_SF: *onnx::SF_LOG * 2,
@@ -38,9 +45,22 @@ impl Layer for MulLayer {
           *onnx::CQ_RANGE_LOWER,
           *onnx::CQ_RANGE,
         )),
-      }),
-      N: 1,
-    }));
+      }))
+    } else {
+      graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(CQ2BasicBlock {
+          setup: Some((
+            Box::new(ChangeSFBasicBlock {
+              input_SF: *onnx::SF_LOG * 2,
+              output_SF: *onnx::SF_LOG,
+            }),
+            *onnx::CQ_RANGE_LOWER,
+            *onnx::CQ_RANGE,
+          )),
+        }),
+        N: 1,
+      }))
+    };
     // If any of the inputs are scalars, use the scalar version of the mul basic block.
     let mul_basicblock = if input_shapes[1].len() == 0 || input_shapes[0].len() == 0 {
       mul_scalar

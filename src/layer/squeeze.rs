@@ -75,12 +75,16 @@ pub struct UnsqueezeLayer;
 impl Layer for UnsqueezeLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
-    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     attributes: &Vec<&AttributeProto>,
   ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
 
-    let axis: isize = attributes.iter().filter(|x| x.name == "axes").next().unwrap().ints[0] as isize;
+    println!("constants: {:?}", constants);
+    let axis: isize = match attributes.iter().filter(|x| x.name == "axes").next() {
+      Some(v) => v.ints[0] as isize,
+      None => util::fr_to_int(constants[1].unwrap().0[0]) as isize,
+    };
     let axis = if axis < 0 { input_shapes[0].len() as isize + axis + 1 } else { axis };
 
     let startShape = input_shapes[0];
@@ -97,6 +101,7 @@ impl Layer for UnsqueezeLayer {
         }
       })
       .collect();
+    println!("start end {:?} {:?}", startShape, endShape);
 
     if startShape.last() == endShape.last() {
       let reshape = graph.addBB(Box::new(ReshapeBasicBlock {

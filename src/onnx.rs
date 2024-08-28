@@ -31,19 +31,19 @@ fn parse_onnx_inputs(onnx_graph: &pb::GraphProto) -> (HashMap<String, usize>, Ha
     let tract_onnx::pb::type_proto::Value::TensorType(t) = i.r#type.as_ref().unwrap().value.as_ref().unwrap();
     shapes.insert(
       i.name.clone(),
-      t.shape
-        .as_ref()
-        .unwrap()
-        .dim
-        .iter()
-        .map(|x| {
-          if let tract_onnx::pb::tensor_shape_proto::dimension::Value::DimValue(x) = x.value.as_ref().unwrap() {
-            *x as usize
-          } else {
-            panic!("Unknown dimension") // we currently can only support constant dimensions
-          }
-        })
-        .collect::<Vec<_>>(),
+      vec![1, 4, 4, 4], // t.shape
+                        //   .as_ref()
+                        //   .unwrap()
+                        //   .dim
+                        //   .iter()
+                        //   .map(|x| {
+                        //     if let tract_onnx::pb::tensor_shape_proto::dimension::Value::DimValue(x) = x.value.as_ref().unwrap() {
+                        //       *x as usize
+                        //     } else {
+                        //       panic!("Unknown dimension") // we currently can only support constant dimensions
+                        //     }
+                        //   })
+                        //   .collect::<Vec<_>>(),
     );
   }
 
@@ -250,12 +250,7 @@ fn update_graph_w_local_graph(
         })
         .collect(),
     });
-    let name = if node.name.clone() == "" {
-      node.op_type.to_string()
-    } else {
-      node.name.clone()
-    };
-    graph.layer_names.push(format!("Op {}", name));
+    graph.layer_names.push(format!("Op {}", node.name.clone()));
   }
   // tracking output_idx of local_graph
   for (i, output) in node.output.iter().enumerate() {

@@ -248,6 +248,7 @@ macro_rules! create_conv_layer {
         };
         let cc2_output = graph.addNode(cc2, vec![(add_output, 0)]);
         graph.outputs.push((cc2_output, 0));
+        println!("output_shape: {:?}", output_shape);
         (graph, vec![output_shape])
       }
     }

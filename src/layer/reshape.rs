@@ -3,6 +3,7 @@ use crate::graph::*;
 use crate::layer::{squeeze::UnsqueezeBasicBlock, Layer};
 use crate::util::{self, get_reshape_indices};
 use ark_bn254::Fr;
+use ark_std::Zero;
 use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
@@ -12,22 +13,60 @@ impl Layer for ReshapeLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
     constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
-    _attributes: &Vec<&AttributeProto>,
+    attributes: &Vec<&AttributeProto>,
   ) -> (Graph, Vec<Vec<usize>>) {
     let mut graph = Graph::new();
 
+    println!("input shapes {:?}, constants {:?}", input_shapes, constants);
     let startShape = input_shapes[0];
-    let mut endShape: Vec<_> = constants[1].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).filter(|x| *x != 0).collect();
+    let allowzero = match attributes.iter().filter(|x| x.name == "allowzero").next() {
+      Some(v) => v.i,
+      None => 0,
+    };
+    let mut endShape: Vec<_> = if allowzero == 0 {
+      constants[1]
+        .unwrap()
+        .0
+        .as_slice()
+        .unwrap()
+        .iter()
+        .enumerate()
+        .map(|(i, x)| {
+          if i < input_shapes[1][0] {
+            if *x == Fr::zero() {
+              input_shapes[0][i] as i32
+            } else {
+              util::fr_to_int(*x)
+            }
+          } else {
+            0
+          }
+        })
+        .filter(|x| *x != 0)
+        .collect()
+    } else {
+      constants[1]
+        .unwrap()
+        .0
+        .as_slice()
+        .unwrap()
+        .iter()
+        .enumerate()
+        .map(|(i, x)| if i < input_shapes[1][0] { util::fr_to_int(*x) } else { 0 })
+        .filter(|x| *x != 0)
+        .collect()
+    };
     if let Some(i) = endShape.iter().position(|&x| x == -1) {
       let a = input_shapes[0].iter().fold(1, |x, &y| x * y) as i32;
       let b = endShape.iter().fold(-1, |x, &y| x * y);
       endShape[i] = a / b;
     }
     let endShape: Vec<_> = endShape.iter().map(|&x| x as usize).filter(|x| *x != 0).collect();
+    println!("start end {:?} {:?}", startShape, endShape);
 
     if startShape.last() == endShape.last() {
       let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: endShape.clone() }));
-      let output = graph.addNode(reshape, vec![(-1, 0)]);
+      let output = graph.addNode(reshape, vec![(-1, 0), (-2, 0)]);
       graph.outputs.push((output, 0));
     } else if startShape.len() == 0 {
       // special case: arr0 --> [1,1,...]
@@ -45,10 +84,11 @@ impl Layer for ReshapeLayer {
         input_dim: IxDyn(&startShape_padded),
         padding_partition: copy_constraint::PaddingEnum::Zero,
       }));
-      let output = graph.addNode(cc, vec![(-1, 0)]);
+      let output = graph.addNode(cc, vec![(-1, 0), (-2, 0)]);
       graph.outputs.push((output, 0));
     }
 
+    println!("output_shape: {:?}", endShape);
     (graph, vec![endShape])
   }
 }

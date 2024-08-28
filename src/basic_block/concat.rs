@@ -13,7 +13,9 @@ pub struct ConcatBasicBlock {
 impl BasicBlock for ConcatBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     assert!(self.axis != inputs[0].shape().len() - 1);
+    println!("inputs {:?}", inputs);
     let r = ndarray::concatenate(Axis(self.axis), &inputs.iter().map(|x| x.view()).collect::<Vec<_>>()).unwrap();
+    println!("output: {:?}", r);
     vec![r]
   }
 

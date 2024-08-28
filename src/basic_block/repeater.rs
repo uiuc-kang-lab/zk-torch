@@ -21,6 +21,7 @@ fn broadcastN<T1: Clone + std::fmt::Debug, T2: Clone + std::fmt::Debug>(
   // Broadcast inputs to a shared larger dimension
   let dims: Vec<_> = inputs.iter().map(|input| input.shape().to_vec()).collect();
   let dims_ptr = dims.iter().map(|x| x).collect();
+  println!("dims: {:?}", dims);
   let superDim = util::broadcastDims(&dims_ptr, N);
   let len = superDim.len() + N;
   let broadcasted: Vec<_> = inputs

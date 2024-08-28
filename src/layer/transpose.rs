@@ -45,6 +45,7 @@ impl Layer for TransposeLayer {
       todo!()
     }
 
+    println!("output_shape {:?}", endShape);
     (graph, vec![endShape])
   }
 }
