@@ -289,7 +289,6 @@ fn process_node(
   let input_shapes = input_shapes.into_iter().filter_map(|x| x).collect::<Vec<_>>(); // hack: we ignore optional inputs
   let input_types: Vec<_> = node.input.iter().map(|x| types.get(x)).collect();
   let input_types = input_types.into_iter().filter_map(|opt| opt.map(|x| *x)).collect::<Vec<_>>();
-  println!("input_types {:?}", input_types);
   let node_constants = node
     .input
     .iter()
@@ -303,7 +302,6 @@ fn process_node(
     .collect();
   let node_attributes = node.attribute.iter().map(|x| x).collect();
   let (local_graph, output_shapes, output_types) = get_local_graph(op, &input_shapes, &input_types, &node_constants, node_attributes);
-  println!("output_types {:?}", output_types);
 
   // compute precomputable constants (these are constants that can be computed without proving)
   if node_constants.iter().all(|&x| x.is_some()) {
