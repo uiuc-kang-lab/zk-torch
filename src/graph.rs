@@ -257,7 +257,6 @@ impl Graph {
         .collect();
       let precomputable = self.layer_names[i].contains("(precomputed)");
       if !precomputable {
-        println!("skipping verifying for {:?} {:?}", i, self.basic_blocks[n.basic_block]);
         let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, cache.clone());
         let mut bytes = Vec::new();
         let temp: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (proofs[i].0.clone(), proofs[i].1.clone(), proofs[i].2.clone());
