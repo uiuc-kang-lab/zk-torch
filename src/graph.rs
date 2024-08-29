@@ -24,6 +24,7 @@ pub struct Node {
 #[derive(Debug)]
 pub struct Graph {
   pub basic_blocks: Vec<Box<dyn BasicBlock>>,
+  pub precomputed_bb: Vec<bool>,
   pub layer_names: Vec<String>,
   pub nodes: Vec<Node>,
   pub outputs: Vec<(i32, usize)>,
@@ -91,6 +92,11 @@ impl Graph {
       .zip(models.iter())
       .enumerate()
       .map(|(i, (b, m))| {
+        let precomputable = self.precomputed_bb[i];
+        if precomputable {
+          println!("skipping setup for {:?} {:?}", i, b);
+          return (vec![], vec![], vec![]);
+        }
         println!("setting up {:?} {:?}", i, b);
         let bb_name = format!("{b:?}");
         let save_cq_layer_setup = CONFIG.prover.enable_layer_setup && (bb_name.contains("CQ2BasicBlock") || bb_name.contains("CQBasicBlock"));
@@ -134,6 +140,11 @@ impl Graph {
       .iter()
       .enumerate()
       .map(|(i, n)| {
+        let precomputable = self.layer_names[i].contains("(precomputed)");
+        if precomputable {
+          println!("skipping proving for {:?} {:?}", i, self.basic_blocks[n.basic_block]);
+          return (vec![], vec![], vec![]);
+        }
         let prove_id = format!("{} | proving {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
         println!("{}", prove_id);
         let myInputs = n
@@ -189,6 +200,11 @@ impl Graph {
       .iter()
       .enumerate()
       .map(|(i, n)| {
+        let precomputable = self.layer_names[i].contains("(precomputed)");
+        if precomputable {
+          println!("skipping verifying for {:?} {:?}", i, self.basic_blocks[n.basic_block]);
+          return vec![];
+        }
         println!("{} | verifying {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
         let myInputs = n
           .inputs
@@ -239,25 +255,30 @@ impl Graph {
           }
         })
         .collect();
-      let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, cache.clone());
-      let mut bytes = Vec::new();
-      let temp: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (proofs[i].0.clone(), proofs[i].1.clone(), proofs[i].2.clone());
-      temp.serialize_uncompressed(&mut bytes).unwrap();
-      util::add_randomness(rng, bytes);
-      pairings.iter().for_each(|p| {
-        assert!(p
-          .iter()
-          .fold(PairingOutput::<Bn<ark_bn254::Config>>::zero(), |acc, x| {
-            acc + Bn254::pairing(x.0, x.1)
-          })
-          .is_zero());
-      });
+      let precomputable = self.layer_names[i].contains("(precomputed)");
+      if !precomputable {
+        println!("skipping verifying for {:?} {:?}", i, self.basic_blocks[n.basic_block]);
+        let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, cache.clone());
+        let mut bytes = Vec::new();
+        let temp: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (proofs[i].0.clone(), proofs[i].1.clone(), proofs[i].2.clone());
+        temp.serialize_uncompressed(&mut bytes).unwrap();
+        util::add_randomness(rng, bytes);
+        pairings.iter().for_each(|p| {
+          assert!(p
+            .iter()
+            .fold(PairingOutput::<Bn<ark_bn254::Config>>::zero(), |acc, x| {
+              acc + Bn254::pairing(x.0, x.1)
+            })
+            .is_zero());
+        });
+      }
     });
   }
 
   pub fn new() -> Self {
     Graph {
       basic_blocks: vec![],
+      precomputed_bb: vec![],
       layer_names: vec![],
       nodes: vec![],
       outputs: vec![],

@@ -10,6 +10,7 @@ use once_cell::sync::Lazy;
 use pool::MaxPoolLayer;
 use std::collections::HashMap;
 use tract_onnx::pb;
+use tract_onnx::pb::tensor_proto::DataType;
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::Datum;
 use tract_onnx::prelude::{DatumType, Framework};
@@ -75,12 +76,13 @@ fn parse_onnx_constants<'a>(
   let mut idx = 0;
 
   for (name, tensor) in constants.clone() {
-    let tensor = load_tensor(&*onnx.provider, tensor, None).unwrap();
-    let (tensor, data_type) = match tensor.datum_type() {
-      DatumType::F32 => {
-        let tensor = tensor.into_array::<f32>().unwrap();
-        Ok((
-          tensor.map(|x| {
+    let (tensor, data_type) = if tensor.data_location.is_none() {
+      let tensor = load_tensor(&*onnx.provider, tensor, None).unwrap();
+      let data_type = tensor.datum_type();
+      let tensor = match tensor.datum_type() {
+        DatumType::F32 => {
+          let tensor = tensor.into_array::<f32>().unwrap();
+          Ok(tensor.map(|x| {
             // handle the case where the constant is very close to zero (i.e., epsilon to prevent division by zero)
             if *x < 1e-10 && *x > 0.0 {
               // the reason we use 1 here is because it is the smallest positive value that can be represented in the field
@@ -89,21 +91,29 @@ fn parse_onnx_constants<'a>(
             let mut y = (*x * *SF_FLOAT).round();
             y = y.clamp(-(1 << 15) as f32, (1 << 15) as f32);
             Fr::from(y as i32)
-          }),
-          DatumType::F32,
-        ))
+          }))
+        }
+        DatumType::I64 => {
+          let tensor = tensor.into_array::<i64>().unwrap();
+          Ok(tensor.map(|x| Fr::from(*x)))
+        }
+        DatumType::Bool => {
+          let tensor = tensor.into_array::<bool>().unwrap();
+          Ok(tensor.map(|x| Fr::from(*x as i32)))
+        }
+        _ => Err(format!("Unsupported constant type: {:?}", tensor.datum_type())),
       }
-      DatumType::I64 => {
-        let tensor = tensor.into_array::<i64>().unwrap();
-        Ok((tensor.map(|x| Fr::from(*x)), DatumType::I64))
-      }
-      DatumType::Bool => {
-        let tensor = tensor.into_array::<bool>().unwrap();
-        Ok((tensor.map(|x| Fr::from(*x as i32)), DatumType::Bool))
-      }
-      _ => Err(format!("Unsupported constant type: {:?}", tensor.datum_type())),
-    }
-    .unwrap();
+      .unwrap();
+      (tensor, data_type)
+    } else {
+      // if the data_location is not None, we generate fake weights for now.
+      // we can add support for loading weights from file later
+      let shape: Vec<usize> = tensor.dims.iter().map(|&i| i as usize).collect();
+      let dtype = DataType::from_i32(tensor.data_type).unwrap().into();
+      let data_type = util::datatype_to_datumtype(tensor.data_type);
+      let tensor = util::generate_fake_tensor(dtype, shape);
+      (tensor, data_type)
+    };
 
     shapes.insert(name.clone(), tensor.shape().to_vec());
     let tensor = util::pad_to_pow_of_two(&tensor, &Fr::zero());
@@ -130,6 +140,7 @@ fn create_output_indices<'a>(
     });
     graph.layer_names.push(format!("Const {}", name.to_string()));
     graph.basic_blocks.push(Box::new(ConstBasicBlock {}));
+    graph.precomputed_bb.push(false);
   }
 
   outputs_idx
@@ -216,6 +227,7 @@ fn update_graph_w_local_graph(
   outputs_idx: &mut HashMap<String, Vec<(i32, usize)>>,
   basic_blocks_idx: &mut HashMap<String, usize>,
   models: &mut Vec<(ArrayD<Fr>, DatumType)>,
+  precomputable: bool,
 ) {
   // pushing basicblocks and models in a local graph to update graph.basic_blocks and models
   let mut local_block_idx = vec![];
@@ -227,6 +239,9 @@ fn update_graph_w_local_graph(
     if idx == graph.basic_blocks.len() {
       models.push((basic_block.genModel(), DatumType::I64));
       graph.basic_blocks.push(basic_block);
+      graph.precomputed_bb.push(precomputable);
+    } else {
+      graph.precomputed_bb[idx] = graph.precomputed_bb[idx] && precomputable;
     }
   }
   // pushing nodes in a local graph to update graph.nodes
@@ -258,7 +273,11 @@ fn update_graph_w_local_graph(
     } else {
       node.name.clone()
     };
-    graph.layer_names.push(format!("Op {}", name));
+    if precomputable {
+      graph.layer_names.push(format!("Op {} (precomputed)", name));
+    } else {
+      graph.layer_names.push(format!("Op {}", name));
+    }
   }
   // tracking output_idx of local_graph
   for (i, output) in node.output.iter().enumerate() {
@@ -282,6 +301,7 @@ fn process_node(
   outputs_idx: &mut HashMap<String, Vec<(i32, usize)>>,
   basic_blocks_idx: &mut HashMap<String, usize>,
 ) {
+  let mut precomputable = false;
   // match onnx operation
   let op = node.op_type.as_str();
   println!("Compiling ONNX node: {}", node.name);
@@ -311,10 +331,11 @@ fn process_node(
     node.output.iter().zip(local_graph.outputs.iter()).for_each(|(output_str, &(nodeX, nodeY))| {
       passed_constants.insert(output_str.to_string(), outputs[nodeX as usize][nodeY].clone());
     });
+    precomputable = true;
   }
 
   // update graph with local graph
-  update_graph_w_local_graph(graph, local_graph, node, &input_idx, outputs_idx, basic_blocks_idx, models);
+  update_graph_w_local_graph(graph, local_graph, node, &input_idx, outputs_idx, basic_blocks_idx, models, precomputable);
 
   // handle a special case (op == "Shape")
   if op == "Shape" {
@@ -341,6 +362,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<(ArrayD<Fr>, DatumType)>) {
 
   let mut graph = Graph {
     basic_blocks: vec![],
+    precomputed_bb: vec![],
     layer_names: vec![],
     nodes: vec![],
     outputs: vec![],

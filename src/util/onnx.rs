@@ -19,7 +19,6 @@ use tract_onnx::prelude::{DatumType, Framework};
 pub fn generate_fake_inputs_for_onnx(filename: &str) -> Vec<ArrayD<Fr>> {
   let onnx = tract_onnx::onnx();
   let onnx_graph = onnx.proto_model_for_path(filename).unwrap().graph.unwrap();
-  let mut rng = StdRng::from_entropy();
 
   let mut inputs = vec![];
 
@@ -39,20 +38,25 @@ pub fn generate_fake_inputs_for_onnx(filename: &str) -> Vec<ArrayD<Fr>> {
         }
       })
       .collect::<Vec<_>>();
-    let val_num = &shape.iter().fold(1, |acc, x| acc * x);
 
-    let input = match t.elem_type() {
-      DataType::Float | DataType::Float16 | DataType::Double => (0..*val_num).map(|_| Fr::from(rng.gen_range(-2..2))).collect(),
-      DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => (0..*val_num).map(|_| Fr::from(1)).collect(),
-      DataType::Uint8 | DataType::Uint16 | DataType::Uint32 | DataType::Uint64 => (0..*val_num).map(|_| Fr::from(1)).collect(),
-      _ => panic!("Unsupported constant type: {:?}", t.elem_type()),
-    };
-
-    let input = ArrayD::from_shape_vec(shape, input).unwrap();
+    let input = generate_fake_tensor(t.elem_type(), shape);
     let input = pad_to_pow_of_two(&input, &Fr::zero());
     inputs.push(input);
   }
   inputs
+}
+
+pub fn generate_fake_tensor(dtype: DataType, shape: Vec<usize>) -> ArrayD<Fr> {
+  let mut rng = StdRng::from_entropy();
+  let val_num = shape.iter().fold(1, |acc, x| acc * x);
+  let input = match dtype {
+    DataType::Float | DataType::Float16 | DataType::Double => (0..val_num).map(|_| Fr::from(rng.gen_range(-2..2))).collect(),
+    DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => (0..val_num).map(|_| Fr::from(1)).collect(),
+    DataType::Uint8 | DataType::Uint16 | DataType::Uint32 | DataType::Uint64 => (0..val_num).map(|_| Fr::from(1)).collect(),
+    DataType::Bool => (0..val_num).map(|_| Fr::from(rng.gen_range(0..2))).collect(),
+    _ => panic!("Unsupported constant type: {:?}", dtype),
+  };
+  ArrayD::from_shape_vec(shape, input).unwrap()
 }
 
 // Converts ints for the DataType enum into DatumType
