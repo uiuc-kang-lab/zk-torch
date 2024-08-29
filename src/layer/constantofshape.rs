@@ -19,7 +19,7 @@ impl Layer for ConstOfShapeLayer {
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
 
-    let value = Fr::from(attributes.iter().filter(|x| x.name == "value").next().unwrap().t.clone().unwrap().raw_data[0]);
+    let value = Fr::from(attributes.iter().filter(|x| x.name == "value").next().unwrap().i);
     let endShape: Vec<usize> = constants[0].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x) as usize).filter(|x| *x != 0).collect();
     let endShape_padded: Vec<usize> = endShape.iter().map(|&x| util::next_pow(x as u32) as usize).collect();
 

@@ -46,12 +46,18 @@ macro_rules! create_division_layer {
           let const_block = graph.addBB(Box::new($const_block { c: c_value as _ }));
 
           // Add a basic block for range checking with custom setup
-          let const_check = graph.addBB(Box::new(RepeaterBasicBlock {
-            basic_block: Box::new(CQ2BasicBlock {
+          let const_check = if input_shapes[0].len() == input_shapes[1].len() && input_shapes[0].len() == 0 {
+            graph.addBB(Box::new(CQ2BasicBlock {
               setup: Some((Box::new($const_block { c: c_value as _ }), *onnx::CQ_RANGE_LOWER, *onnx::CQ_RANGE)),
-            }),
-            N: 1,
-          }));
+            }))
+          } else {
+            graph.addBB(Box::new(RepeaterBasicBlock {
+              basic_block: Box::new(CQ2BasicBlock {
+                setup: Some((Box::new($const_block { c: c_value as _ }), *onnx::CQ_RANGE_LOWER, *onnx::CQ_RANGE)),
+              }),
+              N: 1,
+            }))
+          };
 
           // Create a node for the division/modulo operation
           let const_output = graph.addNode(const_block, vec![(-1, 0)]);

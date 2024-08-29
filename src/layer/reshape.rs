@@ -3,6 +3,7 @@ use crate::graph::*;
 use crate::layer::{squeeze::UnsqueezeBasicBlock, Layer};
 use crate::util::{self, get_reshape_indices};
 use ark_bn254::Fr;
+use ark_std::Zero;
 use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
@@ -18,7 +19,27 @@ impl Layer for ReshapeLayer {
     let mut graph = Graph::new();
 
     let startShape = input_shapes[0];
-    let mut endShape: Vec<_> = constants[1].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).filter(|x| *x != 0).collect();
+    let mut endShape: Vec<_> = constants[1]
+      .unwrap()
+      .0
+      .as_slice()
+      .unwrap()
+      .iter()
+      .enumerate()
+      .map(|(i, x)| {
+        if i < input_shapes[1][0] {
+          // If a shape dimension is 0, then we replace the value with the corresponding input dimension
+          if *x == Fr::zero() {
+            input_shapes[0][i] as i32
+          } else {
+            util::fr_to_int(*x)
+          }
+        } else {
+          0
+        }
+      })
+      .filter(|x| *x != 0)
+      .collect();
     if let Some(i) = endShape.iter().position(|&x| x == -1) {
       let a = input_shapes[0].iter().fold(1, |x, &y| x * y) as i32;
       let b = endShape.iter().fold(-1, |x, &y| x * y);
