@@ -47,6 +47,7 @@ pub fn generate_fake_inputs_for_onnx(filename: &str) -> Vec<ArrayD<Fr>> {
 }
 
 pub fn generate_fake_tensor(dtype: DataType, shape: Vec<usize>) -> ArrayD<Fr> {
+  eprintln!("\x1b[93mWARNING\x1b[0m: Generating fake tensor for ONNX model. This is only for testing purposes.");
   let mut rng = StdRng::from_entropy();
   let val_num = shape.iter().fold(1, |acc, x| acc * x);
   let input = match dtype {

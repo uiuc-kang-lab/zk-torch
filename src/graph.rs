@@ -24,7 +24,7 @@ pub struct Node {
 #[derive(Debug)]
 pub struct Graph {
   pub basic_blocks: Vec<Box<dyn BasicBlock>>,
-  pub precomputed_bb: Vec<bool>,
+  pub precomputable: (Vec<bool>, Vec<bool>), // (for basic_blocks, for nodes)
   pub layer_names: Vec<String>,
   pub nodes: Vec<Node>,
   pub outputs: Vec<(i32, usize)>,
@@ -92,7 +92,7 @@ impl Graph {
       .zip(models.iter())
       .enumerate()
       .map(|(i, (b, m))| {
-        let precomputable = self.precomputed_bb[i];
+        let precomputable = self.precomputable.0[i];
         if precomputable {
           println!("skipping setup for {:?} {:?}", i, b);
           return (vec![], vec![], vec![]);
@@ -140,7 +140,7 @@ impl Graph {
       .iter()
       .enumerate()
       .map(|(i, n)| {
-        let precomputable = self.layer_names[i].contains("(precomputed)");
+        let precomputable = self.precomputable.1[i];
         if precomputable {
           println!("skipping proving for {:?} {:?}", i, self.basic_blocks[n.basic_block]);
           return (vec![], vec![], vec![]);
@@ -200,7 +200,7 @@ impl Graph {
       .iter()
       .enumerate()
       .map(|(i, n)| {
-        let precomputable = self.layer_names[i].contains("(precomputed)");
+        let precomputable = self.precomputable.1[i];
         if precomputable {
           println!("skipping verifying for {:?} {:?}", i, self.basic_blocks[n.basic_block]);
           return vec![];
@@ -255,7 +255,7 @@ impl Graph {
           }
         })
         .collect();
-      let precomputable = self.layer_names[i].contains("(precomputed)");
+      let precomputable = self.precomputable.1[i];
       if !precomputable {
         let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, cache.clone());
         let mut bytes = Vec::new();
@@ -277,7 +277,7 @@ impl Graph {
   pub fn new() -> Self {
     Graph {
       basic_blocks: vec![],
-      precomputed_bb: vec![],
+      precomputable: (vec![], vec![]),
       layer_names: vec![],
       nodes: vec![],
       outputs: vec![],

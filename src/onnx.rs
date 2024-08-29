@@ -107,7 +107,7 @@ fn parse_onnx_constants<'a>(
       (tensor, data_type)
     } else {
       // if the data_location is not None, we generate fake weights for now.
-      // we can add support for loading weights from file later
+      // TODO: we can add support for loading weights from file later
       let shape: Vec<usize> = tensor.dims.iter().map(|&i| i as usize).collect();
       let dtype = DataType::from_i32(tensor.data_type).unwrap().into();
       let data_type = util::datatype_to_datumtype(tensor.data_type);
@@ -140,7 +140,8 @@ fn create_output_indices<'a>(
     });
     graph.layer_names.push(format!("Const {}", name.to_string()));
     graph.basic_blocks.push(Box::new(ConstBasicBlock {}));
-    graph.precomputed_bb.push(false);
+    graph.precomputable.1.push(false);
+    graph.precomputable.0.push(false);
   }
 
   outputs_idx
@@ -239,9 +240,9 @@ fn update_graph_w_local_graph(
     if idx == graph.basic_blocks.len() {
       models.push((basic_block.genModel(), DatumType::I64));
       graph.basic_blocks.push(basic_block);
-      graph.precomputed_bb.push(precomputable);
+      graph.precomputable.0.push(precomputable);
     } else {
-      graph.precomputed_bb[idx] = graph.precomputed_bb[idx] && precomputable;
+      graph.precomputable.0[idx] = graph.precomputable.0[idx] && precomputable;
     }
   }
   // pushing nodes in a local graph to update graph.nodes
@@ -275,8 +276,10 @@ fn update_graph_w_local_graph(
     };
     if precomputable {
       graph.layer_names.push(format!("Op {} (precomputed)", name));
+      graph.precomputable.1.push(true);
     } else {
       graph.layer_names.push(format!("Op {}", name));
+      graph.precomputable.1.push(false);
     }
   }
   // tracking output_idx of local_graph
@@ -362,7 +365,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<(ArrayD<Fr>, DatumType)>) {
 
   let mut graph = Graph {
     basic_blocks: vec![],
-    precomputed_bb: vec![],
+    precomputable: (vec![], vec![]),
     layer_names: vec![],
     nodes: vec![],
     outputs: vec![],
