@@ -13,7 +13,7 @@ impl Layer for MulLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
     input_types: &Vec<DatumType>,
-    constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();

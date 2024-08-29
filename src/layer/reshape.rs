@@ -71,7 +71,7 @@ impl Layer for ReshapeLayer {
       let reshape = graph.addBB(Box::new(ReshapeBasicBlock {
         shape: endShape_padded.clone(),
       }));
-      let output = graph.addNode(reshape, vec![(-1, 0), (-2, 0)]);
+      let output = graph.addNode(reshape, vec![(-1, 0)]);
       graph.outputs.push((output, 0));
     } else if startShape.len() == 0 {
       // special case: arr0 --> [1,1,...]
@@ -88,7 +88,7 @@ impl Layer for ReshapeLayer {
         input_dim: IxDyn(&startShape_padded),
         padding_partition: copy_constraint::PaddingEnum::Zero,
       }));
-      let output = graph.addNode(cc, vec![(-1, 0), (-2, 0)]);
+      let output = graph.addNode(cc, vec![(-1, 0)]);
       graph.outputs.push((output, 0));
     }
 

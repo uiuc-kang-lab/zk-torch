@@ -12,7 +12,7 @@ pub struct ReshapeBasicBlock {
 
 impl BasicBlock for ReshapeBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    assert!(inputs.len() == 2);
+    assert!(inputs.len() == 1);
     assert!(inputs[0].shape().last() == self.shape.last());
     vec![inputs[0].view().into_shape(&self.shape[..]).unwrap().to_owned()]
   }
