@@ -14,48 +14,32 @@ impl Layer for ReshapeLayer {
     input_shapes: &Vec<&Vec<usize>>,
     input_types: &Vec<DatumType>,
     constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
-    attributes: &Vec<&AttributeProto>,
+    _attributes: &Vec<&AttributeProto>,
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
 
     let startShape = input_shapes[0];
-    let allowzero = match attributes.iter().filter(|x| x.name == "allowzero").next() {
-      Some(v) => v.i,
-      None => 0,
-    };
-    let mut endShape: Vec<_> = if allowzero == 0 {
-      constants[1]
-        .unwrap()
-        .0
-        .as_slice()
-        .unwrap()
-        .iter()
-        .enumerate()
-        .map(|(i, x)| {
-          if i < input_shapes[1][0] {
-            if *x == Fr::zero() {
-              input_shapes[0][i] as i32
-            } else {
-              util::fr_to_int(*x)
-            }
+    let mut endShape: Vec<_> = constants[1]
+      .unwrap()
+      .0
+      .as_slice()
+      .unwrap()
+      .iter()
+      .enumerate()
+      .map(|(i, x)| {
+        if i < input_shapes[1][0] {
+          // If a shape dimension is 0, then we replace the value with the corresponding input dimension
+          if *x == Fr::zero() {
+            input_shapes[0][i] as i32
           } else {
-            0
+            util::fr_to_int(*x)
           }
-        })
-        .filter(|x| *x != 0)
-        .collect()
-    } else {
-      constants[1]
-        .unwrap()
-        .0
-        .as_slice()
-        .unwrap()
-        .iter()
-        .enumerate()
-        .map(|(i, x)| if i < input_shapes[1][0] { util::fr_to_int(*x) } else { 0 })
-        .filter(|x| *x != 0)
-        .collect()
-    };
+        } else {
+          0
+        }
+      })
+      .filter(|x| *x != 0)
+      .collect();
     if let Some(i) = endShape.iter().position(|&x| x == -1) {
       let a = input_shapes[0].iter().fold(1, |x, &y| x * y) as i32;
       let b = endShape.iter().fold(-1, |x, &y| x * y);
