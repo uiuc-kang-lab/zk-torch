@@ -1,6 +1,6 @@
 task: "sample"
 onnx:
-  model_path: "../edge_onnx/StableDiffusionXL/vae_decoder.onnx"
+  model_path: "sample.onnx"
   input_path: "not_implemented_yet"
 ptau:
   ptau_path: "challenge"
