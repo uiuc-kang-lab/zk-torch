@@ -39,7 +39,7 @@ impl Layer for ExpandLayer {
     // if so, use ExpandBasicBlock without proving. Otherwise, use ConstOfShapeBasicBlock and MulScalarBasicBlock
     let shape0_product = shape0.iter().fold(1, |acc, x| acc * x);
     let shape1_product = shape1.iter().fold(1, |acc, x| acc * x);
-    if *input_shapes[0].last().unwrap() == *newShape.clone().last().unwrap() && shape0_product < shape1_product {
+    if *input_shapes[0].last().unwrap() == *newShape.clone().last().unwrap() && shape0_product <= shape1_product {
       let expand = graph.addBB(Box::new(ExpandBasicBlock {}));
       let expand_output = graph.addNode(expand, vec![(-1, 0), (-2, 0)]);
       graph.outputs.push((expand_output, 0));

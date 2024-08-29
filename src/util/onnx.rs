@@ -64,8 +64,18 @@ pub fn generate_fake_tensor(dtype: DataType, shape: Vec<usize>) -> ArrayD<Fr> {
 pub fn datatype_to_datumtype(t: i32) -> DatumType {
   match t {
     1 => DatumType::F32,
+    2 => DatumType::I64,
+    3 => DatumType::I64,
+    4 => DatumType::I64,
+    5 => DatumType::I64,
+    6 => DatumType::I64,
     7 => DatumType::I64,
+    8 => DatumType::String,
     9 => DatumType::Bool,
+    10 => DatumType::F32,
+    11 => DatumType::F32,
+    12 => DatumType::I64,
+    13 => DatumType::I64,
     _ => panic!("DatumType {:?} not supported", t),
   }
 }
