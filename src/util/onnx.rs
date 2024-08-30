@@ -64,19 +64,10 @@ pub fn generate_fake_tensor(dtype: DataType, shape: Vec<usize>) -> ArrayD<Fr> {
 // https://docs.rs/tract-onnx/latest/tract_onnx/pb/tensor_proto/enum.DataType.html
 pub fn datatype_to_datumtype(t: i32) -> DatumType {
   match t {
-    1 => DatumType::F32,
-    2 => DatumType::I64,
-    3 => DatumType::I64,
-    4 => DatumType::I64,
-    5 => DatumType::I64,
-    6 => DatumType::I64,
-    7 => DatumType::I64,
+    2 | 3 | 4 | 5 | 6 | 7 | 12 | 13 => DatumType::I64,
+    1 | 10 | 11 => DatumType::F32,
     8 => DatumType::String,
     9 => DatumType::Bool,
-    10 => DatumType::F32,
-    11 => DatumType::F32,
-    12 => DatumType::I64,
-    13 => DatumType::I64,
     _ => panic!("DatumType {:?} not supported", t),
   }
 }
