@@ -46,17 +46,23 @@ impl Layer for ExpandLayer {
     } else {
       let constantOfShape = graph.addBB(Box::new(ConstOfShapeBasicBlock {
         c: Fr::one(),
-        shape: newShape_padded,
+        shape: newShape_padded.clone(),
       }));
       let mul_scalar = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(MulScalarBasicBlock {}),
         N: 1,
       }));
+      let mul = graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(MulBasicBlock {}),
+        N: 1,
+      }));
       let constantOfShape_output = graph.addNode(constantOfShape, vec![]);
       let expand_output = if *input_shapes[0].last().unwrap() == 1 {
         graph.addNode(mul_scalar, vec![(constantOfShape_output, 0), (-1, 0)])
-      } else {
+      } else if *newShape_padded.last().unwrap() == 1 {
         graph.addNode(mul_scalar, vec![(-1, 0), (constantOfShape_output, 0)])
+      } else {
+        graph.addNode(mul, vec![(-1, 0), (constantOfShape_output, 0)])
       };
       graph.outputs.push((expand_output, 0));
     }
