@@ -6,9 +6,9 @@ use crate::util;
 use ark_bn254::Fr;
 use ark_std::One;
 use ndarray::ArrayD;
+use rayon::iter::ParallelIterator;
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
-use rayon::iter::ParallelIterator;
 
 #[derive(Debug)]
 pub struct PrecomputedPowBasicBlock {
