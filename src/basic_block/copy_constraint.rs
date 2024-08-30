@@ -19,7 +19,6 @@ use ark_std::{
 use ndarray::{azip, indices, ArrayD, ArrayView, ArrayView1, ArrayViewD, Axis, Dim, Dimension, IxDyn, IxDynImpl, NdIndex, Shape, Zip};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
-use std::time::Instant;
 use std::{
   cmp::{max, min},
   collections::{BTreeMap, HashMap},
@@ -395,7 +394,6 @@ impl BasicBlock for CopyConstraintBasicBlock {
       coeffs: Z_poly.coeffs.par_iter().enumerate().map(|(i, x)| x * &domain.element(i)).collect(),
     };
     // These have the extra beta * X + gamma etc. terms that appear in Z, t, r (seen as terms of t on p. 29 of [1])
-
     let ft_polys: Vec<_> = fj_polys
       .par_iter()
       .enumerate()
