@@ -3,8 +3,9 @@ use ark_ff::Zero;
 use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::One;
 
-pub fn mul_polys(polys: &Vec<DensePolynomial<Fr>>, domain_size: usize) -> DensePolynomial<Fr> {
-  let domain = GeneralEvaluationDomain::new(domain_size * polys.len()).unwrap();
+pub fn mul_polys(polys: &Vec<DensePolynomial<Fr>>) -> DensePolynomial<Fr> {
+  let N: usize = polys.iter().map(|p| p.coeffs.len()).sum();
+  let domain = GeneralEvaluationDomain::new(N).unwrap();
   if polys[0].is_zero() {
     return DensePolynomial::zero();
   }

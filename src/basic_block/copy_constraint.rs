@@ -402,9 +402,9 @@ impl BasicBlock for CopyConstraintBasicBlock {
         x + &id_poly + gamma_poly.clone()
       })
       .collect();
-    let f1_poly = util::mul_polys(&ft_polys, N);
+    let f1_poly = util::mul_polys(&ft_polys);
     let gt_polys: Vec<_> = fj_polys.par_iter().enumerate().map(|(i, x)| &ssig_polys[i].mul(&beta_poly) + x + gamma_poly.clone()).collect();
-    let g1_poly = util::mul_polys(&gt_polys, N);
+    let g1_poly = util::mul_polys(&gt_polys);
 
     let alpha_pows = calc_pow(alpha, Lnone_polys.len() + 1);
     let mut none_poly = DensePolynomial::<Fr>::zero();
