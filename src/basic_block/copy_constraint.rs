@@ -19,6 +19,7 @@ use ark_std::{
 use ndarray::{azip, indices, ArrayD, ArrayView, ArrayView1, ArrayViewD, Axis, Dim, Dimension, IxDyn, IxDynImpl, NdIndex, Shape, Zip};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
+use std::time::Instant;
 use std::{
   cmp::{max, min},
   collections::{BTreeMap, HashMap},
@@ -271,7 +272,12 @@ impl BasicBlock for CopyConstraintBasicBlock {
     );
     let ssig_polys: Vec<_> = ssig.par_iter().map(|x| DensePolynomial::from_coefficients_vec(domain.ifft(x))).collect();
 
+    let start = Instant::now();
+    // let _ = util::msm::<G1Projective>(&srs.X1A, &ssig_polys[0].coeffs);
+
     let ssig_xs: Vec<_> = ssig_polys.iter().map(|x| util::msm::<G1Projective>(&srs.X1A, &x.coeffs)).collect();
+    let duration = start.elapsed();
+    println!("msm time: {:?}", duration);
 
     return (ssig_xs, vec![], ssig_polys);
   }
@@ -329,26 +335,26 @@ impl BasicBlock for CopyConstraintBasicBlock {
 
     let mut Z = vec![Fr::zero(); N];
     Z[0] = Fr::one();
-    for j in 0..(N - 1) {
-      let o = domain.element(j);
-      let num: Fr = inputs[0]
-        .iter()
-        .chain(outputs[0].iter())
-        .enumerate()
-        .map(|(i, x)| beta * Fr::from((i + 1) as i32) * o + x.poly.evaluate(&o) + gamma)
-        .product();
-      let denom: Fr = inputs[0]
-        .iter()
-        .chain(outputs[0].iter())
-        .enumerate()
-        .map(|(i, x)| beta * ssig_polys[i].evaluate(&o) + x.poly.evaluate(&o) + gamma)
-        .product();
-      Z[j + 1] = Z[j] * num * denom.inverse().unwrap();
-    }
+    // for j in 0..(N - 1) {
+    //   let o = domain.element(j);
+    //   let num: Fr = inputs[0]
+    //     .iter()
+    //     .chain(outputs[0].iter())
+    //     .enumerate()
+    //     .map(|(i, x)| beta * Fr::from((i + 1) as i32) * o + x.poly.evaluate(&o) + gamma)
+    //     .product();
+    //   let denom: Fr = inputs[0]
+    //     .iter()
+    //     .chain(outputs[0].iter())
+    //     .enumerate()
+    //     .map(|(i, x)| beta * ssig_polys[i].evaluate(&o) + x.poly.evaluate(&o) + gamma)
+    //     .product();
+    //   Z[j + 1] = Z[j] * num * denom.inverse().unwrap();
+    // }
     let Z_poly = DensePolynomial::from_coefficients_vec(domain.ifft(&Z));
-    let Z_blind: Vec<_> = (0..3).map(|_| Fr::rand(&mut rng2)).collect();
-    let Z_blind_poly = DensePolynomial::from_coefficients_vec(vec![Z_blind[0], Z_blind[1], Z_blind[2]]);
-    let Z_poly = &Z_poly + &Z_blind_poly.mul(&DensePolynomial::from(domain.vanishing_polynomial()));
+    // let Z_blind: Vec<_> = (0..3).map(|_| Fr::rand(&mut rng2)).collect();
+    // let Z_blind_poly = DensePolynomial::from_coefficients_vec(vec![Z_blind[0], Z_blind[1], Z_blind[2]]);
+    // let Z_poly = &Z_poly + &Z_blind_poly.mul(&DensePolynomial::from(domain.vanishing_polynomial()));
     let Z_x = util::msm::<G1Projective>(&srs.X1A, &Z_poly.coeffs);
 
     // Round 3: Commit t (batched quotient polynomial of the below polynomials, p. 29 of [1])
@@ -394,6 +400,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
       coeffs: Z_poly.coeffs.par_iter().enumerate().map(|(i, x)| x * &domain.element(i)).collect(),
     };
     // These have the extra beta * X + gamma etc. terms that appear in Z, t, r (seen as terms of t on p. 29 of [1])
+
+    let start = Instant::now();
     let ft_polys: Vec<_> = fj_polys
       .par_iter()
       .enumerate()
@@ -402,9 +410,13 @@ impl BasicBlock for CopyConstraintBasicBlock {
         x + &id_poly + gamma_poly.clone()
       })
       .collect();
-    let f1_poly = ft_polys.iter().fold(DensePolynomial::from_coefficients_vec(vec![Fr::one()]), |acc, x| acc.mul(x));
+    let f1_poly = util::mul_polys(&ft_polys, N);
+    // let f1_poly = ft_polys.iter().fold(DensePolynomial::from_coefficients_vec(vec![Fr::one()]), |acc, x| acc.mul(x));
     let gt_polys: Vec<_> = fj_polys.par_iter().enumerate().map(|(i, x)| &ssig_polys[i].mul(&beta_poly) + x + gamma_poly.clone()).collect();
-    let g1_poly = gt_polys.iter().fold(DensePolynomial::from_coefficients_vec(vec![Fr::one()]), |acc, x| acc.mul(x));
+    let g1_poly = util::mul_polys(&gt_polys, N);
+    let duration = start.elapsed();
+    println!("t polys time: {:?}", duration);
+    // let g1_poly = gt_polys.iter().fold(DensePolynomial::from_coefficients_vec(vec![Fr::one()]), |acc, x| acc.mul(x));
 
     let alpha_pows = calc_pow(alpha, Lnone_polys.len() + 1);
     let mut none_poly = DensePolynomial::<Fr>::zero();
