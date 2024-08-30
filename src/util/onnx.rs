@@ -60,6 +60,7 @@ pub fn generate_fake_inputs_for_onnx(filename: &str) -> Vec<ArrayD<Fr>> {
 pub fn datatype_to_datumtype(t: i32) -> DatumType {
   match t {
     1 => DatumType::F32,
+    6 => DatumType::I32,
     7 => DatumType::I64,
     9 => DatumType::Bool,
     _ => panic!("DatumType {:?} not supported", t),
@@ -68,6 +69,7 @@ pub fn datatype_to_datumtype(t: i32) -> DatumType {
 
 pub fn datumtype_to_sf(t: DatumType) -> usize {
   match t {
+    DatumType::I32 => 1,
     DatumType::I64 => 1,
     DatumType::Bool => 1,
     DatumType::F32 => *onnx::SF,
