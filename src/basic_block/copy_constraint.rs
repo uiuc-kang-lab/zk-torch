@@ -269,9 +269,10 @@ impl BasicBlock for CopyConstraintBasicBlock {
         .into_iter()
         .collect(),
     );
-    let ssig_polys: Vec<_> = ssig.par_iter().map(|x| DensePolynomial::from_coefficients_vec(domain.ifft(x))).collect();
-
+    let mut ssig_poly_evals: Vec<_> = ssig.par_iter().map(|x| DensePolynomial::from_coefficients_vec(x.to_vec())).collect();
+    let mut ssig_polys: Vec<_> = ssig.par_iter().map(|x| DensePolynomial::from_coefficients_vec(domain.ifft(x))).collect();
     let ssig_xs: Vec<_> = ssig_polys.iter().map(|x| util::msm::<G1Projective>(&srs.X1A, &x.coeffs)).collect();
+    ssig_polys.append(&mut ssig_poly_evals);
 
     return (ssig_xs, vec![], ssig_polys);
   }
@@ -294,6 +295,19 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let N = max(input_deg, output_deg);
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
 
+    // Round 0: Evaluate over N-th roots of unity for I/O
+    let mut io_evals: Vec<Vec<Fr>> = if N == input_deg {
+      input.par_iter().map(|x| x.raw.clone()).collect()
+    } else {
+      input.par_iter().map(|x| domain.fft(&x.poly.coeffs)).collect()
+    };
+    let mut output_evals: Vec<Vec<Fr>> = if N == output_deg {
+      output.par_iter().map(|x| x.raw.clone()).collect()
+    } else {
+      output.par_iter().map(|x| domain.fft(&x.poly.coeffs)).collect()
+    };
+    io_evals.append(&mut output_evals);
+
     // Round 1: Commit input and output polynomials
     // Calculate fjs (corresponds to fjs on p. 22 and a, b, c on p. 28 of [1])
     let m = inputs[0].len() + outputs[0].len();
@@ -315,6 +329,9 @@ impl BasicBlock for CopyConstraintBasicBlock {
       .collect();
 
     let ssig_polys = &setup.2[..];
+    let ssig_polys_len = ssig_polys.len();
+    let ssig_poly_evals = &ssig_polys[ssig_polys_len / 2..];
+    let ssig_polys = &ssig_polys[..ssig_polys_len / 2];
 
     // Round 2: Commit Z (p. 28 of [1])
     // Fiat-Shamir
@@ -331,17 +348,11 @@ impl BasicBlock for CopyConstraintBasicBlock {
     Z[0] = Fr::one();
     for j in 0..(N - 1) {
       let o = domain.element(j);
-      let num: Fr = inputs[0]
-        .iter()
-        .chain(outputs[0].iter())
-        .enumerate()
-        .map(|(i, x)| beta * Fr::from((i + 1) as i32) * o + x.poly.evaluate(&o) + gamma)
+      let num: Fr = (0..io_evals.len()).into_par_iter()
+        .map(|i| beta * Fr::from((i + 1) as i32) * o + io_evals[i][j] + gamma)
         .product();
-      let denom: Fr = inputs[0]
-        .iter()
-        .chain(outputs[0].iter())
-        .enumerate()
-        .map(|(i, x)| beta * ssig_polys[i].evaluate(&o) + x.poly.evaluate(&o) + gamma)
+      let denom: Fr = (0..io_evals.len()).into_par_iter()
+        .map(|i| beta * ssig_poly_evals[i].coeffs[j] + io_evals[i][j] + gamma)
         .product();
       Z[j + 1] = Z[j] * num * denom.inverse().unwrap();
     }
@@ -402,9 +413,9 @@ impl BasicBlock for CopyConstraintBasicBlock {
         x + &id_poly + gamma_poly.clone()
       })
       .collect();
-    let f1_poly = util::mul_polys(&ft_polys, N);
+    let f1_poly = util::mul_polys(&ft_polys);
     let gt_polys: Vec<_> = fj_polys.par_iter().enumerate().map(|(i, x)| &ssig_polys[i].mul(&beta_poly) + x + gamma_poly.clone()).collect();
-    let g1_poly = util::mul_polys(&gt_polys, N);
+    let g1_poly = util::mul_polys(&gt_polys);
 
     let alpha_pows = calc_pow(alpha, Lnone_polys.len() + 1);
     let mut none_poly = DensePolynomial::<Fr>::zero();
