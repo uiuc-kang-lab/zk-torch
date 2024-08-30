@@ -42,6 +42,14 @@ impl Layer for PowLayer {
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
 
+    // Note: the following code is a workaround for the case that constants[0] is a scalar and constants[1] is a tensor
+    //       If we want to formally prove this, we need to
+    //       (1) either implement a new basic block that can handle this case
+    //       (2) or perform element-wise pow and copy the result to the output tensor
+    //       both of which are a little bit complicated.
+    //       Fortunately, this case only happens in the precomputable part of RoPE embedding for now.
+    //       So, we can just use a simple basic block that can handle this case without proving.
+    // TODO: think about how to handle this case in a more general way later
     // if both constants[0] and constants[1] are Some
     if constants[0].is_some() && constants[1].is_some() {
       // if constants[0].len() == 1 and constants[1].len() > 1
@@ -55,6 +63,7 @@ impl Layer for PowLayer {
         return (graph, vec![input_shapes[1].clone()], vec![input_types[0]]);
       }
     }
+
     assert!(constants[1].unwrap().0.len() == 1);
     let N = util::fr_to_int(*constants[1].unwrap().0.first().unwrap());
     assert!(N >= 0);
