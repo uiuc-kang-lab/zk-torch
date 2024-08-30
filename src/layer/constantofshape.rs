@@ -5,9 +5,9 @@ use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
+use tract_onnx::pb::tensor_proto::DataType;
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
-use tract_onnx::pb::tensor_proto::DataType;
 
 // Generate a tensor with a given value (the value is in the ONNX attribute) and shape (the shape is in the input tensor)
 // reference: https://onnx.ai/onnx/operators/onnx__ConstantOfShape.html
@@ -30,12 +30,8 @@ impl Layer for ConstOfShapeLayer {
       _ => panic!("Unsupported data type"),
     };
     let value = match datum_type {
-      DatumType::I64 => {
-        Fr::from(attr_val.t.clone().unwrap().raw_data[0])
-      },
-      DatumType::F32 => {
-        Fr::from((attr_val.t.clone().unwrap().raw_data[0] as f32 * *onnx::SF_FLOAT).round() as i32)
-      },
+      DatumType::I64 => Fr::from(attr_val.t.clone().unwrap().raw_data[0]),
+      DatumType::F32 => Fr::from((attr_val.t.clone().unwrap().raw_data[0] as f32 * *onnx::SF_FLOAT).round() as i32),
       _ => panic!("Unsupported data type"),
     };
     let endShape: Vec<usize> = constants[0].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x) as usize).filter(|x| *x != 0).collect();
