@@ -348,12 +348,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
     Z[0] = Fr::one();
     for j in 0..(N - 1) {
       let o = domain.element(j);
-      let num: Fr = (0..io_evals.len()).into_par_iter()
-        .map(|i| beta * Fr::from((i + 1) as i32) * o + io_evals[i][j] + gamma)
-        .product();
-      let denom: Fr = (0..io_evals.len()).into_par_iter()
-        .map(|i| beta * ssig_poly_evals[i].coeffs[j] + io_evals[i][j] + gamma)
-        .product();
+      let num: Fr = (0..io_evals.len()).into_par_iter().map(|i| beta * Fr::from((i + 1) as i32) * o + io_evals[i][j] + gamma).product();
+      let denom: Fr = (0..io_evals.len()).into_par_iter().map(|i| beta * ssig_poly_evals[i].coeffs[j] + io_evals[i][j] + gamma).product();
       Z[j + 1] = Z[j] * num * denom.inverse().unwrap();
     }
     let Z_poly = DensePolynomial::from_coefficients_vec(domain.ifft(&Z));
