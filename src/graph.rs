@@ -24,7 +24,7 @@ pub struct Node {
 #[derive(Debug)]
 pub struct Graph {
   pub basic_blocks: Vec<Box<dyn BasicBlock>>,
-  pub precomputable: (Vec<bool>, Vec<bool>), // (for basic_blocks, for nodes)
+  pub precomputable: (Vec<bool>, Vec<bool>, Vec<bool>), // (for setup, for prove and verify, for encodeOutputs)
   pub layer_names: Vec<String>,
   pub nodes: Vec<Node>,
   pub outputs: Vec<(i32, usize)>,
@@ -61,8 +61,17 @@ impl Graph {
     outputs: &Vec<&Vec<&ArrayD<Fr>>>,
     timing: &mut TimingTree,
   ) -> Vec<Vec<ArrayD<Data>>> {
+    assert!(self.nodes.len() == self.precomputable.2.len());
     let mut outputsEnc = vec![vec![]; self.nodes.len()];
     self.nodes.iter().enumerate().for_each(|(i, n)| {
+      let precomputable = self.precomputable.2[i];
+      if precomputable {
+        println!(
+          "{} | skipping encodingOutputs for {i} {:?}",
+          self.layer_names[i], self.basic_blocks[n.basic_block]
+        );
+        return;
+      }
       let encode_id = format!("{} | encoding node {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
       println!("{}", encode_id);
       let myInputs = n
@@ -86,6 +95,7 @@ impl Graph {
   }
 
   pub fn setup(&self, srs: &SRS, models: &Vec<&ArrayD<Data>>) -> Vec<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)> {
+    assert!(self.basic_blocks.len() == self.precomputable.0.len());
     self
       .basic_blocks
       .iter()
@@ -133,6 +143,7 @@ impl Graph {
     rng: &mut StdRng,
     timing: &mut TimingTree,
   ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> {
+    assert!(self.nodes.len() == self.precomputable.1.len());
     let cache = Arc::new(Mutex::new(HashMap::new()));
 
     self
@@ -142,7 +153,10 @@ impl Graph {
       .map(|(i, n)| {
         let precomputable = self.precomputable.1[i];
         if precomputable {
-          println!("skipping proving for {:?} {:?}", i, self.basic_blocks[n.basic_block]);
+          println!(
+            "{} | skipping proving for {i} {:?}",
+            self.layer_names[i], self.basic_blocks[n.basic_block]
+          );
           return (vec![], vec![], vec![]);
         }
         let prove_id = format!("{} | proving {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
@@ -193,6 +207,7 @@ impl Graph {
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)>,
     rng: &mut StdRng,
   ) {
+    assert!(self.nodes.len() == self.precomputable.1.len());
     let cache = Arc::new(Mutex::new(HashMap::new()));
 
     let pairings: Vec<Vec<PairingCheck>> = self
@@ -202,7 +217,10 @@ impl Graph {
       .map(|(i, n)| {
         let precomputable = self.precomputable.1[i];
         if precomputable {
-          println!("skipping verifying for {:?} {:?}", i, self.basic_blocks[n.basic_block]);
+          println!(
+            "{} | skipping verifying for {i} {:?}",
+            self.layer_names[i], self.basic_blocks[n.basic_block]
+          );
           return vec![];
         }
         println!("{} | verifying {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
@@ -240,6 +258,7 @@ impl Graph {
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)>,
     rng: &mut StdRng,
   ) {
+    assert!(self.nodes.len() == self.precomputable.1.len());
     let cache = Arc::new(Mutex::new(HashMap::new()));
 
     self.nodes.iter().enumerate().for_each(|(i, n)| {
@@ -277,7 +296,7 @@ impl Graph {
   pub fn new() -> Self {
     Graph {
       basic_blocks: vec![],
-      precomputable: (vec![], vec![]),
+      precomputable: (vec![], vec![], vec![]),
       layer_names: vec![],
       nodes: vec![],
       outputs: vec![],

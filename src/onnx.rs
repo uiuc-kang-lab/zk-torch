@@ -140,8 +140,9 @@ fn create_output_indices<'a>(
     });
     graph.layer_names.push(format!("Const {}", name.to_string()));
     graph.basic_blocks.push(Box::new(ConstBasicBlock {}));
-    graph.precomputable.1.push(false);
     graph.precomputable.0.push(false);
+    graph.precomputable.1.push(true);
+    graph.precomputable.2.push(true);
   }
 
   outputs_idx
@@ -276,11 +277,11 @@ fn update_graph_w_local_graph(
     };
     if precomputable {
       graph.layer_names.push(format!("Op {} (precomputed)", name));
-      graph.precomputable.1.push(true);
     } else {
       graph.layer_names.push(format!("Op {}", name));
-      graph.precomputable.1.push(false);
     }
+    graph.precomputable.1.push(precomputable);
+    graph.precomputable.2.push(precomputable);
   }
   // tracking output_idx of local_graph
   for (i, output) in node.output.iter().enumerate() {
@@ -353,6 +354,34 @@ fn process_node(
   });
 }
 
+// This function is used for find all the skip-able nodes when encoding the circuit outputs.
+// The high-level idea is that we can skip encodeOutputs for a node only when
+// - the node itself is precomputable
+// - all of its outputs are fed into precomputable nodes (that's why we need to propagate precomputable)
+fn propagate_precomputable(graph: &mut Graph) {
+  println!("Determining skip-able nodes when encoding the circuit...");
+  let mut precomputable = graph.precomputable.2.clone();
+  let mut changed = true;
+  let mut counter = 0;
+  // stop propagating when no more changes are made
+  while changed {
+    println!("  Iteration: {}", counter);
+    changed = false;
+    for i in 0..graph.nodes.len() {
+      let node = &graph.nodes[i];
+      for inp in node.inputs.iter() {
+        if inp.0 >= 0 {
+          let orig = precomputable[inp.0 as usize];
+          precomputable[inp.0 as usize] = precomputable[inp.0 as usize] && precomputable[i];
+          changed = changed || (orig != precomputable[inp.0 as usize]);
+        }
+      }
+    }
+    counter += 1;
+  }
+  graph.precomputable.2 = precomputable;
+}
+
 // This function is used for loading onnx models and returning the graph and models
 // - Graph: the graph of zk-torch BasicBlocks after parsing the onnx layers
 // - Models: input tensors required for generating a setup for each BasicBlock
@@ -365,7 +394,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<(ArrayD<Fr>, DatumType)>) {
 
   let mut graph = Graph {
     basic_blocks: vec![],
-    precomputable: (vec![], vec![]),
+    precomputable: (vec![], vec![], vec![]),
     layer_names: vec![],
     nodes: vec![],
     outputs: vec![],
@@ -389,6 +418,8 @@ pub fn load_file(filename: &str) -> (Graph, Vec<(ArrayD<Fr>, DatumType)>) {
       &mut basic_blocks_idx,
     );
   }
+
+  propagate_precomputable(&mut graph);
 
   (graph, models)
 }
