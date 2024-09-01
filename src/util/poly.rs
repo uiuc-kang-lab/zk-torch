@@ -1,5 +1,5 @@
 use ark_bn254::Fr;
-use ark_ff::{Field, Zero};
+use ark_ff::Zero;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain, Polynomial};
 use ark_std::One;
 use rayon::prelude::*;
