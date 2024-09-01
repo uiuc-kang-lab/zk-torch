@@ -4,10 +4,7 @@
  * padding_partitions fields in the CopyConstraintBasicBlock.
  */
 use crate::util::pad_to_pow_of_two;
-use ark_bn254::Fr;
-use ark_std::Zero;
-use ndarray::{ArrayD, Axis, Dimension, IxDyn};
-use std::collections::HashMap;
+use ndarray::{ArrayD, IxDyn};
 
 // Helper function to get the indices of the reshaped tensor
 // Note that the input_shape and output_shape are non-padded

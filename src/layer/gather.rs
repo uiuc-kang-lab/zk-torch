@@ -28,12 +28,19 @@ impl Layer for GatherLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
     input_types: &Vec<DatumType>,
-    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
+    let mut indices_output = -2;
+    if input_shapes[1].len() == 0 {
+      let indices = graph.addBB(Box::new(Const2BasicBlock {
+        c: constants[1].unwrap().0.clone(),
+      }));
+      indices_output = graph.addNode(indices, vec![]);
+    }
     let gather = graph.addBB(Box::new(GatherBasicBlock {}));
-    let output = graph.addNode(gather, vec![(-1, 0), (-2, 0)]);
+    let output = graph.addNode(gather, vec![(-1, 0), (indices_output, 0)]);
     graph.outputs.push((output, 0));
     let mut output_shape = input_shapes[1].clone();
     output_shape.extend_from_slice(&input_shapes[0][1..]);

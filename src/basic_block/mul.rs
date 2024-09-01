@@ -53,7 +53,7 @@ impl BasicBlock for MulConstBasicBlock {
 pub struct MulScalarBasicBlock;
 impl BasicBlock for MulScalarBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[1].len() == 1);
+    assert!(inputs.len() == 2 && inputs[0].ndim() <= 1 && inputs[1].len() == 1);
     vec![inputs[0].map(|x| *x * inputs[1].first().unwrap())]
   }
 

@@ -1,5 +1,5 @@
 task: "sample"
-onnx: 
+onnx:
   model_path: "sample.onnx"
   input_path: "not_implemented_yet"
 ptau:

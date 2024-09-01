@@ -19,13 +19,22 @@ macro_rules! define_arithmetic_layer {
         _attributes: &Vec<&AttributeProto>,
       ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
         let mut graph = Graph::new();
-        let layer = graph.addBB(Box::new(RepeaterBasicBlock {
-          basic_block: Box::new($basic_block {}),
-          N: 1,
-        }));
+        let layer = if input_shapes[0].len() == 0 && input_shapes[1].len() == 0 {
+          graph.addBB(Box::new($basic_block {}))
+        } else {
+          graph.addBB(Box::new(RepeaterBasicBlock {
+            basic_block: Box::new($basic_block {}),
+            N: 1,
+          }))
+        };
+        let output_shape = if input_shapes[0].len() == 0 && input_shapes[1].len() == 0 {
+          input_shapes[0].clone()
+        } else {
+          util::broadcastDims(input_shapes, 0)
+        };
         let layer_output = graph.addNode(layer, vec![(-1, 0), (-2, 0)]);
         graph.outputs.push((layer_output, 0));
-        (graph, vec![util::broadcastDims(input_shapes, 0)], vec![input_types[0]])
+        (graph, vec![output_shape], vec![input_types[0]])
       }
     }
   };
