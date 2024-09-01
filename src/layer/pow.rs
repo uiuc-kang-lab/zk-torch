@@ -57,7 +57,9 @@ impl Layer for PowLayer {
       if constants[0].unwrap().0.len() == 1 && constants[1].unwrap().0.len() > 1 {
         let c_vec = match constants[1].unwrap().1 {
           DatumType::I32 | DatumType::I64 => constants[1].unwrap().0.iter().map(|x| *x).collect::<Vec<_>>(),
-          DatumType::F32 => constants[1].unwrap().0.iter().map(|x| Fr::from((util::fr_to_int(*x) as f32 / *onnx::SF_FLOAT) as i32)).collect::<Vec<_>>(),
+          DatumType::F32 => {
+            constants[1].unwrap().0.iter().map(|x| Fr::from((util::fr_to_int(*x) as f32 / *onnx::SF_FLOAT) as i32)).collect::<Vec<_>>()
+          }
           _ => panic!("unsupported type"),
         };
         let shape = constants[1].unwrap().0.shape();
@@ -77,10 +79,10 @@ impl Layer for PowLayer {
 
     assert!(constants[1].unwrap().0.len() == 1);
     let N = match constants[1].unwrap().1 {
-      DatumType::I32 | DatumType::I64 =>  util::fr_to_int(*constants[1].unwrap().0.first().unwrap()),
+      DatumType::I32 | DatumType::I64 => util::fr_to_int(*constants[1].unwrap().0.first().unwrap()),
       DatumType::F32 => (util::fr_to_int(*constants[1].unwrap().0.first().unwrap()) as f32 / *onnx::SF_FLOAT) as i32,
       _ => panic!("unsupported type"),
-    }; 
+    };
 
     assert!(N >= 0);
     if N == 0 {
