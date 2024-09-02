@@ -354,7 +354,7 @@ fn process_node(
   });
 }
 
-// This function is used for find all the skip-able nodes when encoding the circuit outputs.
+// This function is used for finding all the skip-able nodes when encoding the circuit outputs.
 // The high-level idea is that we can skip encodeOutputs for a node only when
 // - the node itself is precomputable
 // - all of its outputs are fed into precomputable nodes (that's why we need to propagate precomputable)
