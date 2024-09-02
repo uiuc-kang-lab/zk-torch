@@ -87,7 +87,7 @@ impl Graph {
         // These layers require no proving and verifying, and their outputs are not used as inputs of
         // `encodeOutputs` in any other layers that need proving and verifying.
         println!(
-          "{} | skipping encodingOutputs for {i} {:?}",
+          "{} | skipping encodingOutputs for {i} {:?} because the output is precomputable and will not be used as input in any layer that needs proving and verifying",
           self.layer_names[i], self.basic_blocks[n.basic_block]
         );
         return;
@@ -126,7 +126,10 @@ impl Graph {
         if precomputable {
           // Skip setup for some basicblocks if they are precomputable.
           // These basicblocks require no proving and verifying since they are not used in any layer that needs proving and verifying.
-          println!("skipping setup for {:?} {:?}", i, b);
+          println!(
+            "skipping setup for {:?} {:?} because the basicblock is not used in any layer that needs proving and verifying",
+            i, b
+          );
           return (vec![], vec![], vec![]);
         }
         println!("setting up {:?} {:?}", i, b);
@@ -178,7 +181,7 @@ impl Graph {
           // Skip proving for some layers if they are precomputable.
           // These layers require no proving and verifying as their inputs are known (i.e., constants) during graph construction.
           println!(
-            "{} | skipping proving for {i} {:?}",
+            "{} | skipping proving for {i} {:?} because this layer is precomputable given the constant inputs",
             self.layer_names[i], self.basic_blocks[n.basic_block]
           );
           return (vec![], vec![], vec![]);
@@ -244,7 +247,7 @@ impl Graph {
           // Skip verifying for some layers if they are precomputable.
           // These layers require no proving and verifying as their inputs are known (i.e., constants) during graph construction.
           println!(
-            "{} | skipping verifying for {i} {:?}",
+            "{} | skipping verifying for {i} {:?} because this layer is precomputable given the constant inputs",
             self.layer_names[i], self.basic_blocks[n.basic_block]
           );
           return vec![];
