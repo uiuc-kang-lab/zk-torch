@@ -27,6 +27,8 @@ pub fn mul_two_polys(polys: &Vec<DensePolynomial<Fr>>) -> DensePolynomial<Fr> {
   DensePolynomial::from_coefficients_vec(domain.ifft(&p_evals))
 }
 
+// Multiply a list of polynomials in parallel
+// TODO: explore if there exists a more efficient parallel algorithm
 pub fn mul_polys(polys: &Vec<DensePolynomial<Fr>>) -> DensePolynomial<Fr> {
   // Base case: if the list has only one polynomial, return it directly
   if polys.len() == 1 {
