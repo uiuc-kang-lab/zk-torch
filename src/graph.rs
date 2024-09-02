@@ -84,8 +84,8 @@ impl Graph {
       let precomputable = self.precomputable.for_encodeOutputs[i];
       if precomputable {
         // Skip encodeOutputs for some layers if they are precomputable.
-        // These layers require no proving and verifying, and their outputs are not used as inputs of 
-        // `encodeOutputs`` in any other layers that need proving and verifying.
+        // These layers require no proving and verifying, and their outputs are not used as inputs of
+        // `encodeOutputs` in any other layers that need proving and verifying.
         println!(
           "{} | skipping encodingOutputs for {i} {:?}",
           self.layer_names[i], self.basic_blocks[n.basic_block]
