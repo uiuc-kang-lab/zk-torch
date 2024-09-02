@@ -56,6 +56,7 @@ fn parse_onnx_inputs(onnx_graph: &pb::GraphProto) -> (HashMap<String, usize>, Ha
 fn parse_onnx_constants<'a>(
   onnx_graph: &'a pb::GraphProto,
   shapes: &mut HashMap<String, Vec<usize>>,
+  types: &mut HashMap<String, DatumType>,
 ) -> (
   impl Iterator<Item = (String, &'a pb::TensorProto)> + 'a,
   HashMap<String, usize>,
@@ -106,6 +107,7 @@ fn parse_onnx_constants<'a>(
     .unwrap();
 
     shapes.insert(name.clone(), tensor.shape().to_vec());
+    types.insert(name.clone(), data_type);
     let tensor = util::pad_to_pow_of_two(&tensor, &Fr::zero());
     constants_hashmap.insert(name.clone(), idx);
     models.push((tensor, data_type));
@@ -337,7 +339,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<(ArrayD<Fr>, DatumType)>) {
   let onnx_graph = onnx.proto_model_for_path(filename).unwrap().graph.unwrap();
 
   let (input_idx, mut shapes, mut types) = parse_onnx_inputs(&onnx_graph);
-  let (constants, constants_hashmap, mut models) = parse_onnx_constants(&onnx_graph, &mut shapes);
+  let (constants, constants_hashmap, mut models) = parse_onnx_constants(&onnx_graph, &mut shapes, &mut types);
 
   let mut graph = Graph {
     basic_blocks: vec![],
