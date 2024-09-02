@@ -140,9 +140,9 @@ fn create_output_indices<'a>(
     });
     graph.layer_names.push(format!("Const {}", name.to_string()));
     graph.basic_blocks.push(Box::new(ConstBasicBlock {}));
-    graph.precomputable.0.push(false);
-    graph.precomputable.1.push(true);
-    graph.precomputable.2.push(true);
+    graph.precomputable.for_setup.push(false);
+    graph.precomputable.for_prove_and_verify.push(true);
+    graph.precomputable.for_encodeOutputs.push(true);
   }
 
   outputs_idx
@@ -241,9 +241,9 @@ fn update_graph_w_local_graph(
     if idx == graph.basic_blocks.len() {
       models.push((basic_block.genModel(), DatumType::I64));
       graph.basic_blocks.push(basic_block);
-      graph.precomputable.0.push(precomputable);
+      graph.precomputable.for_setup.push(precomputable);
     } else {
-      graph.precomputable.0[idx] = graph.precomputable.0[idx] && precomputable;
+      graph.precomputable.for_setup[idx] = graph.precomputable.for_setup[idx] && precomputable;
     }
   }
   // pushing nodes in a local graph to update graph.nodes
@@ -280,8 +280,8 @@ fn update_graph_w_local_graph(
     } else {
       graph.layer_names.push(format!("Op {}", name));
     }
-    graph.precomputable.1.push(precomputable);
-    graph.precomputable.2.push(precomputable);
+    graph.precomputable.for_prove_and_verify.push(precomputable);
+    graph.precomputable.for_encodeOutputs.push(precomputable);
   }
   // tracking output_idx of local_graph
   for (i, output) in node.output.iter().enumerate() {
@@ -360,7 +360,7 @@ fn process_node(
 // - all of its outputs are fed into precomputable nodes (that's why we need to propagate precomputable)
 fn propagate_precomputable(graph: &mut Graph) {
   println!("Determining skip-able nodes when encoding the circuit...");
-  let mut precomputable = graph.precomputable.2.clone();
+  let mut precomputable = graph.precomputable.for_encodeOutputs.clone();
   let mut changed = true;
   let mut counter = 0;
   // stop propagating when no more changes are made
@@ -379,7 +379,7 @@ fn propagate_precomputable(graph: &mut Graph) {
     }
     counter += 1;
   }
-  graph.precomputable.2 = precomputable;
+  graph.precomputable.for_encodeOutputs = precomputable;
 }
 
 // This function is used for loading onnx models and returning the graph and models
@@ -394,7 +394,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<(ArrayD<Fr>, DatumType)>) {
 
   let mut graph = Graph {
     basic_blocks: vec![],
-    precomputable: (vec![], vec![], vec![]),
+    precomputable: Precomputable::new(),
     layer_names: vec![],
     nodes: vec![],
     outputs: vec![],
