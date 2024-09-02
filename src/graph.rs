@@ -17,17 +17,17 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 pub struct Precomputable {
-  pub for_setup: Vec<bool>,
-  pub for_prove_and_verify: Vec<bool>,
-  pub for_encodeOutputs: Vec<bool>,
+  pub setup: Vec<bool>,
+  pub prove_and_verify: Vec<bool>,
+  pub encodeOutputs: Vec<bool>,
 }
 
 impl Precomputable {
   pub fn new() -> Self {
     Precomputable {
-      for_setup: vec![],
-      for_prove_and_verify: vec![],
-      for_encodeOutputs: vec![],
+      setup: vec![],
+      prove_and_verify: vec![],
+      encodeOutputs: vec![],
     }
   }
 }
@@ -78,10 +78,10 @@ impl Graph {
     outputs: &Vec<&Vec<&ArrayD<Fr>>>,
     timing: &mut TimingTree,
   ) -> Vec<Vec<ArrayD<Data>>> {
-    assert!(self.nodes.len() == self.precomputable.for_encodeOutputs.len());
+    assert!(self.nodes.len() == self.precomputable.encodeOutputs.len());
     let mut outputsEnc = vec![vec![]; self.nodes.len()];
     self.nodes.iter().enumerate().for_each(|(i, n)| {
-      let precomputable = self.precomputable.for_encodeOutputs[i];
+      let precomputable = self.precomputable.encodeOutputs[i];
       if precomputable {
         // Skip encodeOutputs for some layers if they are precomputable.
         // These layers require no proving and verifying, and their outputs are not used as inputs of
@@ -115,14 +115,14 @@ impl Graph {
   }
 
   pub fn setup(&self, srs: &SRS, models: &Vec<&ArrayD<Data>>) -> Vec<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)> {
-    assert!(self.basic_blocks.len() == self.precomputable.for_setup.len());
+    assert!(self.basic_blocks.len() == self.precomputable.setup.len());
     self
       .basic_blocks
       .iter()
       .zip(models.iter())
       .enumerate()
       .map(|(i, (b, m))| {
-        let precomputable = self.precomputable.for_setup[i];
+        let precomputable = self.precomputable.setup[i];
         if precomputable {
           // Skip setup for some basicblocks if they are precomputable.
           // These basicblocks require no proving and verifying since they are not used in any layer that needs proving and verifying.
@@ -168,7 +168,7 @@ impl Graph {
     rng: &mut StdRng,
     timing: &mut TimingTree,
   ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> {
-    assert!(self.nodes.len() == self.precomputable.for_prove_and_verify.len());
+    assert!(self.nodes.len() == self.precomputable.prove_and_verify.len());
     let cache = Arc::new(Mutex::new(HashMap::new()));
 
     self
@@ -176,7 +176,7 @@ impl Graph {
       .iter()
       .enumerate()
       .map(|(i, n)| {
-        let precomputable = self.precomputable.for_prove_and_verify[i];
+        let precomputable = self.precomputable.prove_and_verify[i];
         if precomputable {
           // Skip proving for some layers if they are precomputable.
           // These layers require no proving and verifying as their inputs are known (i.e., constants) during graph construction.
@@ -234,7 +234,7 @@ impl Graph {
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)>,
     rng: &mut StdRng,
   ) {
-    assert!(self.nodes.len() == self.precomputable.for_prove_and_verify.len());
+    assert!(self.nodes.len() == self.precomputable.prove_and_verify.len());
     let cache = Arc::new(Mutex::new(HashMap::new()));
 
     let pairings: Vec<Vec<PairingCheck>> = self
@@ -242,7 +242,7 @@ impl Graph {
       .iter()
       .enumerate()
       .map(|(i, n)| {
-        let precomputable = self.precomputable.for_prove_and_verify[i];
+        let precomputable = self.precomputable.prove_and_verify[i];
         if precomputable {
           // Skip verifying for some layers if they are precomputable.
           // These layers require no proving and verifying as their inputs are known (i.e., constants) during graph construction.
@@ -287,7 +287,7 @@ impl Graph {
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)>,
     rng: &mut StdRng,
   ) {
-    assert!(self.nodes.len() == self.precomputable.for_prove_and_verify.len());
+    assert!(self.nodes.len() == self.precomputable.prove_and_verify.len());
     let cache = Arc::new(Mutex::new(HashMap::new()));
 
     self.nodes.iter().enumerate().for_each(|(i, n)| {
@@ -303,7 +303,7 @@ impl Graph {
           }
         })
         .collect();
-      let precomputable = self.precomputable.for_prove_and_verify[i];
+      let precomputable = self.precomputable.prove_and_verify[i];
       if !precomputable {
         let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, cache.clone());
         let mut bytes = Vec::new();

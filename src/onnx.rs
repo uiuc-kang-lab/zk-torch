@@ -140,9 +140,9 @@ fn create_output_indices<'a>(
     });
     graph.layer_names.push(format!("Const {}", name.to_string()));
     graph.basic_blocks.push(Box::new(ConstBasicBlock {}));
-    graph.precomputable.for_setup.push(false);
-    graph.precomputable.for_prove_and_verify.push(true);
-    graph.precomputable.for_encodeOutputs.push(true);
+    graph.precomputable.setup.push(false);
+    graph.precomputable.prove_and_verify.push(true);
+    graph.precomputable.encodeOutputs.push(true);
   }
 
   outputs_idx
@@ -241,9 +241,9 @@ fn update_graph_w_local_graph(
     if idx == graph.basic_blocks.len() {
       models.push((basic_block.genModel(), DatumType::I64));
       graph.basic_blocks.push(basic_block);
-      graph.precomputable.for_setup.push(precomputable);
+      graph.precomputable.setup.push(precomputable);
     } else {
-      graph.precomputable.for_setup[idx] = graph.precomputable.for_setup[idx] && precomputable;
+      graph.precomputable.setup[idx] = graph.precomputable.setup[idx] && precomputable;
     }
   }
   // pushing nodes in a local graph to update graph.nodes
@@ -280,8 +280,8 @@ fn update_graph_w_local_graph(
     } else {
       graph.layer_names.push(format!("Op {}", name));
     }
-    graph.precomputable.for_prove_and_verify.push(precomputable);
-    graph.precomputable.for_encodeOutputs.push(precomputable);
+    graph.precomputable.prove_and_verify.push(precomputable);
+    graph.precomputable.encodeOutputs.push(precomputable);
   }
   // tracking output_idx of local_graph
   for (i, output) in node.output.iter().enumerate() {
@@ -360,7 +360,7 @@ fn process_node(
 // - all of its outputs are fed into precomputable nodes (that's why we need to propagate precomputable)
 fn propagate_precomputable(graph: &mut Graph) {
   println!("Determining skip-able nodes when encoding the circuit...");
-  let mut precomputable = graph.precomputable.for_encodeOutputs.clone();
+  let mut precomputable = graph.precomputable.encodeOutputs.clone();
   let mut changed = true;
   let mut counter = 0;
   // stop propagating when no more changes are made
@@ -379,7 +379,7 @@ fn propagate_precomputable(graph: &mut Graph) {
     }
     counter += 1;
   }
-  graph.precomputable.for_encodeOutputs = precomputable;
+  graph.precomputable.encodeOutputs = precomputable;
 }
 
 // This function is used for loading onnx models and returning the graph and models
