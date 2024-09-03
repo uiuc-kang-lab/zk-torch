@@ -13,13 +13,7 @@ impl BasicBlock for GatherBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     let mut v = Vec::new();
     inputs[1].for_each(|x| {
-      let idx = {
-        if *x > Fr::from(inputs[0].len() as i32) {
-          (util::fr_to_int(*x) + inputs[0].len() as i32) as usize
-        } else {
-          util::fr_to_int(*x) as usize
-        }
-      };
+      let idx = util::fr_to_int(*x) as usize;
       v.extend_from_slice(inputs[0].index_axis(Axis(0), idx).to_slice().unwrap());
     });
     let mut shape = inputs[1].shape().to_vec();
@@ -38,18 +32,15 @@ impl Layer for GatherLayer {
     _attributes: &Vec<&AttributeProto>,
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
-    let mut indices_output = -2;
-    if input_shapes[1].len() == 0 {
-      let indices = constants[1].unwrap().0.mapv(|x| {
-        if x > Fr::from(input_shapes[0][0] as i64) {
-          Fr::from(input_shapes[0][0] as i64) + x
-        } else {
-          x
-        }
-      });
-      let indices = graph.addBB(Box::new(Const2BasicBlock { c: indices }));
-      indices_output = graph.addNode(indices, vec![]);
-    }
+    let indices = constants[1].unwrap().0.mapv(|x| {
+      if x > Fr::from(input_shapes[0][0] as i64) {
+        Fr::from(input_shapes[0][0] as i64) + x
+      } else {
+        x
+      }
+    });
+    let indices = graph.addBB(Box::new(Const2BasicBlock { c: indices }));
+    let indices_output = graph.addNode(indices, vec![]);
     let gather = graph.addBB(Box::new(GatherBasicBlock {}));
     let output = graph.addNode(gather, vec![(-1, 0), (indices_output, 0)]);
     graph.outputs.push((output, 0));
