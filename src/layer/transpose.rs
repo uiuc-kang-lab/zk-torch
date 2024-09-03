@@ -26,10 +26,6 @@ impl Layer for TransposeLayer {
       let output = graph.addNode(transpose, vec![(-1, 0)]);
       graph.outputs.push((output, 0));
     } else {
-      // 0, 3, 1, 2
-      // 0, 1, 2, 3 => element that needs to be swapped to last should be 2nd to last, permute to swap
-      // 0, 1, 3, 2 => swap 3 and the element in its place [0, 2, 1, 3]
-      // 0, 3, 1, 2
       // move last element to be 2nd to last
       let pos = axes.iter().position(|&x| x == n - 1).unwrap();
       let mut perm = axes.clone();
