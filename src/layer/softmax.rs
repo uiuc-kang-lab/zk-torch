@@ -32,7 +32,7 @@ impl Layer for SoftmaxLayer {
             input_SF: *onnx::SF_LOG,
             output_SF: *onnx::SF_LOG,
           }),
-          -(*onnx::CQ_RANGE as i32),
+          *onnx::CQ_RANGE_LOWER,
           *onnx::CQ_RANGE,
         )),
       }),
