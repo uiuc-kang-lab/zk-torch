@@ -580,6 +580,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     util::add_randomness(rng, bytes);
     let w = Fr::rand(rng);
 
+    // Round 2 randomness
     let mut bytes = Vec::new();
     vec![qj_x].serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
