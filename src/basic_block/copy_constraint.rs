@@ -333,12 +333,26 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let ssig_poly_evals = &ssig_polys[ssig_polys_len / 2..];
     let ssig_polys = &ssig_polys[..ssig_polys_len / 2];
 
+    // Round 1.5: compute q(x)s = [fj_blind(x) - fj(x)] / (x^N - 1) for proving fj_blind(x) = fj(x)
+    // Fiat Shamir
+    let mut bytes = Vec::new();
+    fj_xs.serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+
+    let w = Fr::rand(rng);
+    let w_pows = util::calc_pow(w, m);
+    let rs: Vec<_> = (0..m).map(|_| Fr::rand(&mut rng2)).collect();
+    let qj_x: G1Projective = (0..m).map(|i| (srs.X1P[1] * -fj_blind1[i] - srs.X1P[0] * fj_blind[i] + srs.Y1P * rs[i]) * w_pows[i]).sum();
+    let inp_outp_rs: Vec<_> = inputs[0].iter().chain(outputs[0].iter()).map(|x| x.r).collect();
+    let r_plus_r_Q_x: G1Projective = (0..m).map(|i| ((srs.X1P[N] - srs.X1P[0]) * rs[i] - srs.X1P[0] * inp_outp_rs[i]) * w_pows[i]).sum();
+
     // Round 2: Commit Z (p. 28 of [1])
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    let mut rng2 = StdRng::from_entropy();
-    fj_xs.serialize_uncompressed(&mut bytes).unwrap();
+    let mut proof = vec![qj_x];
+    proof.serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
+
     let beta = Fr::rand(rng);
     let gamma = Fr::rand(rng);
     let beta_poly = DensePolynomial::from_coefficients_vec(vec![beta]);
@@ -361,9 +375,10 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // Round 3: Commit t (batched quotient polynomial of the below polynomials, p. 29 of [1])
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    let mut proof = vec![Z_x];
-    proof.serialize_uncompressed(&mut bytes).unwrap();
+    let mut proof_1 = vec![Z_x];
+    proof_1.serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
+    proof.append(&mut proof_1);
 
     // Calculate L0(X)(Z(X)-1) polynomial
     let mut L0_evals = vec![Fr::zero(); N];
@@ -508,6 +523,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // Blinding
     proof.append(&mut vec![W_x, W_gx]);
     proof.push(srs.X1P[0] * (r * (zeta_pows[N - 1] - Fr::one())));
+    proof.push(r_plus_r_Q_x);
 
     let mut ssig_xs = setup.0.iter().map(|x| Into::<G1Projective>::into(*x)).collect();
     proof.append(&mut ssig_xs);
@@ -539,13 +555,13 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // constructors to use the blinding scheme when appropriate.
     let input = inputs[0];
 
-    let [Z_x, t_x, W_x, W_gx, C1] = proof.0[..5] else {
+    let [qj_x, Z_x, t_x, W_x, W_gx, C1, C2] = proof.0[..7] else {
       panic!("Wrong proof format")
     };
 
     let m = inputs[0].len() + outputs[0].len();
-    let ssig_xs = &proof.0[5..m + 5];
-    let fj_xs = &proof.0[m + 5..];
+    let ssig_xs = &proof.0[7..m + 7];
+    let fj_xs = &proof.0[m + 7..];
 
     // TODO: have verifier compute Lagrange basis evals
     let padding_partitions = get_padding_partition(&self.permutation, &self.padding_partition);
@@ -558,9 +574,14 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let ssig_zs = &q1_evals[..m];
     let fj_zs = &q1_evals[m..];
 
-    // Round 2 randomness
+    // Round 1.5 randomness
     let mut bytes = Vec::new();
     fj_xs.serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+    let w = Fr::rand(rng);
+
+    let mut bytes = Vec::new();
+    vec![qj_x].serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
     let beta = Fr::rand(rng);
     let gamma = Fr::rand(rng);
@@ -625,10 +646,16 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let q1_z: Fr = q1_evals.iter().enumerate().fold(Fr::zero(), |acc, (i, x)| acc + *x * vs[i]);
     let r_0 = -L0_z * alpha - gt_z * (fj_zs[fj_zs.len() - 1] + gamma) * Z_gz;
     let E = srs.X1A[0] * (-r_0 + q1_z + u * Z_gz);
+
+    let w_pows = util::calc_pow(w, m);
+    let fj_sum: G1Projective = fj_xs.iter().enumerate().map(|(i, x)| *x * w_pows[i]).sum();
+    let inp_outp_sum: G1Projective = inputs[0].iter().chain(outputs[0].iter()).enumerate().map(|(i, x)| x.g1 * w_pows[i]).sum();
+    let check_fj_terms = inp_outp_sum - fj_sum;
     checks.push(vec![
       ((W_x + W_gx * u).into(), srs.X2A[1]),
-      ((-(W_x * zeta + W_gx * u * omega * zeta + F - E)).into(), srs.X2A[0]),
-      (-C1, srs.Y2A),
+      ((-(W_x * zeta + W_gx * u * omega * zeta + F - E) + check_fj_terms).into(), srs.X2A[0]),
+      (-qj_x, (srs.X2A[N] - srs.X2A[0]).into()),
+      ((-C1 + C2).into(), srs.Y2A),
     ]);
     checks
   }
