@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use crate::onnx;
 use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
@@ -9,6 +10,7 @@ use ark_std::{
   ops::{Mul, Sub},
   One, UniformRand, Zero,
 };
+use core::panic;
 use ndarray::ArrayD;
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
@@ -26,6 +28,26 @@ impl BasicBlock for CQ2BasicBlock {
       self.setup.as_ref().unwrap().1,
       self.setup.as_ref().unwrap().2,
     )
+  }
+
+  fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+    println!("CQ2BasicBlock Range Precheck");
+    assert!(inputs.len() == 2);
+    let mut table_dict = HashMap::new();
+    let N = model.shape()[1];
+    for i in 0..N {
+      table_dict.insert((model[[0, i]], model[[1, i]]), i);
+    }
+    for x in inputs[0].iter().zip(inputs[1].iter()) {
+      let temp = (*x.0, *x.1);
+      if !table_dict.contains_key(&temp) {
+        let temp_ints = (util::fr_to_int(temp.0), util::fr_to_int(temp.1));
+        println!("{:?}", temp);
+        panic!("The pair {:?} is not in the model", temp_ints);
+      }
+    }
+
+    vec![]
   }
 
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {

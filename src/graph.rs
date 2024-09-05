@@ -65,7 +65,11 @@ impl Graph {
           }
         })
         .collect();
-      outputs[i] = self.basic_blocks[n.basic_block].run(&models[n.basic_block], &myInputs);
+      let b = &self.basic_blocks[n.basic_block];
+      let bb_name = format!("{b:?}");
+      if (!bb_name.contains("CQ2BasicBlock")) && (!bb_name.contains("CQBasicBlock")) || CONFIG.sf.enable_precheck {
+        outputs[i] = self.basic_blocks[n.basic_block].run(&models[n.basic_block], &myInputs);
+      }
     });
     return outputs;
   }

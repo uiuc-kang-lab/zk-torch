@@ -28,6 +28,7 @@ pub struct ScaleFactorConfig {
   pub scale_factor_log: usize,
   pub cq_range_log: usize,
   pub cq_range_lower_log: usize,
+  pub enable_precheck: bool,
 }
 
 #[derive(Debug, Deserialize)]

@@ -10,6 +10,7 @@ sf:
   scale_factor_log: 3
   cq_range_log: 6
   cq_range_lower_log: 5
+  enable_precheck: true
 prover:
   model_path: "models"
   setup_path: "setups"
