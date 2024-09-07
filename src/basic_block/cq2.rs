@@ -31,7 +31,6 @@ impl BasicBlock for CQ2BasicBlock {
   }
 
   fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    println!("CQ2BasicBlock Range Precheck");
     assert!(inputs.len() == 2);
     let mut table_dict = HashMap::new();
     let N = model.shape()[1];
