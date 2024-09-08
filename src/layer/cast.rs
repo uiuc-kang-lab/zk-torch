@@ -3,6 +3,7 @@ use crate::graph::*;
 use crate::layer::Layer;
 use crate::util;
 use crate::util::datumtype_to_sf;
+use crate::onnx;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;
@@ -28,7 +29,23 @@ impl Layer for CastLayer {
     } else {
       graph.addBB(Box::new(ChangeSFBasicBlock { input_SF, output_SF }))
     };
+    let change_sf_check = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(CQ2BasicBlock {
+        setup: Some((
+          Box::new(ChangeSFBasicBlock {
+            input_SF: input_SF,
+            output_SF: output_SF,
+          }),
+          *onnx::CQ_RANGE_LOWER,
+          *onnx::CQ_RANGE,
+        )),
+      }),
+      N: 1,
+    }));
     let id_output = graph.addNode(id, vec![(-1, 0)]);
+    if input_SF != output_SF {
+      let _ = graph.addNode(change_sf_check, vec![(-1, 0), (id_output, 0)]);
+    }
     graph.outputs.push((id_output, 0));
     (graph, vec![input_shapes[0].clone()], to)
   }
