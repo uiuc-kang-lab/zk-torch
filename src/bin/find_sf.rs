@@ -1,6 +1,6 @@
 use core::panic;
-use std::process::{Command, Stdio};
 use std::fs;
+use std::process::{Command, Stdio};
 use zk_torch::{CONFIG, CONFIG_FILE};
 
 fn witness_gen() -> String {

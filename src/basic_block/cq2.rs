@@ -35,14 +35,12 @@ impl BasicBlock for CQ2BasicBlock {
       return vec![];
     }
     assert!(inputs.len() == 2);
-    let mut table_dict = HashMap::new();
-    let N = model.shape()[1];
-    for i in 0..N {
-      table_dict.insert((model[[0, i]], model[[1, i]]), i);
-    }
     for x in inputs[0].iter().zip(inputs[1].iter()) {
       let temp = (*x.0, *x.1);
-      if !table_dict.contains_key(&temp) {
+      let x_0_int = util::fr_to_int(temp.0);
+      let low = self.setup.as_ref().unwrap().1;
+      let high = low + self.setup.as_ref().unwrap().2 as i32;
+      if x_0_int < low || x_0_int >= high {
         let temp_ints = (util::fr_to_int(temp.0), util::fr_to_int(temp.1));
         println!("{:?}", temp);
         panic!("The pair {:?} is not in the model", temp_ints);
