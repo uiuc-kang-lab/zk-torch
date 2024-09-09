@@ -1,9 +1,9 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
+use crate::onnx;
 use crate::util;
 use crate::util::datumtype_to_sf;
-use crate::onnx;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;

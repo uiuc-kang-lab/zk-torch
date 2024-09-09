@@ -27,7 +27,7 @@ impl BasicBlock for CQBasicBlock {
 
   fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     if model.len() == 0 {
-      return vec![]
+      return vec![];
     }
     assert!(inputs.len() == 1);
     let mut table_dict = HashMap::new();

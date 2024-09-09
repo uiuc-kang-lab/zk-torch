@@ -32,7 +32,7 @@ impl BasicBlock for CQ2BasicBlock {
 
   fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
     if model.ndim() != 2 {
-      return vec![]
+      return vec![];
     }
     assert!(inputs.len() == 2);
     let mut table_dict = HashMap::new();

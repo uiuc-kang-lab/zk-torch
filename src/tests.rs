@@ -1,5 +1,5 @@
 use crate::basic_block::*;
-use crate::{convert_to_data, ptau, util};
+use crate::{ptau, util, util::convert_to_data};
 use ark_bn254::{Bn254, Fr, G1Affine, G2Affine};
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_poly::univariate::DensePolynomial;

@@ -21,7 +21,7 @@ jobs:
     - name: Build
       run: cargo build
     - name: Run
-      run: cargo run -- config.yaml
+      run: cargo run --bin zk_torch -- config.yaml
     - name: Test
       run: cargo test
 
