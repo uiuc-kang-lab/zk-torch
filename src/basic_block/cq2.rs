@@ -35,15 +35,17 @@ impl BasicBlock for CQ2BasicBlock {
       return vec![];
     }
     assert!(inputs.len() == 2);
-    for x in inputs[0].iter().zip(inputs[1].iter()) {
-      let temp = (*x.0, *x.1);
-      let x_0_int = util::fr_to_int(temp.0);
-      let low = self.setup.as_ref().unwrap().1;
-      let high = low + self.setup.as_ref().unwrap().2 as i32;
-      if x_0_int < low || x_0_int >= high {
-        let temp_ints = (util::fr_to_int(temp.0), util::fr_to_int(temp.1));
-        println!("{:?}", temp);
-        panic!("The pair {:?} is not in the model", temp_ints);
+    if self.setup.is_some() {
+      for x in inputs[0].iter().zip(inputs[1].iter()) {
+        let temp = (*x.0, *x.1);
+        let x_0_int = util::fr_to_int(temp.0);
+        let low = self.setup.as_ref().unwrap().1;
+        let high = low + self.setup.as_ref().unwrap().2 as i32;
+        if x_0_int < low || x_0_int >= high {
+          let temp_ints = (util::fr_to_int(temp.0), util::fr_to_int(temp.1));
+          println!("{:?}", temp);
+          panic!("The pair {:?} is not in the model", temp_ints);
+        }
       }
     }
 
