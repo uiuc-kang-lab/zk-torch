@@ -168,9 +168,13 @@ fn main() {
   let srs = &ptau::load_file(&CONFIG.ptau.ptau_path, CONFIG.ptau.pow_len_log, CONFIG.ptau.loaded_pow_len_log);
   let onnx_file_name = &CONFIG.onnx.model_path;
   let (mut graph, models) = onnx::load_file(onnx_file_name);
-  // TODO: read inputs from json file
-  let fake_inputs = util::generate_fake_inputs_for_onnx(onnx_file_name);
-  let inputs = fake_inputs.iter().map(|x| x).collect();
+  let input_path = &CONFIG.onnx.input_path;
+  let inputs = if std::path::Path::new(input_path).exists() {
+    util::load_inputs_from_json_for_onnx(onnx_file_name, input_path)
+  } else {
+    util::generate_fake_inputs_for_onnx(onnx_file_name)
+  };
+  let inputs = inputs.iter().map(|x| x).collect();
   let models = models.iter().map(|x| &x.0).collect();
   setup(&srs, &graph, &models, &mut timing);
   let outputs = run(&inputs, &graph, &models, &mut timing);

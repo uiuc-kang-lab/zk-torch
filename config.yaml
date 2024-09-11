@@ -1,9 +1,9 @@
-task: "sample"
+task: sample
 onnx:
-  model_path: "sample.onnx"
-  input_path: "not_implemented_yet"
+  model_path: sample.onnx
+  input_path: sample.json
 ptau:
-  ptau_path: "challenge"
+  ptau_path: challenge
   pow_len_log: 7
   loaded_pow_len_log: 7
 sf:
@@ -11,15 +11,15 @@ sf:
   cq_range_log: 6
   cq_range_lower_log: 5
 prover:
-  model_path: "models"
-  setup_path: "setups"
-  enc_model_path: "modelsEnc"
-  enc_input_path: "inputsEnc"
-  enc_output_path: "outputsEnc"
-  proof_path: "proofs"
+  model_path: models
+  setup_path: setups
+  enc_model_path: modelsEnc
+  enc_input_path: inputsEnc
+  enc_output_path: outputsEnc
+  proof_path: proofs
   enable_layer_setup: true
 verifier:
-  enc_model_path: "modelsEnc"
-  enc_input_path: "inputsEnc"
-  enc_output_path: "outputsEnc"
-  proof_path: "proofs"
+  enc_model_path: modelsEnc
+  enc_input_path: inputsEnc
+  enc_output_path: outputsEnc
+  proof_path: proofs

@@ -18,7 +18,7 @@ srun python test_gpu_scripts/notify_enqueue.py "$1" "$2" "$3"
 srun rustup override set nightly
 
 export LIBCLANG_PATH=/projects/illinois/eng/cs/ddkang/bjchen4/gpu/llvm-project/build/lib
-srun --export=ALL cargo run --features gpu -- config.yaml
+srun --export=ALL cargo run --bin zk_torch --features gpu -- config.yaml
 srun python test_gpu_scripts/notify_result.py "$1" "$2" "$3"
 
 srun --export=ALL cargo test --features gpu
