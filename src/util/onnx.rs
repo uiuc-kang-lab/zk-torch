@@ -77,7 +77,7 @@ pub fn datumtype_to_sf(t: DatumType) -> usize {
     DatumType::I32 => 1,
     DatumType::I64 => 1,
     DatumType::Bool => 1,
-    DatumType::F32 => *onnx::SF,
+    DatumType::F32 => *onnx::SF_LOG,
     _ => panic!("DatumType {:?} not supported", t),
   }
 }
