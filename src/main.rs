@@ -1,52 +1,20 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 #![allow(unused_imports)]
-use crate::graph::Graph;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::univariate::DensePolynomial;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use basic_block::*;
 use ndarray::ArrayD;
-use once_cell::sync::Lazy;
+use plonky2::{timed, util::timing::TimingTree};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use sha3::{Digest, Keccak256};
-use std::env;
 use std::fs::{self, File};
 use std::io::Read;
-use std::path::Path;
-use util::{convert_to_data, measure_file_size};
-mod basic_block;
-mod graph;
-mod layer;
-mod onnx;
-use plonky2::{timed, util::timing::TimingTree};
-mod ptau;
-#[cfg(test)]
-mod tests;
-mod util;
-
-// Define a static CONFIG that holds the loaded configuration
-static CONFIG: Lazy<util::Config> = Lazy::new(|| {
-  let args: Vec<String> = env::args().collect();
-  if args.len() != 2 {
-    panic!("Usage: cargo run -- <config file>");
-  }
-  let mut file = File::open(&args[1]).expect("Could not open config");
-  let mut contents = String::new();
-  file.read_to_string(&mut contents).expect("Could not read config");
-
-  serde_yaml::from_str(&contents).expect("Could not parse config")
-});
-
-static LAYER_SETUP_DIR: Lazy<String> = Lazy::new(|| {
-  let dir = format!(
-    "layer_setup/{}_{}_{}",
-    CONFIG.sf.scale_factor_log, CONFIG.sf.cq_range_log, CONFIG.sf.cq_range_lower_log
-  );
-  assert!(Path::new(&dir).exists() || fs::create_dir_all(&dir).is_ok());
-  dir
-});
+use zk_torch::basic_block::*;
+use zk_torch::graph::Graph;
+use zk_torch::util::{self, convert_to_data, measure_file_size};
+use zk_torch::{onnx, ptau, CONFIG, LAYER_SETUP_DIR};
 
 fn setup(srs: &SRS, graph: &Graph, models: &Vec<&ArrayD<Fr>>, timing: &mut TimingTree) {
   // Setup:

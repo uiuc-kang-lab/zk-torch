@@ -1,9 +1,8 @@
 use super::BasicBlock;
 use crate::{
-  basic_block::{Data, DataEnc, SRS},
+  basic_block::{Data, DataEnc, PairingCheck, ProveVerifyCache, SRS},
   onnx,
   util::{self, calc_pow},
-  PairingCheck, ProveVerifyCache,
 };
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
