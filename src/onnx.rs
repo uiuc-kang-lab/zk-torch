@@ -33,19 +33,7 @@ fn parse_onnx_inputs(onnx_graph: &pb::GraphProto) -> (HashMap<String, usize>, Ha
     let tract_onnx::pb::type_proto::Value::TensorType(t) = i.r#type.as_ref().unwrap().value.as_ref().unwrap();
     shapes.insert(
       i.name.clone(),
-      t.shape
-        .as_ref()
-        .unwrap()
-        .dim
-        .iter()
-        .map(|x| {
-          if let tract_onnx::pb::tensor_shape_proto::dimension::Value::DimValue(x) = x.value.as_ref().unwrap() {
-            *x as usize
-          } else {
-            panic!("Unknown dimension") // we currently can only support constant dimensions
-          }
-        })
-        .collect::<Vec<_>>(),
+        util::get_shape_from_onnx_input(t)
     );
     types.insert(i.name.clone(), util::datatype_to_datumtype(t.elem_type));
   }
