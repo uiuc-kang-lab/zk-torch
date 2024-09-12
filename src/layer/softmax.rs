@@ -86,17 +86,18 @@ impl Layer for SoftmaxLayer {
     //    We first compute the maximum value of the input array. 
     // 2. X - m: 
     //    We subtract the maximum value from each element of the input array.
-    // 3. e^(X - m): 
+    // 3. e^(X - m) * SF: 
     //    We compute the exponential of each element of the input array. 
     //    And we use "exp_check" to ensure that the output is within the CQ range.
-    // 4. SUM(e^(X - m)): 
+    // 4. SUM(e^(X - m)) * SF: 
     //    We compute the sum of the exponential of each element of the input array.
-    // 5. 1 / SUM(e^(X - m)):
+    // 5. SF / SUM(e^(X - m)):
     //    We compute the reciprocal of the sum of the exponential of each element of the input array.
     //    And we use "rec_check" to ensure that the output is within the CQ range.
-    // 6. e^(X - m) * 1 / SUM(e^(X - m)):
+    // 6. [e^(X - m) * SF] * [SF / SUM(e^(X - m))]:
     //    We multiply the output from step 3 and step 5.
-    // 7. Change the scale factor of the output to the original scale factor.
+    // 7. [e^(X - m) * SF] * [SF / SUM(e^(X - m))] --> [e^(X - m) / SUM(e^(X - m))] * SF
+    //    Change the scale factor of the output to the original scale factor.
     let max_output = graph.addNode(max, vec![(-1, 0)]);
     let sub_output = graph.addNode(sub, vec![(-1, 0), (max_output, 0)]);
     let exp_output = graph.addNode(exp, vec![(sub_output, 0)]);
