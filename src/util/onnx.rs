@@ -14,7 +14,7 @@ use tract_onnx::pb::{tensor_proto::DataType, type_proto::Tensor};
 use tract_onnx::prelude::{DatumType, Framework};
 
 // This function is used for getting the shape of an ONNX input tensor
-pub fn get_shape_from_onnx_input(tensor: &Tensor) -> Vec<usize> {
+pub fn get_shape_from_onnx_tensor(tensor: &Tensor) -> Vec<usize> {
   tensor
     .shape
     .as_ref()
@@ -43,7 +43,7 @@ pub fn generate_fake_inputs_for_onnx(filename: &str) -> Vec<ArrayD<Fr>> {
 
   for onnx_input in onnx_graph.input.iter() {
     let tract_onnx::pb::type_proto::Value::TensorType(t) = onnx_input.r#type.as_ref().unwrap().value.as_ref().unwrap();
-    let shape = get_shape_from_onnx_input(t);
+    let shape = get_shape_from_onnx_tensor(t);
 
     let input = generate_fake_tensor(t.elem_type(), shape);
     let input = pad_to_pow_of_two(&input, &Fr::zero());
@@ -93,20 +93,7 @@ pub fn load_inputs_from_json_for_onnx(onnx_name: &str, json_name: &str) -> Vec<A
 
   for (i, onnx_input) in onnx_graph.input.iter().enumerate() {
     let tract_onnx::pb::type_proto::Value::TensorType(t) = onnx_input.r#type.as_ref().unwrap().value.as_ref().unwrap();
-    let shape = t
-      .shape
-      .as_ref()
-      .unwrap()
-      .dim
-      .iter()
-      .map(|x| {
-        if let tract_onnx::pb::tensor_shape_proto::dimension::Value::DimValue(x) = x.value.as_ref().unwrap() {
-          *x as usize
-        } else {
-          panic!("Unknown dimension")
-        }
-      })
-      .collect::<Vec<_>>();
+    let shape = get_shape_from_onnx_tensor(t);
 
     let input = match t.elem_type() {
       DataType::Float | DataType::Float16 | DataType::Double => {
