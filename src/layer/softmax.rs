@@ -82,14 +82,14 @@ impl Layer for SoftmaxLayer {
     }));
 
     // The proving idea is as follows
-    // 1. m = max(X): 
-    //    We first compute the maximum value of the input array. 
-    // 2. X - m: 
+    // 1. m = max(X):
+    //    We first compute the maximum value of the input array.
+    // 2. X - m:
     //    We subtract the maximum value from each element of the input array.
-    // 3. e^(X - m) * SF: 
-    //    We compute the exponential of each element of the input array. 
+    // 3. e^(X - m) * SF:
+    //    We compute the exponential of each element of the input array.
     //    And we use "exp_check" to ensure that the output is within the CQ range.
-    // 4. SUM(e^(X - m)) * SF: 
+    // 4. SUM(e^(X - m)) * SF:
     //    We compute the sum of the exponential of each element of the input array.
     // 5. SF / SUM(e^(X - m)):
     //    We compute the reciprocal of the sum of the exponential of each element of the input array.

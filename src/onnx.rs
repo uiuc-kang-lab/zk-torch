@@ -31,10 +31,7 @@ fn parse_onnx_inputs(onnx_graph: &pb::GraphProto) -> (HashMap<String, usize>, Ha
   for (idx, i) in onnx_graph.input.iter().enumerate() {
     input_idx.insert(i.name.clone(), idx);
     let tract_onnx::pb::type_proto::Value::TensorType(t) = i.r#type.as_ref().unwrap().value.as_ref().unwrap();
-    shapes.insert(
-      i.name.clone(),
-        util::get_shape_from_onnx_tensor(t)
-    );
+    shapes.insert(i.name.clone(), util::get_shape_from_onnx_tensor(t));
     types.insert(i.name.clone(), util::datatype_to_datumtype(t.elem_type));
   }
 
