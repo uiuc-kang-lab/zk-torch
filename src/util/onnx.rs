@@ -43,30 +43,7 @@ pub fn generate_fake_inputs_for_onnx(filename: &str) -> Vec<ArrayD<Fr>> {
 
   for onnx_input in onnx_graph.input.iter() {
     let tract_onnx::pb::type_proto::Value::TensorType(t) = onnx_input.r#type.as_ref().unwrap().value.as_ref().unwrap();
-    let shape = t
-      .shape
-      .as_ref()
-      .unwrap()
-      .dim
-      .iter()
-      .enumerate()
-      .map(|(i, x)| {
-        if let tract_onnx::pb::tensor_shape_proto::dimension::Value::DimValue(x) = x.value.as_ref().unwrap() {
-          *x as usize
-        } else {
-          //4 as usize
-          if i == 0 {
-            1
-          } else if i == 1 {
-            4
-          } else if i < 4 {
-            4
-          } else {
-            panic!("Unknown dimension") // we currently can only support constant dimensions
-          }
-        }
-      })
-      .collect::<Vec<_>>();
+    let shape = get_shape_from_onnx_tensor(t);
 
     let input = generate_fake_tensor(t.elem_type(), shape);
     let input = pad_to_pow_of_two(&input, &Fr::zero());

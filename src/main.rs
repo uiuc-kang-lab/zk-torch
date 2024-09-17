@@ -2,23 +2,16 @@
 #![allow(non_upper_case_globals)]
 #![allow(unused_imports)]
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ec::CurveGroup;
 use ark_poly::univariate::DensePolynomial;
-use ark_poly::DenseUVPolynomial;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
-use ark_std::Zero;
-use basic_block::*;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ndarray::ArrayD;
-use once_cell::sync::Lazy;
-use plonky2::timed;
-use plonky2::util::timing::TimingTree;
-use rand::Rng;
+use plonky2::{timed, util::timing::TimingTree};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use sha3::{Digest, Keccak256};
 use std::fs::{self, File};
 use std::io::Read;
-use zk_torch::basic_block::{self, *};
+use zk_torch::basic_block::*;
 use zk_torch::graph::Graph;
 use zk_torch::util::{self, convert_to_data, measure_file_size};
 use zk_torch::{onnx, ptau, CONFIG, LAYER_SETUP_DIR};
@@ -51,28 +44,9 @@ fn setup(srs: &SRS, graph: &Graph, models: &Vec<&ArrayD<Fr>>, timing: &mut Timin
     .collect();
 
   let models_ref: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
-  let setups: Vec<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)> =
-    timed!(timing, "setup and encode models", graph.setup(srs, &models_ref));
-  // let setups_1: Vec<_> = setups[1].0.iter().map(|x| x.into_affine()).collect();
-  // println!("setups: {:?}", setups_1);
-  // let a = vec![G1Projective::zero(); 2113536];
-  // let b = vec![G2Projective::zero(); 0];
-  // let mut rng = StdRng::from_entropy();
-  // let coeffs = vec![Fr::from(rng.gen_range(-2..2)); 64];
-  // let c = vec![DensePolynomial::from_coefficients_vec(coeffs); 4227072];
-  // let setups: Vec<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)> = vec![(vec![], vec![], vec![]), (a, vec![], c)];
+  let setups = timed!(timing, "setup and encode models", graph.setup(srs, &models_ref));
   // Save files:
-  // println!("serializing setups");
-  // for i in 0..setups.len() {
-  //   println!("setups lens: {} {} {}", setups[i].0.len(), setups[i].1.len(), setups[i].2.len());
-  // }
-  // println!("setups: {:?}", setups[1].0);
   setups.serialize_uncompressed(File::create(&CONFIG.prover.setup_path).unwrap()).unwrap();
-  // for i in setups {
-  //   for j in i.0 {
-  //     j.into_affine().check().unwrap();
-  //   }
-  // }
   let modelsBytes = bincode::serialize(&models).unwrap();
   fs::write(&CONFIG.prover.model_path, &modelsBytes).unwrap();
 }
@@ -84,11 +58,9 @@ fn run(inputs: &Vec<&ArrayD<Fr>>, graph: &Graph, models: &Vec<&ArrayD<Fr>>, timi
 
 fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, outputs: Vec<Vec<ArrayD<Fr>>>, graph: &mut Graph, timing: &mut TimingTree) {
   // Load model and setup:
-  println!("deserializing setups");
   let setups =
     Vec::<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)>::deserialize_uncompressed(File::open(&CONFIG.prover.setup_path).unwrap())
       .unwrap();
-  println!("finished deserializing setups");
   let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>)> = util::vec_iter(&setups)
     .map(|x| {
       (
