@@ -1,22 +1,22 @@
 task: sample
 onnx:
-  model_path: sample.onnx
-  input_path: sample.json
+  model_path: "../edge_onnx/3dunet_01.onnx"
+  input_path: "not_implemented_yet"
 ptau:
-  ptau_path: challenge
-  pow_len_log: 7
-  loaded_pow_len_log: 7
+  ptau_path: "challenge_18"
+  pow_len_log: 18
+  loaded_pow_len_log: 18
 sf:
   scale_factor_log: 3
-  cq_range_log: 6
-  cq_range_lower_log: 5
+  cq_range_log: 9
+  cq_range_lower_log: 8
 prover:
-  model_path: models
-  setup_path: setups
-  enc_model_path: modelsEnc
-  enc_input_path: inputsEnc
-  enc_output_path: outputsEnc
-  proof_path: proofs
+  model_path: "models"
+  setup_path: "../../Downloads/setups"
+  enc_model_path: "modelsEnc"
+  enc_input_path: "inputsEnc"
+  enc_output_path: "outputsEnc"
+  proof_path: "proofs"
   enable_layer_setup: true
 verifier:
   enc_model_path: modelsEnc

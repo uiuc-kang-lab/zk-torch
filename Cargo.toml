@@ -3,13 +3,16 @@ name = "zk_torch"
 version = "0.1.0"
 edition = "2021"
 
+[profile.dev]
+opt-level = 3
+
 [dependencies]
 ark-std = {version = "0.4", features = ["parallel"]}
-ark-ff = {version = "0.4", features = ["parallel"]}
-ark-ec = "0.4"
-ark-poly = {version = "0.4", features = ["parallel"]}
-ark-bn254 = "0.4"
-ark-serialize = { version = "0.4", features = ["derive"] }
+ark-ff = {path = "../algebra/ff", features = ["parallel"]}
+ark-ec = {path = "../algebra/ec"}
+ark-poly = { path = "../algebra/poly", features = ["parallel"]}
+ark-bn254 = { path = "../curves/bn254" }
+ark-serialize = { path = "../algebra/serialize", features = ["derive"] }
 serde = { version = "1.0.201", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
