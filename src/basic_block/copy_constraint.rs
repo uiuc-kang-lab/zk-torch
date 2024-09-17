@@ -250,31 +250,36 @@ impl BasicBlock for CopyConstraintBasicBlock {
         (inp_idx, v)
       })
       .collect();
-    let mut ssig: Vec<Vec<Fr>> = inp_arr
-      .map_axis(Axis(self.input_dim.ndim() - 1), |x| {
-        construct_ssig(x.as_slice().unwrap(), N, last_inp_dim, &sigma_map, true)
-      })
-      .into_iter()
-      .collect();
+    let first_row = inp_arr.axis_iter(Axis(self.input_dim.ndim() - 1)).next().unwrap().to_owned();
+    // println!("first row {:?}", first_row.as_slice());
+    // let mut ssig: Vec<Vec<Fr>> = inp_arr
+    //   .map_axis(Axis(self.input_dim.ndim() - 1), |x| {
+    //     construct_ssig(x.as_slice().unwrap(), N, last_inp_dim, &sigma_map, true)
+    //   })
+    //   .into_iter()
+    //   .collect();
+    let mut ssig: Vec<Vec<Fr>> = vec![construct_ssig(first_row.as_slice().unwrap(), N, last_inp_dim, &sigma_map, true)];
 
-    let mut outp_arr = ArrayD::from_elem(output_dim.clone(), ((0, 0), None));
-    Zip::from(&mut outp_arr).and(&flat_outp_idxs).and(&self.permutation).for_each(|r, &a, b| {
-      *r = (a, flat_index(&self.input_dim, b, N));
-    });
-    ssig.append(
-      &mut outp_arr
-        .map_axis(Axis(output_dim.ndim() - 1), |x| {
-          construct_ssig(x.as_slice().unwrap(), N, last_outp_dim, &sigma_map, false)
-        })
-        .into_iter()
-        .collect(),
-    );
-    let mut ssig_poly_evals: Vec<_> = ssig.par_iter().map(|x| DensePolynomial::from_coefficients_vec(x.to_vec())).collect();
+    // let mut outp_arr = ArrayD::from_elem(output_dim.clone(), ((0, 0), None));
+    // Zip::from(&mut outp_arr).and(&flat_outp_idxs).and(&self.permutation).for_each(|r, &a, b| {
+    //   *r = (a, flat_index(&self.input_dim, b, N));
+    // });
+    // ssig.append(
+    //   &mut outp_arr
+    //     .map_axis(Axis(output_dim.ndim() - 1), |x| {
+    //       construct_ssig(x.as_slice().unwrap(), N, last_outp_dim, &sigma_map, false)
+    //     })
+    //     .into_iter()
+    //     .collect(),
+    // );
+    ssig = vec![ssig[0].clone()];
+    // let mut ssig_poly_evals: Vec<_> = ssig.par_iter().map(|x| DensePolynomial::from_coefficients_vec(x.to_vec())).collect();
     let mut ssig_polys: Vec<_> = ssig.par_iter().map(|x| DensePolynomial::from_coefficients_vec(domain.ifft(x))).collect();
     let ssig_xs: Vec<_> = ssig_polys.iter().map(|x| util::msm::<G1Projective>(&srs.X1A, &x.coeffs)).collect();
-    ssig_polys.append(&mut ssig_poly_evals);
+    // ssig_polys.append(&mut ssig_poly_evals);
 
-    return (ssig_xs, vec![], ssig_polys);
+    // return (ssig_xs, vec![], ssig_polys);
+    (ssig_xs, vec![], vec![])
   }
 
   fn prove(

@@ -2,8 +2,9 @@
 #![allow(non_upper_case_globals)]
 #![allow(unused_imports)]
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_ec::CurveGroup;
 use ark_poly::univariate::DensePolynomial;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
 use ndarray::ArrayD;
 use plonky2::{timed, util::timing::TimingTree};
 use rand::{rngs::StdRng, SeedableRng};
@@ -46,7 +47,13 @@ fn setup(srs: &SRS, graph: &Graph, models: &Vec<&ArrayD<Fr>>, timing: &mut Timin
   let models_ref: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
   let setups = timed!(timing, "setup and encode models", graph.setup(srs, &models_ref));
   // Save files:
-  setups.serialize_uncompressed(File::create(&CONFIG.prover.setup_path).unwrap()).unwrap();
+  setups[1].0[0].serialize_uncompressed(File::create(&CONFIG.prover.setup_path).unwrap()).unwrap();
+  // setups.serialize_uncompressed(File::create(&CONFIG.prover.setup_path).unwrap()).unwrap();
+  for i in setups {
+    for j in i.0 {
+      j.into_affine().check().unwrap();
+    }
+  }
   let modelsBytes = bincode::serialize(&models).unwrap();
   fs::write(&CONFIG.prover.model_path, &modelsBytes).unwrap();
 }
@@ -58,9 +65,11 @@ fn run(inputs: &Vec<&ArrayD<Fr>>, graph: &Graph, models: &Vec<&ArrayD<Fr>>, timi
 
 fn prove(srs: &SRS, inputs: &Vec<&ArrayD<Fr>>, outputs: Vec<Vec<ArrayD<Fr>>>, graph: &mut Graph, timing: &mut TimingTree) {
   // Load model and setup:
+  println!("deserializing setups");
   let setups =
     Vec::<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)>::deserialize_uncompressed(File::open(&CONFIG.prover.setup_path).unwrap())
       .unwrap();
+  println!("finished deserializing setups");
   let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>)> = util::vec_iter(&setups)
     .map(|x| {
       (
