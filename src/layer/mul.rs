@@ -29,16 +29,17 @@ impl Layer for MulLayer {
         N: 1,
       }))
     };
+    let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
     let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-      input_SF: *onnx::SF_LOG * 2,
-      output_SF: *onnx::SF_LOG,
+      input_SF: sf_log * 2,
+      output_SF: sf_log,
     }));
     let change_SF_check = if input_shapes[0].len() == input_shapes[1].len() && input_shapes[0].len() == 0 {
       graph.addBB(Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(ChangeSFBasicBlock {
-            input_SF: *onnx::SF_LOG * 2,
-            output_SF: *onnx::SF_LOG,
+            input_SF: sf_log * 2,
+            output_SF: sf_log,
           }),
           *onnx::CQ_RANGE_LOWER,
           *onnx::CQ_RANGE,
@@ -49,8 +50,8 @@ impl Layer for MulLayer {
         basic_block: Box::new(CQ2BasicBlock {
           setup: Some((
             Box::new(ChangeSFBasicBlock {
-              input_SF: *onnx::SF_LOG * 2,
-              output_SF: *onnx::SF_LOG,
+              input_SF: sf_log * 2,
+              output_SF: sf_log,
             }),
             *onnx::CQ_RANGE_LOWER,
             *onnx::CQ_RANGE,

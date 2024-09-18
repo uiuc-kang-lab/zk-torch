@@ -11,10 +11,10 @@ pub struct ReshapeBasicBlock {
 }
 
 impl BasicBlock for ReshapeBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 1);
     assert!(inputs[0].shape().last() == self.shape.last());
-    vec![inputs[0].view().into_shape(&self.shape[..]).unwrap().to_owned()]
+    Ok(vec![inputs[0].view().into_shape(&self.shape[..]).unwrap().to_owned()])
   }
 
   fn encodeOutputs(&self, _srs: &SRS, _model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, _outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {

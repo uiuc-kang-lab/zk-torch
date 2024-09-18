@@ -19,16 +19,17 @@ macro_rules! define_nonlinear_layer {
         _attributes: &Vec<&AttributeProto>,
       ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
         let mut graph = Graph::new();
+        let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
         let layer = graph.addBB(Box::new($basic_block {
-          input_SF: *onnx::SF_LOG,
-          output_SF: *onnx::SF_LOG,
+          input_SF: sf_log,
+          output_SF: sf_log,
         }));
         let layer_check = graph.addBB(Box::new(RepeaterBasicBlock {
           basic_block: Box::new(CQ2BasicBlock {
             setup: Some((
               Box::new($basic_block {
-                input_SF: *onnx::SF_LOG,
-                output_SF: *onnx::SF_LOG,
+                input_SF: sf_log,
+                output_SF: sf_log,
               }),
               *onnx::CQ_RANGE_LOWER,
               *onnx::CQ_RANGE,

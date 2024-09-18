@@ -4,7 +4,12 @@ use plonky2::{timed, util::timing::TimingTree};
 use zk_torch::graph::Graph;
 use zk_torch::{onnx, util, CONFIG};
 
-fn run(inputs: &Vec<&ArrayD<Fr>>, graph: &Graph, models: &Vec<&ArrayD<Fr>>, timing: &mut TimingTree) -> Vec<Vec<ArrayD<Fr>>> {
+fn run(
+  inputs: &Vec<&ArrayD<Fr>>,
+  graph: &Graph,
+  models: &Vec<&ArrayD<Fr>>,
+  timing: &mut TimingTree,
+) -> Result<Vec<Vec<ArrayD<Fr>>>, util::CQOutOfRangeError> {
   // Run:
   timed!(timing, "run witness generation", graph.run(inputs, models))
 }

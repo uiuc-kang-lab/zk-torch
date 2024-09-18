@@ -16,16 +16,16 @@ use std::ops::{Mul, Sub};
 #[derive(Debug)]
 pub struct MaxBasicBlock;
 impl BasicBlock for MaxBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 1);
-    vec![arr1(&[inputs[0].fold(Fr::zero(), |max, x| {
+    Ok(vec![arr1(&[inputs[0].fold(Fr::zero(), |max, x| {
       if *x < Fr::from(1 << 28) && *x > max {
         return *x;
       } else {
         return max;
       }
     })])
-    .into_dyn()]
+    .into_dyn()])
   }
 }
 
@@ -37,7 +37,7 @@ pub struct MaxProofBasicBlock {
 // This max includes a proof. The first output is the max and second output is a vector of max - x for all input values x. The second output is needed because it is necessary to perform a range check on the second output.
 impl BasicBlock for MaxProofBasicBlock {
   // Returns the max of the input and max - x for all x in input
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 1 && inputs[0].ndim() == 1);
     let cq_max = Fr::from(-self.cq_range_lower);
     let max_arr = inputs[0]
@@ -54,7 +54,7 @@ impl BasicBlock for MaxProofBasicBlock {
 
     let mut r = ArrayD::zeros(inputs[0].shape());
     azip!((r in &mut r, &x in inputs[0]) *r = *max_val - x);
-    vec![max_arr, r]
+    Ok(vec![max_arr, r])
   }
 
   // Overview of the proof:

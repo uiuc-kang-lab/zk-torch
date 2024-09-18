@@ -47,7 +47,7 @@ impl BasicBlock for EqBasicBlock {
 #[derive(Debug)]
 pub struct ElementwiseEqBasicBlock;
 impl BasicBlock for ElementwiseEqBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 2 && inputs[0].ndim() <= 1 && inputs[1].ndim() <= 1);
     let mut r = ArrayD::zeros(IxDyn(&[std::cmp::max(inputs[0].len(), inputs[1].len())]));
     // broadcast inputs[0] to compare with each element in inputs[1]
@@ -68,6 +68,6 @@ impl BasicBlock for ElementwiseEqBasicBlock {
         .for_each(|r, &x, &y| *r = (util::fr_to_int(x) == util::fr_to_int(y)) as u8);
     }
 
-    vec![r.map(|&x| Fr::from(x)).into_dyn()]
+    Ok(vec![r.map(|&x| Fr::from(x)).into_dyn()])
   }
 }

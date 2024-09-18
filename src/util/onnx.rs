@@ -100,7 +100,7 @@ pub fn load_inputs_from_json_for_onnx(onnx_name: &str, json_name: &str) -> Vec<A
         let input: Vec<Fr> = json.input_data[i]
           .iter()
           .map(|x| {
-            let y = (*x * *onnx::SF_FLOAT as f64).round();
+            let y = (*x * onnx::SF_FLOAT.read().unwrap().to_owned() as f64).round();
             Fr::from(y as i32)
           })
           .collect();
@@ -135,7 +135,7 @@ pub fn datumtype_to_sf(t: DatumType) -> usize {
     DatumType::I32 => 1,
     DatumType::I64 => 1,
     DatumType::Bool => 1,
-    DatumType::F32 => *onnx::SF_LOG,
+    DatumType::F32 => onnx::SF_LOG.read().unwrap().to_owned(),
     _ => panic!("DatumType {:?} not supported", t),
   }
 }

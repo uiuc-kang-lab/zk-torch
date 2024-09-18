@@ -21,7 +21,7 @@ fn index<'a, T>(A: &'a ArrayD<T>, i: usize) -> &T {
 #[derive(Debug)]
 pub struct MatMulBasicBlock;
 impl BasicBlock for MatMulBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(
       inputs.len() == 2
         && inputs[1].ndim() == 2
@@ -34,7 +34,10 @@ impl BasicBlock for MatMulBasicBlock {
     if inputs[0].ndim() == 1 {
       let a = inputs[0].view().into_dimensionality::<Ix1>().unwrap();
       let idx_arr = (0..m).collect::<Vec<_>>();
-      vec![arr1(&(util::vec_iter(&idx_arr).map(|&i| (0..n).map(|j| a[j] * b[[i, j]]).sum()).collect::<Vec<_>>())).into_dyn()]
+      Ok(vec![arr1(
+        &(util::vec_iter(&idx_arr).map(|&i| (0..n).map(|j| a[j] * b[[i, j]]).sum()).collect::<Vec<_>>()),
+      )
+      .into_dyn()])
     } else {
       let a = inputs[0].view().into_dimensionality::<Ix2>().unwrap();
       let l = a.shape()[0];
@@ -45,7 +48,7 @@ impl BasicBlock for MatMulBasicBlock {
           (0..n).map(|k| a[[i, k]] * b[[j, k]]).sum()
         })
         .collect();
-      vec![ArrayD::from_shape_vec(vec![l, m], res).unwrap()]
+      Ok(vec![ArrayD::from_shape_vec(vec![l, m], res).unwrap()])
     }
   }
 

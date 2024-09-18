@@ -34,7 +34,7 @@ pub struct RangeConstBasicBlock {
   pub delta: i32,
 }
 impl BasicBlock for RangeConstBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     let element_num = max(0, ((self.limit - self.start) + self.delta - 1) / self.delta);
     let mut r = vec![];
     let mut x = self.start;
@@ -46,7 +46,7 @@ impl BasicBlock for RangeConstBasicBlock {
     while r.len() < element_num_pad {
       r.push(Fr::zero());
     }
-    vec![arr1(&r).into_dyn()]
+    Ok(vec![arr1(&r).into_dyn()])
   }
 
   fn setup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {

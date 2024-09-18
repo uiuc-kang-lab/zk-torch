@@ -72,7 +72,7 @@ impl Layer for ResizeLayer {
       panic!("Resize has invalid nearest_mode string");
     };
     // scales is a float, so it will have been scaled by onnx::SF by the onnx compiler. This assumes that dividing by onnx::SF will recover the original value
-    let scales: Vec<_> = constants[2].unwrap().0.iter().map(|x| util::fr_to_int(*x) as f32 / *onnx::SF as f32).collect();
+    let scales: Vec<_> = constants[2].unwrap().0.iter().map(|x| util::fr_to_int(*x) as f32 / onnx::SF.read().unwrap().to_owned() as f32).collect();
     assert!(scales.len() == input_shapes[0].len());
 
     let (output_shape, permutation) = resize_permutation(input_shapes[0], &scales);

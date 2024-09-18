@@ -10,7 +10,7 @@ use tract_onnx::prelude::DatumType;
 #[derive(Debug)]
 pub struct GatherBasicBlock;
 impl BasicBlock for GatherBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     let mut v = Vec::new();
     inputs[1].for_each(|x| {
       let idx = util::fr_to_int(*x) as usize;
@@ -19,7 +19,7 @@ impl BasicBlock for GatherBasicBlock {
     let mut shape = inputs[1].shape().to_vec();
     shape.extend_from_slice(&inputs[0].shape()[1..]);
     let v = ArrayD::from_shape_vec(shape, v).unwrap();
-    vec![v]
+    Ok(vec![v])
   }
 }
 

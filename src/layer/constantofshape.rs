@@ -31,7 +31,7 @@ impl Layer for ConstOfShapeLayer {
     };
     let value = match datum_type {
       DatumType::I64 => Fr::from(attr_val.t.clone().unwrap().raw_data[0]),
-      DatumType::F32 => Fr::from((attr_val.t.clone().unwrap().raw_data[0] as f32 * *onnx::SF_FLOAT).round() as i32),
+      DatumType::F32 => Fr::from((attr_val.t.clone().unwrap().raw_data[0] as f32 * onnx::SF_FLOAT.read().unwrap().to_owned()).round() as i32),
       _ => panic!("Unsupported data type"),
     };
     let endShape: Vec<usize> = constants[0].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x) as usize).filter(|x| *x != 0).collect();

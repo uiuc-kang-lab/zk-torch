@@ -16,21 +16,22 @@ impl Layer for SoftmaxLayer {
     _attributes: &Vec<&AttributeProto>,
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
+    let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
     let max = graph.addBB(Box::new(MaxBasicBlock {}));
     let sub = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(SubBasicBlock {}),
       N: 1,
     }));
     let exp = graph.addBB(Box::new(ExpBasicBlock {
-      input_SF: *onnx::SF_LOG,
-      output_SF: *onnx::SF_LOG,
+      input_SF: sf_log,
+      output_SF: sf_log,
     }));
     let exp_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(ExpBasicBlock {
-            input_SF: *onnx::SF_LOG,
-            output_SF: *onnx::SF_LOG,
+            input_SF: sf_log,
+            output_SF: sf_log,
           }),
           -(*onnx::CQ_RANGE as i32) + 1,
           *onnx::CQ_RANGE,
@@ -43,15 +44,15 @@ impl Layer for SoftmaxLayer {
       N: 1,
     }));
     let reciprocal = graph.addBB(Box::new(ReciprocalBasicBlock {
-      input_SF: *onnx::SF_LOG,
-      output_SF: *onnx::SF_LOG,
+      input_SF: sf_log,
+      output_SF: sf_log,
     }));
     let rec_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(ReciprocalBasicBlock {
-            input_SF: *onnx::SF_LOG,
-            output_SF: *onnx::SF_LOG,
+            input_SF: sf_log,
+            output_SF: sf_log,
           }),
           0,
           *onnx::CQ_RANGE,
@@ -64,15 +65,15 @@ impl Layer for SoftmaxLayer {
       N: 1,
     }));
     let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-      input_SF: *onnx::SF_LOG * 2,
-      output_SF: *onnx::SF_LOG,
+      input_SF: sf_log * 2,
+      output_SF: sf_log,
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(ChangeSFBasicBlock {
-            input_SF: *onnx::SF_LOG * 2,
-            output_SF: *onnx::SF_LOG,
+            input_SF: sf_log * 2,
+            output_SF: sf_log,
           }),
           *onnx::CQ_RANGE_LOWER,
           *onnx::CQ_RANGE,

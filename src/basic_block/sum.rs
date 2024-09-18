@@ -12,9 +12,9 @@ use rand::{rngs::StdRng, SeedableRng};
 #[derive(Debug)]
 pub struct SumBasicBlock;
 impl BasicBlock for SumBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 1 && inputs[0].ndim() == 1);
-    vec![arr1(&[inputs[0].iter().sum::<Fr>()]).into_dyn()]
+    Ok(vec![arr1(&[inputs[0].iter().sum::<Fr>()]).into_dyn()])
   }
 
   fn prove(

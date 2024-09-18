@@ -11,10 +11,10 @@ use tract_onnx::prelude::DatumType;
 #[derive(Debug)]
 pub struct ExpandBasicBlock;
 impl BasicBlock for ExpandBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     let newShape: Vec<_> = inputs[1].as_slice().unwrap().iter().map(|&x| util::fr_to_int(x) as usize).filter(|x| *x != 0).collect();
     let padded_newShape: Vec<_> = newShape.iter().map(|&x| util::next_pow(x as u32) as usize).collect();
-    vec![inputs[0].broadcast(padded_newShape).unwrap().into_owned()]
+    Ok(vec![inputs[0].broadcast(padded_newShape).unwrap().into_owned()])
   }
 }
 

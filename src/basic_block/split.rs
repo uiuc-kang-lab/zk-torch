@@ -1,4 +1,5 @@
 use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_std::Zero;
 use ndarray::{ArrayD, Axis};
@@ -11,7 +12,7 @@ pub struct SplitBasicBlock {
 }
 
 impl BasicBlock for SplitBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 1);
     assert!(self.axis < inputs[0].ndim() - 1);
     assert!(inputs[0].shape()[self.axis] == self.split.iter().sum::<usize>());
@@ -23,7 +24,7 @@ impl BasicBlock for SplitBasicBlock {
       b = remaining;
       r.push(a.to_owned());
     }
-    r
+    Ok(r)
   }
 
   fn encodeOutputs(&self, _srs: &SRS, _model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, _outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {

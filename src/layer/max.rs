@@ -106,11 +106,9 @@ impl Layer for MinLayer {
         padding_partition: copy_constraint::PaddingEnum::Zero,
       }));
 
+      let sf = onnx::SF.read().unwrap().to_owned();
       let neg = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(NegBasicBlock {
-          input_SF: *onnx::SF,
-          output_SF: *onnx::SF,
-        }),
+        basic_block: Box::new(NegBasicBlock { input_SF: sf, output_SF: sf }),
         N: 1,
       }));
 

@@ -10,7 +10,7 @@ pub struct DivScalarBasicBlock {
 }
 
 impl BasicBlock for DivScalarBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[1].len() == 1);
     let SF = self.output_SF as i64;
     let y = util::fr_to_int(inputs[1][0]) as i64;
@@ -27,7 +27,7 @@ impl BasicBlock for DivScalarBasicBlock {
         (Fr::from(z), Fr::from(r))
       })
       .unzip();
-    vec![arr1(&div).into_dyn(), arr1(&rem).into_dyn()]
+    Ok(vec![arr1(&div).into_dyn(), arr1(&rem).into_dyn()])
   }
 }
 
@@ -37,7 +37,7 @@ pub struct DivConstBasicBlock {
 }
 
 impl BasicBlock for DivConstBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 1);
     let shape = inputs[0].shape();
 
@@ -49,7 +49,7 @@ impl BasicBlock for DivConstBasicBlock {
       })
       .collect::<Vec<_>>();
 
-    vec![ArrayD::from_shape_vec(shape, out).unwrap()]
+    Ok(vec![ArrayD::from_shape_vec(shape, out).unwrap()])
   }
 }
 
@@ -58,7 +58,7 @@ pub struct ModConstBasicBlock {
   pub c: u32,
 }
 impl BasicBlock for ModConstBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 1);
     let shape = inputs[0].shape();
 
@@ -69,6 +69,6 @@ impl BasicBlock for ModConstBasicBlock {
       })
       .collect::<Vec<_>>();
 
-    vec![ArrayD::from_shape_vec(shape, out).unwrap()]
+    Ok(vec![ArrayD::from_shape_vec(shape, out).unwrap()])
   }
 }

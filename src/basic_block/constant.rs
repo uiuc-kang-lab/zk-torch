@@ -1,4 +1,5 @@
 use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ndarray::{arr0, ArrayD, IxDyn};
 use rand::rngs::StdRng;
@@ -6,8 +7,8 @@ use rand::rngs::StdRng;
 #[derive(Debug)]
 pub struct ConstBasicBlock;
 impl BasicBlock for ConstBasicBlock {
-  fn run(&self, model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    vec![model.clone()]
+  fn run(&self, model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
+    Ok(vec![model.clone()])
   }
 
   fn encodeOutputs(&self, _srs: &SRS, model: &ArrayD<Data>, _inputs: &Vec<&ArrayD<Data>>, _outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
@@ -36,8 +37,8 @@ pub struct Const2BasicBlock {
 }
 
 impl BasicBlock for Const2BasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    vec![self.c.clone()]
+  fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
+    Ok(vec![self.c.clone()])
   }
 }
 
@@ -49,7 +50,7 @@ pub struct ConstOfShapeBasicBlock {
   pub shape: Vec<usize>,
 }
 impl BasicBlock for ConstOfShapeBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    vec![ArrayD::from_elem(IxDyn(&self.shape), self.c)]
+  fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
+    Ok(vec![ArrayD::from_elem(IxDyn(&self.shape), self.c)])
   }
 }

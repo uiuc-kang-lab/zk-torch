@@ -23,7 +23,7 @@ use std::ops::{Add, Mul, Sub};
 #[derive(Debug)]
 pub struct OrderedBasicBlock;
 impl BasicBlock for OrderedBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 1 && inputs[0].ndim() == 1);
 
     let mut sorted_data_shift_1 = inputs[0].into_iter().skip(1).cloned().collect::<Vec<_>>();
@@ -32,7 +32,7 @@ impl BasicBlock for OrderedBasicBlock {
 
     // Outsource the range check of d to the caller
     let diff = (inputs[0] - sorted_data_shift_1).into_dyn();
-    vec![diff]
+    Ok(vec![diff])
   }
 
   fn prove(

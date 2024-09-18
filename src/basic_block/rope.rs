@@ -1,4 +1,5 @@
 use super::BasicBlock;
+use crate::util;
 use ark_bn254::Fr;
 use ndarray::{arr1, ArrayD};
 
@@ -9,7 +10,7 @@ pub struct RoPEBasicBlock {
 }
 
 impl BasicBlock for RoPEBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     let mut r1 = vec![];
     let mut r2 = vec![];
     for i in 0..64 {
@@ -23,6 +24,6 @@ impl BasicBlock for RoPEBasicBlock {
       r1.push(a);
       r2.push(b);
     }
-    vec![arr1(&r1).into_dyn(), arr1(&r2).into_dyn()]
+    Ok(vec![arr1(&r1).into_dyn(), arr1(&r2).into_dyn()])
   }
 }
