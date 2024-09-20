@@ -23,14 +23,16 @@ impl Layer for TransposeLayer {
 
     if *axes.last().unwrap() == n - 1 {
       let transpose = graph.addBB(Box::new(TransposeBasicBlock { perm: axes.clone() }));
+      println!("axes: {:?}", axes);
       let output = graph.addNode(transpose, vec![(-1, 0)]);
       graph.outputs.push((output, 0));
     } else {
-      // move last element to be 2nd to last
       let pos = axes.iter().position(|&x| x == n - 1).unwrap();
       let mut perm = axes.clone();
+      // keep n-1 in last index and move axes[n-1] to n-2
       perm[pos] = axes[n - 2];
-      perm[n - 2] = n - 1;
+      perm[n - 2] = axes[n - 1];
+      perm[n - 1] = n - 1;
       let transpose = graph.addBB(Box::new(TransposeBasicBlock { perm }));
       let intermediate = graph.addNode(transpose, vec![(-1, 0)]);
       // swap the last two
