@@ -47,8 +47,8 @@ fn setup(srs: &SRS, graph: &Graph, models: &Vec<&ArrayD<Fr>>, timing: &mut Timin
   let models_ref: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
   let setups = timed!(timing, "setup and encode models", graph.setup(srs, &models_ref));
   // Save files:
-  setups[1].0[0].serialize_uncompressed(File::create(&CONFIG.prover.setup_path).unwrap()).unwrap();
-  // setups.serialize_uncompressed(File::create(&CONFIG.prover.setup_path).unwrap()).unwrap();
+  // setups[1].0[0].serialize_uncompressed(File::create(&CONFIG.prover.setup_path).unwrap()).unwrap();
+  setups.serialize_uncompressed(File::create(&CONFIG.prover.setup_path).unwrap()).unwrap();
   for i in setups {
     for j in i.0 {
       j.into_affine().check().unwrap();
