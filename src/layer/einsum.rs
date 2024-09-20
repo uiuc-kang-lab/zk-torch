@@ -65,16 +65,17 @@ fn vector_outer_product(graph: &mut Graph, input_shapes: &Vec<&Vec<usize>>) -> V
     basic_block: Box::new(MulScalarBasicBlock {}),
     N: 1,
   }));
+  let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
   let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-    input_SF: *onnx::SF_LOG * 2,
-    output_SF: *onnx::SF_LOG,
+    input_SF: sf_log * 2,
+    output_SF: sf_log,
   }));
   let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
     basic_block: Box::new(CQ2BasicBlock {
       setup: Some((
         Box::new(ChangeSFBasicBlock {
-          input_SF: *onnx::SF_LOG * 2,
-          output_SF: *onnx::SF_LOG,
+          input_SF: sf_log * 2,
+          output_SF: sf_log,
         }),
         *onnx::CQ_RANGE_LOWER,
         *onnx::CQ_RANGE,
@@ -114,16 +115,17 @@ fn vector_inner_product(graph: &mut Graph, _input_shapes: &Vec<&Vec<usize>>) -> 
     basic_block: Box::new(MulBasicBlock {}),
     N: 1,
   }));
+  let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
   let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-    input_SF: *onnx::SF_LOG * 2,
-    output_SF: *onnx::SF_LOG,
+    input_SF: sf_log * 2,
+    output_SF: sf_log,
   }));
   let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
     basic_block: Box::new(CQ2BasicBlock {
       setup: Some((
         Box::new(ChangeSFBasicBlock {
-          input_SF: *onnx::SF_LOG * 2,
-          output_SF: *onnx::SF_LOG,
+          input_SF: sf_log * 2,
+          output_SF: sf_log,
         }),
         *onnx::CQ_RANGE_LOWER,
         *onnx::CQ_RANGE,

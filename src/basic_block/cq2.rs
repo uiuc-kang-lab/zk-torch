@@ -28,6 +28,28 @@ impl BasicBlock for CQ2BasicBlock {
     )
   }
 
+  fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
+    if model.ndim() != 2 {
+      return Ok(vec![]);
+    }
+    assert!(inputs.len() == 2);
+    if self.setup.is_some() {
+      for x in inputs[0].iter().zip(inputs[1].iter()) {
+        let temp = (*x.0, *x.1);
+        let x_0_int = util::fr_to_int(temp.0);
+        let low = self.setup.as_ref().unwrap().1;
+        let high = low + self.setup.as_ref().unwrap().2 as i32;
+        if x_0_int < low || x_0_int >= high {
+          let temp_ints = (util::fr_to_int(temp.0), util::fr_to_int(temp.1));
+          println!("{:?}, {:?}", temp_ints, temp);
+          return Err(util::CQOutOfRangeError { input: temp_ints.0 });
+        }
+      }
+    }
+
+    Ok(vec![])
+  }
+
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     assert!(model.ndim() == 1 && model.len() == 2);
     let N = model[0].raw.len();

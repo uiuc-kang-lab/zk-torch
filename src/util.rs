@@ -1,6 +1,7 @@
 pub use arithmetic::*;
 pub use config::*;
 pub use copy_constraint::*;
+pub use err::*;
 pub use fft::*;
 pub use iter::*;
 pub use msm::*;
@@ -15,6 +16,7 @@ pub use verifier::*;
 pub mod arithmetic;
 pub mod config;
 pub mod copy_constraint;
+pub mod err;
 pub mod fft;
 pub mod iter;
 pub mod msm;

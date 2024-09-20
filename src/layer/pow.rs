@@ -16,7 +16,7 @@ pub struct PrecomputedPowBasicBlock {
   pub output_SF: usize,
 }
 impl BasicBlock for PrecomputedPowBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     let base = util::fr_to_int(*inputs[0].first().unwrap()) as f32;
     let shape = inputs[1].shape();
     let out = util::array_into_iter(inputs[1])
@@ -28,7 +28,7 @@ impl BasicBlock for PrecomputedPowBasicBlock {
         Fr::from(b.round() as i32)
       })
       .collect::<Vec<_>>();
-    vec![ArrayD::from_shape_vec(shape, out).unwrap()]
+    Ok(vec![ArrayD::from_shape_vec(shape, out).unwrap()])
   }
 }
 
@@ -43,6 +43,8 @@ impl Layer for PowLayer {
     let mut graph = Graph::new();
     assert!(constants[1].is_some());
 
+    let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
+    let sf_float = onnx::SF_FLOAT.read().unwrap().to_owned();
     // Note: the following code is a workaround for the case that constants[0] is a scalar and constants[1] is a tensor
     //       If we want to formally prove this, we need to
     //       (1) either implement a new basic block that can handle this case
@@ -57,9 +59,7 @@ impl Layer for PowLayer {
       if constants[0].unwrap().0.len() == 1 && constants[1].unwrap().0.len() > 1 {
         let c_vec = match constants[1].unwrap().1 {
           DatumType::I32 | DatumType::I64 => constants[1].unwrap().0.iter().map(|x| *x).collect::<Vec<_>>(),
-          DatumType::F32 => {
-            constants[1].unwrap().0.iter().map(|x| Fr::from((util::fr_to_int(*x) as f32 / *onnx::SF_FLOAT) as i32)).collect::<Vec<_>>()
-          }
+          DatumType::F32 => constants[1].unwrap().0.iter().map(|x| Fr::from((util::fr_to_int(*x) as f32 / sf_float) as i32)).collect::<Vec<_>>(),
           _ => panic!("unsupported type"),
         };
         let shape = constants[1].unwrap().0.shape();
@@ -67,8 +67,8 @@ impl Layer for PowLayer {
           c: ArrayD::from_shape_vec(shape, c_vec).unwrap(),
         }));
         let pow = graph.addBB(Box::new(PrecomputedPowBasicBlock {
-          input_SF: *onnx::SF_LOG,
-          output_SF: *onnx::SF_LOG,
+          input_SF: sf_log,
+          output_SF: sf_log,
         }));
         let const2_output = graph.addNode(const2, vec![]);
         let pow_output = graph.addNode(pow, vec![(-1, 0), (const2_output, 0)]);
@@ -80,7 +80,7 @@ impl Layer for PowLayer {
     assert!(constants[1].unwrap().0.len() == 1);
     let N = match constants[1].unwrap().1 {
       DatumType::I32 | DatumType::I64 => util::fr_to_int(*constants[1].unwrap().0.first().unwrap()),
-      DatumType::F32 => (util::fr_to_int(*constants[1].unwrap().0.first().unwrap()) as f32 / *onnx::SF_FLOAT) as i32,
+      DatumType::F32 => (util::fr_to_int(*constants[1].unwrap().0.first().unwrap()) as f32 / sf_float) as i32,
       _ => panic!("unsupported type"),
     };
 
@@ -101,15 +101,15 @@ impl Layer for PowLayer {
       N: 1,
     }));
     let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-      input_SF: *onnx::SF_LOG * 2,
-      output_SF: *onnx::SF_LOG,
+      input_SF: sf_log * 2,
+      output_SF: sf_log,
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(ChangeSFBasicBlock {
-            input_SF: *onnx::SF_LOG * 2,
-            output_SF: *onnx::SF_LOG,
+            input_SF: sf_log * 2,
+            output_SF: sf_log,
           }),
           *onnx::CQ_RANGE_LOWER,
           *onnx::CQ_RANGE,

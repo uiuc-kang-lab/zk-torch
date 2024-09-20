@@ -65,11 +65,11 @@ impl Layer for SqueezeLayer {
 #[derive(Debug)]
 pub struct UnsqueezeBasicBlock;
 impl BasicBlock for UnsqueezeBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     // unsqueeze the input tensor
     let r = inputs[0].clone();
     let r = r.insert_axis(Axis(0));
-    vec![r]
+    Ok(vec![r])
   }
 }
 

@@ -101,15 +101,21 @@ impl BasicBlock for RepeaterBasicBlock {
     self.basic_block.genModel()
   }
 
-  fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     let temp = broadcastN::<Fr, Fr>(inputs, None, self.N);
     let temp = temp.map(|(subArrays, _)| {
       let subArrays: Vec<_> = util::vec_iter(subArrays).map(|y| y).collect();
       self.basic_block.run(model, &subArrays)
     });
+    if temp.iter().any(|x| x.is_err()) {
+      return Err(util::CQOutOfRangeError {
+        input: temp.iter().filter_map(|x| x.as_ref().err()).next().unwrap().input,
+      });
+    }
+    let temp = temp.map(|x| x.as_ref().unwrap());
     let temp = temp.map(|x| x.iter().map(|y| y).collect());
     let temp = temp.map(|x| x);
-    combineArr(&temp)
+    Ok(combineArr(&temp))
   }
 
   fn encodeOutputs(&self, srs: &SRS, model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {

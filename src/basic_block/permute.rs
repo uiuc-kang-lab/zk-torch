@@ -22,15 +22,18 @@ pub struct PermuteBasicBlock {
 // Where A is in the input matrix, B is the output matrix, and p is the permutation
 // In order to do a matrix transpose, we set p_0[i]=ni and p_1[i]=i
 impl BasicBlock for PermuteBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 1 && inputs[0].ndim() == 2);
     let n = inputs[0].len_of(Axis(0));
-    vec![Array::from_shape_fn((self.permutation.0.len(), self.permutation.1.len()), |(i, j)| {
-      let s = self.permutation.0[i] + self.permutation.1[j];
-      assert!(s < inputs[0].len());
-      inputs[0][[s % n, s / n]]
-    })
-    .into_dyn()]
+    Ok(vec![Array::from_shape_fn(
+      (self.permutation.0.len(), self.permutation.1.len()),
+      |(i, j)| {
+        let s = self.permutation.0[i] + self.permutation.1[j];
+        assert!(s < inputs[0].len());
+        inputs[0][[s % n, s / n]]
+      },
+    )
+    .into_dyn()])
   }
 
   fn prove(

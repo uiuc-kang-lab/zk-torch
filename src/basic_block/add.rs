@@ -1,4 +1,5 @@
 use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ndarray::{arr0, azip, ArrayD, IxDyn};
 use rand::rngs::StdRng;
@@ -6,7 +7,7 @@ use rand::rngs::StdRng;
 #[derive(Debug)]
 pub struct AddBasicBlock;
 impl BasicBlock for AddBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 2 && inputs[0].ndim() <= 1 && inputs[1].ndim() <= 1);
     let mut r = ArrayD::zeros(IxDyn(&[std::cmp::max(inputs[0].len(), inputs[1].len())]));
     if inputs[0].len() == 1 && inputs[1].ndim() > 0 {
@@ -16,7 +17,7 @@ impl BasicBlock for AddBasicBlock {
     } else {
       azip!((r in &mut r, &x in inputs[0], &y in inputs[1]) *r = x + y);
     }
-    vec![r]
+    Ok(vec![r])
   }
 
   fn encodeOutputs(&self, _srs: &SRS, _model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {

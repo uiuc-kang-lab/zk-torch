@@ -24,6 +24,25 @@ impl BasicBlock for CQBasicBlock {
     self.setup.clone().into_dyn()
   }
 
+  fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
+    if model.len() == 0 {
+      return Ok(vec![]);
+    }
+    assert!(inputs.len() == 1);
+    let mut table_dict = HashMap::new();
+    for (i, x) in model.view().as_slice().unwrap().iter().enumerate() {
+      table_dict.insert(*x, i);
+    }
+    for x in inputs[0].view().as_slice().unwrap() {
+      if !table_dict.contains_key(x) {
+        let x_int = util::fr_to_int(*x);
+        println!("{:?},{:?},{:?}", x_int, x, -*x);
+        return Err(util::CQOutOfRangeError { input: x_int });
+      }
+    }
+    Ok(vec![])
+  }
+
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     assert!(model.len() == 1);
     let model = &model.first().unwrap();

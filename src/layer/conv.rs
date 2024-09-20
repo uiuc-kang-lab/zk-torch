@@ -195,9 +195,10 @@ macro_rules! create_conv_layer {
         }));
         let matmul = graph.addBB(Box::new(MatMulBasicBlock {}));
 
+        let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
         let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-          input_SF: *onnx::SF_LOG * 2,
-          output_SF: *onnx::SF_LOG,
+          input_SF: sf_log * 2,
+          output_SF: sf_log,
         }));
         let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
           basic_block: Box::new(CQBasicBlock {

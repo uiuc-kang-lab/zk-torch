@@ -11,11 +11,11 @@ use tract_onnx::prelude::DatumType;
 #[derive(Debug)]
 pub struct ShapeBasicBlock;
 impl BasicBlock for ShapeBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     let shape: Vec<_> = inputs[0].shape().iter().map(|&x| Fr::from(x as i32)).collect();
     let shape = arr1(&shape).into_dyn();
     let padded_shape = util::pad_to_pow_of_two(&shape, &Fr::zero());
-    vec![padded_shape]
+    Ok(vec![padded_shape])
   }
 }
 

@@ -51,7 +51,12 @@ fn setup(srs: &SRS, graph: &Graph, models: &Vec<&ArrayD<Fr>>, timing: &mut Timin
   fs::write(&CONFIG.prover.model_path, &modelsBytes).unwrap();
 }
 
-fn run(inputs: &Vec<&ArrayD<Fr>>, graph: &Graph, models: &Vec<&ArrayD<Fr>>, timing: &mut TimingTree) -> Vec<Vec<ArrayD<Fr>>> {
+fn run(
+  inputs: &Vec<&ArrayD<Fr>>,
+  graph: &Graph,
+  models: &Vec<&ArrayD<Fr>>,
+  timing: &mut TimingTree,
+) -> Result<Vec<Vec<ArrayD<Fr>>>, util::CQOutOfRangeError> {
   // Run:
   timed!(timing, "run witness generation", graph.run(inputs, models))
 }
@@ -178,7 +183,11 @@ fn main() {
   let models = models.iter().map(|x| &x.0).collect();
   setup(&srs, &graph, &models, &mut timing);
   let outputs = run(&inputs, &graph, &models, &mut timing);
-  prove(&srs, &inputs, outputs, &mut graph, &mut timing);
+  if outputs.is_err() {
+    println!("CQ Error: {:?}", outputs.err().unwrap());
+    return;
+  }
+  prove(&srs, &inputs, outputs.unwrap(), &mut graph, &mut timing);
   verify(&srs, &graph, &mut timing);
 
   // measure proof size

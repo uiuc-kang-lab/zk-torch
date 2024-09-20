@@ -11,7 +11,7 @@ pub struct ClipBasicBlock {
   pub max: f32,
 }
 impl BasicBlock for ClipBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 1);
     let shape = inputs[0].shape();
     let out = util::array_into_iter(inputs[0])
@@ -21,6 +21,6 @@ impl BasicBlock for ClipBasicBlock {
         Fr::from(x.round() as i32)
       })
       .collect::<Vec<_>>();
-    vec![ArrayD::from_shape_vec(shape, out).unwrap()]
+    Ok(vec![ArrayD::from_shape_vec(shape, out).unwrap()])
   }
 }

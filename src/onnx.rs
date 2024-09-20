@@ -9,6 +9,7 @@ use ndarray::{arr1, ArrayD};
 use once_cell::sync::Lazy;
 use pool::MaxPoolLayer;
 use std::collections::HashMap;
+use std::sync::RwLock;
 use tract_onnx::pb;
 use tract_onnx::pb::tensor_proto::DataType;
 use tract_onnx::pb::AttributeProto;
@@ -16,9 +17,9 @@ use tract_onnx::prelude::Datum;
 use tract_onnx::prelude::{DatumType, Framework};
 use tract_onnx::tensor::load_tensor;
 
-pub static SF_LOG: Lazy<usize> = Lazy::new(|| CONFIG.sf.scale_factor_log);
-pub static SF: Lazy<usize> = Lazy::new(|| 1 << *SF_LOG);
-pub static SF_FLOAT: Lazy<f32> = Lazy::new(|| (1 << *SF_LOG) as f32);
+pub static SF_LOG: Lazy<RwLock<usize>> = Lazy::new(|| RwLock::new(CONFIG.sf.scale_factor_log));
+pub static SF: Lazy<RwLock<usize>> = Lazy::new(|| RwLock::new(1 << SF_LOG.read().unwrap().to_owned()));
+pub static SF_FLOAT: Lazy<RwLock<f32>> = Lazy::new(|| RwLock::new((1 << SF_LOG.read().unwrap().to_owned()) as f32));
 pub static CQ_RANGE: Lazy<usize> = Lazy::new(|| 1 << CONFIG.sf.cq_range_log);
 pub static CQ_RANGE_LOWER: Lazy<i32> = Lazy::new(|| -(1 << CONFIG.sf.cq_range_lower_log));
 
@@ -31,10 +32,7 @@ fn parse_onnx_inputs(onnx_graph: &pb::GraphProto) -> (HashMap<String, usize>, Ha
   for (idx, i) in onnx_graph.input.iter().enumerate() {
     input_idx.insert(i.name.clone(), idx);
     let tract_onnx::pb::type_proto::Value::TensorType(t) = i.r#type.as_ref().unwrap().value.as_ref().unwrap();
-    shapes.insert(
-      i.name.clone(),
-        util::get_shape_from_onnx_tensor(t)
-    );
+    shapes.insert(i.name.clone(), util::get_shape_from_onnx_tensor(t));
     types.insert(i.name.clone(), util::datatype_to_datumtype(t.elem_type));
   }
 
@@ -77,7 +75,7 @@ fn parse_onnx_constants<'a>(
               // the reason we use 1 here is because it is the smallest positive value that can be represented in the field
               return Fr::from(1);
             }
-            let mut y = (*x * *SF_FLOAT).round();
+            let mut y = (*x * SF_FLOAT.read().unwrap().to_owned()).round();
             y = y.clamp(-(1 << 15) as f32, (1 << 15) as f32);
             Fr::from(y as i32)
           }))
@@ -321,7 +319,7 @@ fn process_node(
   if node_constants.iter().all(|&x| x.is_some()) {
     let node_inputs: Vec<_> = node_constants.iter().map(|&x| x.unwrap().clone()).collect();
     let node_inputs = node_inputs.iter().map(|x| x.0).collect();
-    let outputs = local_graph.run(&node_inputs, &vec![&arr1(&[]).into_dyn(); local_graph.basic_blocks.len()]);
+    let outputs = local_graph.run(&node_inputs, &vec![&arr1(&[]).into_dyn(); local_graph.basic_blocks.len()]).unwrap();
     node.output.iter().zip(local_graph.outputs.iter()).for_each(|(output_str, &(nodeX, nodeY))| {
       passed_constants.insert(output_str.to_string(), outputs[nodeX as usize][nodeY].clone());
     });

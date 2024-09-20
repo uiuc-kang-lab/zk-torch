@@ -22,14 +22,14 @@ use tract_onnx::tract_core::num_traits::ops::bytes;
 #[derive(Debug)]
 pub struct BooleanCheckBasicBlock;
 impl BasicBlock for BooleanCheckBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     // check if all elements are 0 or 1
     assert!(inputs.len() == 1);
     assert!(inputs[0].iter().all(|y| {
       let y_int = util::fr_to_int(*y);
       y_int == 0 || y_int == 1
     }));
-    vec![]
+    Ok(vec![])
   }
 
   fn prove(

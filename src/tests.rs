@@ -5,6 +5,7 @@ use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_poly::univariate::DensePolynomial;
 use ark_std::UniformRand;
 use ark_std::{One, Zero};
+use core::panic;
 use ndarray::{arr0, concatenate, s, ArrayD, Axis, IxDyn};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::collections::HashMap;
@@ -13,6 +14,7 @@ use std::sync::{Arc, Mutex};
 fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) {
   let mut rng = StdRng::from_entropy();
   let outputs = basic_block.run(model, inputs);
+  let outputs = if outputs.is_ok() { outputs.unwrap() } else { panic!("Error in run") };
   let outputs: Vec<&ArrayD<Fr>> = outputs.iter().map(|x| x).collect();
   let model = convert_to_data(srs, model);
   let setup = basic_block.setup(srs, &model);

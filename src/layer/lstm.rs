@@ -119,16 +119,17 @@ impl Layer for LSTMLayer {
         basic_block: Box::new(MatMulBasicBlock {}),
         N: 2,
       }));
+      let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
       let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-        input_SF: *onnx::SF_LOG * 2,
-        output_SF: *onnx::SF_LOG,
+        input_SF: sf_log * 2,
+        output_SF: sf_log,
       }));
       let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
           setup: Some((
             Box::new(ChangeSFBasicBlock {
-              input_SF: *onnx::SF_LOG * 2,
-              output_SF: *onnx::SF_LOG,
+              input_SF: sf_log * 2,
+              output_SF: sf_log,
             }),
             *onnx::CQ_RANGE_LOWER,
             *onnx::CQ_RANGE,
@@ -197,15 +198,15 @@ impl Layer for LSTMLayer {
 
       // sublayer 11: Sigmoid for input gate
       let sigmoid = graph.addBB(Box::new(SigmoidBasicBlock {
-        input_SF: *onnx::SF_LOG * 2,
-        output_SF: *onnx::SF_LOG,
+        input_SF: sf_log * 2,
+        output_SF: sf_log,
       }));
       let sigmoid_check = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
           setup: Some((
             Box::new(SigmoidBasicBlock {
-              input_SF: *onnx::SF_LOG * 2,
-              output_SF: *onnx::SF_LOG,
+              input_SF: sf_log * 2,
+              output_SF: sf_log,
             }),
             *onnx::CQ_RANGE_LOWER,
             *onnx::CQ_RANGE,
@@ -226,15 +227,15 @@ impl Layer for LSTMLayer {
 
       // sublayer 14: Tanh for candidate memory
       let tanh = graph.addBB(Box::new(TanhBasicBlock {
-        input_SF: *onnx::SF_LOG * 2,
-        output_SF: *onnx::SF_LOG,
+        input_SF: sf_log * 2,
+        output_SF: sf_log,
       }));
       let tanh_check = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
           setup: Some((
             Box::new(TanhBasicBlock {
-              input_SF: *onnx::SF_LOG * 2,
-              output_SF: *onnx::SF_LOG,
+              input_SF: sf_log * 2,
+              output_SF: sf_log,
             }),
             *onnx::CQ_RANGE_LOWER,
             *onnx::CQ_RANGE,

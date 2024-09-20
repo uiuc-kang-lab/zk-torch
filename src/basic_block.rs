@@ -152,8 +152,8 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
     ArrayD::zeros(IxDyn(&[0]))
   }
 
-  fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
-    vec![]
+  fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
+    Ok(vec![])
   }
 
   // This function encodes the outputs of the BasicBlock into Data objects.

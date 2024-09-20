@@ -19,11 +19,11 @@ use std::ops::{Add, Mul, Sub};
 #[derive(Debug)]
 pub struct OneToOneBasicBlock;
 impl BasicBlock for OneToOneBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 4);
     assert!(inputs[0].ndim() == 1 && inputs[1].ndim() == 1 && inputs[2].ndim() == 1 && inputs[3].ndim() == 1);
     assert!(inputs[0].len() == inputs[1].len() && inputs[0].len() == inputs[2].len() && inputs[0].len() == inputs[3].len());
-    vec![]
+    Ok(vec![])
   }
 
   // The high-level proving idea:

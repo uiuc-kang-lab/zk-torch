@@ -48,9 +48,9 @@ pub struct Graph {
 }
 
 impl Graph {
-  pub fn run(&self, inputs: &Vec<&ArrayD<Fr>>, models: &Vec<&ArrayD<Fr>>) -> Vec<Vec<ArrayD<Fr>>> {
+  pub fn run(&self, inputs: &Vec<&ArrayD<Fr>>, models: &Vec<&ArrayD<Fr>>) -> Result<Vec<Vec<ArrayD<Fr>>>, util::CQOutOfRangeError> {
     let mut outputs = vec![vec![]; self.nodes.len()];
-    self.nodes.iter().enumerate().for_each(|(i, n)| {
+    let res: Result<(), util::CQOutOfRangeError> = self.nodes.iter().enumerate().try_for_each(|(i, n)| {
       println!("{} | running {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
       let myInputs = n
         .inputs
@@ -65,9 +65,15 @@ impl Graph {
           }
         })
         .collect();
-      outputs[i] = self.basic_blocks[n.basic_block].run(&models[n.basic_block], &myInputs);
+      outputs[i] = self.basic_blocks[n.basic_block].run(&models[n.basic_block], &myInputs)?;
+      Ok(())
     });
-    return outputs;
+    if res.is_err() {
+      return Err(util::CQOutOfRangeError {
+        input: res.err().unwrap().input,
+      });
+    }
+    return Ok(outputs);
   }
 
   pub fn encodeOutputs(

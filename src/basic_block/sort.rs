@@ -25,7 +25,7 @@ pub struct SortBasicBlock {
   pub len: usize,
 }
 impl BasicBlock for SortBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[1].ndim() == 1 && inputs[0].len() == inputs[1].len());
     let data = inputs[0].slice(s![..self.len]).to_owned().into_dyn();
     let data_tail = inputs[0].slice(s![self.len..]).iter().cloned().collect::<Vec<_>>();
@@ -49,6 +49,6 @@ impl BasicBlock for SortBasicBlock {
 
     let (sorted_data, sorted_indices) = (arr1(&sorted_data).into_dyn(), arr1(&sorted_indices).into_dyn());
 
-    vec![sorted_data, sorted_indices]
+    Ok(vec![sorted_data, sorted_indices])
   }
 }

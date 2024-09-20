@@ -16,21 +16,22 @@ impl Layer for SoftmaxLayer {
     _attributes: &Vec<&AttributeProto>,
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
+    let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
     let max = graph.addBB(Box::new(MaxBasicBlock {}));
     let sub = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(SubBasicBlock {}),
       N: 1,
     }));
     let exp = graph.addBB(Box::new(ExpBasicBlock {
-      input_SF: *onnx::SF_LOG,
-      output_SF: *onnx::SF_LOG,
+      input_SF: sf_log,
+      output_SF: sf_log,
     }));
     let exp_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(ExpBasicBlock {
-            input_SF: *onnx::SF_LOG,
-            output_SF: *onnx::SF_LOG,
+            input_SF: sf_log,
+            output_SF: sf_log,
           }),
           -(*onnx::CQ_RANGE as i32) + 1,
           *onnx::CQ_RANGE,
@@ -43,15 +44,15 @@ impl Layer for SoftmaxLayer {
       N: 1,
     }));
     let reciprocal = graph.addBB(Box::new(ReciprocalBasicBlock {
-      input_SF: *onnx::SF_LOG,
-      output_SF: *onnx::SF_LOG,
+      input_SF: sf_log,
+      output_SF: sf_log,
     }));
     let rec_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(ReciprocalBasicBlock {
-            input_SF: *onnx::SF_LOG,
-            output_SF: *onnx::SF_LOG,
+            input_SF: sf_log,
+            output_SF: sf_log,
           }),
           0,
           *onnx::CQ_RANGE,
@@ -64,15 +65,15 @@ impl Layer for SoftmaxLayer {
       N: 1,
     }));
     let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-      input_SF: *onnx::SF_LOG * 2,
-      output_SF: *onnx::SF_LOG,
+      input_SF: sf_log * 2,
+      output_SF: sf_log,
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(ChangeSFBasicBlock {
-            input_SF: *onnx::SF_LOG * 2,
-            output_SF: *onnx::SF_LOG,
+            input_SF: sf_log * 2,
+            output_SF: sf_log,
           }),
           *onnx::CQ_RANGE_LOWER,
           *onnx::CQ_RANGE,
@@ -82,14 +83,14 @@ impl Layer for SoftmaxLayer {
     }));
 
     // The proving idea is as follows
-    // 1. m = max(X): 
-    //    We first compute the maximum value of the input array. 
-    // 2. X - m: 
+    // 1. m = max(X):
+    //    We first compute the maximum value of the input array.
+    // 2. X - m:
     //    We subtract the maximum value from each element of the input array.
-    // 3. e^(X - m) * SF: 
-    //    We compute the exponential of each element of the input array. 
+    // 3. e^(X - m) * SF:
+    //    We compute the exponential of each element of the input array.
     //    And we use "exp_check" to ensure that the output is within the CQ range.
-    // 4. SUM(e^(X - m)) * SF: 
+    // 4. SUM(e^(X - m)) * SF:
     //    We compute the sum of the exponential of each element of the input array.
     // 5. SF / SUM(e^(X - m)):
     //    We compute the reciprocal of the sum of the exponential of each element of the input array.

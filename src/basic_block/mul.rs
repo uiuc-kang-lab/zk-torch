@@ -12,9 +12,9 @@ pub struct MulConstBasicBlock {
 }
 
 impl BasicBlock for MulConstBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 1 && inputs[0].ndim() == 1);
-    vec![inputs[0].map(|x| *x * Fr::from(self.c as u32))]
+    Ok(vec![inputs[0].map(|x| *x * Fr::from(self.c as u32))])
   }
 
   fn prove(
@@ -52,9 +52,9 @@ impl BasicBlock for MulConstBasicBlock {
 #[derive(Debug)]
 pub struct MulScalarBasicBlock;
 impl BasicBlock for MulScalarBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 2 && inputs[0].ndim() <= 1 && inputs[1].len() == 1);
-    vec![inputs[0].map(|x| *x * inputs[1].first().unwrap())]
+    Ok(vec![inputs[0].map(|x| *x * inputs[1].first().unwrap())])
   }
 
   fn prove(
@@ -103,11 +103,11 @@ impl BasicBlock for MulScalarBasicBlock {
 #[derive(Debug)]
 pub struct MulBasicBlock;
 impl BasicBlock for MulBasicBlock {
-  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[0].shape() == inputs[1].shape());
     let mut r = ArrayD::zeros(inputs[0].dim());
     azip!((r in &mut r, &x in inputs[0], &y in inputs[1]) *r = x * y);
-    vec![r]
+    Ok(vec![r])
   }
 
   fn prove(

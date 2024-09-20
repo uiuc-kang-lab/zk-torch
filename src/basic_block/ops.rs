@@ -15,7 +15,7 @@ macro_rules! make_basic_block {
       pub output_SF: usize,
     }
     impl BasicBlock for $name {
-      fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Fr>> {
+      fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
         assert!(inputs.len() == 1);
         let shape = inputs[0].shape();
         let out = util::array_into_iter(inputs[0])
@@ -28,7 +28,7 @@ macro_rules! make_basic_block {
           })
           .collect::<Vec<_>>();
 
-        vec![ArrayD::from_shape_vec(shape, out).unwrap()]
+        Ok(vec![ArrayD::from_shape_vec(shape, out).unwrap()])
       }
     }
   };

@@ -35,7 +35,7 @@ macro_rules! create_division_layer {
             DatumType::I64 => c_value,
             _ => {
               if $output_idx == 0 {
-                c_value / *onnx::SF_FLOAT as f32
+                c_value / onnx::SF_FLOAT.read().unwrap().to_owned() as f32
               } else {
                 c_value
               }
@@ -77,7 +77,9 @@ macro_rules! create_division_layer {
 
         // Create a basic block for division with scalar values
         let div = graph.addBB(Box::new(RepeaterBasicBlock {
-          basic_block: Box::new(DivScalarBasicBlock { output_SF: *onnx::SF }),
+          basic_block: Box::new(DivScalarBasicBlock {
+            output_SF: onnx::SF.read().unwrap().to_owned(),
+          }),
           N: 1,
         }));
 
@@ -91,7 +93,9 @@ macro_rules! create_division_layer {
 
         // Create basic blocks for multiplication by constants and scalars
         let mul_SF2 = graph.addBB(Box::new(RepeaterBasicBlock {
-          basic_block: Box::new(MulConstBasicBlock { c: *onnx::SF * 2 }),
+          basic_block: Box::new(MulConstBasicBlock {
+            c: onnx::SF.read().unwrap().to_owned() * 2,
+          }),
           N: 1,
         }));
 
