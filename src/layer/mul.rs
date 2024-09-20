@@ -91,11 +91,9 @@ impl Layer for MulLayer {
       }));
       let constantOfShape_output = graph.addNode(constantOfShape, vec![]);
       if *input_shapes[0].last().unwrap() == 1 || *input_shapes[1].last().unwrap() == 1 {
-        println!("1 broadcast {} mul {}", broadcast_inp, mul_inp);
         let broadcast_output = graph.addNode(mul_scalar, vec![(constantOfShape_output, 0), (broadcast_inp, 0)]);
         graph.addNode(mul_basicblock, vec![(mul_inp, 0), (broadcast_output, 0)])
       } else {
-        println!("2 broadcast {} mul {}", broadcast_inp, mul_inp);
         let broadcast_output = graph.addNode(mul, vec![(constantOfShape_output, 0), (broadcast_inp, 0)]);
         graph.addNode(mul, vec![(broadcast_output, 0), (mul_inp, 0)])
       }
