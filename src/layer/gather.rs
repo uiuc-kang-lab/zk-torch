@@ -33,6 +33,7 @@ impl Layer for GatherLayer {
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let mut indices_output = -2;
+    // Avoid unwrapping a None value
     if input_shapes[1].len() == 0 {
       let indices = constants[1].unwrap().0.mapv(|x| {
         if x > Fr::from(input_shapes[0][0] as i64) {
