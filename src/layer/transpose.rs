@@ -43,10 +43,10 @@ impl Layer for TransposeLayer {
       let transpose = graph.addBB(Box::new(TransposeBasicBlock { perm }));
       let intermediate = graph.addNode(transpose, vec![(-1, 0)]);
       // Swap the last two
-      // if pos != n-2, n-1
+      // If pos != n-2, n-1
       // pos        n-2       n-1
       // axes[n-2]  n-1       axes[n-1]
-      // if pos == n-2
+      // If pos == n-2
       // pos/n-2    n-1
       // n-1        axes[n-1]
       let (a, b) = (n - 1, axes[n - 1]);
