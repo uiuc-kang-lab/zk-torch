@@ -4,6 +4,7 @@ use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
+use ark_std::One;
 use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
@@ -67,9 +68,35 @@ impl Layer for MulLayer {
     } else {
       mul
     };
-    // If the first input is a scalar, swap the inputs, because the mul scalar basic block expects the scalar to be the second input.
+    // If the first input is a scalar, swap the inputs, because the mul scalar basic block expects the scalar to be the second input. If the last dimension differs between the two inputs, broadcast.
     let mul_output = if input_shapes[0].len() == 0 {
       graph.addNode(mul_basicblock, vec![(-2, 0), (-1, 0)])
+    } else if input_shapes[1].len() > 0 && input_shapes[0].last().unwrap() != input_shapes[1].last().unwrap() {
+      let (broadcast_inp, mul_inp, broadcast_idx) = if input_shapes[0].last().unwrap() > input_shapes[1].last().unwrap() {
+        (-2, -1, 0)
+      } else {
+        (-1, -2, 1)
+      };
+      let constantOfShape = graph.addBB(Box::new(ConstOfShapeBasicBlock {
+        c: Fr::one(),
+        shape: input_shapes[broadcast_idx].clone(),
+      }));
+      let mul_scalar = graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(MulScalarBasicBlock {}),
+        N: 1,
+      }));
+      let mul = graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(MulBasicBlock {}),
+        N: 1,
+      }));
+      let constantOfShape_output = graph.addNode(constantOfShape, vec![]);
+      if *input_shapes[0].last().unwrap() == 1 || *input_shapes[1].last().unwrap() == 1 {
+        let broadcast_output = graph.addNode(mul_scalar, vec![(constantOfShape_output, 0), (broadcast_inp, 0)]);
+        graph.addNode(mul_basicblock, vec![(mul_inp, 0), (broadcast_output, 0)])
+      } else {
+        let broadcast_output = graph.addNode(mul, vec![(constantOfShape_output, 0), (broadcast_inp, 0)]);
+        graph.addNode(mul, vec![(broadcast_output, 0), (mul_inp, 0)])
+      }
     } else {
       graph.addNode(mul_basicblock, vec![(-1, 0), (-2, 0)])
     };

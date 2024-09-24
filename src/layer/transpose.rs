@@ -26,14 +26,29 @@ impl Layer for TransposeLayer {
       let output = graph.addNode(transpose, vec![(-1, 0)]);
       graph.outputs.push((output, 0));
     } else {
-      // move last element to be 2nd to last
       let pos = axes.iter().position(|&x| x == n - 1).unwrap();
       let mut perm = axes.clone();
+      // Keep n-1 in last index and move axes[n-1] to n-2
+      // With this, we have the values
+      // If pos != n-2, n-1
+      // pos        n-2       n-1
+      // axes[n-2]  axes[n-1] n-1
+      // If pos == n-2
+      // pos/n-2    n-1
+      // axes[n-1]  n-1
+      // pos == n-1 is covered by the if case
       perm[pos] = axes[n - 2];
-      perm[n - 2] = n - 1;
+      perm[n - 2] = axes[n - 1];
+      perm[n - 1] = n - 1;
       let transpose = graph.addBB(Box::new(TransposeBasicBlock { perm }));
       let intermediate = graph.addNode(transpose, vec![(-1, 0)]);
-      // swap the last two
+      // Swap the last two
+      // If pos != n-2, n-1
+      // pos        n-2       n-1
+      // axes[n-2]  n-1       axes[n-1]
+      // If pos == n-2
+      // pos/n-2    n-1
+      // n-1        axes[n-1]
       let (a, b) = (n - 1, axes[n - 1]);
       let (mut c, mut d) = (input_shapes[0][a], input_shapes[0][b]);
       c = util::next_pow(c as u32) as usize;
@@ -44,7 +59,14 @@ impl Layer for TransposeLayer {
         N: 2,
       }));
       let permute_output = graph.addNode(permute, vec![(intermediate, 0)]);
-      // if pos swap happened, correct the swap
+      // If pos swap happened, correct the swap
+      // If pos != n-2, n-1
+      // swap swaps pos and n-2 indices
+      // pos  n-2         n-1
+      // n-1  axes[n-2]   axes[n-1]
+      // If pos == n-2
+      // pos/n-2    n-1
+      // n-1        axes[n-1]
       let output = if pos == n - 2 {
         permute_output
       } else {
