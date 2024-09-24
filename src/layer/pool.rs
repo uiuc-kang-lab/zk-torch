@@ -103,9 +103,10 @@ impl Layer for MaxPoolLayer {
       padding_partition: copy_constraint::PaddingEnum::Zero,
     }));
 
-    let r: Vec<_> = (0..-*onnx::CQ_RANGE_LOWER).map(Fr::from).collect();
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQBasicBlock { setup: arr1(&r) }),
+      basic_block: Box::new(CQBasicBlock {
+        setup: util::CQArrayType::NonNegative,
+      }),
       N: 1,
     }));
 

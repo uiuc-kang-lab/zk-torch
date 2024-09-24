@@ -16,12 +16,12 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct CQBasicBlock {
-  pub setup: Array1<Fr>,
+  pub setup: util::CQArrayType,
 }
 
 impl BasicBlock for CQBasicBlock {
   fn genModel(&self) -> ArrayD<Fr> {
-    self.setup.clone().into_dyn()
+    util::gen_cq_array(self.setup.clone())
   }
 
   fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
@@ -29,14 +29,9 @@ impl BasicBlock for CQBasicBlock {
       return Ok(vec![]);
     }
     assert!(inputs.len() == 1);
-    let mut table_dict = HashMap::new();
-    for (i, x) in model.view().as_slice().unwrap().iter().enumerate() {
-      table_dict.insert(*x, i);
-    }
     for x in inputs[0].view().as_slice().unwrap() {
-      if !table_dict.contains_key(x) {
-        let x_int = util::fr_to_int(*x);
-        println!("{:?},{:?},{:?}", x_int, x, -*x);
+      let x_int = util::fr_to_int(*x);
+      if !util::check_cq_array(self.setup.clone(), x_int) {
         return Err(util::CQOutOfRangeError { input: x_int });
       }
     }

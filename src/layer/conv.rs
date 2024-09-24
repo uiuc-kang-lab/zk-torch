@@ -201,8 +201,15 @@ macro_rules! create_conv_layer {
           output_SF: sf_log,
         }));
         let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
-          basic_block: Box::new(CQBasicBlock {
-            setup: Array1::from_iter(*onnx::CQ_RANGE_LOWER..-*onnx::CQ_RANGE_LOWER).map(|x| Fr::from(*x)),
+          basic_block: Box::new(CQ2BasicBlock {
+            setup: Some((
+              Box::new(ChangeSFBasicBlock {
+                input_SF: sf_log * 2,
+                output_SF: sf_log,
+              }),
+              *onnx::CQ_RANGE_LOWER,
+              *onnx::CQ_RANGE,
+            )),
           }),
           N: 1,
         }));
@@ -238,7 +245,7 @@ macro_rules! create_conv_layer {
         let cc1_output = graph.addNode(cc1, vec![(-2, 0)]);
         let cqlin_output = graph.addNode(matmul, vec![(cc_output, 0), (cc1_output, 0)]);
         let change_SF_output = graph.addNode(change_SF, vec![(cqlin_output, 0)]);
-        let _ = graph.addNode(change_SF_check, vec![(change_SF_output, 0)]);
+        let _ = graph.addNode(change_SF_check, vec![(cqlin_output, 0), (change_SF_output, 0)]);
 
         // Add bias if it exists
         let add_output = {

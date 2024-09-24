@@ -63,13 +63,13 @@ impl Layer for TopKLayer {
       basic_block: Box::new(OrderedBasicBlock {}),
       N: 1,
     }));
-    let r: Vec<_> = if descending {
-      (0..-*onnx::CQ_RANGE_LOWER).map(Fr::from).collect()
+    let cq_type = if descending {
+      util::CQArrayType::NonNegative
     } else {
-      (*onnx::CQ_RANGE_LOWER + 1..1).map(Fr::from).collect()
+      util::CQArrayType::NonPositive
     };
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQBasicBlock { setup: arr1(&r) }),
+      basic_block: Box::new(CQBasicBlock { setup: cq_type }),
       N: 1,
     }));
 
@@ -154,9 +154,10 @@ impl Layer for ArgMaxLayer {
       basic_block: Box::new(OrderedBasicBlock {}),
       N: 1,
     }));
-    let r: Vec<_> = (0..-*onnx::CQ_RANGE_LOWER).map(Fr::from).collect();
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQBasicBlock { setup: arr1(&r) }),
+      basic_block: Box::new(CQBasicBlock {
+        setup: util::CQArrayType::NonNegative,
+      }),
       N: 1,
     }));
 

@@ -125,7 +125,7 @@ impl Layer for BatchNormLayer {
     }));
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
-        setup: Array1::from_iter(0..*onnx::CQ_RANGE).map(|x| Fr::from(*x as i32)),
+        setup: util::CQArrayType::NonNegative,
       }),
       N: 1,
     }));
@@ -371,7 +371,7 @@ impl Layer for InstanceNormLayer {
     }));
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
-        setup: Array1::from_iter(0..*onnx::CQ_RANGE).map(|x| Fr::from(*x as i32)),
+        setup: util::CQArrayType::NonNegative,
       }),
       N: 1,
     }));

@@ -40,14 +40,16 @@ impl Layer for LessLayer {
       basic_block: Box::new(SubBasicBlock {}),
       N: 1,
     }));
-    let r1: Vec<_> = (*onnx::CQ_RANGE_LOWER..0).map(Fr::from).collect();
     let negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQBasicBlock { setup: arr1(&r1) }),
+      basic_block: Box::new(CQBasicBlock {
+        setup: util::CQArrayType::Negative,
+      }),
       N: 1,
     }));
-    let r2: Vec<_> = (0..-*onnx::CQ_RANGE_LOWER).map(Fr::from).collect();
     let non_negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQBasicBlock { setup: arr1(&r2) }),
+      basic_block: Box::new(CQBasicBlock {
+        setup: util::CQArrayType::NonNegative,
+      }),
       N: 1,
     }));
 

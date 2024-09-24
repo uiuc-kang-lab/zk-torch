@@ -79,7 +79,7 @@ fn testBasicBlocks() {
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a_0, &a_0]);
   testBasicBlock(
     CQBasicBlock {
-      setup: a.clone().into_dimensionality::<ndarray::Ix1>().unwrap(),
+      setup: util::CQArrayType::Custom(a.iter().map(|x| *x).collect::<Vec<_>>()),
     },
     srs,
     &a,
