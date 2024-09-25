@@ -333,7 +333,7 @@ impl Layer for InstanceNormLayer {
       input_SF: sf_log * 2,
       output_SF: sf_log,
     }));
-    // The input is not scaled by SF
+    // The input is scaled by SF
     let sqrt_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         setup: Some((
@@ -365,8 +365,6 @@ impl Layer for InstanceNormLayer {
       N: 1,
     }));
     let div_SF = graph.addBB(Box::new(DivConstBasicBlock {
-      // c: X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y) as f32 * ((1 << sf_log) as f32)
-      //   / ((1 << (sf_log * 2)) as f32),
       c: (X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y) as f32).sqrt() * ((1 << sf_log) as f32).sqrt(),
     }));
     let div_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
