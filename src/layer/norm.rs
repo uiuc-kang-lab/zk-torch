@@ -333,11 +333,12 @@ impl Layer for InstanceNormLayer {
       input_SF: sf_log * 2,
       output_SF: sf_log,
     }));
+    // The input is not scaled by SF
     let sqrt_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(SqrtBasicBlock {
-            input_SF: sf_log * 2,
+            input_SF: sf_log,
             output_SF: sf_log,
           }),
           *onnx::CQ_RANGE_LOWER,
@@ -356,6 +357,23 @@ impl Layer for InstanceNormLayer {
           Box::new(ChangeSFBasicBlock {
             input_SF: sf_log * 2,
             output_SF: sf_log,
+          }),
+          *onnx::CQ_RANGE_LOWER,
+          *onnx::CQ_RANGE,
+        )),
+      }),
+      N: 1,
+    }));
+    let div_SF = graph.addBB(Box::new(DivConstBasicBlock {
+      // c: X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y) as f32 * ((1 << sf_log) as f32)
+      //   / ((1 << (sf_log * 2)) as f32),
+      c: (X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y) as f32).sqrt() * ((1 << sf_log) as f32).sqrt(),
+    }));
+    let div_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(CQ2BasicBlock {
+        setup: Some((
+          Box::new(DivConstBasicBlock {
+            c: (X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y) as f32).sqrt() * ((1 << sf_log) as f32).sqrt(),
           }),
           *onnx::CQ_RANGE_LOWER,
           *onnx::CQ_RANGE,
@@ -424,14 +442,18 @@ impl Layer for InstanceNormLayer {
     let mean_output = graph.addNode(reshape_0, vec![(mean_output, 0)]);
 
     // compute var (shape: [N, C, 1, ..., 1])
+    // m = mean(X)
+    // s = size(X)
+    // X - m
     let sub_output = graph.addNode(sub, vec![(-1, 0), (mean_output, 0)]);
+    // (X - m) * SF / (sqrt(s) * sqrt(SF))
+    let div_SF_output = graph.addNode(div_SF, vec![(sub_output, 0)]);
+    let _ = graph.addNode(div_SF_check, vec![(sub_output, 0), (div_SF_output, 0)]);
+    // (X - m)^2 * SF / s
     let mul_output = graph.addNode(mul, vec![(sub_output, 0), (sub_output, 0)]);
-    let change_SF_output = graph.addNode(change_SF, vec![(mul_output, 0)]);
-    let _ = graph.addNode(change_SF_check, vec![(mul_output, 0), (change_SF_output, 0)]);
-    let cc_output = graph.addNode(cc, vec![(change_SF_output, 0)]);
-    let sum_output = graph.addNode(sum, vec![(cc_output, 0)]);
-    let var_output = graph.addNode(div_const, vec![(sum_output, 0)]);
-    let _ = graph.addNode(div_const_check, vec![(sum_output, 0), (var_output, 0)]);
+    let cc_output = graph.addNode(cc, vec![(mul_output, 0)]);
+    // SUM((X - m)^2) * SF / s
+    let var_output = graph.addNode(sum, vec![(cc_output, 0)]);
     let var_output = graph.addNode(reshape_0, vec![(var_output, 0)]);
 
     // reshape scale (shape: [C, 1, ..., 1])
@@ -454,6 +476,7 @@ impl Layer for InstanceNormLayer {
 
     // Step 3. sqrt(var + epsilon) (shape: [N * C, 1, ..., 1])
     let sqrt_output = graph.addNode(sqrt, vec![(var_plus_eps_output, 0)]);
+    // Falls out of CQ range
     let _ = graph.addNode(sqrt_check, vec![(var_plus_eps_output, 0), (sqrt_output, 0)]);
 
     // Step 4. (X - mean) / sqrt(var + epsilon)
