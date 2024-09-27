@@ -48,7 +48,6 @@ macro_rules! define_nonlinear_layer {
 
 // Using the macro to define nonlinear layers
 define_nonlinear_layer!(ReLULayer, ReLUBasicBlock);
-define_nonlinear_layer!(SqrtLayer, SqrtBasicBlock);
 define_nonlinear_layer!(CeilLayer, CeilBasicBlock);
 define_nonlinear_layer!(ErfLayer, ErfBasicBlock);
 define_nonlinear_layer!(ExpLayer, ExpBasicBlock);
