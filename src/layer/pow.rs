@@ -23,7 +23,7 @@ impl BasicBlock for PrecomputedPowBasicBlock {
       .map(|x| {
         let mut b = base;
         b /= (1 << self.input_SF) as f32;
-        b = b.powi(util::fr_to_int(*x));
+        b = b.powi(util::fr_to_int(*x).try_into().unwrap());
         b *= (1 << self.output_SF) as f32;
         Fr::from(b.round() as i32)
       })
@@ -80,7 +80,7 @@ impl Layer for PowLayer {
     assert!(constants[1].unwrap().0.len() == 1);
     let N = match constants[1].unwrap().1 {
       DatumType::I32 | DatumType::I64 => util::fr_to_int(*constants[1].unwrap().0.first().unwrap()),
-      DatumType::F32 => (util::fr_to_int(*constants[1].unwrap().0.first().unwrap()) as f32 / sf_float) as i32,
+      DatumType::F32 => (util::fr_to_int(*constants[1].unwrap().0.first().unwrap()) as f32 / sf_float) as i128,
       _ => panic!("unsupported type"),
     };
 

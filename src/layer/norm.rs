@@ -365,7 +365,7 @@ impl Layer for InstanceNormLayer {
       N: 1,
     }));
     let div_SF = graph.addBB(Box::new(DivConstBasicBlock {
-      c: (X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y) as f32).sqrt() * ((1 << sf_log) as f32).sqrt(),
+      c: (X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y) as f32).sqrt() * ((1 << sf_log) as f32),
     }));
     let div_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
@@ -444,13 +444,13 @@ impl Layer for InstanceNormLayer {
     // s = size(X)
     // X - m
     let sub_output = graph.addNode(sub, vec![(-1, 0), (mean_output, 0)]);
-    // (X - m) * SF / (sqrt(s) * sqrt(SF))
+    // (X - m) * SF / (sqrt(s) * SF)
     let div_SF_output = graph.addNode(div_SF, vec![(sub_output, 0)]);
     let _ = graph.addNode(div_SF_check, vec![(sub_output, 0), (div_SF_output, 0)]);
-    // (X - m)^2 * SF / s
+    // (X - m)^2 / s
     let mul_output = graph.addNode(mul, vec![(sub_output, 0), (sub_output, 0)]);
     let cc_output = graph.addNode(cc, vec![(mul_output, 0)]);
-    // SUM((X - m)^2) * SF / s
+    // SUM((X - m)^2) / s
     let var_output = graph.addNode(sum, vec![(cc_output, 0)]);
     let var_output = graph.addNode(reshape_0, vec![(var_output, 0)]);
 
@@ -473,9 +473,80 @@ impl Layer for InstanceNormLayer {
     let var_plus_eps_output = graph.addNode(reshape_4, vec![(add_output, 0)]);
 
     // Step 3. sqrt(var + epsilon) (shape: [N * C, 1, ..., 1])
+    let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
+    let sqrt = graph.addBB(Box::new(SqrtBasicBlock {
+      input_SF: sf_log,
+      output_SF: sf_log,
+    }));
+    let sf = onnx::SF.read().unwrap().to_owned();
+    let sf_const = graph.addBB(Box::new(Const2BasicBlock {
+      c: arr1(&vec![Fr::from(sf as i32)]).into_dyn(),
+    }));
+    let two_const = graph.addBB(Box::new(Const2BasicBlock {
+      c: arr1(&vec![Fr::from(2)]).into_dyn(),
+    }));
+    let add = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(AddBasicBlock {}),
+      N: 1,
+    }));
+    let sub = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(SubBasicBlock {}),
+      N: 1,
+    }));
+    let mul = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(MulBasicBlock {}),
+      N: 1,
+    }));
+    let mul_scalar = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(MulScalarBasicBlock {}),
+      N: 1,
+    }));
+    let non_negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(CQBasicBlock {
+        setup: util::CQArrayType::NonNegative,
+      }),
+      N: 1,
+    }));
+    let negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(CQBasicBlock {
+        setup: util::CQArrayType::Negative,
+      }),
+      N: 1,
+    }));
+
+    // x = var + epsilon
+    // SqrtBB(x) = sqrt(x/SF)*SF + eps (where -1 < eps < 1)
     let sqrt_output = graph.addNode(sqrt, vec![(var_plus_eps_output, 0)]);
-    // Falls out of CQ range
-    let _ = graph.addNode(sqrt_check, vec![(var_plus_eps_output, 0), (sqrt_output, 0)]);
+    // The following operations are to check if sqrt_output is correct
+    // square_sqrt = SqrtBB(x)^2 = x*SF + 2*sqrt(x/SF)*SF*eps + eps^2
+    let square_sqrt = graph.addNode(mul, vec![(sqrt_output, 0), (sqrt_output, 0)]);
+    // scale_input_by_sf = x*SF
+    let sf_const_output = graph.addNode(sf_const, vec![]);
+    let scale_input_by_sf = graph.addNode(mul_scalar, vec![(var_plus_eps_output, 0), (sf_const_output, 0)]);
+    // difference = SqrtBB(x)^2 - x*SF = 2*sqrt(x/SF)*SF*eps + eps^2 = 2*SqrtBB(x)*eps + eps^2
+    // Because -1 < eps < 1, -2*SqrtBB(x) < 2*SqrtBB(x)*eps < 2*SqrtBB(x) and 0 < eps^2 < 1.
+    // Because -1 < eps < 0, -2*SqrtBB(x) < 2*SqrtBB(x)*eps and 0 < eps^2 < 1.
+
+    // -2*SqrtBB(x) < 2*SqrtBB(x)*eps + eps^2
+    // 2*SqrtBB(x)*eps + eps^2 < 2*SqrtBB(x) + 1
+    // Therefore, - 2*SqrtBB(x) < difference < 2*SqrtBB(x) + 1.
+    // The following two inequalities should hold:
+    // 1. difference + 2*SqrtBB(x) >= 0
+    // 2. difference - 2*SqrtBB(x) - 1 < 0
+    let difference = graph.addNode(sub, vec![(square_sqrt, 0), (scale_input_by_sf, 0)]);
+    // scale_output_by_2 = 2*SqrtBB(x)
+    let two_const_output = graph.addNode(two_const, vec![]);
+    let scale_output_by_2 = graph.addNode(mul_scalar, vec![(sqrt_output, 0), (two_const_output, 0)]);
+    // let _ = graph.addNode(non_negative_check, vec![(scale_output_by_2, 0)]);
+    // d_plus_scale_output_by_2 = difference + 2*SqrtBB(x)
+    let d_plus_scale_output_by_2 = graph.addNode(add, vec![(difference, 0), (scale_output_by_2, 0)]);
+    // d_minus_scale_output_by_2 = difference - 2*SqrtBB(x)
+    let d_minus_scale_output_by_2 = graph.addNode(sub, vec![(difference, 0), (scale_output_by_2, 0)]);
+    let _ = graph.addNode(non_negative_check, vec![(d_plus_scale_output_by_2, 0)]);
+    let _ = graph.addNode(negative_check, vec![(d_minus_scale_output_by_2, 0)]);
+    // let sqrt_output = graph.addNode(sqrt, vec![(var_plus_eps_output, 0)]);
+    // // Falls out of CQ range
+    // let _ = graph.addNode(sqrt_check, vec![(var_plus_eps_output, 0), (sqrt_output, 0)]);
 
     // Step 4. (X - mean) / sqrt(var + epsilon)
     let split_sub_output = graph.addNode(split_x, vec![(x_minus_mean_output, 0)]); // N*C outputs (shape: [1, D1, D2, ..., DN])

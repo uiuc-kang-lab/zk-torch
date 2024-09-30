@@ -31,7 +31,7 @@ impl BasicBlock for MaxBasicBlock {
 
 #[derive(Debug)]
 pub struct MaxProofBasicBlock {
-  pub cq_range_lower: i32,
+  pub cq_range_lower: i128,
 }
 
 // This max includes a proof. The first output is the max and second output is a vector of max - x for all input values x. The second output is needed because it is necessary to perform a range check on the second output.

@@ -84,11 +84,11 @@ impl Layer for SliceLayer {
     _attributes: &Vec<&AttributeProto>,
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
-    let starts: Vec<_> = constants[1].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).collect();
-    let ends: Vec<_> = constants[2].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).collect();
+    let starts: Vec<_> = constants[1].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x) as i32).collect();
+    let ends: Vec<_> = constants[2].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x) as i32).collect();
     // steps and axes might be optional
     let axes: Vec<_> = match constants.get(3) {
-      Some(x) => x.unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x)).collect(),
+      Some(x) => x.unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x) as i32).collect(),
       None => (0..input_shapes[0].len()).map(|x| x as i32).collect(),
     };
     let mut steps: Vec<_> = match constants.get(4) {

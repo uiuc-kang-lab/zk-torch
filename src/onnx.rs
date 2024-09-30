@@ -21,7 +21,7 @@ pub static SF_LOG: Lazy<RwLock<usize>> = Lazy::new(|| RwLock::new(CONFIG.sf.scal
 pub static SF: Lazy<RwLock<usize>> = Lazy::new(|| RwLock::new(1 << SF_LOG.read().unwrap().to_owned()));
 pub static SF_FLOAT: Lazy<RwLock<f32>> = Lazy::new(|| RwLock::new((1 << SF_LOG.read().unwrap().to_owned()) as f32));
 pub static CQ_RANGE: Lazy<usize> = Lazy::new(|| 1 << CONFIG.sf.cq_range_log);
-pub static CQ_RANGE_LOWER: Lazy<i32> = Lazy::new(|| -(1 << CONFIG.sf.cq_range_lower_log));
+pub static CQ_RANGE_LOWER: Lazy<i128> = Lazy::new(|| -(1 << CONFIG.sf.cq_range_lower_log));
 
 // This function is used for parsing the inputs of onnx models
 fn parse_onnx_inputs(onnx_graph: &pb::GraphProto) -> (HashMap<String, usize>, HashMap<String, Vec<usize>>, HashMap<String, DatumType>) {

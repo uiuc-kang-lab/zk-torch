@@ -6,11 +6,11 @@
 use ark_bn254::Fr;
 use ark_ff::PrimeField;
 
-pub fn fr_to_int(x: Fr) -> i32 {
+pub fn fr_to_int(x: Fr) -> i128 {
   if x < Fr::from(1 << 28) {
-    x.into_bigint().0[0] as i32
+    x.into_bigint().0[0] as i128
   } else {
-    -((-x).into_bigint().0[0] as i32)
+    -((-x).into_bigint().0[0] as i128)
   }
 }
 

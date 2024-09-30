@@ -29,9 +29,9 @@ use std::{
 // The range is defined by three constants: the start, limit, and delta values.
 #[derive(Debug)]
 pub struct RangeConstBasicBlock {
-  pub start: i32,
-  pub limit: i32,
-  pub delta: i32,
+  pub start: i128,
+  pub limit: i128,
+  pub delta: i128,
 }
 impl BasicBlock for RangeConstBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, _inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {

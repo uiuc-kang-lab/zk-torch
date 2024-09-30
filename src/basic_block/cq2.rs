@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct CQ2BasicBlock {
-  pub setup: Option<(Box<dyn BasicBlock>, i32, usize)>,
+  pub setup: Option<(Box<dyn BasicBlock>, i128, usize)>,
 }
 
 impl BasicBlock for CQ2BasicBlock {
@@ -38,11 +38,11 @@ impl BasicBlock for CQ2BasicBlock {
         let temp = (*x.0, *x.1);
         let x_0_int = util::fr_to_int(temp.0);
         let low = self.setup.as_ref().unwrap().1;
-        let high = low + self.setup.as_ref().unwrap().2 as i32;
+        let high = low + self.setup.as_ref().unwrap().2 as i128;
         if x_0_int < low || x_0_int >= high {
           let temp_ints = (util::fr_to_int(temp.0), util::fr_to_int(temp.1));
-          println!("{:?}, {:?}", temp_ints, temp);
-          return Err(util::CQOutOfRangeError { input: temp_ints.0 });
+          println!("{:?}", temp);
+          panic!("The pair {:?} is not in the model", temp_ints);
         }
       }
     }

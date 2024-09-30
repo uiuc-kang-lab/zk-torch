@@ -44,7 +44,7 @@ impl Layer for TopKLayer {
 
     let range = graph.addBB(Box::new(RangeConstBasicBlock {
       start: 0,
-      limit: util::next_pow(input_shapes[0][axis] as u32) as i32,
+      limit: util::next_pow(input_shapes[0][axis] as u32) as i128,
       delta: 1,
     }));
     let data_len = input_shapes[0][axis];
@@ -138,7 +138,7 @@ impl Layer for ArgMaxLayer {
 
     let range = graph.addBB(Box::new(RangeConstBasicBlock {
       start: 0,
-      limit: util::next_pow(input_shapes[0][axis] as u32) as i32,
+      limit: util::next_pow(input_shapes[0][axis] as u32) as i128,
       delta: 1,
     }));
     let data_len = input_shapes[0][axis];

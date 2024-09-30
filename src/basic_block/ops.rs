@@ -20,10 +20,15 @@ macro_rules! make_basic_block {
         let shape = inputs[0].shape();
         let out = util::array_into_iter(inputs[0])
           .map(|x| {
+            println!("x {:?}", x);
             let mut x = util::fr_to_int(*x) as f32;
+            println!("x {:?}", x);
             x /= (1 << self.input_SF) as f32;
+            println!("x {:?}", x);
             x = $operation(x);
+            println!("x {:?}", x);
             x *= (1 << self.output_SF) as f32;
+            println!("x {:?}", x);
             Fr::from(x.round() as i32)
           })
           .collect::<Vec<_>>();

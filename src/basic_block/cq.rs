@@ -31,6 +31,7 @@ impl BasicBlock for CQBasicBlock {
     assert!(inputs.len() == 1);
     for x in inputs[0].view().as_slice().unwrap() {
       let x_int = util::fr_to_int(*x);
+      println!("x_int: {:?}", x_int);
       if !util::check_cq_array(self.setup.clone(), x_int) {
         return Err(util::CQOutOfRangeError { input: x_int });
       }

@@ -32,7 +32,7 @@ impl Layer for ReshapeLayer {
           if *x == Fr::zero() {
             input_shapes[0][i] as i32
           } else {
-            util::fr_to_int(*x)
+            util::fr_to_int(*x) as i32
           }
         } else {
           0

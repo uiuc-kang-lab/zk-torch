@@ -137,7 +137,7 @@ fn testBasicBlocks() {
 
 #[test]
 fn test_max() {
-  let CQ_RANGE_LOWER: i32 = -(1 << 5);
+  let CQ_RANGE_LOWER: i128 = -(1 << 5);
   let srs = &ptau::load_file("challenge", 7, 7);
   let empty = ArrayD::zeros(IxDyn(&[0]));
   let a = ArrayD::from_shape_vec(IxDyn(&[2]), vec![1, 0].into_iter().map(|x| Fr::from(x)).collect()).unwrap();

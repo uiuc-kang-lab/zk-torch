@@ -2,5 +2,5 @@ use std::fmt;
 
 #[derive(Debug, Clone)]
 pub struct CQOutOfRangeError {
-  pub input: i32,
+  pub input: i128,
 }

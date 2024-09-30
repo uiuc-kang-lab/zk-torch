@@ -32,13 +32,13 @@ pub fn gen_cq_array(cq_type: CQArrayType) -> ArrayD<Fr> {
   arr1(&r).into_dyn()
 }
 
-pub fn check_cq_array(cq_type: CQArrayType, x_int: i32) -> bool {
+pub fn check_cq_array(cq_type: CQArrayType, x_int: i128) -> bool {
   let result = match cq_type {
-    CQArrayType::Negative => x_int < 0 && x_int >= *onnx::CQ_RANGE_LOWER,
-    CQArrayType::NonNegative => x_int >= 0 && x_int < (*onnx::CQ_RANGE as i32),
-    CQArrayType::NonZero => x_int != 0 && x_int >= *onnx::CQ_RANGE_LOWER && x_int <= -*onnx::CQ_RANGE_LOWER,
-    CQArrayType::NonPositive => x_int <= 0 && x_int > *onnx::CQ_RANGE_LOWER,
-    CQArrayType::Positive => x_int > 0 && x_int <= -*onnx::CQ_RANGE_LOWER,
+    CQArrayType::Negative => x_int < 0 && x_int >= (*onnx::CQ_RANGE_LOWER as i128),
+    CQArrayType::NonNegative => x_int >= 0 && x_int < (*onnx::CQ_RANGE as i128),
+    CQArrayType::NonZero => x_int != 0 && x_int >= (*onnx::CQ_RANGE_LOWER as i128) && x_int <= (-*onnx::CQ_RANGE_LOWER as i128),
+    CQArrayType::NonPositive => x_int <= 0 && x_int > (*onnx::CQ_RANGE_LOWER as i128),
+    CQArrayType::Positive => x_int > 0 && x_int <= (-*onnx::CQ_RANGE_LOWER as i128),
     CQArrayType::Custom(range) => {
       let range = range.iter().map(|x| util::fr_to_int(*x)).collect::<Vec<_>>();
       range.contains(&x_int)
@@ -50,7 +50,7 @@ pub fn check_cq_array(cq_type: CQArrayType, x_int: i32) -> bool {
   result
 }
 
-pub fn gen_cq_table(basic_block: &Box<dyn BasicBlock>, offset: i32, size: usize) -> ArrayD<Fr> {
+pub fn gen_cq_table(basic_block: &Box<dyn BasicBlock>, offset: i128, size: usize) -> ArrayD<Fr> {
   let range = Array1::from_shape_fn(size, |i| Fr::from(i as u32) + Fr::from(offset)).into_dyn();
   let result = &(**basic_block).run(&ArrayD::zeros(IxDyn(&[0])), &vec![&range]).unwrap()[0];
   let range = range.view().into_shape(IxDyn(&[1, size])).unwrap();

@@ -20,6 +20,9 @@ impl BasicBlock for SubBasicBlock {
     } else {
       azip!((r in &mut r, &x in inputs[0], &y in inputs[1]) *r = x - y);
     }
+    println!("sub inputs[0]: {:?}", inputs[0]);
+    println!("sub inputs[1]: {:?}", inputs[1]);
+    println!("sub r: {:?}", r);
     Ok(vec![r])
   }
 
