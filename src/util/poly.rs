@@ -41,7 +41,7 @@ fn karatsuba_multiply(a: &DensePolynomial<Fr>, b: &DensePolynomial<Fr>) -> Dense
   let n = std::cmp::max(a.degree(), b.degree()) + 1;
 
   // Base case: use standard multiplication for small polynomials
-  if n <= 32 {
+  if n <= 134217728 {
     return a * b;
   }
 
