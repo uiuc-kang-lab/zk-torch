@@ -21,14 +21,11 @@ macro_rules! make_basic_block {
         let out = util::array_into_iter(inputs[0])
           .map(|x| {
             println!("x {:?}", x);
-            let mut x = util::fr_to_int(*x) as f32;
+            let mut x = util::fr_to_int(*x) as f64;
             println!("x {:?}", x);
-            x /= (1 << self.input_SF) as f32;
-            println!("x {:?}", x);
+            x /= (1 << self.input_SF) as f64;
             x = $operation(x);
-            println!("x {:?}", x);
-            x *= (1 << self.output_SF) as f32;
-            println!("x {:?}", x);
+            x *= (1 << self.output_SF) as f64;
             Fr::from(x.round() as i32)
           })
           .collect::<Vec<_>>();
@@ -39,25 +36,25 @@ macro_rules! make_basic_block {
   };
 }
 
-make_basic_block!(ExpBasicBlock, { |x: f32| { x.exp() } });
-make_basic_block!(LogBasicBlock, { |x: f32| { x.ln() } });
+make_basic_block!(ExpBasicBlock, { |x: f64| { x.exp() } });
+make_basic_block!(LogBasicBlock, { |x: f64| { x.ln() } });
 make_basic_block!(ReLUBasicBlock, {
-  |x: f32| {
-    if x < 0f32 {
-      0f32
+  |x: f64| {
+    if x < 0f64 {
+      0f64
     } else {
       x
     }
   }
 });
-make_basic_block!(SqrtBasicBlock, { |x: f32| { x.sqrt() } });
-make_basic_block!(ChangeSFBasicBlock, { |x: f32| { x } });
-make_basic_block!(ErfBasicBlock, { |x: f32| { util::erf(x) } });
-make_basic_block!(SigmoidBasicBlock, { |x: f32| { x.exp() / (1. + x.exp()) } });
-make_basic_block!(TanhBasicBlock, { |x: f32| { x.tanh() } });
-make_basic_block!(CeilBasicBlock, { |x: f32| { x.ceil() } });
-make_basic_block!(NegBasicBlock, { |x: f32| { -x } });
-make_basic_block!(CosBasicBlock, { |x: f32| { x.cos() } });
-make_basic_block!(SinBasicBlock, { |x: f32| { x.sin() } });
-make_basic_block!(TanBasicBlock, { |x: f32| { x.tan() } });
-make_basic_block!(ReciprocalBasicBlock, { |x: f32| { 1. / x } });
+make_basic_block!(SqrtBasicBlock, { |x: f64| { x.sqrt() } });
+make_basic_block!(ChangeSFBasicBlock, { |x: f64| { x } });
+make_basic_block!(ErfBasicBlock, { |x: f64| { util::erf(x as f32) as f64 } });
+make_basic_block!(SigmoidBasicBlock, { |x: f64| { x.exp() / (1. + x.exp()) } });
+make_basic_block!(TanhBasicBlock, { |x: f64| { x.tanh() } });
+make_basic_block!(CeilBasicBlock, { |x: f64| { x.ceil() } });
+make_basic_block!(NegBasicBlock, { |x: f64| { -x } });
+make_basic_block!(CosBasicBlock, { |x: f64| { x.cos() } });
+make_basic_block!(SinBasicBlock, { |x: f64| { x.sin() } });
+make_basic_block!(TanBasicBlock, { |x: f64| { x.tan() } });
+make_basic_block!(ReciprocalBasicBlock, { |x: f64| { 1. / x } });
