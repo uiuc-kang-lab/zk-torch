@@ -134,6 +134,37 @@ impl Layer for BatchNormLayer {
     }));
     let split_x = graph.addBB(Box::new(SplitBasicBlock { axis: 1, split: split_ind }));
     let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: 1 }));
+    let sqrt = graph.addBB(Box::new(SqrtBasicBlock {
+      input_SF: sf_log,
+      output_SF: sf_log,
+    }));
+    let sf = onnx::SF.read().unwrap().to_owned();
+    let sf_const = graph.addBB(Box::new(Const2BasicBlock {
+      c: arr1(&vec![Fr::from(sf as i32)]).into_dyn(),
+    }));
+    let two_const = graph.addBB(Box::new(Const2BasicBlock {
+      c: arr1(&vec![Fr::from(2)]).into_dyn(),
+    }));
+    let mul = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(MulBasicBlock {}),
+      N: 1,
+    }));
+    let mul_scalar = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(MulScalarBasicBlock {}),
+      N: 1,
+    }));
+    let non_negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(CQBasicBlock {
+        setup: util::CQArrayType::NonNegative,
+      }),
+      N: 1,
+    }));
+    let negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(CQBasicBlock {
+        setup: util::CQArrayType::Negative,
+      }),
+      N: 1,
+    }));
 
     // output epsilon
     let epsilon_output = graph.addNode(epsilon, vec![]);
@@ -165,47 +196,6 @@ impl Layer for BatchNormLayer {
     let add_output = graph.addNode(add, vec![(var_output, 0), (epsilon_output, 0)]);
 
     // Step 3. sqrt(var + epsilon)
-    let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
-    let sqrt = graph.addBB(Box::new(SqrtBasicBlock {
-      input_SF: sf_log,
-      output_SF: sf_log,
-    }));
-    let sf = onnx::SF.read().unwrap().to_owned();
-    let sf_const = graph.addBB(Box::new(Const2BasicBlock {
-      c: arr1(&vec![Fr::from(sf as i32)]).into_dyn(),
-    }));
-    let two_const = graph.addBB(Box::new(Const2BasicBlock {
-      c: arr1(&vec![Fr::from(2)]).into_dyn(),
-    }));
-    let add = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(AddBasicBlock {}),
-      N: 1,
-    }));
-    let sub = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(SubBasicBlock {}),
-      N: 1,
-    }));
-    let mul = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MulBasicBlock {}),
-      N: 1,
-    }));
-    let mul_scalar = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MulScalarBasicBlock {}),
-      N: 1,
-    }));
-    let non_negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQBasicBlock {
-        setup: util::CQArrayType::NonNegative,
-      }),
-      N: 1,
-    }));
-    let negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQBasicBlock {
-        setup: util::CQArrayType::Negative,
-      }),
-      N: 1,
-    }));
-
     // x = var + epsilon
     // SqrtBB(x) = sqrt(x/SF)*SF + eps (where -1 < eps < 1)
     let sqrt_output = graph.addNode(sqrt, vec![(add_output, 0)]);
@@ -429,6 +419,34 @@ impl Layer for InstanceNormLayer {
       N: 1,
     }));
 
+    let sqrt = graph.addBB(Box::new(SqrtBasicBlock {
+      input_SF: sf_log,
+      output_SF: sf_log,
+    }));
+    let sf = onnx::SF.read().unwrap().to_owned();
+    let sf_const = graph.addBB(Box::new(Const2BasicBlock {
+      c: arr1(&vec![Fr::from(sf as i32)]).into_dyn(),
+    }));
+    let two_const = graph.addBB(Box::new(Const2BasicBlock {
+      c: arr1(&vec![Fr::from(2)]).into_dyn(),
+    }));
+    let mul_scalar = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(MulScalarBasicBlock {}),
+      N: 1,
+    }));
+    let non_negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(CQBasicBlock {
+        setup: util::CQArrayType::NonNegative,
+      }),
+      N: 1,
+    }));
+    let negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(CQBasicBlock {
+        setup: util::CQArrayType::Negative,
+      }),
+      N: 1,
+    }));
+
     // Reshape X to [N * C, D1 * D2 * ... * DN]
     let shape_for_split_x: Vec<_> = vec![mean_shape_padded[0] * mean_shape_padded[1]]
       .into_iter()
@@ -494,47 +512,6 @@ impl Layer for InstanceNormLayer {
     let var_plus_eps_output = graph.addNode(reshape_4, vec![(add_output, 0)]);
 
     // Step 3. sqrt(var + epsilon) (shape: [N * C, 1, ..., 1])
-    let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
-    let sqrt = graph.addBB(Box::new(SqrtBasicBlock {
-      input_SF: sf_log,
-      output_SF: sf_log,
-    }));
-    let sf = onnx::SF.read().unwrap().to_owned();
-    let sf_const = graph.addBB(Box::new(Const2BasicBlock {
-      c: arr1(&vec![Fr::from(sf as i32)]).into_dyn(),
-    }));
-    let two_const = graph.addBB(Box::new(Const2BasicBlock {
-      c: arr1(&vec![Fr::from(2)]).into_dyn(),
-    }));
-    let add = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(AddBasicBlock {}),
-      N: 1,
-    }));
-    let sub = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(SubBasicBlock {}),
-      N: 1,
-    }));
-    let mul = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MulBasicBlock {}),
-      N: 1,
-    }));
-    let mul_scalar = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MulScalarBasicBlock {}),
-      N: 1,
-    }));
-    let non_negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQBasicBlock {
-        setup: util::CQArrayType::NonNegative,
-      }),
-      N: 1,
-    }));
-    let negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQBasicBlock {
-        setup: util::CQArrayType::Negative,
-      }),
-      N: 1,
-    }));
-
     // x = var + epsilon
     // SqrtBB(x) = sqrt(x/SF)*SF + eps (where -1 < eps < 1)
     let sqrt_output = graph.addNode(sqrt, vec![(var_plus_eps_output, 0)]);
