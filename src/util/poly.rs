@@ -40,18 +40,15 @@ fn mul_by_xn(poly: &DensePolynomial<Fr>, n: usize) -> DensePolynomial<Fr> {
 fn karatsuba_multiply(a: &DensePolynomial<Fr>, b: &DensePolynomial<Fr>) -> DensePolynomial<Fr> {
   let n = std::cmp::max(a.degree(), b.degree()) + 1;
 
-  // Base case: use standard multiplication for small polynomials
   if n <= 1 << 27 {
     return a * b;
   }
 
   let m = n / 2;
 
-  // Split polynomials
   let (a0, a1) = split_polynomial(a, m);
   let (b0, b1) = split_polynomial(b, m);
 
-  // Recursive steps
   let z0 = karatsuba_multiply(&a0, &b0);
   let z2 = karatsuba_multiply(&a1, &b1);
 
@@ -59,7 +56,6 @@ fn karatsuba_multiply(a: &DensePolynomial<Fr>, b: &DensePolynomial<Fr>) -> Dense
   let b0_plus_b1 = &b0 + &b1;
   let z1 = karatsuba_multiply(&a0_plus_a1, &b0_plus_b1);
 
-  // Combine results
   let mut result = mul_by_xn(&z2, 2 * m);
   result += &z0;
   result = &result + &mul_by_xn(&(&(&z1 - &z2) - &z0), m);
