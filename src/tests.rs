@@ -291,21 +291,3 @@ fn test_copy_constraint() {
     &vec![&ArrayD::from_shape_vec(vec![2, 1, 4], (1..9).map(|x| Fr::from(x)).collect()).unwrap()],
   );
 }
-
-#[test]
-fn test_poly_mul() {
-  fn random_dense_polynomial(degree: usize) -> DensePolynomial<Fr> {
-    let mut rng = thread_rng();
-    DensePolynomial::rand(degree, &mut rng)
-  }
-
-  let degrees = 10..25;
-  for i in degrees {
-    let poly_1 = random_dense_polynomial(1 << i);
-    let poly_2 = random_dense_polynomial(1 << i);
-    let start = Instant::now();
-    util::mul_polys(&vec![poly_1, poly_2]);
-    let duration: std::time::Duration = start.elapsed();
-    println!("{} duration: {:?}", i, duration);
-  }
-}
