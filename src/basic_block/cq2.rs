@@ -41,8 +41,8 @@ impl BasicBlock for CQ2BasicBlock {
         let high = low + self.setup.as_ref().unwrap().2 as i128;
         if x_0_int < low || x_0_int >= high {
           let temp_ints = (util::fr_to_int(temp.0), util::fr_to_int(temp.1));
-          println!("{:?}", temp);
-          panic!("The pair {:?} is not in the model", temp_ints);
+          println!("{:?}, {:?}", temp_ints, temp);
+          return Err(util::CQOutOfRangeError { input: temp_ints.0 });
         }
       }
     }
