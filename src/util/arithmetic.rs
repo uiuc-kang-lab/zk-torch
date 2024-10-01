@@ -41,7 +41,7 @@ pub fn next_pow(n: u32) -> u32 {
 }
 
 /// Computes erf(x) approximation using A&S formula 7.1.26
-pub fn erf(x: f32) -> f32 {
+pub fn erf(x: f64) -> f64 {
   let a1 = 0.254829592;
   let a2 = -0.284496736;
   let a3 = 1.421413741;

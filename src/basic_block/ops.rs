@@ -47,7 +47,7 @@ make_basic_block!(ReLUBasicBlock, {
 });
 make_basic_block!(SqrtBasicBlock, { |x: f64| { x.sqrt() } });
 make_basic_block!(ChangeSFBasicBlock, { |x: f64| { x } });
-make_basic_block!(ErfBasicBlock, { |x: f64| { util::erf(x as f32) as f64 } });
+make_basic_block!(ErfBasicBlock, { |x: f64| { util::erf(x) } });
 make_basic_block!(SigmoidBasicBlock, { |x: f64| { x.exp() / (1. + x.exp()) } });
 make_basic_block!(TanhBasicBlock, { |x: f64| { x.tanh() } });
 make_basic_block!(CeilBasicBlock, { |x: f64| { x.ceil() } });
