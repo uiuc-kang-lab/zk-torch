@@ -19,7 +19,7 @@ impl BasicBlock for MaxBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 1);
     Ok(vec![arr1(&[inputs[0].fold(Fr::zero(), |max, x| {
-      if *x < Fr::from(1 << 28) && *x > max {
+      if *x < Fr::from(1 << 127) && *x > max {
         return *x;
       } else {
         return max;

@@ -54,8 +54,6 @@ pub struct MulScalarBasicBlock;
 impl BasicBlock for MulScalarBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 2 && inputs[0].ndim() <= 1 && inputs[1].len() == 1);
-    println!("mulsc inputs[0]: {:?}", inputs[0]);
-    println!("mulsc inputs[1]: {:?}", inputs[1]);
     Ok(vec![inputs[0].map(|x| *x * inputs[1].first().unwrap())])
   }
 
@@ -108,8 +106,6 @@ impl BasicBlock for MulBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 2 && inputs[0].ndim() == 1 && inputs[0].shape() == inputs[1].shape());
     let mut r = ArrayD::zeros(inputs[0].dim());
-    println!("mul inputs[0]: {:?}", inputs[0]);
-    println!("mul inputs[1]: {:?}", inputs[1]);
     azip!((r in &mut r, &x in inputs[0], &y in inputs[1]) *r = x * y);
     Ok(vec![r])
   }

@@ -525,10 +525,7 @@ impl Layer for InstanceNormLayer {
     let scale_input_by_sf = graph.addNode(mul_scalar, vec![(var_plus_eps_output, 0), (sf_const_output, 0)]);
     // difference = SqrtBB(x)^2 - x*SF = 2*sqrt(x/SF)*SF*eps + eps^2 = 2*SqrtBB(x)*eps + eps^2
     // Because -1 < eps < 1, -2*SqrtBB(x) < 2*SqrtBB(x)*eps < 2*SqrtBB(x) and 0 < eps^2 < 1.
-    // Because -1 < eps < 0, -2*SqrtBB(x) < 2*SqrtBB(x)*eps and 0 < eps^2 < 1.
 
-    // -2*SqrtBB(x) < 2*SqrtBB(x)*eps + eps^2
-    // 2*SqrtBB(x)*eps + eps^2 < 2*SqrtBB(x) + 1
     // Therefore, - 2*SqrtBB(x) < difference < 2*SqrtBB(x) + 1.
     // The following two inequalities should hold:
     // 1. difference + 2*SqrtBB(x) >= 0
@@ -537,16 +534,11 @@ impl Layer for InstanceNormLayer {
     // scale_output_by_2 = 2*SqrtBB(x)
     let two_const_output = graph.addNode(two_const, vec![]);
     let scale_output_by_2 = graph.addNode(mul_scalar, vec![(sqrt_output, 0), (two_const_output, 0)]);
-    // let _ = graph.addNode(non_negative_check, vec![(scale_output_by_2, 0)]);
-    // d_plus_scale_output_by_2 = difference + 2*SqrtBB(x)
     let d_plus_scale_output_by_2 = graph.addNode(add, vec![(difference, 0), (scale_output_by_2, 0)]);
     // d_minus_scale_output_by_2 = difference - 2*SqrtBB(x)
     let d_minus_scale_output_by_2 = graph.addNode(sub, vec![(difference, 0), (scale_output_by_2, 0)]);
     let _ = graph.addNode(non_negative_check, vec![(d_plus_scale_output_by_2, 0)]);
     let _ = graph.addNode(negative_check, vec![(d_minus_scale_output_by_2, 0)]);
-    // let sqrt_output = graph.addNode(sqrt, vec![(var_plus_eps_output, 0)]);
-    // // Falls out of CQ range
-    // let _ = graph.addNode(sqrt_check, vec![(var_plus_eps_output, 0), (sqrt_output, 0)]);
 
     // Step 4. (X - mean) / sqrt(var + epsilon)
     let split_sub_output = graph.addNode(split_x, vec![(x_minus_mean_output, 0)]); // N*C outputs (shape: [1, D1, D2, ..., DN])

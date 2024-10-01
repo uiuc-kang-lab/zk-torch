@@ -17,9 +17,6 @@ impl BasicBlock for AddBasicBlock {
     } else {
       azip!((r in &mut r, &x in inputs[0], &y in inputs[1]) *r = x + y);
     }
-    println!("inputs[0]: {:?}", inputs[0]);
-    println!("inputs[1]: {:?}", inputs[1]);
-    println!("r: {:?}", r);
     Ok(vec![r])
   }
 
