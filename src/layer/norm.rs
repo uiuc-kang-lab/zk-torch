@@ -386,7 +386,7 @@ impl Layer for InstanceNormLayer {
       basic_block: Box::new(CQ2BasicBlock {
         setup: Some((
           Box::new(DivConstBasicBlock {
-            c: (X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y) as f32).sqrt() * ((1 << sf_log) as f32).sqrt(),
+            c: (X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y) as f32).sqrt() * ((1 << sf_log) as f32),
           }),
           *onnx::CQ_RANGE_LOWER,
           *onnx::CQ_RANGE,
