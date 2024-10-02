@@ -14,13 +14,13 @@ impl BasicBlock for RoPEBasicBlock {
     let mut r1 = vec![];
     let mut r2 = vec![];
     for i in 0..64 {
-      let x = (self.token_i as f32) / (10000_f32.powf((i as f32) / 64_f32));
+      let x = (self.token_i as f64) / (10000_f64.powf((i as f64) / 64_f64));
       let mut a = x.cos();
       let mut b = x.sin();
-      a *= (1 << self.output_SF) as f32;
-      b *= (1 << self.output_SF) as f32;
-      let a = Fr::from(a.round() as i32);
-      let b = Fr::from(b.round() as i32);
+      a *= (1 << self.output_SF) as f64;
+      b *= (1 << self.output_SF) as f64;
+      let a = Fr::from(a.round() as i128);
+      let b = Fr::from(b.round() as i128);
       r1.push(a);
       r2.push(b);
     }

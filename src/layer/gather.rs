@@ -36,6 +36,7 @@ impl Layer for GatherLayer {
     // Avoid unwrapping a None value
     if input_shapes[1].len() == 0 {
       let indices = constants[1].unwrap().0.mapv(|x| {
+        // util::fr_to_int(x)
         if x > Fr::from(input_shapes[0][0] as i64) {
           Fr::from(input_shapes[0][0] as i64) + x
         } else {
