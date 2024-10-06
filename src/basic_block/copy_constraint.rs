@@ -562,9 +562,6 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // constructors to use the blinding scheme when appropriate.
     let input = inputs[0];
 
-    // let [qj_x, Z_x, t_x, W_x, W_gx, C1, C2] = proof.0[..7] else {
-    //   panic!("Wrong proof format")
-    // };
     let m = inputs[0].len() + outputs[0].len();
     let [qj_x, Z_x] = proof.0[..2] else { panic!("Wrong proof format") };
     let t_xs = &proof.0[2..proof.0.len() - 2 * m - 4];
