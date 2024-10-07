@@ -437,7 +437,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     }
     let t_poly = f1_poly.mul(&Z_poly).sub(&g1_poly.mul(&Zg_poly)) + L0Z_poly.mul(&alpha_poly) + none_poly;
     let t_poly = t_poly.divide_by_vanishing_poly(domain).unwrap().0;
-    let t_polys = util::split_polynomial(&t_poly, N);
+    let t_polys = util::split_polynomial(&t_poly, srs.X1P.len());
     let t_x: Vec<_> = t_polys.iter().map(|x| util::msm::<G1Projective>(&srs.X1A, &x.coeffs)).collect();
 
     // Round 4: Compute openings
@@ -480,7 +480,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // Calculate opening quotient for batched quotient check (containing r, fjs, ssigs on p. 30 of [1])
     let ft_zs: Vec<_> = fj_zs.iter().enumerate().map(|(i, x)| beta * Fr::from((i + 1) as i32) * zeta + *x + gamma).collect();
     let gt_zs: Vec<_> = fj_zs.iter().enumerate().map(|(i, x)| ssig_zs[i] * beta + *x + gamma).collect();
-    let zeta_pows = calc_pow(zeta, N * t_x.len());
+    let zeta_pows = calc_pow(zeta, t_poly.coeffs.len());
     let gt_z: Fr = gt_zs[..gt_zs.len() - 1].iter().product();
     let ft_z = ft_zs.iter().product();
     let ft_z_poly = DensePolynomial::from_coefficients_vec(vec![ft_z]);
@@ -501,7 +501,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     }
     let r_t_poly = &t_polys[0]
       + &t_polys[1..].iter().enumerate().fold(DensePolynomial::zero(), |acc, (i, p)| {
-        acc + p.mul(&DensePolynomial::from_coefficients_vec(vec![zeta_pows[(i + 1) * N - 1]]))
+        acc + p.mul(&DensePolynomial::from_coefficients_vec(vec![zeta_pows[(i + 1) * srs.X1P.len() - 1]]))
       });
     let r_poly = &(&lhs - &rhs) - &DensePolynomial::from_coefficients_vec(vec![zeta_pows[N - 1] - Fr::one()]).mul(&r_t_poly)
       + Z_poly.sub(&one).mul(&DensePolynomial::from_coefficients_vec(vec![alpha * L0_z]))
@@ -527,7 +527,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     proof.append(&mut vec![W_x, W_gx]);
     let mut t_b = r[0];
     for i in 1..r.len() {
-      t_b += r[i] * zeta_pows[i * N - 1];
+      t_b += r[i] * zeta_pows[i * srs.X1P.len() - 1];
     }
     proof.push(srs.X1P[0] * (t_b * (zeta_pows[N - 1] - Fr::one())));
     proof.push(r_plus_r_Q_x);
@@ -638,12 +638,12 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let ft_z: Fr = ft_zs.iter().product();
     // Contains all but the last
     let gt_z: Fr = gt_zs[..gt_zs.len() - 1].iter().product();
-    let zeta_pows = calc_pow(zeta, N * t_xs.len());
+    let zeta_pows = calc_pow(zeta, srs.X1P.len() * t_xs.len());
 
     let alpha_pows = calc_pow(alpha, Lnone_zs.len() + 1);
     let mut t_x = t_xs[0];
     for i in 1..t_xs.len() {
-      t_x = (t_x + t_xs[i] * zeta_pows[i * N - 1]).into();
+      t_x = (t_x + t_xs[i] * zeta_pows[i * srs.X1P.len() - 1]).into();
     }
     let mut D = Z_x * (ft_z + alpha * L0_z + u) - ssig_xs[ssig_xs.len() - 1] * beta * gt_z * Z_gz - t_x * (zeta_pows[N - 1] - Fr::one());
     for i in 0..pad_vals.len() {
