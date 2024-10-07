@@ -438,14 +438,14 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let t_poly = f1_poly.mul(&Z_poly).sub(&g1_poly.mul(&Zg_poly)) + L0Z_poly.mul(&alpha_poly) + none_poly;
     let t_poly = t_poly.divide_by_vanishing_poly(domain).unwrap().0;
     let t_polys = util::split_polynomial(&t_poly, srs.X1P.len());
-    let t_x: Vec<_> = t_polys.iter().map(|x| util::msm::<G1Projective>(&srs.X1A, &x.coeffs)).collect();
+    let t_xs: Vec<_> = t_polys.iter().map(|x| util::msm::<G1Projective>(&srs.X1A, &x.coeffs)).collect();
 
     // Round 4: Compute openings
     // Fiat-Shamir
     let mut bytes = Vec::new();
     let mut rng2 = StdRng::from_entropy();
-    let r: Vec<_> = (0..t_x.len()).map(|_| Fr::rand(&mut rng2)).collect();
-    let mut proof_1: Vec<_> = t_x.iter().enumerate().map(|(i, x)| x + srs.Y1P * r[i]).collect();
+    let r: Vec<_> = (0..t_xs.len()).map(|_| Fr::rand(&mut rng2)).collect();
+    let mut proof_1: Vec<_> = t_xs.iter().enumerate().map(|(i, x)| x + srs.Y1P * r[i]).collect();
     proof_1.serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
     proof.append(&mut proof_1);
@@ -480,7 +480,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // Calculate opening quotient for batched quotient check (containing r, fjs, ssigs on p. 30 of [1])
     let ft_zs: Vec<_> = fj_zs.iter().enumerate().map(|(i, x)| beta * Fr::from((i + 1) as i32) * zeta + *x + gamma).collect();
     let gt_zs: Vec<_> = fj_zs.iter().enumerate().map(|(i, x)| ssig_zs[i] * beta + *x + gamma).collect();
-    let zeta_pows = calc_pow(zeta, t_poly.coeffs.len());
+    let zeta_pows = calc_pow(zeta, max(N, srs.X1P.len() * (t_xs.len() - 1)));
     let gt_z: Fr = gt_zs[..gt_zs.len() - 1].iter().product();
     let ft_z = ft_zs.iter().product();
     let ft_z_poly = DensePolynomial::from_coefficients_vec(vec![ft_z]);
@@ -638,7 +638,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let ft_z: Fr = ft_zs.iter().product();
     // Contains all but the last
     let gt_z: Fr = gt_zs[..gt_zs.len() - 1].iter().product();
-    let zeta_pows = calc_pow(zeta, srs.X1P.len() * t_xs.len());
+    let zeta_pows = calc_pow(zeta, max(N, srs.X1P.len() * (t_xs.len() - 1)));
 
     let alpha_pows = calc_pow(alpha, Lnone_zs.len() + 1);
     let mut t_x = t_xs[0];
