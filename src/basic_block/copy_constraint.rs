@@ -162,6 +162,7 @@ pub struct CopyConstraintBasicBlock {
 
 impl BasicBlock for CopyConstraintBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
+    println!("inputs[0] {:?}, input dim {:?}", inputs[0].dim(), self.input_dim);
     assert!(inputs.len() == 1 && inputs[0].dim() == self.input_dim);
     let padding_partitions = get_padding_partition(&self.permutation, &self.padding_partition);
     let tmp_hashmap: HashMap<IxDyn, Fr> = padding_partitions.iter().flat_map(|(k, v)| v.iter().map(|x| (x.clone(), *k))).collect();
@@ -659,5 +660,28 @@ impl BasicBlock for CopyConstraintBasicBlock {
       ((-C1 + C2).into(), srs.Y2A),
     ]);
     checks
+  }
+}
+
+// Version of CopyConstraint without proof. Used for cqlin when the input needs preprocessing before commitment.
+#[derive(Debug)]
+pub struct CopyConstraintPrecomputeBasicBlock {
+  pub permutation: ArrayD<Option<IxDyn>>,
+  pub input_dim: IxDyn,
+  pub padding_partition: PaddingEnum,
+}
+
+impl BasicBlock for CopyConstraintPrecomputeBasicBlock {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
+    assert!(inputs.len() == 1 && inputs[0].dim() == self.input_dim);
+    let padding_partitions = get_padding_partition(&self.permutation, &self.padding_partition);
+    let tmp_hashmap: HashMap<IxDyn, Fr> = padding_partitions.iter().flat_map(|(k, v)| v.iter().map(|x| (x.clone(), *k))).collect();
+    Ok(vec![ArrayD::from_shape_fn(self.permutation.shape(), |i| {
+      if let Some(idx) = &self.permutation[&i] {
+        inputs[0][idx]
+      } else {
+        tmp_hashmap[&i]
+      }
+    })])
   }
 }

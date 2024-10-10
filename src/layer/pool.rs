@@ -70,7 +70,7 @@ impl Layer for MaxPoolLayer {
     // Splat input
     let ch = input_shapes[0][1];
     let permutation = splat_input(&input_shapes[0], &strides, &pads, ch, &kernel_shape);
-    let permutation_padded = splat_pad(&permutation);
+    let permutation_padded = splat_pad(&permutation, &None);
     let input_shape_padded: Vec<_> = input_shapes[0].iter().map(|i| i.next_power_of_two()).collect();
 
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {

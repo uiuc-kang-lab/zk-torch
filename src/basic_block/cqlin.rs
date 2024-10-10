@@ -11,9 +11,16 @@ use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 
 #[derive(Debug)]
-pub struct CQLinBasicBlock;
+pub struct CQLinBasicBlock {
+  pub setup: ArrayD<Fr>,
+}
+
 // input is rows of A, model is rows of B, outputs are rows of C
 impl BasicBlock for CQLinBasicBlock {
+  fn genModel(&self) -> ArrayD<Fr> {
+    self.setup.clone()
+  }
+
   fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(model.ndim() == 2 && inputs.len() == 1 && inputs[0].ndim() == 2 && inputs[0].shape()[1] == model.shape()[0]);
     let (a, b) = (
