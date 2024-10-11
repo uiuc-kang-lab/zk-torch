@@ -7,7 +7,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{UniformRand, Zero};
 pub use bool_check::BooleanCheckBasicBlock;
 pub use clip::ClipBasicBlock;
-pub use concat::ConcatBasicBlock;
+pub use concat::{ConcatBasicBlock, ConcatLastDimBasicBlock};
 pub use constant::{Const2BasicBlock, ConstBasicBlock, ConstOfShapeBasicBlock};
 pub use copy_constraint::CopyConstraintBasicBlock;
 pub use cq::CQBasicBlock;

@@ -52,3 +52,7 @@ pub fn mul_polys(polys: &Vec<DensePolynomial<Fr>>) -> DensePolynomial<Fr> {
   // Recursively call mul_polys on the next level until we get the root
   mul_polys(&next_level)
 }
+
+pub fn split_polynomial(poly: &DensePolynomial<Fr>, n: usize) -> Vec<DensePolynomial<Fr>> {
+  poly.coeffs().chunks(n).map(|chunk| DensePolynomial::from_coefficients_vec(chunk.to_vec())).collect()
+}
