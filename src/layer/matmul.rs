@@ -44,10 +44,14 @@ impl Layer for MatMulLayer {
     }));
     let matmul_output = if constants.len() > 1 && constants[1].is_some() {
       let b = constants[1].unwrap().0;
-      let cqlin = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(CQLinBasicBlock { setup: b.to_owned() }),
-        N: 2,
-      }));
+      let cqlin = if input_shapes[0].len() > 1 {
+        graph.addBB(Box::new(RepeaterBasicBlock {
+          basic_block: Box::new(CQLinBasicBlock { setup: b.to_owned() }),
+          N: 2,
+        }))
+      } else {
+        graph.addBB(Box::new(CQLinBasicBlock { setup: b.to_owned() }))
+      };
       graph.addNode(cqlin, vec![(-1, 0)])
     } else {
       let transpose = graph.addBB(Box::new(RepeaterBasicBlock {
