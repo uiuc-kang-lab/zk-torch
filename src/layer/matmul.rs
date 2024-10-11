@@ -17,7 +17,6 @@ impl Layer for MatMulLayer {
     _attributes: &Vec<&AttributeProto>,
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
-    println!("input_shapes {:?}", input_shapes);
     let n = input_shapes[1].len();
     let (mut a, mut b) = (input_shapes[1][n - 2], input_shapes[1][n - 1]);
     a = util::next_pow(a as u32) as usize;
