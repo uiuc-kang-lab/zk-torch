@@ -17,6 +17,7 @@ impl Layer for MatMulLayer {
     _attributes: &Vec<&AttributeProto>,
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
+    println!("input_shapes {:?}", input_shapes);
     let n = input_shapes[1].len();
     let (mut a, mut b) = (input_shapes[1][n - 2], input_shapes[1][n - 1]);
     a = util::next_pow(a as u32) as usize;
@@ -43,7 +44,10 @@ impl Layer for MatMulLayer {
     }));
     let matmul_output = if constants.len() > 1 && constants[1].is_some() {
       let b = constants[1].unwrap().0;
-      let cqlin = graph.addBB(Box::new(CQLinBasicBlock { setup: b.to_owned() }));
+      let cqlin = graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(CQLinBasicBlock { setup: b.to_owned() }),
+        N: 2,
+      }));
       graph.addNode(cqlin, vec![(-1, 0)])
     } else {
       let transpose = graph.addBB(Box::new(RepeaterBasicBlock {
