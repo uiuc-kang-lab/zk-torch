@@ -24,6 +24,7 @@ impl BasicBlock for CQLinBasicBlock {
   fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(model.ndim() == 2);
     assert!(inputs.len() == 1);
+    // Support both 1d and 2d inputs
     assert!(
       (inputs[0].ndim() == 1 && inputs[0].shape()[0] == model.shape()[0]) || (inputs[0].ndim() == 2 && inputs[0].shape()[1] == model.shape()[0])
     );
