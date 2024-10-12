@@ -36,7 +36,12 @@ impl BasicBlock for CQLinBasicBlock {
       model.view().into_dimensionality::<Ix2>().unwrap(),
       b.view().into_dimensionality::<Ix2>().unwrap(),
     );
-    Ok(vec![b.dot(&a).into_dyn()])
+    if inputs[0].ndim() == 1 {
+      let prod = b.dot(&a).into_dyn();
+      Ok(vec![prod.clone().into_shape(IxDyn(&[prod.shape()[1]])).unwrap()])
+    } else {
+      Ok(vec![b.dot(&a).into_dyn()])
+    }
   }
 
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
@@ -157,6 +162,11 @@ impl BasicBlock for CQLinBasicBlock {
     } else {
       &inputs[0]
     };
+    let output = if outputs[0].ndim() == 0 {
+      &outputs[0].clone().into_shape(IxDyn(&[1])).unwrap()
+    } else {
+      &outputs[0]
+    };
     let mut flat_A = vec![Fr::zero(); m];
     let mut flat_A_r = Fr::zero();
     for i in 0..l {
@@ -172,9 +182,9 @@ impl BasicBlock for CQLinBasicBlock {
     let mut flat_C_r = Fr::zero();
     for i in 0..l {
       for j in 0..n {
-        flat_C[j] += outputs[0][i].raw[j] * alpha_pow.raw[i];
+        flat_C[j] += output[i].raw[j] * alpha_pow.raw[i];
       }
-      flat_C_r += outputs[0][i].r * alpha_pow.raw[i];
+      flat_C_r += output[i].r * alpha_pow.raw[i];
     }
     let mut flat_C = Data::new(srs, &flat_C);
     flat_C.r = flat_C_r;
@@ -265,12 +275,17 @@ impl BasicBlock for CQLinBasicBlock {
     } else {
       &inputs[0]
     };
+    let output = if outputs[0].ndim() == 0 {
+      &outputs[0].clone().into_shape(IxDyn(&[1])).unwrap()
+    } else {
+      &outputs[0]
+    };
     // Calculate flat_A
     let temp: Vec<_> = (0..l).map(|i| input[i].g1).collect();
     let flat_A_g1 = util::msm::<G1Projective>(&temp, &alpha_pow);
 
     // Calculate flat_C
-    let temp: Vec<_> = (0..l).map(|i| outputs[0][i].g1).collect();
+    let temp: Vec<_> = (0..l).map(|i| output[i].g1).collect();
     let flat_C_g1 = util::msm::<G1Projective>(&temp, &alpha_pow).into();
 
     // Check A(x) M(x) = Z(X) Q(X) + R(X)
