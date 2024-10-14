@@ -36,6 +36,7 @@ fn mul_by_xn(poly: &DensePolynomial<Fr>, n: usize) -> DensePolynomial<Fr> {
   new_coeffs.extend(poly.coeffs().iter().cloned());
   DensePolynomial::from_coefficients_vec(new_coeffs)
 }
+
 fn karatsuba_multiply(a: &DensePolynomial<Fr>, b: &DensePolynomial<Fr>) -> DensePolynomial<Fr> {
   let n = std::cmp::max(a.degree(), b.degree()) + 1;
   if n <= 1 << 27 {
