@@ -104,11 +104,13 @@ fn testBasicBlocks() {
   let l: usize = 1 << 3;
   let m: usize = 1 << 2;
   let n: usize = 1 << 1;
-  let a = ArrayD::from_shape_fn(IxDyn(&[l, m]), |_| Fr::rand(&mut rng));
+  let a = ArrayD::from_shape_fn(IxDyn(&[m]), |_| Fr::rand(&mut rng));
   let b = ArrayD::from_shape_fn(IxDyn(&[n, m]), |_| Fr::rand(&mut rng));
   let c = ArrayD::from_shape_fn(IxDyn(&[m, n]), |_| Fr::rand(&mut rng));
+  testBasicBlock(CQLinBasicBlock { setup: c.clone() }, srs, &c, &vec![&a]);
+  let a = ArrayD::from_shape_fn(IxDyn(&[l, m]), |_| Fr::rand(&mut rng));
   testBasicBlock(MatMulBasicBlock {}, srs, &empty, &vec![&a, &b]);
-  testBasicBlock(CQLinBasicBlock {}, srs, &c, &vec![&a]);
+  testBasicBlock(CQLinBasicBlock { setup: c.clone() }, srs, &c, &vec![&a]);
   let p1 = (vec![0], (0..l * m).collect::<Vec<_>>()); // Concatenate columns
   let p2 = (vec![0], (0..l * m).map(|i| (i % m) * l + (i / m)).collect::<Vec<_>>()); // Concatenate rows
   let p3 = ((0..m).map(|i| i * l).collect::<Vec<_>>(), (0..l).collect::<Vec<_>>()); // Transpose
@@ -285,5 +287,85 @@ fn test_copy_constraint() {
     srs,
     &empty,
     &vec![&ArrayD::from_shape_vec(vec![2, 1, 4], (1..9).map(|x| Fr::from(x)).collect()).unwrap()],
+  );
+  // polynomial exceeds challenge size
+  testBasicBlock(
+    CopyConstraintBasicBlock {
+      permutation: ArrayD::from_shape_vec(
+        vec![8, 8],
+        vec![
+          Some(IxDyn(&[1, 1, 0])),
+          Some(IxDyn(&[1, 0, 1])),
+          Some(IxDyn(&[0, 1, 0])),
+          None,
+          Some(IxDyn(&[0, 0, 0])),
+          Some(IxDyn(&[0, 1, 0])),
+          Some(IxDyn(&[1, 1, 0])),
+          None,
+          Some(IxDyn(&[0, 1, 1])),
+          Some(IxDyn(&[0, 0, 0])),
+          Some(IxDyn(&[1, 0, 1])),
+          None,
+          None,
+          None,
+          None,
+          None,
+          Some(IxDyn(&[1, 1, 0])),
+          Some(IxDyn(&[1, 0, 1])),
+          Some(IxDyn(&[0, 1, 0])),
+          None,
+          Some(IxDyn(&[0, 0, 0])),
+          Some(IxDyn(&[0, 1, 0])),
+          Some(IxDyn(&[1, 1, 0])),
+          None,
+          Some(IxDyn(&[0, 1, 1])),
+          Some(IxDyn(&[0, 0, 0])),
+          Some(IxDyn(&[1, 0, 1])),
+          None,
+          None,
+          None,
+          None,
+          None,
+          Some(IxDyn(&[1, 1, 0])),
+          Some(IxDyn(&[1, 0, 1])),
+          Some(IxDyn(&[0, 1, 0])),
+          None,
+          Some(IxDyn(&[0, 0, 0])),
+          Some(IxDyn(&[0, 1, 0])),
+          Some(IxDyn(&[1, 1, 0])),
+          None,
+          Some(IxDyn(&[0, 1, 1])),
+          Some(IxDyn(&[0, 0, 0])),
+          Some(IxDyn(&[1, 0, 1])),
+          None,
+          None,
+          None,
+          None,
+          None,
+          Some(IxDyn(&[1, 1, 0])),
+          Some(IxDyn(&[1, 0, 1])),
+          Some(IxDyn(&[0, 1, 0])),
+          None,
+          Some(IxDyn(&[0, 0, 0])),
+          Some(IxDyn(&[0, 1, 0])),
+          Some(IxDyn(&[1, 1, 0])),
+          None,
+          Some(IxDyn(&[0, 1, 1])),
+          Some(IxDyn(&[0, 0, 0])),
+          Some(IxDyn(&[1, 0, 1])),
+          None,
+          None,
+          None,
+          None,
+          None,
+        ],
+      )
+      .unwrap(),
+      input_dim: IxDyn(&[4, 4, 4]),
+      padding_partition: copy_constraint::PaddingEnum::Max(Fr::one()),
+    },
+    srs,
+    &empty,
+    &vec![&ArrayD::from_shape_vec(vec![4, 4, 4], (1..65).map(|x| Fr::from(x)).collect()).unwrap()],
   );
 }

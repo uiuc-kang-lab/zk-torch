@@ -437,16 +437,15 @@ impl BasicBlock for CopyConstraintBasicBlock {
     }
     let t_poly = f1_poly.mul(&Z_poly).sub(&g1_poly.mul(&Zg_poly)) + L0Z_poly.mul(&alpha_poly) + none_poly;
     let t_poly = t_poly.divide_by_vanishing_poly(domain).unwrap().0;
-    // TODO: We currently commit t entirely instead of splitting it into
-    // smaller polynomials of degree <n done in the Plonk paper.
-    let t_x = util::msm::<G1Projective>(&srs.X1A, &t_poly.coeffs);
+    let t_polys = util::split_polynomial(&t_poly, srs.X1P.len());
+    let t_xs: Vec<_> = t_polys.iter().map(|x| util::msm::<G1Projective>(&srs.X1A, &x.coeffs)).collect();
 
     // Round 4: Compute openings
     // Fiat-Shamir
     let mut bytes = Vec::new();
     let mut rng2 = StdRng::from_entropy();
-    let r = Fr::rand(&mut rng2);
-    let mut proof_1 = vec![t_x + srs.Y1P * r];
+    let r: Vec<_> = (0..t_xs.len()).map(|_| Fr::rand(&mut rng2)).collect();
+    let mut proof_1: Vec<_> = t_xs.iter().enumerate().map(|(i, x)| x + srs.Y1P * r[i]).collect();
     proof_1.serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
     proof.append(&mut proof_1);
@@ -481,7 +480,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // Calculate opening quotient for batched quotient check (containing r, fjs, ssigs on p. 30 of [1])
     let ft_zs: Vec<_> = fj_zs.iter().enumerate().map(|(i, x)| beta * Fr::from((i + 1) as i32) * zeta + *x + gamma).collect();
     let gt_zs: Vec<_> = fj_zs.iter().enumerate().map(|(i, x)| ssig_zs[i] * beta + *x + gamma).collect();
-    let zeta_pows = calc_pow(zeta, N);
+    let zeta_pows = calc_pow(zeta, max(N, srs.X1P.len() * (t_xs.len() - 1)));
     let gt_z: Fr = gt_zs[..gt_zs.len() - 1].iter().product();
     let ft_z = ft_zs.iter().product();
     let ft_z_poly = DensePolynomial::from_coefficients_vec(vec![ft_z]);
@@ -500,7 +499,11 @@ impl BasicBlock for CopyConstraintBasicBlock {
       r_none_poly = &r_none_poly
         + &DensePolynomial::from_coefficients_vec(vec![Lnone_zs[i] * alpha_pows[i + 1]]).mul(&fj_polys[fj_none_idxs[i]].sub(&pad_val_poly));
     }
-    let r_poly = &(&lhs - &rhs) - &DensePolynomial::from_coefficients_vec(vec![zeta_pows[N - 1] - Fr::one()]).mul(&t_poly)
+    let r_t_poly = &t_polys[0]
+      + &t_polys[1..].iter().enumerate().fold(DensePolynomial::zero(), |acc, (i, p)| {
+        acc + p.mul(&DensePolynomial::from_coefficients_vec(vec![zeta_pows[(i + 1) * srs.X1P.len() - 1]]))
+      });
+    let r_poly = &(&lhs - &rhs) - &DensePolynomial::from_coefficients_vec(vec![zeta_pows[N - 1] - Fr::one()]).mul(&r_t_poly)
       + Z_poly.sub(&one).mul(&DensePolynomial::from_coefficients_vec(vec![alpha * L0_z]))
       + r_none_poly;
 
@@ -522,7 +525,11 @@ impl BasicBlock for CopyConstraintBasicBlock {
 
     // Blinding
     proof.append(&mut vec![W_x, W_gx]);
-    proof.push(srs.X1P[0] * (r * (zeta_pows[N - 1] - Fr::one())));
+    let mut t_b = r[0];
+    for i in 1..r.len() {
+      t_b += r[i] * zeta_pows[i * srs.X1P.len() - 1];
+    }
+    proof.push(srs.X1P[0] * (t_b * (zeta_pows[N - 1] - Fr::one())));
     proof.push(r_plus_r_Q_x);
 
     let mut ssig_xs = setup.0.iter().map(|x| Into::<G1Projective>::into(*x)).collect();
@@ -555,13 +562,16 @@ impl BasicBlock for CopyConstraintBasicBlock {
     // constructors to use the blinding scheme when appropriate.
     let input = inputs[0];
 
-    let [qj_x, Z_x, t_x, W_x, W_gx, C1, C2] = proof.0[..7] else {
-      panic!("Wrong proof format")
-    };
-
     let m = inputs[0].len() + outputs[0].len();
-    let ssig_xs = &proof.0[7..m + 7];
-    let fj_xs = &proof.0[m + 7..];
+    let [qj_x, Z_x] = proof.0[..2] else { panic!("Wrong proof format") };
+    let t_xs = &proof.0[2..proof.0.len() - 2 * m - 4];
+    let W_x = proof.0[proof.0.len() - 2 * m - 4];
+    let W_gx = proof.0[proof.0.len() - 2 * m - 3];
+    let C1 = proof.0[proof.0.len() - 2 * m - 2];
+    let C2 = proof.0[proof.0.len() - 2 * m - 1];
+
+    let ssig_xs = &proof.0[proof.0.len() - 2 * m..proof.0.len() - m];
+    let fj_xs = &proof.0[proof.0.len() - m..];
 
     // TODO: have verifier compute Lagrange basis evals
     let padding_partitions = get_padding_partition(&self.permutation, &self.padding_partition);
@@ -595,7 +605,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
 
     // Round 4 randomness
     let mut bytes = Vec::new();
-    vec![t_x].serialize_uncompressed(&mut bytes).unwrap();
+    t_xs.serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
     let zeta = Fr::rand(rng);
 
@@ -628,9 +638,13 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let ft_z: Fr = ft_zs.iter().product();
     // Contains all but the last
     let gt_z: Fr = gt_zs[..gt_zs.len() - 1].iter().product();
-    let zeta_pows = calc_pow(zeta, N);
+    let zeta_pows = calc_pow(zeta, max(N, srs.X1P.len() * (t_xs.len() - 1)));
 
     let alpha_pows = calc_pow(alpha, Lnone_zs.len() + 1);
+    let mut t_x = t_xs[0];
+    for i in 1..t_xs.len() {
+      t_x = (t_x + t_xs[i] * zeta_pows[i * srs.X1P.len() - 1]).into();
+    }
     let mut D = Z_x * (ft_z + alpha * L0_z + u) - ssig_xs[ssig_xs.len() - 1] * beta * gt_z * Z_gz - t_x * (zeta_pows[N - 1] - Fr::one());
     for i in 0..pad_vals.len() {
       let pad_x: G1Affine = (-srs.X1P[0] * pad_vals[i] + fj_xs[fj_none_idxs[i]]).into();

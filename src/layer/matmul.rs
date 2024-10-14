@@ -13,7 +13,7 @@ impl Layer for MatMulLayer {
   fn graph(
     input_shapes: &Vec<&Vec<usize>>,
     input_types: &Vec<DatumType>,
-    _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+    constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
@@ -23,14 +23,6 @@ impl Layer for MatMulLayer {
     b = util::next_pow(b as u32) as usize;
     let permutation = ((0..b).map(|x| x * a).collect(), (0..a).collect());
 
-    let transpose = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
-      N: 2,
-    }));
-    let matmul = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MatMulBasicBlock {}),
-      N: 2,
-    }));
     let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
     let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
       input_SF: sf_log * 2,
@@ -49,8 +41,29 @@ impl Layer for MatMulLayer {
       }),
       N: 1,
     }));
-    let transpose_output = graph.addNode(transpose, vec![(-2, 0)]);
-    let matmul_output = graph.addNode(matmul, vec![(-1, 0), (transpose_output, 0)]);
+    let matmul_output = if constants.len() > 1 && constants[1].is_some() {
+      let b = constants[1].unwrap().0;
+      let cqlin = if input_shapes[0].len() > 1 {
+        graph.addBB(Box::new(RepeaterBasicBlock {
+          basic_block: Box::new(CQLinBasicBlock { setup: b.to_owned() }),
+          N: 2,
+        }))
+      } else {
+        graph.addBB(Box::new(CQLinBasicBlock { setup: b.to_owned() }))
+      };
+      graph.addNode(cqlin, vec![(-1, 0)])
+    } else {
+      let transpose = graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(PermuteBasicBlock { permutation }),
+        N: 2,
+      }));
+      let matmul = graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(MatMulBasicBlock {}),
+        N: 2,
+      }));
+      let transpose_output = graph.addNode(transpose, vec![(-2, 0)]);
+      graph.addNode(matmul, vec![(-1, 0), (transpose_output, 0)])
+    };
     let change_SF_output = graph.addNode(change_SF, vec![(matmul_output, 0)]);
     let _ = graph.addNode(change_SF_check, vec![(matmul_output, 0), (change_SF_output, 0)]);
     graph.outputs.push((change_SF_output, 0));

@@ -4,6 +4,7 @@ use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
+use ark_std::Zero;
 use ndarray::indices;
 use ndarray::Dim;
 use ndarray::Dimension;
@@ -98,35 +99,35 @@ fn splat_input(
 }
 
 // Splats weights into shape (out_channels x inp_channels * kernel_dims product) such that each row corresponds to flattened kernels for each input channel
-fn splat_weights(weights_shape: &Vec<usize>, is_transpose: bool) -> Vec<Vec<Option<IxDyn>>> {
+fn splat_weights(weights: &ArrayD<Fr>, is_transpose: bool) -> Vec<Vec<Fr>> {
   let mut weights_cells = vec![];
   let mut weight_row_idx = 0;
 
   // Input and output channel positions are swapped between Conv and ConvTranspose
-  let out_channels = if is_transpose { weights_shape[1] } else { weights_shape[0] };
-  let in_channels = if is_transpose { weights_shape[0] } else { weights_shape[1] };
-  // (out_channels x inp_channels * kernel_dims product)
-  for chan_out in 0..out_channels {
-    weights_cells.push(vec![]);
-    for ck in 0..in_channels {
-      for ch_idx in indices(IxDyn(&weights_shape[2..])) {
+  let out_channels = if is_transpose { weights.shape()[1] } else { weights.shape()[0] };
+  let in_channels = if is_transpose { weights.shape()[0] } else { weights.shape()[1] };
+  // (inp_channels * kernel_dims product x out_channels)
+  for ck in 0..in_channels {
+    for ch_idx in indices(IxDyn(&weights.shape()[2..])) {
+      weights_cells.push(vec![]);
+      for chan_out in 0..out_channels {
         let mut idx = if is_transpose { vec![ck, chan_out] } else { vec![chan_out, ck] };
         idx.append(&mut ch_idx.as_array_view().to_vec());
-        weights_cells[weight_row_idx].push(Some(IxDyn(&idx)));
+        weights_cells[weight_row_idx].push(weights[IxDyn(&idx)]);
       }
+      weight_row_idx += 1;
     }
-    weight_row_idx += 1;
   }
   weights_cells
 }
 
 // Adds padding to the nearest power of two to splatted inputs/weights
-pub fn splat_pad(input: &Vec<Vec<Option<IxDyn>>>) -> ArrayD<Option<IxDyn>> {
+pub fn splat_pad<G: Clone>(input: &Vec<Vec<G>>, pad_val: &G) -> ArrayD<G> {
   let outp_size = input.len();
   let conv_size = input[0].len();
   let flattened_inp: Vec<_> = input.into_iter().flat_map(|x| x.iter().map(|y| y.clone())).collect();
   let flattened_inp = ArrayD::from_shape_vec(IxDyn(&vec![outp_size, conv_size]), flattened_inp).unwrap();
-  util::pad_to_pow_of_two(&flattened_inp, &None)
+  util::pad_to_pow_of_two(&flattened_inp, pad_val)
 }
 
 // The overview of the proving:
@@ -143,7 +144,7 @@ macro_rules! create_conv_layer {
       fn graph(
         input_shapes: &Vec<&Vec<usize>>,
         input_types: &Vec<DatumType>,
-        _constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
+        constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
         attributes: &Vec<&AttributeProto>,
       ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
         let mut graph = Graph::new();
@@ -176,7 +177,7 @@ macro_rules! create_conv_layer {
         // Splat input
         let ci = if $is_transpose { weight_shape[0] } else { weight_shape[1] };
         let permutation = splat_input(&input_shapes[0], &strides, &pads, ci, &ch_dims, $is_transpose);
-        let permutation_padded = splat_pad(&permutation);
+        let permutation_padded = splat_pad(&permutation, &None);
         let input_shape_padded: Vec<_> = input_shapes[0].iter().map(|i| i.next_power_of_two()).collect();
         let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
           permutation: permutation_padded,
@@ -184,16 +185,9 @@ macro_rules! create_conv_layer {
           padding_partition: copy_constraint::PaddingEnum::Zero,
         }));
 
-        // TODO: change to CQLin and commit splatted weights
-        let weights_splatted = splat_weights(&weight_shape, $is_transpose);
-        let weights_padded = splat_pad(&weights_splatted);
-        let weight_shape_padded: Vec<_> = weight_shape.iter().map(|i| i.next_power_of_two()).collect();
-        let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
-          permutation: weights_padded,
-          input_dim: IxDyn(&weight_shape_padded),
-          padding_partition: copy_constraint::PaddingEnum::Zero,
-        }));
-        let matmul = graph.addBB(Box::new(MatMulBasicBlock {}));
+        let weights_splatted = splat_weights(constants[1].unwrap().0, $is_transpose);
+        let weights_padded = splat_pad(&weights_splatted, &Fr::zero());
+        let cqlin = graph.addBB(Box::new(CQLinBasicBlock { setup: weights_padded }));
 
         let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
         let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
@@ -234,16 +228,15 @@ macro_rules! create_conv_layer {
         let cout = if $is_transpose { weight_shape[1] } else { weight_shape[0] };
         let mut output_shape = vec![1, cout];
         output_shape.append(&mut out_dims);
-        let reshape_permutation = util::get_reshape_indices(vec![permutation.len(), weights_splatted.len()], output_shape.clone());
+        let reshape_permutation = util::get_reshape_indices(vec![permutation.len(), weights_splatted[0].len()], output_shape.clone());
         let cc2 = graph.addBB(Box::new(CopyConstraintBasicBlock {
           permutation: reshape_permutation,
-          input_dim: IxDyn(&[permutation.len().next_power_of_two(), weights_splatted.len().next_power_of_two()]),
+          input_dim: IxDyn(&[permutation.len().next_power_of_two(), weights_splatted[0].len().next_power_of_two()]),
           padding_partition: copy_constraint::PaddingEnum::Zero,
         }));
 
         let cc_output = graph.addNode(cc, vec![(-1, 0)]);
-        let cc1_output = graph.addNode(cc1, vec![(-2, 0)]);
-        let cqlin_output = graph.addNode(matmul, vec![(cc_output, 0), (cc1_output, 0)]);
+        let cqlin_output = graph.addNode(cqlin, vec![(cc_output, 0)]);
         let change_SF_output = graph.addNode(change_SF, vec![(cqlin_output, 0)]);
         let _ = graph.addNode(change_SF_check, vec![(cqlin_output, 0), (change_SF_output, 0)]);
 
