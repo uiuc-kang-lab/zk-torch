@@ -89,6 +89,7 @@ fn karatsuba_split(p: &DensePolynomial<Fr>, m: usize) -> (DensePolynomial<Fr>, D
   (low, high)
 }
 
+// Split poly into degree n-1 polynomials
 pub fn split_polynomial(poly: &DensePolynomial<Fr>, n: usize) -> Vec<DensePolynomial<Fr>> {
   poly.coeffs().chunks(n).map(|chunk| DensePolynomial::from_coefficients_vec(chunk.to_vec())).collect()
 }
