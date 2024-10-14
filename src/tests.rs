@@ -1,19 +1,15 @@
 use crate::basic_block::*;
-use crate::util::mul_two_polys;
 use crate::{ptau, util, util::convert_to_data};
 use ark_bn254::{Bn254, Fr, G1Affine, G2Affine};
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_poly::univariate::DensePolynomial;
-use ark_poly::DenseUVPolynomial;
 use ark_std::UniformRand;
 use ark_std::{One, Zero};
 use core::panic;
 use ndarray::{arr0, concatenate, s, ArrayD, Axis, IxDyn};
-use rand::thread_rng;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
 
 fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) {
   let mut rng = StdRng::from_entropy();
