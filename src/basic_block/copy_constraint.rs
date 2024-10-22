@@ -277,6 +277,29 @@ impl BasicBlock for CopyConstraintBasicBlock {
     return (ssig_xs, vec![], ssig_polys);
   }
 
+  fn mockSetup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+    eprintln!("\x1b[93mWARNING\x1b[0m: MockSetup is enabled. This is only for testing purposes.");
+    let output_dim = self.permutation.dim().as_array_view().to_vec();
+    let input_dim = self.input_dim.as_array_view().to_vec();
+    let last_inp_dim = self.input_dim[self.input_dim.ndim() - 1];
+    let last_outp_dim = output_dim[output_dim.len() - 1];
+
+    let inp_dim_product: usize = input_dim[..input_dim.len() - 1].iter().product();
+    let out_dim_product: usize = output_dim[..output_dim.len() - 1].iter().product();
+    let N = max(last_inp_dim, last_outp_dim);
+    let m = inp_dim_product + out_dim_product;
+    let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
+
+    let ssig: Vec<_> = (0..m).map(|i| (0..N).map(|j| Fr::from((i + 1) as i32) * domain.element(j)).collect::<Vec<_>>()).collect::<Vec<_>>();
+
+    let mut ssig_poly_evals: Vec<_> = ssig.par_iter().map(|x| DensePolynomial::from_coefficients_vec(x.to_vec())).collect();
+    let mut ssig_polys: Vec<_> = ssig_poly_evals.clone();
+    let ssig_xs: Vec<_> = ssig_polys.iter().map(|_x| srs.X1P[0].clone()).collect();
+    ssig_polys.append(&mut ssig_poly_evals);
+
+    return (ssig_xs, vec![], ssig_polys);
+  }
+
   fn prove(
     &self,
     srs: &SRS,

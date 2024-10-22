@@ -169,6 +169,11 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
     (Vec::new(), Vec::new(), Vec::new())
   }
 
+  fn mockSetup(&self, _srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+    eprintln!("\x1b[93mWARNING\x1b[0m: MockSetup is enabled. This is only for testing purposes.");
+    (Vec::new(), Vec::new(), Vec::new())
+  }
+
   fn prove(
     &self,
     _srs: &SRS,

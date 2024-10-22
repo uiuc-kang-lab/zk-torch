@@ -6,6 +6,7 @@
 use crate::basic_block::{BasicBlock, Data, SRS};
 use crate::{onnx, util};
 use ark_bn254::{Fr, G1Projective};
+use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::Zero;
 use ndarray::{arr0, arr1, concatenate, Array1, ArrayD, Axis, IxDyn};
 use rayon::range;
@@ -72,4 +73,33 @@ pub fn convert_to_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
     *x = Data::new(srs, &x.raw);
   });
   a
+}
+
+pub fn convert_to_mock_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
+  if a.ndim() <= 1 {
+    return arr0(mock_data_new(srs, a.view().as_slice().unwrap())).into_dyn();
+  }
+  let mut a = a.map_axis(Axis(a.ndim() - 1), |r| Data {
+    raw: r.as_slice().unwrap().to_vec(),
+    poly: ark_poly::polynomial::univariate::DensePolynomial::zero(),
+    r: Fr::zero(),
+    g1: G1Projective::zero(),
+  });
+  a.par_map_inplace(|x| {
+    *x = mock_data_new(srs, &x.raw);
+  });
+  a
+}
+
+pub fn mock_data_new(srs: &SRS, raw: &[Fr]) -> Data {
+  let N = raw.len();
+  let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
+  let f = DensePolynomial::from_coefficients_vec(domain.ifft(&raw));
+  let fx = if f.is_zero() { G1Projective::zero() } else { srs.X1P[0].clone() };
+  return Data {
+    raw: raw.to_vec(),
+    poly: f,
+    g1: fx,
+    r: Fr::from(1),
+  };
 }

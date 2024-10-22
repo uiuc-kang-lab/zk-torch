@@ -164,6 +164,32 @@ impl Graph {
       .collect()
   }
 
+  pub fn mockSetup(&self, srs: &SRS, models: &Vec<&ArrayD<Data>>) -> Vec<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)> {
+    assert!(self.basic_blocks.len() == self.precomputable.setup.len());
+    self
+      .basic_blocks
+      .iter()
+      .zip(models.iter())
+      .enumerate()
+      .map(|(i, (b, m))| {
+        let precomputable = self.precomputable.setup[i];
+        if precomputable {
+          // Skip setup for some basicblocks if they are precomputable.
+          // These basicblocks require no proving and verifying since they are not used in any layer that needs proving and verifying.
+          println!(
+            "skipping setup for {:?} {:?} because the basicblock is not used in any layer that needs proving and verifying",
+            i, b
+          );
+          return (vec![], vec![], vec![]);
+        }
+        println!("setting up (mock) {:?} {:?}", i, b);
+        let setup = b.mockSetup(srs, *m);
+        let setups = vec![setup];
+        return setups.first().unwrap().clone();
+      })
+      .collect()
+  }
+
   pub fn prove(
     &mut self,
     srs: &SRS,
@@ -298,6 +324,16 @@ impl Graph {
 
     self.nodes.iter().enumerate().for_each(|(i, n)| {
       println!("verifying (debug mode) {i} {:?}", self.basic_blocks[n.basic_block]);
+      let precomputable = self.precomputable.prove_and_verify[i];
+      if precomputable {
+        // Skip verifying for some layers if they are precomputable.
+        // These layers require no proving and verifying as their inputs are known (i.e., constants) during graph construction.
+        println!(
+          "{} | skipping verifying for {i} {:?} because this layer is precomputable given the constant inputs",
+          self.layer_names[i], self.basic_blocks[n.basic_block]
+        );
+        return;
+      }
       let myInputs = n
         .inputs
         .iter()
@@ -309,7 +345,6 @@ impl Graph {
           }
         })
         .collect();
-      let precomputable = self.precomputable.prove_and_verify[i];
       if !precomputable {
         let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, cache.clone());
         let mut bytes = Vec::new();

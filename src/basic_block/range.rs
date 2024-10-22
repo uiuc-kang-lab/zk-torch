@@ -68,6 +68,10 @@ impl BasicBlock for RangeConstBasicBlock {
     (vec![range_x], vec![], vec![])
   }
 
+  fn mockSetup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+    (vec![srs.X1P[0].clone()], vec![], vec![])
+  }
+
   fn prove(
     &self,
     srs: &SRS,
