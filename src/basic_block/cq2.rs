@@ -50,6 +50,7 @@ impl BasicBlock for CQ2BasicBlock {
     Ok(vec![])
   }
 
+  #[cfg(not(feature = "mock_prove"))]
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     assert!(model.ndim() == 1 && model.len() == 2);
     let N = model[0].raw.len();
@@ -86,7 +87,9 @@ impl BasicBlock for CQ2BasicBlock {
     return (setup, setup2, Vec::new());
   }
 
-  fn mockSetup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+  #[cfg(feature = "mock_prove")]
+  fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+    eprintln!("\x1b[93mWARNING\x1b[0m: MockSetup is enabled. This is only for testing purposes.");
     assert!(model.ndim() == 1 && model.len() == 2);
     let N = model[0].raw.len();
     let mut setup = vec![];

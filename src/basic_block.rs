@@ -166,10 +166,7 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
   // The subsequent setup/prove/verify functions run on encoded Data objects (vector commitments).
   // This reduces computation because the Data objects can be encoded once at the beginning and then reused for these functions.
   fn setup(&self, _srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
-    (Vec::new(), Vec::new(), Vec::new())
-  }
-
-  fn mockSetup(&self, _srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+    #[cfg(feature = "mock_prove")]
     eprintln!("\x1b[93mWARNING\x1b[0m: MockSetup is enabled. This is only for testing purposes.");
     (Vec::new(), Vec::new(), Vec::new())
   }

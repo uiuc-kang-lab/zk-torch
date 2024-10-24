@@ -224,7 +224,7 @@ pub fn setup(
     .collect();
 
   let models_ref: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
-  let setups = timed!(timing, "setup and encode models", graph.mockSetup(srs, &models_ref));
+  let setups = timed!(timing, "setup and encode models", graph.setup(srs, &models_ref));
   (setups, models)
 }
 

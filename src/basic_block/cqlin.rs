@@ -45,6 +45,7 @@ impl BasicBlock for CQLinBasicBlock {
     }
   }
 
+  #[cfg(not(feature = "mock_prove"))]
   fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     let m = model.len();
     let n = model[0].raw.len();
@@ -125,7 +126,9 @@ impl BasicBlock for CQLinBasicBlock {
     (setup, vec![M_x.into()], Vec::new())
   }
 
-  fn mockSetup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+  #[cfg(feature = "mock_prove")]
+  fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+    eprintln!("\x1b[93mWARNING\x1b[0m: MockSetup is enabled. This is only for testing purposes.");
     let m = model.len();
     let n = model[0].raw.len();
 

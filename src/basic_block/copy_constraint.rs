@@ -174,6 +174,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     })])
   }
 
+  #[cfg(not(feature = "mock_prove"))]
   fn setup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     let output_dim = self.permutation.dim();
     let last_inp_dim = self.input_dim[self.input_dim.ndim() - 1];
@@ -277,7 +278,8 @@ impl BasicBlock for CopyConstraintBasicBlock {
     return (ssig_xs, vec![], ssig_polys);
   }
 
-  fn mockSetup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+  #[cfg(feature = "mock_prove")]
+  fn setup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     eprintln!("\x1b[93mWARNING\x1b[0m: MockSetup is enabled. This is only for testing purposes.");
     let output_dim = self.permutation.dim().as_array_view().to_vec();
     let input_dim = self.input_dim.as_array_view().to_vec();

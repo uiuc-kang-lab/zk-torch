@@ -135,10 +135,6 @@ impl BasicBlock for RepeaterBasicBlock {
     self.basic_block.setup(srs, model)
   }
 
-  fn mockSetup(&self, _srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
-    self.basic_block.mockSetup(_srs, _model)
-  }
-
   fn prove(
     &self,
     srs: &SRS,
