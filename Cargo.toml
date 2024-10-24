@@ -28,3 +28,4 @@ itertools = "0.13.0"
 [features]
 debug = []
 gpu = []
+mock_prove = []

@@ -3,16 +3,26 @@
  * The functions are used for verification-related operations, such as
  * an algorithm for combining pairing checks.
  */
-use crate::basic_block::PairingCheck;
+use crate::basic_block::{BasicBlock, Data, DataEnc, PairingCheck, SRS};
+use crate::graph::Graph;
 use crate::util::msm;
+use crate::{onnx, util, CONFIG, LAYER_SETUP_DIR};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::models::short_weierstrass::SWCurveConfig;
 use ark_ec::short_weierstrass::Affine;
 use ark_ec::AffineRepr;
+use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
+use ark_std::Zero;
+use ndarray::{arr0, arr1, concatenate, Array1, ArrayD, Axis, IxDyn};
+use plonky2::{timed, util::timing::TimingTree};
 use rand::{rngs::StdRng, SeedableRng};
+use sha3::{Digest, Keccak256};
 use std::collections::HashMap;
 use std::collections::{BTreeSet, HashSet};
+use std::fs::File;
+use std::io::Read;
 
 pub fn combine_pairing_checks(checks: &Vec<&PairingCheck>) -> (Vec<G1Affine>, Vec<G2Affine>) {
   println!("{:?}", checks.iter().map(|x| x.len()).sum::<usize>());
@@ -83,4 +93,47 @@ pub fn combine_pairing_checks(checks: &Vec<&PairingCheck>) -> (Vec<G1Affine>, Ve
   assert!(ATree.is_empty() && B.is_empty() && BTree.is_empty());
   println!("{:?}", res.0.len());
   res
+}
+
+pub fn verify(srs: &SRS, graph: &Graph, timing: &mut TimingTree) {
+  // Read Files:
+  let proofs =
+    Vec::<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)>::deserialize_uncompressed_unchecked(File::open(&CONFIG.verifier.proof_path).unwrap()).unwrap();
+  let proofs = proofs.iter().map(|x| (&x.0, &x.1, &x.2)).collect();
+  let mut modelsEncBytes = Vec::new();
+  File::open(&CONFIG.verifier.enc_model_path).unwrap().read_to_end(&mut modelsEncBytes).unwrap();
+  let modelsEnc: Vec<ArrayD<DataEnc>> = bincode::deserialize(&modelsEncBytes).unwrap();
+  let modelsEnc: Vec<&ArrayD<DataEnc>> = modelsEnc.iter().map(|model| model).collect();
+  let mut inputsEncBytes = Vec::new();
+  File::open(&CONFIG.verifier.enc_input_path).unwrap().read_to_end(&mut inputsEncBytes).unwrap();
+  let inputsEnc: Vec<ArrayD<DataEnc>> = bincode::deserialize(&inputsEncBytes).unwrap();
+  let inputsEnc: Vec<&ArrayD<DataEnc>> = inputsEnc.iter().map(|input| input).collect();
+  let mut outputsEncBytes = Vec::new();
+  File::open(&CONFIG.verifier.enc_output_path).unwrap().read_to_end(&mut outputsEncBytes).unwrap();
+  let outputsEnc: Vec<Vec<ArrayD<DataEnc>>> = bincode::deserialize(&outputsEncBytes).unwrap();
+  let outputsEnc: Vec<Vec<&ArrayD<DataEnc>>> = outputsEnc.iter().map(|output| output.iter().map(|x| x).collect()).collect();
+  let outputsEnc: Vec<&Vec<&ArrayD<DataEnc>>> = outputsEnc.iter().map(|x| x).collect();
+
+  // Fiat-Shamir:
+  let mut hasher = Keccak256::new();
+  hasher.update(modelsEncBytes);
+  hasher.update(inputsEncBytes);
+  hasher.update(outputsEncBytes);
+  let mut buf = [0u8; 32];
+  hasher.finalize_into((&mut buf).into());
+  let mut rng = StdRng::from_seed(buf);
+
+  // Verify:
+  #[cfg(feature = "debug")]
+  timed!(
+    timing,
+    "verify (debug)",
+    graph.verify_for_each_pairing(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng)
+  );
+  #[cfg(not(feature = "debug"))]
+  timed!(
+    timing,
+    "verify",
+    graph.verify(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng)
+  );
 }
