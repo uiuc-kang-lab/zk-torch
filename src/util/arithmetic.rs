@@ -54,3 +54,9 @@ pub fn erf(x: f64) -> f64 {
   let y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * (-x * x).exp();
   sign * y
 }
+
+pub fn gelu(x: f64) -> f64 {
+  let sqrt_2 = 2.0_f64.sqrt();
+  let y = 0.5 * x * (1.0 + erf(x / sqrt_2));
+  y
+}

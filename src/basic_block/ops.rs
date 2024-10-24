@@ -56,3 +56,4 @@ make_basic_block!(CosBasicBlock, { |x: f64| { x.cos() } });
 make_basic_block!(SinBasicBlock, { |x: f64| { x.sin() } });
 make_basic_block!(TanBasicBlock, { |x: f64| { x.tan() } });
 make_basic_block!(ReciprocalBasicBlock, { |x: f64| { 1. / x } });
+make_basic_block!(GeLUBasicBlock, { |x: f64| { util::gelu(x) } });

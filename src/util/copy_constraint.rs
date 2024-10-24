@@ -15,3 +15,14 @@ pub fn get_reshape_indices(input_shape: Vec<usize>, output_shape: Vec<usize>) ->
   let padded_indices = pad_to_pow_of_two(&output_indices, &None);
   padded_indices
 }
+
+pub fn get_reshape_transpose_indices(input_shape: Vec<usize>, output_shape: Vec<usize>, axes: Vec<usize>) -> ArrayD<Option<IxDyn>> {
+  let indices = ArrayD::from_shape_fn(input_shape.as_slice(), |index| Some(index.clone()));
+  let output_indices = indices.view().into_shape(&output_shape[..]).unwrap().to_owned();
+
+  let mut permuted_indices = output_indices.clone();
+  permuted_indices = permuted_indices.permuted_axes(IxDyn(&axes));
+
+  let padded_indices = pad_to_pow_of_two(&permuted_indices, &None);
+  padded_indices
+}

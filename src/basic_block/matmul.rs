@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
+#![allow(elided_named_lifetimes)]
 use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util::{self, calc_pow};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
