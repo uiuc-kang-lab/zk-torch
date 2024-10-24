@@ -42,7 +42,7 @@ impl Layer for MatMulLayer {
       }),
       N: 1,
     }));
-    let small_matmul = (a * b) <= 1 << CONFIG.ptau.loaded_pow_len_log;
+    let small_matmul = (a * b) < 1 << CONFIG.ptau.loaded_pow_len_log;
     let use_cqlin = constants.len() > 1 && constants[1].is_some() && small_matmul;
     let matmul_output = if use_cqlin {
       let b = constants[1].unwrap().0;
