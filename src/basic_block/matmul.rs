@@ -1,6 +1,5 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-#![allow(elided_named_lifetimes)]
 use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util::{self, calc_pow};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -11,7 +10,7 @@ use ndarray::{arr1, arr2, ArrayD, Ix1, Ix2, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::iter::ParallelIterator;
 
-fn index<'a, T>(A: &'a ArrayD<T>, i: usize) -> &T {
+fn index<'a, T>(A: &'a ArrayD<T>, i: usize) -> &'a T {
   if i == 0 {
     A.first().unwrap()
   } else {
