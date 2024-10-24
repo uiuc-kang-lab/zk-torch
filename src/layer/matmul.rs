@@ -3,6 +3,7 @@ use crate::graph::*;
 use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
+use crate::CONFIG;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;
@@ -41,7 +42,9 @@ impl Layer for MatMulLayer {
       }),
       N: 1,
     }));
-    let matmul_output = if constants.len() > 1 && constants[1].is_some() {
+    let small_matmul = (a * b) <= 1 << CONFIG.ptau.loaded_pow_len_log;
+    let use_cqlin = constants.len() > 1 && constants[1].is_some() && small_matmul;
+    let matmul_output = if use_cqlin {
       let b = constants[1].unwrap().0;
       let cqlin = if input_shapes[0].len() > 1 {
         graph.addBB(Box::new(RepeaterBasicBlock {

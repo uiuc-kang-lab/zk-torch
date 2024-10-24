@@ -19,7 +19,7 @@ impl Layer for NegLayer {
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let zero = graph.addBB(Box::new(Const2BasicBlock {
-      c: arr1(&vec![Fr::zero(); *input_shapes[0].last().unwrap()]).into_dyn(),
+      c: arr1(&vec![Fr::zero(); util::next_pow(*input_shapes[0].last().unwrap() as u32) as usize]).into_dyn(),
     }));
     let layer = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(SubBasicBlock {}),
