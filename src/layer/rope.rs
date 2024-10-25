@@ -11,6 +11,8 @@ use tract_onnx::pb::tensor_proto::DataType;
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
 
+// Rotate the last dimension of the input tensor:
+// [x_0, x_1, x_2, x_3, ..., x_{n-2}, x_{n-1}] -> [x_1, x_0, x_3, x_2, ..., x_{n-1}, x_{n-2}]
 fn get_rope_rotate_indices(input_shape: &Vec<usize>) -> ArrayD<Option<IxDyn>> {
   let indices = ArrayD::from_shape_fn(input_shape.as_slice(), |index| {
     let index_len = index.ndim();
