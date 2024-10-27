@@ -175,7 +175,41 @@ macro_rules! create_conv_layer {
           None => vec![1; dims.len() - 2],
         };
 
-        // Splat input
+        // Add bias
+        let add = graph.addBB(Box::new(RepeaterBasicBlock {
+          basic_block: Box::new(AddBasicBlock {}),
+          N: 1,
+        }));
+
+        // Matmul
+        let weights_splatted = splat_weights(constants[1].unwrap().0, $is_transpose);
+        let weights_padded = splat_pad(&weights_splatted, &Fr::zero());
+        let cqlin = graph.addBB(Box::new(RepeaterBasicBlock {
+          basic_block: Box::new(CQLinBasicBlock { setup: weights_padded }),
+          N: 2,
+        }));
+
+        // Scale down
+        let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
+        let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
+          input_SF: sf_log * 2,
+          output_SF: sf_log,
+        }));
+        let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
+          basic_block: Box::new(CQ2BasicBlock {
+            setup: Some((
+              Box::new(ChangeSFBasicBlock {
+                input_SF: sf_log * 2,
+                output_SF: sf_log,
+              }),
+              *onnx::CQ_RANGE_LOWER,
+              *onnx::CQ_RANGE,
+            )),
+          }),
+          N: 1,
+        }));
+
+        // Splat input with transpose+permute with 1x1 optimization or with copy constraint otherwise
         let ci = if $is_transpose { weight_shape[0] } else { weight_shape[1] };
         let permutation = splat_input(&input_shapes[0], &strides, &pads, ci, &ch_dims, $is_transpose);
         let n = input_shapes[0].len();
@@ -203,47 +237,13 @@ macro_rules! create_conv_layer {
           basic_block: Box::new(PermuteBasicBlock { permutation: transpose1 }),
           N: 2,
         }));
-
-        let weights_splatted = splat_weights(constants[1].unwrap().0, $is_transpose);
-        let weights_padded = splat_pad(&weights_splatted, &Fr::zero());
-        let cqlin = graph.addBB(Box::new(RepeaterBasicBlock {
-          basic_block: Box::new(CQLinBasicBlock { setup: weights_padded }),
-          N: 2,
-        }));
-
-        let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
-        let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
-          input_SF: sf_log * 2,
-          output_SF: sf_log,
-        }));
-        let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
-          basic_block: Box::new(CQ2BasicBlock {
-            setup: Some((
-              Box::new(ChangeSFBasicBlock {
-                input_SF: sf_log * 2,
-                output_SF: sf_log,
-              }),
-              *onnx::CQ_RANGE_LOWER,
-              *onnx::CQ_RANGE,
-            )),
-          }),
-          N: 1,
-        }));
-
-        // Add bias
-        let add = graph.addBB(Box::new(RepeaterBasicBlock {
-          basic_block: Box::new(AddBasicBlock {}),
-          N: 1,
-        }));
-
-        // Only used if 1x1 kernel
         let transpose2 = ((0..a).map(|x| x * b).collect(), (0..b).collect());
         let permute2 = graph.addBB(Box::new(RepeaterBasicBlock {
           basic_block: Box::new(PermuteBasicBlock { permutation: transpose2 }),
           N: 2,
         }));
 
-        // Reshape matmul into output shape
+        // Reshape matmul into output shape with transpose+permute with 1x1 optimization or with copy constraint otherwise
         let mut padding = vec![];
         let pads = if $is_transpose {
           conv_transpose_pads(&pads, &ch_dims)
@@ -273,12 +273,15 @@ macro_rules! create_conv_layer {
           }))
         };
 
-        let cc_output = if ch_dims[0] == 1 {
+        // Splat input with transpose+permute with 1x1 optimization or with copy constraint otherwise
+        let cc_output = if kernel_1x1_opt {
           let trans_output = graph.addNode(cc, vec![(-1, 0)]);
           graph.addNode(permute1, vec![(trans_output, 0)])
         } else {
           graph.addNode(cc, vec![(-1, 0)])
         };
+
+        // Matmul
         let cqlin_output = graph.addNode(cqlin, vec![(cc_output, 0)]);
         let change_SF_output = graph.addNode(change_SF, vec![(cqlin_output, 0)]);
         let _ = graph.addNode(change_SF_check, vec![(cqlin_output, 0), (change_SF_output, 0)]);
@@ -291,7 +294,9 @@ macro_rules! create_conv_layer {
             change_SF_output
           }
         };
-        let cc2_output = if ch_dims[0] == 1 {
+
+        // Reshape matmul into output shape with transpose+permute with 1x1 optimization or with copy constraint otherwise
+        let cc2_output = if kernel_1x1_opt {
           let trans_output = graph.addNode(permute2, vec![(add_output, 0)]);
           graph.addNode(cc2, vec![(trans_output, 0)])
         } else {
