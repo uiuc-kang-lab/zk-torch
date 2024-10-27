@@ -179,7 +179,8 @@ macro_rules! create_conv_layer {
         let ci = if $is_transpose { weight_shape[0] } else { weight_shape[1] };
         let permutation = splat_input(&input_shapes[0], &strides, &pads, ci, &ch_dims, $is_transpose);
         let n = input_shapes[0].len();
-        let cc = if ch_dims[0] == 1 {
+        let kernel_1x1_opt = pads.iter().all(|&x| x == 0) && strides.iter().all(|&x| x == 1) && ch_dims[0] == 1;
+        let cc = if kernel_1x1_opt {
           let mut perm = vec![0];
           perm.append(&mut (2..n - 1).collect());
           perm.append(&mut vec![1, n - 1]);
@@ -257,7 +258,7 @@ macro_rules! create_conv_layer {
         let mut output_shape = vec![1, cout];
         output_shape.append(&mut out_dims);
 
-        let cc2 = if ch_dims[0] == 1 {
+        let cc2 = if kernel_1x1_opt {
           let mut perm = vec![0, n - 2];
           let n = input_shapes[0].len();
           perm.append(&mut (1..n - 2).collect());
