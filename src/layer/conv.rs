@@ -237,7 +237,8 @@ macro_rules! create_conv_layer {
           basic_block: Box::new(PermuteBasicBlock { permutation: transpose1 }),
           N: 2,
         }));
-        let transpose2 = ((0..a).map(|x| x * b).collect(), (0..b).collect());
+        let cout = if $is_transpose { weight_shape[1] } else { weight_shape[0] };
+        let transpose2 = ((0..cout.next_power_of_two()).map(|x| x * b).collect(), (0..b).collect());
         let permute2 = graph.addBB(Box::new(RepeaterBasicBlock {
           basic_block: Box::new(PermuteBasicBlock { permutation: transpose2 }),
           N: 2,
@@ -254,7 +255,6 @@ macro_rules! create_conv_layer {
           padding.push([pads[i], pads[dims.len() + i]]);
         }
         let mut out_dims = out_hw(&dims, &strides, &ch_dims, &padding, $is_transpose);
-        let cout = if $is_transpose { weight_shape[1] } else { weight_shape[0] };
         let mut output_shape = vec![1, cout];
         output_shape.append(&mut out_dims);
 
