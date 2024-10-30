@@ -136,7 +136,9 @@ pub fn splat_pad<G: Clone>(input: &Vec<Vec<G>>, pad_val: &G) -> ArrayD<G> {
 // 2. Perform matmul between inputs and weights with the resulting shape (out_dims product x out_channels). Each element corresponds to an element of the final output
 // 2a. If 1x1 kernel, the last dimension is out_channels and the rest are unchanged
 // 3. Scale down and add bias if it exists
-// 4. Reshape into the final output shape
+// 4. Reshape into [batch_size, out_h, out_w, outp_channels], skipped if 1x1 kernel
+// 5. Permute into [batch_size, out_h, outp_channels, out_w]
+// 6. Transpose into [batch_size, outp_channels, out_h, out_w]
 macro_rules! create_conv_layer {
   ($layer_name:ident, $is_transpose:expr) => {
     pub struct $layer_name;
@@ -229,7 +231,6 @@ macro_rules! create_conv_layer {
           }))
         };
 
-        // Only used if 1x1 kernel
         let a = input_shapes[0][1].next_power_of_two();
         let b = input_shapes[0][n - 1].next_power_of_two();
         let transpose1 = ((0..b).map(|x| x * a).collect(), (0..a).collect());
@@ -237,14 +238,8 @@ macro_rules! create_conv_layer {
           basic_block: Box::new(PermuteBasicBlock { permutation: transpose1 }),
           N: 2,
         }));
-        let cout = if $is_transpose { weight_shape[1] } else { weight_shape[0] };
-        let transpose2 = ((0..cout.next_power_of_two()).map(|x| x * b).collect(), (0..b).collect());
-        let permute2 = graph.addBB(Box::new(RepeaterBasicBlock {
-          basic_block: Box::new(PermuteBasicBlock { permutation: transpose2 }),
-          N: 2,
-        }));
 
-        // Reshape matmul into output shape with transpose+permute with 1x1 optimization or with copy constraint otherwise
+        // Reshape matmul into output shape with transpose+permute with 1x1 optimization or with reshape+transpose+permute
         let mut padding = vec![];
         let pads = if $is_transpose {
           conv_transpose_pads(&pads, &ch_dims)
@@ -254,24 +249,28 @@ macro_rules! create_conv_layer {
         for i in 0..dims.len() {
           padding.push([pads[i], pads[dims.len() + i]]);
         }
-        let mut out_dims = out_hw(&dims, &strides, &ch_dims, &padding, $is_transpose);
+        let cout = if $is_transpose { weight_shape[1] } else { weight_shape[0] };
+        let out_dims = out_hw(&dims, &strides, &ch_dims, &padding, $is_transpose);
         let mut output_shape = vec![1, cout];
-        output_shape.append(&mut out_dims);
+        output_shape.append(&mut out_dims.clone());
+        let a = cout.next_power_of_two();
+        let b = output_shape[n - 1].next_power_of_two();
+        let transpose2 = ((0..a).map(|x| x * b).collect(), (0..b).collect());
+        let permute2 = graph.addBB(Box::new(RepeaterBasicBlock {
+          basic_block: Box::new(PermuteBasicBlock { permutation: transpose2 }),
+          N: 2,
+        }));
 
-        let cc2 = if kernel_1x1_opt {
-          let mut perm = vec![0, n - 2];
-          let n = input_shapes[0].len();
-          perm.append(&mut (1..n - 2).collect());
-          perm.append(&mut vec![n - 1]);
-          graph.addBB(Box::new(TransposeBasicBlock { perm }))
-        } else {
-          let reshape_permutation = util::get_reshape_indices(vec![permutation.len(), weights_splatted[0].len()], output_shape.clone());
-          graph.addBB(Box::new(CopyConstraintBasicBlock {
-            permutation: reshape_permutation,
-            input_dim: IxDyn(&[permutation.len().next_power_of_two(), weights_splatted[0].len().next_power_of_two()]),
-            padding_partition: copy_constraint::PaddingEnum::Zero,
-          }))
-        };
+        let mut perm = vec![0, n - 2];
+        let n = input_shapes[0].len();
+        perm.append(&mut (1..n - 2).collect());
+        perm.append(&mut vec![n - 1]);
+        let transpose_bb = graph.addBB(Box::new(TransposeBasicBlock { perm }));
+
+        let mut reshape_shape = vec![1];
+        reshape_shape.append(&mut out_dims.iter().map(|x| x.next_power_of_two()).collect());
+        reshape_shape.push(cout);
+        let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: reshape_shape }));
 
         // Splat input with transpose+permute with 1x1 optimization or with copy constraint otherwise
         let cc_output = if kernel_1x1_opt {
@@ -295,14 +294,16 @@ macro_rules! create_conv_layer {
           }
         };
 
-        // Reshape matmul into output shape with transpose+permute with 1x1 optimization or with copy constraint otherwise
-        let cc2_output = if kernel_1x1_opt {
+        // Reshape matmul into output shape with transpose+permute with 1x1 optimization or with reshape+transpose+permute
+        let reshape_output = if kernel_1x1_opt {
           let trans_output = graph.addNode(permute2, vec![(add_output, 0)]);
-          graph.addNode(cc2, vec![(trans_output, 0)])
+          graph.addNode(transpose_bb, vec![(trans_output, 0)])
         } else {
-          graph.addNode(cc2, vec![(add_output, 0)])
+          let reshapebb_output = graph.addNode(reshape, vec![(add_output, 0)]);
+          let trans_output = graph.addNode(permute2, vec![(reshapebb_output, 0)]);
+          graph.addNode(transpose_bb, vec![(trans_output, 0)])
         };
-        graph.outputs.push((cc2_output, 0));
+        graph.outputs.push((reshape_output, 0));
         (graph, vec![output_shape], vec![input_types[0]])
       }
     }
