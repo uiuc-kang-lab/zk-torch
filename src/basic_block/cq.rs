@@ -156,16 +156,16 @@ impl BasicBlock for CQBasicBlock {
       .divide_by_vanishing_poly(domain_n)
       .unwrap()
       .0;
-    let B_x = util::msm::<G1Projective>(&srs.X1A, &B_poly.coeffs);
-    let B_Q_x = util::msm::<G1Projective>(&srs.X1A, &B_Q_poly.coeffs);
+    let B_x = util::gpu_msm_g1(&srs.IX1A, &B_poly.coeffs).as_slice()[0].to_ark();
+    let B_Q_x = util::gpu_msm_g1(&srs.IX1A, &B_Q_poly.coeffs).as_slice()[0].to_ark();
     let B_zero_div = if B_poly.is_zero() {
       G1Projective::zero()
     } else {
-      util::msm::<G1Projective>(&srs.X1A, &B_poly.coeffs[1..])
+      util::gpu_msm_g1(&srs.IX1A, &B_poly.coeffs[1..]).as_slice()[0].to_ark()
     };
-    let B_DC = util::msm::<G1Projective>(&srs.X1A[N - n..], &B_poly.coeffs);
+    let B_DC = util::gpu_msm_g1(&srs.IX1A[N - n..], &B_poly.coeffs).as_slice()[0].to_ark();
 
-    let f_x_2 = util::msm::<G2Projective>(&srs.X2A, &input.poly.coeffs) + srs.Y2P * input.r;
+    let f_x_2 = util::gpu_msm_g2(&srs.IX2A, &input.poly.coeffs).as_slice()[0].to_ark() + srs.Y2P * input.r;
 
     // Blinding
     let mut rng2 = StdRng::from_entropy();

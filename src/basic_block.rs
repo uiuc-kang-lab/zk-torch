@@ -15,6 +15,8 @@ pub use cq2::CQ2BasicBlock;
 pub use cqlin::CQLinBasicBlock;
 pub use div::{DivConstBasicBlock, DivScalarBasicBlock, ModConstBasicBlock};
 pub use eq::{ElementwiseEqBasicBlock, EqBasicBlock};
+use icicle_bn254::curve::{G1Affine as IG1A, G2Affine as IG2A};
+use icicle_core::traits::ArkConvertible;
 pub use id::IdBasicBlock;
 pub use less::LessBasicBlock;
 pub use matmul::MatMulBasicBlock;
@@ -79,6 +81,8 @@ pub struct SRS {
   pub Y2A: G2Affine,
   pub Y1P: G1Projective,
   pub Y2P: G2Projective,
+  pub IX1A: Vec<IG1A>,
+  pub IX2A: Vec<IG2A>,
 }
 
 // During proofs and verifications, a cache is used to prevent recomputation.
@@ -126,6 +130,19 @@ impl Data {
       raw: raw.to_vec(),
       poly: f,
       g1: fx,
+      r: Fr::rand(&mut rng),
+    };
+  }
+
+  pub fn new_wo_commitment(raw: &[Fr]) -> Data {
+    let N = raw.len();
+    let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
+    let f = DensePolynomial::from_coefficients_vec(domain.ifft(&raw));
+    let mut rng = StdRng::from_entropy();
+    return Data {
+      raw: raw.to_vec(),
+      poly: f,
+      g1: G1Projective::zero(),
       r: Fr::rand(&mut rng),
     };
   }

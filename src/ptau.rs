@@ -1,6 +1,8 @@
 use crate::basic_block::*;
 use ark_bn254::{Fq, Fq2, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::PrimeField;
+use icicle_bn254::curve::{G1Affine as IG1A, G2Affine as IG2A};
+use icicle_core::traits::ArkConvertible;
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
@@ -42,6 +44,9 @@ pub fn load_file(filename: &str, n: usize, m: usize) -> SRS {
     .collect();
   let g2_p: Vec<G2Projective> = g2.par_iter().map(|x| (*x).into()).collect();
 
+  let ig1: Vec<_> = g1.par_iter().map(|x| IG1A::from_ark(*x)).collect();
+  let ig2: Vec<_> = g2.par_iter().map(|x| IG2A::from_ark(*x)).collect();
+
   let res = SRS {
     Y1A: g1[g2.len() - 1],
     Y2A: g2[g2.len() - 1],
@@ -51,6 +56,8 @@ pub fn load_file(filename: &str, n: usize, m: usize) -> SRS {
     X2A: g2,
     X1P: g1_p,
     X2P: g2_p,
+    IX1A: ig1,
+    IX2A: ig2,
   };
 
   res
