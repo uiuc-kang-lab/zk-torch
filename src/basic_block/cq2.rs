@@ -9,12 +9,12 @@ use ark_std::{
   ops::{Mul, Sub},
   One, UniformRand, Zero,
 };
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 use ndarray::ArrayD;
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
-#[cfg(feature = "gpu")]
-use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 #[derive(Debug)]
 pub struct CQ2BasicBlock {

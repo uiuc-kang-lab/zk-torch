@@ -16,6 +16,8 @@ use ark_std::{
   ops::{Add, Mul, Sub},
   One, UniformRand, Zero,
 };
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 use ndarray::{azip, indices, ArrayD, ArrayView, ArrayView1, ArrayViewD, Axis, Dim, Dimension, IxDyn, IxDynImpl, NdIndex, Shape, Zip};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
@@ -25,8 +27,6 @@ use std::{
   default,
   iter::{once, repeat, Map},
 };
-#[cfg(feature = "gpu")]
-use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 fn flat_index(shape: &IxDyn, idx: &Option<IxDyn>, N: usize) -> Option<(usize, usize)> {
   assert!(*idx == None || shape.ndim() == idx.as_ref().unwrap().ndim());
@@ -274,7 +274,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     );
     let mut ssig_poly_evals: Vec<_> = ssig.par_iter().map(|x| DensePolynomial::from_coefficients_vec(x.to_vec())).collect();
     let mut ssig_polys: Vec<_> = ssig.par_iter().map(|x| DensePolynomial::from_coefficients_vec(domain.ifft(x))).collect();
-    
+
     #[cfg(not(feature = "gpu"))]
     let ssig_xs: Vec<_> = ssig_polys.iter().map(|x| util::msm::<G1Projective>(&srs.X1A, &x.coeffs)).collect();
     #[cfg(feature = "gpu")]

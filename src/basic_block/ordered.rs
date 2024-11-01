@@ -9,12 +9,12 @@ use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain, Polynomial};
 use ark_serialize::CanonicalSerialize;
 use ark_std::{cmp::max, One, UniformRand, Zero};
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 use ndarray::{arr0, arr1, azip, s, ArrayD, Axis};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::ops::{Add, Mul, Sub};
-#[cfg(feature = "gpu")]
-use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 // OrderedBasicBlock is a basic block that computes
 // d(omega^i) = f_s(x) - f_s(omega * x) for all i in [0, N)

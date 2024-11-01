@@ -6,10 +6,10 @@ use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{UniformRand, Zero};
-use ndarray::{arr1, ArrayD};
-use rand::{rngs::StdRng, SeedableRng};
 #[cfg(feature = "gpu")]
 use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
+use ndarray::{arr1, ArrayD};
+use rand::{rngs::StdRng, SeedableRng};
 
 #[derive(Debug)]
 pub struct SumBasicBlock;

@@ -19,6 +19,12 @@ use rayon::range;
 use sha3::{Digest, Keccak256};
 use std::fs::{self, File};
 use std::io::Read;
+use tract_onnx::prelude::tract_linalg::frame::unicast::mul;
+#[cfg(feature = "gpu")]
+use {
+  crate::util::{batch_gpu_msm_g1, multi_dim_to_flat_index},
+  icicle_bn254::curve::G1Affine as IG1A,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CQArrayType {
@@ -80,6 +86,31 @@ pub fn convert_to_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
   });
   a.par_map_inplace(|x| {
     *x = Data::new(srs, &x.raw);
+  });
+  a
+}
+
+#[cfg(feature = "gpu")]
+pub fn convert_to_data_gpu(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
+  if a.ndim() <= 1 {
+    return arr0(Data::new(srs, a.view().as_slice().unwrap())).into_dyn();
+  }
+  let a_flatten: Vec<Fr> = a.iter().cloned().collect();
+  let a_last_dim: usize = a.dim()[a.ndim() - 1];
+  let a_shape = a.dim();
+  let results = batch_gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &a_flatten as &Vec<Fr>, a_last_dim);
+
+  let mut a = a.map_axis(Axis(a.ndim() - 1), |r| Data {
+    raw: r.as_slice().unwrap().to_vec(),
+    poly: ark_poly::polynomial::univariate::DensePolynomial::zero(),
+    r: Fr::zero(),
+    g1: G1Projective::zero(),
+  });
+  a.indexed_iter_mut().par_bridge().for_each(|(index, x)| {
+    let mut data = Data::new_wo_commitment(&x.raw);
+    let i = multi_dim_to_flat_index(&index, &a_shape);
+    data.g1 = results[i];
+    *x = data;
   });
   a
 }

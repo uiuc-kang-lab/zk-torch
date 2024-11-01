@@ -16,6 +16,8 @@ use ark_std::{
   ops::{Add, Mul, Sub},
   One, UniformRand, Zero,
 };
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 use ndarray::{arr1, indices, ArrayD, ArrayView, ArrayView1, ArrayViewD, Axis, Dim, Dimension, IxDyn, IxDynImpl, NdIndex, Shape, Zip};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
@@ -24,8 +26,6 @@ use std::{
   collections::HashMap,
   iter::{once, repeat},
 };
-#[cfg(feature = "gpu")]
-use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 // RangeConstBasicBlock is a basic block that creates a tensor of a range of values.
 // The range is defined by three constants: the start, limit, and delta values.
