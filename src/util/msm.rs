@@ -136,10 +136,6 @@ pub fn gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>) -> G1Projective {
 
 #[cfg(feature = "gpu")]
 pub fn batch_gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>, size: usize) -> Vec<G1Projective> {
-  if size < 32 {
-    let points: Vec<_> = points.par_iter().map(|x| x.to_ark()).collect();
-    return cpu_msm(&points, scalars);
-  }
   let cfg = icicle_core::msm::MSMConfig::default();
   let points = HostOrDeviceSlice::on_host(points[..size].to_vec());
   let scalars = scalars.par_iter().map(|x| ScalarField::from_ark(*x)).collect();
