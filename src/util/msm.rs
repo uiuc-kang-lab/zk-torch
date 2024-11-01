@@ -135,7 +135,41 @@ pub fn gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>) -> G1Projective {
 }
 
 #[cfg(feature = "gpu")]
+pub fn batch_gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>) -> G1Projective {
+  let size = ark_std::cmp::min(points.len(), scalars.len());
+  if size < 32 {
+    let points: Vec<_> = points.par_iter().map(|x| x.to_ark()).collect();
+    return cpu_msm(&points, scalars);
+  }
+  let cfg = icicle_core::msm::MSMConfig::default();
+  let points = HostOrDeviceSlice::on_host(points[..size].to_vec());
+  let scalars = scalars[..size].par_iter().map(|x| ScalarField::from_ark(*x)).collect();
+  let scalars = HostOrDeviceSlice::on_host(scalars);
+  let results = vec![IG1P::zero(); 1];
+  let mut results: HostOrDeviceSlice<'_, IG1P> = HostOrDeviceSlice::on_host(results);
+  icicle_core::msm::msm(&scalars, &points, &cfg, &mut results).unwrap();
+  results.as_slice()[0].to_ark()
+}
+
+#[cfg(feature = "gpu")]
 pub fn gpu_msm_g2(points: &Vec<IG2A>, scalars: &Vec<Fr>) -> G2Projective {
+  let size = ark_std::cmp::min(points.len(), scalars.len());
+  if size < 32 {
+    let points: Vec<_> = points.iter().map(|x| x.to_ark()).collect();
+    return cpu_msm(&points, scalars);
+  }
+  let cfg = icicle_core::msm::MSMConfig::default();
+  let points = HostOrDeviceSlice::on_host(points[..size].to_vec());
+  let scalars = scalars[..size].par_iter().map(|x| ScalarField::from_ark(*x)).collect();
+  let scalars = HostOrDeviceSlice::on_host(scalars);
+  let results = vec![IG2P::zero(); 1];
+  let mut results: HostOrDeviceSlice<'_, IG2P> = HostOrDeviceSlice::on_host(results);
+  icicle_core::msm::msm(&scalars, &points, &cfg, &mut results).unwrap();
+  results.as_slice()[0].to_ark()
+}
+
+#[cfg(feature = "gpu")]
+pub fn batch_gpu_msm_g2(points: &Vec<IG2A>, scalars: &Vec<Fr>) -> G2Projective {
   let size = ark_std::cmp::min(points.len(), scalars.len());
   if size < 32 {
     let points: Vec<_> = points.iter().map(|x| x.to_ark()).collect();

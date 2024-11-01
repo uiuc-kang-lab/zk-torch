@@ -12,6 +12,8 @@ use ndarray::ArrayD;
 use rand::{rngs::StdRng, SeedableRng};
 use std::ops::{Add, Mul, Sub};
 use tract_onnx::tract_core::num_traits::ops::bytes;
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 // BooleanCheckBasicBlock is a basic block that checks if all elements in inputs[0] are boolean values (0 or 1).
 // The high-level proving idea:
@@ -56,18 +58,27 @@ impl BasicBlock for BooleanCheckBasicBlock {
       coeffs: vec![r[0], r[1], r[2]],
     };
     let g_poly = inputs[0].first().unwrap().poly.clone().add(r_f_poly.mul_by_vanishing_poly(domain));
+    #[cfg(not(feature = "gpu"))]
     let g_x = util::msm::<G1Projective>(&srs.X1A, &g_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let g_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &g_poly.coeffs as &Vec<Fr>);
 
     // compute q(x) = [g(x) - f(x)] / (x^N - 1) for proving g(x) = f(x) over the domain
     let q_poly = g_poly.clone().sub(&inputs[0].first().unwrap().poly.clone()).divide_by_vanishing_poly(domain).unwrap().0;
     let r_Q = r[3];
+    #[cfg(not(feature = "gpu"))]
     let q_x = util::msm::<G1Projective>(&srs.X1A, &q_poly.coeffs) + srs.Y1P * r_Q;
+    #[cfg(feature = "gpu")]
+    let q_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &q_poly.coeffs as &Vec<Fr>) + srs.Y1P * r_Q;
 
     // compute t(x) = g(x) * (1 - g(x)) / (x^N - 1)
     let one_poly = DensePolynomial { coeffs: vec![Fr::one()] };
     let t_poly = g_poly.clone().mul(&one_poly.sub(&g_poly.clone()));
     let t_poly = t_poly.divide_by_vanishing_poly(domain).unwrap().0;
+    #[cfg(not(feature = "gpu"))]
     let t_x = util::msm::<G1Projective>(&srs.X1A, &t_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let t_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &t_poly.coeffs as &Vec<Fr>);
 
     // Fiat-Shamir
     let mut bytes = Vec::new();
@@ -98,7 +109,10 @@ impl BasicBlock for BooleanCheckBasicBlock {
       coeffs: vec![-zeta, Fr::one()],
     };
     let h_poly = &temp1.add(&temp2.mul(&gamma_poly)) / &x_minus_zeta;
+    #[cfg(not(feature = "gpu"))]
     let h_poly_x = util::msm::<G1Projective>(&srs.X1A, &h_poly.coeffs) + srs.Y1P * r[5];
+    #[cfg(feature = "gpu")]
+    let h_poly_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &h_poly.coeffs as &Vec<Fr>) + srs.Y1P * r[5];
     proof_g1.push(h_poly_x);
 
     // compute r + r_Q * (x^N - 1) for considering the blinding factor in secure opening
@@ -106,7 +120,10 @@ impl BasicBlock for BooleanCheckBasicBlock {
       coeffs: vec![inputs[0].first().unwrap().r],
     }
     .add(DensePolynomial { coeffs: vec![r_Q] }.mul_by_vanishing_poly(domain));
+    #[cfg(not(feature = "gpu"))]
     let r_plus_r_Q_x = util::msm::<G1Projective>(&srs.X1A, &r_plus_r_Q.coeffs);
+    #[cfg(feature = "gpu")]
+    let r_plus_r_Q_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &r_plus_r_Q.coeffs as &Vec<Fr>);
 
     // blinding factor
     let C = srs.X1P[0] * (gamma * r[4] + zeta * r[5]) - srs.X1P[1] * r[5] + r_plus_r_Q_x;
