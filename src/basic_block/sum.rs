@@ -8,6 +8,8 @@ use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain,
 use ark_std::{UniformRand, Zero};
 use ndarray::{arr1, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 #[derive(Debug)]
 pub struct SumBasicBlock;
@@ -35,7 +37,12 @@ impl BasicBlock for SumBasicBlock {
     let zero_div = if input.poly.is_zero() {
       G1Projective::zero()
     } else {
-      util::msm::<G1Projective>(&srs.X1A, &input.poly.coeffs[1..])
+      let coeff_to_msm = input.poly.coeffs[1..].to_vec();
+      #[cfg(not(feature = "gpu"))]
+      let result = util::msm::<G1Projective>(&srs.X1A, &coeff_to_msm);
+      #[cfg(feature = "gpu")]
+      let result = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &coeff_to_msm as &Vec<Fr>);
+      result
     } + srs.Y1P * zero_div_r;
     let C = -srs.X1P[1] * zero_div_r + srs.X1P[0] * (input.r - outputs[0].first().unwrap().r * Fr::from(m as u32).inverse().unwrap());
     return (vec![zero_div, C], vec![], Vec::new());

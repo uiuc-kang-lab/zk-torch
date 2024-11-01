@@ -12,6 +12,8 @@ use ark_std::{cmp::max, One, UniformRand, Zero};
 use ndarray::{arr0, arr1, azip, ArrayD, Axis};
 use rand::{rngs::StdRng, SeedableRng};
 use std::ops::{Mul, Sub};
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 #[derive(Debug)]
 pub struct MaxBasicBlock;
@@ -105,7 +107,10 @@ impl BasicBlock for MaxProofBasicBlock {
     let mut s = diff.raw.clone();
     s.sort();
     let s_poly = DensePolynomial::from_coefficients_vec(domain.ifft(&s));
+    #[cfg(not(feature = "gpu"))]
     let s_x = util::msm::<G1Projective>(&srs.X1A, &s_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let s_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &s_poly.coeffs as &Vec<Fr>);
 
     // Round 2: Commit Z
     // Fiat-Shamir
@@ -129,7 +134,10 @@ impl BasicBlock for MaxProofBasicBlock {
     let Z_blind: Vec<_> = (0..3).map(|_| Fr::rand(&mut rng2)).collect();
     let Z_blind_poly = DensePolynomial::from_coefficients_vec(vec![Z_blind[0], Z_blind[1], Z_blind[2]]);
     let Z_poly = &Z_poly + &Z_blind_poly.mul(&DensePolynomial::from(domain.vanishing_polynomial()));
+    #[cfg(not(feature = "gpu"))]
     let Z_x = util::msm::<G1Projective>(&srs.X1A, &Z_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let Z_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &Z_poly.coeffs as &Vec<Fr>);
 
     // Compute Z(omega * X) polynomial
     let Zg_poly = DensePolynomial {
@@ -165,7 +173,10 @@ impl BasicBlock for MaxProofBasicBlock {
       + L0Z_poly.mul(&alpha_poly)
       + L0s_poly.mul(&alpha_poly).mul(&alpha_poly);
     let t_poly = t_poly.divide_by_vanishing_poly(domain).unwrap().0;
+    #[cfg(not(feature = "gpu"))]
     let t_x = util::msm::<G1Projective>(&srs.X1A, &t_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let t_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &t_poly.coeffs as &Vec<Fr>);
 
     // Round 4: Compute openings
     // Fiat-Shamir
@@ -203,14 +214,20 @@ impl BasicBlock for MaxProofBasicBlock {
       coeffs: vec![-zeta, Fr::one()],
     };
     let W_Q = &(&r_poly + &(&Z_poly - &Z_z_poly).mul(&DensePolynomial::from_coefficients_vec(vec![v]))) / &W_V;
+    #[cfg(not(feature = "gpu"))]
     let W_x = util::msm::<G1Projective>(&srs.X1A, &W_Q.coeffs);
+    #[cfg(feature = "gpu")]
+    let W_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &W_Q.coeffs as &Vec<Fr>);
 
     // Compute opening argument for Z over omega * zeta
     let W_gV = DensePolynomial {
       coeffs: vec![-zeta * omega, Fr::one()],
     };
     let W_gQ: DensePolynomial<_> = &Z_poly.sub(&Z_gz_poly) / &W_gV;
+    #[cfg(not(feature = "gpu"))]
     let W_gx = util::msm::<G1Projective>(&srs.X1A, &W_gQ.coeffs);
+    #[cfg(feature = "gpu")]
+    let W_gx = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &W_gQ.coeffs as &Vec<Fr>);
 
     // Round 5 end randomness. This is necessary in the prover to keep rng state consistent with the verifier.
     let mut bytes = Vec::new();

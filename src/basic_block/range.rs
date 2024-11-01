@@ -24,6 +24,8 @@ use std::{
   collections::HashMap,
   iter::{once, repeat},
 };
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 // RangeConstBasicBlock is a basic block that creates a tensor of a range of values.
 // The range is defined by three constants: the start, limit, and delta values.
@@ -65,7 +67,11 @@ impl BasicBlock for RangeConstBasicBlock {
       r.push(Fr::zero());
     }
     let range_poly = DensePolynomial::from_coefficients_vec(domain.ifft(&r));
+    #[cfg(not(feature = "gpu"))]
     let range_x = util::msm::<G1Projective>(&srs.X1A, &range_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let range_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &range_poly.coeffs as &Vec<Fr>);
+
     (vec![range_x], vec![], vec![])
   }
 

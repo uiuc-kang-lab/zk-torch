@@ -131,27 +131,52 @@ impl BasicBlock for MatMulBasicBlock {
     // Calculate Left
     let left_raw: Vec<Fr> = (0..m).map(|i| flat_A.raw[i] * flat_B.raw[i]).collect();
     let left_poly = DensePolynomial::from_coefficients_vec(domain_m.ifft(&left_raw));
+    #[cfg(not(feature = "gpu"))]
     let left_x = util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let left_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &left_poly.coeffs as &Vec<Fr>);
     let left_Q_poly = flat_A.poly.mul(&flat_B.poly).sub(&left_poly).divide_by_vanishing_poly(domain_m).unwrap().0;
+    #[cfg(not(feature = "gpu"))]
     let left_Q_x = util::msm::<G1Projective>(&srs.X1A, &left_Q_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let left_Q_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &left_Q_poly.coeffs as &Vec<Fr>);
     let left_zero = srs.X1A[0] * (Fr::from(m as u32).inverse().unwrap() * left_raw.iter().sum::<Fr>());
     let left_zero_div = if left_poly.is_zero() {
       G1Projective::zero()
     } else {
-      util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs[1..])
+      let coeff_to_msm = left_poly.coeffs[1..].to_vec();
+      #[cfg(not(feature = "gpu"))]
+      let result = util::msm::<G1Projective>(&srs.X1A, &coeff_to_msm);
+      #[cfg(feature = "gpu")]
+      let result = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &coeff_to_msm as &Vec<Fr>);
+      result
     };
+    #[cfg(not(feature = "gpu"))]
     let flat_B_g2 = util::msm::<G2Projective>(&srs.X2A, &flat_B.poly.coeffs) + srs.Y2P * flat_B.r;
+    #[cfg(feature = "gpu")]
+    let flat_B_g2 = util::gpu_msm_g2(&srs.IX2A as &Vec<IG2A>, &flat_B.poly.coeffs as &Vec<Fr>) + srs.Y2P * flat_B.r;
 
     // Calculate Right
     let right_raw: Vec<Fr> = (0..n).map(|i| flat_C.raw[i] * beta_pow.raw[i]).collect();
     let right_poly = DensePolynomial::from_coefficients_vec(domain_n.ifft(&right_raw));
+    #[cfg(not(feature = "gpu"))]
     let right_x = util::msm::<G1Projective>(&srs.X1A, &right_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let right_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &right_poly.coeffs as &Vec<Fr>);
     let right_Q_poly = flat_C.poly.mul(&beta_pow.poly).sub(&right_poly).divide_by_vanishing_poly(domain_n).unwrap().0;
+    #[cfg(not(feature = "gpu"))]
     let right_Q_x = util::msm::<G1Projective>(&srs.X1A, &right_Q_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let right_Q_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &right_Q_poly.coeffs as &Vec<Fr>);
     let right_zero_div = if right_poly.is_zero() {
       G1Projective::zero()
     } else {
-      util::msm::<G1Projective>(&srs.X1A, &right_poly.coeffs[1..])
+      let coeff_to_msm = right_poly.coeffs[1..].to_vec();
+      #[cfg(not(feature = "gpu"))]
+      let result = util::msm::<G1Projective>(&srs.X1A, &coeff_to_msm);
+      #[cfg(feature = "gpu")]
+      let result = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &coeff_to_msm as &Vec<Fr>);
+      result
     };
 
     // Blinding
@@ -206,9 +231,17 @@ impl BasicBlock for MatMulBasicBlock {
     let beta_pow = calc_pow(beta, n);
     let beta_pow_g2 = {
       let mut cache = cache.lock().unwrap();
+      #[cfg(not(feature = "gpu"))]
       let CacheValues::G2(beta_pow_g2) = cache
         .entry(format!("matmul_beta_msm_g2_{n}"))
         .or_insert_with(|| CacheValues::G2(util::msm::<G2Projective>(&srs.X2A, &domain_n.ifft(&beta_pow)).into()))
+      else {
+        panic!("Cache type error")
+      };
+      #[cfg(feature = "gpu")]
+      let CacheValues::G2(beta_pow_g2) = cache
+        .entry(format!("matmul_beta_msm_g2_{n}"))
+        .or_insert_with(|| CacheValues::G2(util::gpu_msm_g2(&srs.IX2A as &Vec<IG2A>, &domain_n.ifft(&beta_pow) as &Vec<Fr>).into()))
       else {
         panic!("Cache type error")
       };

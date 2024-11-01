@@ -13,6 +13,8 @@ use ndarray::{arr0, arr1, azip, s, ArrayD, Axis};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::ops::{Add, Mul, Sub};
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 // OneToOneBasicBlock is a basic block that checks if there exists a one-to-one mapping between
 // data and sorted_data. Besides, it checks the indices are sorted in the same way as the data.
@@ -59,65 +61,101 @@ impl BasicBlock for OneToOneBasicBlock {
       coeffs: vec![r[0], r[1], r[2]],
     };
     let g_poly = inputs[0].first().unwrap().poly.clone().add(r_f_poly.mul_by_vanishing_poly(domain));
+    #[cfg(not(feature = "gpu"))]
     let g_x = util::msm::<G1Projective>(&srs.X1A, &g_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let g_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &g_poly.coeffs as &Vec<Fr>);
 
     // compute g_idx(x) = f_idx(x) + r_f_idx(x) * (x^N - 1) for secure opening
     let r_f_idx_poly = DensePolynomial {
       coeffs: vec![r[3], r[4], r[5]],
     };
     let g_idx_poly = inputs[1].first().unwrap().poly.clone().add(r_f_idx_poly.mul_by_vanishing_poly(domain));
+    #[cfg(not(feature = "gpu"))]
     let g_idx_x = util::msm::<G1Projective>(&srs.X1A, &g_idx_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let g_idx_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &g_idx_poly.coeffs as &Vec<Fr>);
 
     // compute g_s(x) = f_s(x) + r_f_s(x) * (x^N - 1) for secure opening
     let r_f_s_poly = DensePolynomial {
       coeffs: vec![r[6], r[7], r[8]],
     };
     let g_s_poly = inputs[2].first().unwrap().poly.clone().add(r_f_s_poly.mul_by_vanishing_poly(domain));
+    #[cfg(not(feature = "gpu"))]
     let g_s_x = util::msm::<G1Projective>(&srs.X1A, &g_s_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let g_s_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &g_s_poly.coeffs as &Vec<Fr>);
 
     // compute g_idx_s(x) = f_idx_s(x) + r_f_idx_s(x) * (x^N - 1) for secure opening
     let r_f_idx_s_poly = DensePolynomial {
       coeffs: vec![r[9], r[10], r[11]],
     };
     let g_idx_s_poly = inputs[3].first().unwrap().poly.clone().add(r_f_idx_s_poly.mul_by_vanishing_poly(domain));
+    #[cfg(not(feature = "gpu"))]
     let g_idx_s_x = util::msm::<G1Projective>(&srs.X1A, &g_idx_s_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let g_idx_s_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &g_idx_s_poly.coeffs as &Vec<Fr>);
 
     let minus_one_poly = DensePolynomial::from_coefficients_vec(vec![-Fr::one()]);
     // compute q(x) = [f(x) - g(x)]/ (x^N - 1) for proving f(x) = g(x)
     let q_poly = r_f_poly.mul(&minus_one_poly);
     let r_Q = r[12];
+    #[cfg(not(feature = "gpu"))]
     let q_x = util::msm::<G1Projective>(&srs.X1A, &q_poly.coeffs) + srs.Y1P * r_Q;
+    #[cfg(feature = "gpu")]
+    let q_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &q_poly.coeffs as &Vec<Fr>) + srs.Y1P * r_Q;
     let r_plus_r_Q = DensePolynomial { coeffs: vec![r_Q] }.mul_by_vanishing_poly(domain).sub(&DensePolynomial {
       coeffs: vec![inputs[0].first().unwrap().r],
     });
+    #[cfg(not(feature = "gpu"))]
     let r_plus_r_Q_x = util::msm::<G1Projective>(&srs.X1A, &r_plus_r_Q.coeffs);
+    #[cfg(feature = "gpu")]
+    let r_plus_r_Q_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &r_plus_r_Q.coeffs as &Vec<Fr>);
 
     // compute q_idx(x) = [f_idx(x) - g_idx(x)]/ (x^N - 1) for proving f_idx(x) = g_idx(x)
     let q_idx_poly = r_f_idx_poly.mul(&minus_one_poly);
     let r_Q_idx = r[13];
+    #[cfg(not(feature = "gpu"))]
     let q_idx_x = util::msm::<G1Projective>(&srs.X1A, &q_idx_poly.coeffs) + srs.Y1P * r_Q_idx;
+    #[cfg(feature = "gpu")]
+    let q_idx_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &q_idx_poly.coeffs as &Vec<Fr>) + srs.Y1P * r_Q_idx;
     let r_idx_plus_r_Q_idx = DensePolynomial { coeffs: vec![r_Q_idx] }.mul_by_vanishing_poly(domain).sub(&DensePolynomial {
       coeffs: vec![inputs[1].first().unwrap().r],
     });
+    #[cfg(not(feature = "gpu"))]
     let r_idx_plus_r_Q_idx_x = util::msm::<G1Projective>(&srs.X1A, &r_idx_plus_r_Q_idx.coeffs);
+    #[cfg(feature = "gpu")]
+    let r_idx_plus_r_Q_idx_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &r_idx_plus_r_Q_idx.coeffs as &Vec<Fr>);
 
     // compute q_s(x) = [f_s(x) - g_s(x)]/ (x^N - 1) for proving f_s(x) = g_s(x)
     let q_s_poly = r_f_s_poly.mul(&minus_one_poly);
     let r_Q_s = r[14];
+    #[cfg(not(feature = "gpu"))]
     let q_s_x = util::msm::<G1Projective>(&srs.X1A, &q_s_poly.coeffs) + srs.Y1P * r_Q_s;
+    #[cfg(feature = "gpu")]
+    let q_s_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &q_s_poly.coeffs as &Vec<Fr>) + srs.Y1P * r_Q_s;
     let r_s_plus_r_Q_s = DensePolynomial { coeffs: vec![r_Q_s] }.mul_by_vanishing_poly(domain).sub(&DensePolynomial {
       coeffs: vec![inputs[2].first().unwrap().r],
     });
+    #[cfg(not(feature = "gpu"))]
     let r_s_plus_r_Q_s_x = util::msm::<G1Projective>(&srs.X1A, &r_s_plus_r_Q_s.coeffs);
+    #[cfg(feature = "gpu")]
+    let r_s_plus_r_Q_s_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &r_s_plus_r_Q_s.coeffs as &Vec<Fr>);
 
     // compute q_idx_s(x) = [f_idx_s(x) - g_idx_s(x)]/ (x^N - 1) for proving f_idx_s(x) = g_idx_s(x)
     let q_idx_s_poly = r_f_idx_s_poly.mul(&minus_one_poly);
     let r_Q_idx_s = r[15];
+    #[cfg(not(feature = "gpu"))]
     let q_idx_s_x = util::msm::<G1Projective>(&srs.X1A, &q_idx_s_poly.coeffs) + srs.Y1P * r_Q_idx_s;
+    #[cfg(feature = "gpu")]
+    let q_idx_s_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &q_idx_s_poly.coeffs as &Vec<Fr>) + srs.Y1P * r_Q_idx_s;
     let r_idx_s_plus_r_Q_idx_s = DensePolynomial { coeffs: vec![r_Q_idx_s] }.mul_by_vanishing_poly(domain).sub(&DensePolynomial {
       coeffs: vec![inputs[3].first().unwrap().r],
     });
+    #[cfg(not(feature = "gpu"))]
     let r_idx_s_plus_r_Q_idx_s_x = util::msm::<G1Projective>(&srs.X1A, &r_idx_s_plus_r_Q_idx_s.coeffs);
+    #[cfg(feature = "gpu")]
+    let r_idx_s_plus_r_Q_idx_s_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &r_idx_s_plus_r_Q_idx_s.coeffs as &Vec<Fr>);
 
     // Round 2: Commit Z
     // Fiat-Shamir
@@ -142,7 +180,10 @@ impl BasicBlock for OneToOneBasicBlock {
     let Z_blind: Vec<_> = (0..3).map(|_| Fr::rand(&mut rng2)).collect();
     let Z_blind_poly = DensePolynomial::from_coefficients_vec(vec![Z_blind[0], Z_blind[1], Z_blind[2]]);
     let Z_poly = &Z_poly + &Z_blind_poly.mul(&DensePolynomial::from(domain.vanishing_polynomial()));
+    #[cfg(not(feature = "gpu"))]
     let Z_x = util::msm::<G1Projective>(&srs.X1A, &Z_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let Z_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &Z_poly.coeffs as &Vec<Fr>);
 
     // Compute Z(omega * x) polynomial
     let Z_omega_poly = DensePolynomial {
@@ -176,7 +217,10 @@ impl BasicBlock for OneToOneBasicBlock {
       - &Z_poly.mul(&(&g_poly + &beta_poly.mul(&g_idx_poly).add(gamma_poly)))
       + L0Z_poly.mul(&alpha_poly);
     let t_poly = t_N_poly.divide_by_vanishing_poly(domain).unwrap().0;
+    #[cfg(not(feature = "gpu"))]
     let t_x = util::msm::<G1Projective>(&srs.X1A, &t_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let t_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &t_poly.coeffs as &Vec<Fr>);
 
     // Round 4: Compute openings
     // Fiat-Shamir
@@ -230,7 +274,10 @@ impl BasicBlock for OneToOneBasicBlock {
       acc.add(x.mul(&DensePolynomial::from_coefficients_vec(vec![v_pows[i]])))
     });
     let h_poly = &h_numerator / &h_denominator;
+    #[cfg(not(feature = "gpu"))]
     let h_x = util::msm::<G1Projective>(&srs.X1A, &h_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let h_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &h_poly.coeffs as &Vec<Fr>);
 
     // compute h'(x) = SUM_i{[poly_i(x) - poly_i(omega * zeta)] * v^i} / (x - omega * zeta) for proving openings at omega * zeta are correct
     let h_prime_denominator = DensePolynomial::from_coefficients_vec(vec![-omega * zeta, Fr::one()]);
@@ -239,7 +286,10 @@ impl BasicBlock for OneToOneBasicBlock {
       acc.add(x.mul(&DensePolynomial::from_coefficients_vec(vec![v_pows[i]])))
     });
     let h_prime_poly = &h_prime_numerator / &h_prime_denominator;
+    #[cfg(not(feature = "gpu"))]
     let h_prime_x = util::msm::<G1Projective>(&srs.X1A, &h_prime_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let h_prime_x = util::gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &h_prime_poly.coeffs as &Vec<Fr>);
 
     // Round 5 end randomness.
     let mut bytes = Vec::new();
