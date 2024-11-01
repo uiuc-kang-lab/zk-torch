@@ -97,7 +97,7 @@ pub fn convert_to_data_gpu(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
   }
   let a_flatten: Vec<Fr> = a.iter().cloned().collect();
   let a_last_dim: usize = a.dim()[a.ndim() - 1];
-  let a_shape = a.dim();
+  let a_shape = a.shape()[..a.ndim() - 1].to_vec();
   let results = batch_gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &a_flatten as &Vec<Fr>, a_last_dim);
 
   let mut a = a.map_axis(Axis(a.ndim() - 1), |r| Data {
@@ -108,7 +108,7 @@ pub fn convert_to_data_gpu(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
   });
   a.indexed_iter_mut().par_bridge().for_each(|(index, x)| {
     let mut data = Data::new_wo_commitment(&x.raw);
-    let i = multi_dim_to_flat_index(&index, &a_shape);
+    let i = multi_dim_to_flat_index(&index, &IxDyn(&a_shape));
     data.g1 = results[i];
     *x = data;
   });
