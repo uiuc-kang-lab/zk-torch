@@ -152,13 +152,10 @@ impl Data {
   }
 
   pub fn new_wo_commitment(raw: &[Fr]) -> Data {
-    let N = raw.len();
-    let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
-    let f = DensePolynomial::from_coefficients_vec(domain.ifft(&raw));
     let mut rng = StdRng::from_entropy();
     return Data {
       raw: raw.to_vec(),
-      poly: f,
+      poly: ark_poly::polynomial::univariate::DensePolynomial::zero(),
       g1: G1Projective::zero(),
       r: Fr::rand(&mut rng),
     };

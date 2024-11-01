@@ -195,9 +195,9 @@ pub fn gpu_fft_g1_helper(omega: Fr, points: &Vec<G1Projective>) -> Vec<G1Project
   let points = HostOrDeviceSlice::on_host(points);
   let results = vec![IG1P::zero(); size];
   let mut results: HostOrDeviceSlice<'_, IG1P> = HostOrDeviceSlice::on_host(results);
-  let start = std::time::Instant::now();
+  //let start = std::time::Instant::now();
   gfft::gfft(&omega, &points, &mut results).unwrap();
-  println!("fft {size}: {:?}", start.elapsed().as_micros());
+  //println!("fft {size}: {:?}", start.elapsed().as_micros());
   results.as_slice().par_iter().map(|x| x.to_ark()).collect()
 }
 
@@ -210,8 +210,8 @@ pub fn gpu_fft_g2_helper(omega: Fr, points: &Vec<G2Projective>) -> Vec<G2Project
   let points = HostOrDeviceSlice::on_host(points);
   let results = vec![IG2P::zero(); size];
   let mut results: HostOrDeviceSlice<'_, IG2P> = HostOrDeviceSlice::on_host(results);
-  let start = std::time::Instant::now();
+  //let start = std::time::Instant::now();
   gfft::gfft(&omega, &points, &mut results).unwrap();
-  println!("fft2 {size}: {:?}", start.elapsed().as_micros());
+  //println!("fft2 {size}: {:?}", start.elapsed().as_micros());
   results.as_slice().par_iter().map(|x| x.to_ark()).collect()
 }

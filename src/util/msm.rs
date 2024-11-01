@@ -135,12 +135,16 @@ pub fn gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>) -> G1Projective {
 }
 
 #[cfg(feature = "gpu")]
-pub fn batch_gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>, size: usize) -> Vec<G1Projective> {
+pub fn batch_gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>, size: usize, batch: usize) -> Vec<G1Projective> {
+  if size < 32 {
+    let points: Vec<_> = points.par_iter().map(|x| x.to_ark()).collect();
+    return (0..batch).map(|i| cpu_msm(&points, &scalars[i*size..(i+1)*size])).collect()
+  }
   let cfg = icicle_core::msm::MSMConfig::default();
   let points = HostOrDeviceSlice::on_host(points[..size].to_vec());
   let scalars = scalars.par_iter().map(|x| ScalarField::from_ark(*x)).collect();
   let scalars = HostOrDeviceSlice::on_host(scalars);
-  let results = vec![IG1P::zero(); size];
+  let results = vec![IG1P::zero(); batch];
   let mut results: HostOrDeviceSlice<'_, IG1P> = HostOrDeviceSlice::on_host(results);
   icicle_core::msm::msm(&scalars, &points, &cfg, &mut results).unwrap();
   results.as_slice().par_iter().map(|x| x.to_ark()).collect()
@@ -150,7 +154,7 @@ pub fn batch_gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>, size: usize) -> V
 pub fn gpu_msm_g2(points: &Vec<IG2A>, scalars: &Vec<Fr>) -> G2Projective {
   let size = ark_std::cmp::min(points.len(), scalars.len());
   if size < 32 {
-    let points: Vec<_> = points.iter().map(|x| x.to_ark()).collect();
+    let points: Vec<_> = points.par_iter().map(|x| x.to_ark()).collect();
     return cpu_msm(&points, scalars);
   }
   let cfg = icicle_core::msm::MSMConfig::default();
@@ -172,9 +176,9 @@ pub fn gpu_ssm_g1(points: &Vec<G1Projective>, scalars: &Vec<Fr>) -> Vec<G1Projec
   let scalars = HostOrDeviceSlice::on_host(scalars);
   let results = vec![IG1P::zero(); size];
   let mut results: HostOrDeviceSlice<'_, IG1P> = HostOrDeviceSlice::on_host(results);
-  let start = std::time::Instant::now();
+  // let start = std::time::Instant::now();
   gfft::ssm(&scalars, &points, &mut results).unwrap();
-  println!("ssm {size}: {:?}", start.elapsed().as_micros());
+  // println!("ssm {size}: {:?}", start.elapsed().as_micros());
   results.as_slice().par_iter().map(|x| x.to_ark()).collect()
 }
 
@@ -187,8 +191,8 @@ pub fn gpu_ssm_g2(points: &Vec<G2Projective>, scalars: &Vec<Fr>) -> Vec<G2Projec
   let scalars = HostOrDeviceSlice::on_host(scalars);
   let results = vec![IG2P::zero(); size];
   let mut results: HostOrDeviceSlice<'_, IG2P> = HostOrDeviceSlice::on_host(results);
-  let start = std::time::Instant::now();
+  // let start = std::time::Instant::now();
   gfft::ssm(&scalars, &points, &mut results).unwrap();
-  println!("ssm2 {size}: {:?}", start.elapsed().as_micros());
+  // println!("ssm2 {size}: {:?}", start.elapsed().as_micros());
   results.as_slice().par_iter().map(|x| x.to_ark()).collect()
 }
