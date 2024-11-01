@@ -107,13 +107,12 @@ pub fn convert_to_data_gpu(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
     let f = DensePolynomial::from_coefficients_vec(domain.ifft(&raw));
     a_flatten.extend(f.coeffs.clone());
     Data {
-    raw: raw,
-    poly: f,
-    r: Fr::zero(),
-    g1: G1Projective::zero(),
+      raw: raw,
+      poly: f,
+      r: Fr::zero(),
+      g1: G1Projective::zero(),
     }
-  }
-  );
+  });
   let results = batch_gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &a_flatten as &Vec<Fr>, a_last_dim, a_shape_prod);
   a.indexed_iter_mut().par_bridge().for_each(|(index, x)| {
     let mut data = Data::new_wo_commitment(&x.raw);

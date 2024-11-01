@@ -71,7 +71,7 @@ pub mod sum;
 pub mod transpose;
 
 #[cfg(feature = "gpu")]
-use { 
+use {
   icicle_bn254::curve::{G1Affine as IG1A, G2Affine as IG2A},
   icicle_core::traits::ArkConvertible,
 };

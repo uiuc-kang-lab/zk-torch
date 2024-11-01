@@ -101,6 +101,9 @@ pub trait GpuMsmProjective {
 impl GpuMsmProjective for Projective<ark_bn254::g1::Config> {
   type GpuMsmAffine = Affine<ark_bn254::g1::Config>;
   fn gpu_msm(a: &[Self::GpuMsmAffine], b: &[Fr]) -> Self {
+    if b.len() < 128 {
+      return cpu_msm(a, b);
+    }
     let a: Vec<_> = a.par_iter().map(|x| IG1A::from_ark(*x)).collect();
     let b: Vec<_> = b.par_iter().map(|x| *x).collect();
     gpu_msm_g1(&a, &b)
@@ -111,6 +114,9 @@ impl GpuMsmProjective for Projective<ark_bn254::g1::Config> {
 impl GpuMsmProjective for Projective<ark_bn254::g2::Config> {
   type GpuMsmAffine = Affine<ark_bn254::g2::Config>;
   fn gpu_msm(a: &[Self::GpuMsmAffine], b: &[Fr]) -> Self {
+    if b.len() < 128 {
+      return cpu_msm(a, b);
+    }
     let a: Vec<_> = a.par_iter().map(|x| IG2A::from_ark(*x)).collect();
     let b: Vec<_> = b.par_iter().map(|x| *x).collect();
     gpu_msm_g2(&a, &b)
@@ -120,7 +126,7 @@ impl GpuMsmProjective for Projective<ark_bn254::g2::Config> {
 #[cfg(feature = "gpu")]
 pub fn gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>) -> G1Projective {
   let size = ark_std::cmp::min(points.len(), scalars.len());
-  if size < 32 {
+  if size < 128 {
     let points: Vec<_> = points.par_iter().map(|x| x.to_ark()).collect();
     return cpu_msm(&points, scalars);
   }
@@ -136,9 +142,9 @@ pub fn gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>) -> G1Projective {
 
 #[cfg(feature = "gpu")]
 pub fn batch_gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>, size: usize, batch: usize) -> Vec<G1Projective> {
-  if size < 32 {
+  if size < 128 {
     let points: Vec<_> = points.par_iter().map(|x| x.to_ark()).collect();
-    return (0..batch).map(|i| cpu_msm(&points, &scalars[i*size..(i+1)*size])).collect()
+    return (0..batch).map(|i| cpu_msm(&points, &scalars[i * size..(i + 1) * size])).collect();
   }
   let cfg = icicle_core::msm::MSMConfig::default();
   let points = HostOrDeviceSlice::on_host(points[..size].to_vec());
@@ -153,7 +159,7 @@ pub fn batch_gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>, size: usize, batc
 #[cfg(feature = "gpu")]
 pub fn gpu_msm_g2(points: &Vec<IG2A>, scalars: &Vec<Fr>) -> G2Projective {
   let size = ark_std::cmp::min(points.len(), scalars.len());
-  if size < 32 {
+  if size < 128 {
     let points: Vec<_> = points.par_iter().map(|x| x.to_ark()).collect();
     return cpu_msm(&points, scalars);
   }
