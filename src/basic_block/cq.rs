@@ -13,6 +13,8 @@ use ndarray::{Array1, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 #[derive(Debug)]
 pub struct CQBasicBlock {
@@ -45,7 +47,10 @@ impl BasicBlock for CQBasicBlock {
     let N = model.raw.len();
     let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
     let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
+    #[cfg(not(feature = "gpu"))]
     let T_x_2 = util::msm::<G2Projective>(&srs.X2A, &model.poly.coeffs) + srs.Y2P * model.r;
+    #[cfg(feature = "gpu")]
+    let T_x_2 = util::gpu_msm_g2(&srs.IX2A as &Vec<IG2A>, &model.poly.coeffs as &Vec<Fr>) + srs.Y2P * model.r;
     let mut temp = model.poly.coeffs[1..].to_vec();
     temp.resize(N * 2 - 1, Fr::zero());
     let mut temp2 = srs.X1P[..N].to_vec();
@@ -156,16 +161,16 @@ impl BasicBlock for CQBasicBlock {
       .divide_by_vanishing_poly(domain_n)
       .unwrap()
       .0;
-    let B_x = util::gpu_msm_g1(&srs.IX1A, &B_poly.coeffs).as_slice()[0].to_ark();
-    let B_Q_x = util::gpu_msm_g1(&srs.IX1A, &B_Q_poly.coeffs).as_slice()[0].to_ark();
+    let B_x = util::msm::<G1Projective>(&srs.X1A, &B_poly.coeffs);
+    let B_Q_x = util::msm::<G1Projective>(&srs.X1A, &B_Q_poly.coeffs);
     let B_zero_div = if B_poly.is_zero() {
       G1Projective::zero()
     } else {
-      util::gpu_msm_g1(&srs.IX1A, &B_poly.coeffs[1..]).as_slice()[0].to_ark()
+      util::msm::<G1Projective>(&srs.X1A, &B_poly.coeffs[1..])
     };
-    let B_DC = util::gpu_msm_g1(&srs.IX1A[N - n..], &B_poly.coeffs).as_slice()[0].to_ark();
+    let B_DC = util::msm::<G1Projective>(&srs.X1A[N - n..], &B_poly.coeffs);
 
-    let f_x_2 = util::gpu_msm_g2(&srs.IX2A, &input.poly.coeffs).as_slice()[0].to_ark() + srs.Y2P * input.r;
+    let f_x_2 = util::msm::<G2Projective>(&srs.X2A, &input.poly.coeffs) + srs.Y2P * input.r;
 
     // Blinding
     let mut rng2 = StdRng::from_entropy();

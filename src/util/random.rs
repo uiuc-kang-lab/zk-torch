@@ -23,3 +23,8 @@ pub fn gpu_set_random_device() {
   let mut rng = StdRng::from_entropy();
   icicle_cuda_runtime::device::set_device(rng.gen_range(0..1)).unwrap();
 }
+
+#[cfg(feature = "gpu")]
+pub fn gpu_set_device() {
+  icicle_cuda_runtime::device::set_device(0).unwrap();
+}

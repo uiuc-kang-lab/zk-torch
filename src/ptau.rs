@@ -44,6 +44,7 @@ pub fn load_file(filename: &str, n: usize, m: usize) -> SRS {
     .collect();
   let g2_p: Vec<G2Projective> = g2.par_iter().map(|x| (*x).into()).collect();
 
+  // later, to load the affine points to the GPU memory
   let ig1: Vec<_> = g1.par_iter().map(|x| IG1A::from_ark(*x)).collect();
   let ig2: Vec<_> = g2.par_iter().map(|x| IG2A::from_ark(*x)).collect();
 
