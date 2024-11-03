@@ -6,7 +6,7 @@
 #![allow(unused_imports)]
 use crate::basic_block::{CacheValues, ProveVerifyCache};
 use crate::util::{fft, ifft_in_place};
-use ark_bn254::{Fr, G1Affine, G1Projective};
+use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::{ScalarMul, VariableBaseMSM};
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::Zero;
