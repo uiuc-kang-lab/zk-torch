@@ -8,6 +8,7 @@ use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain, Polynomial};
 use ark_serialize::CanonicalSerialize;
 use ark_std::{One, UniformRand, Zero};
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 use ndarray::ArrayD;
 use rand::{rngs::StdRng, SeedableRng};
 use std::ops::{Add, Mul, Sub};
@@ -56,18 +57,18 @@ impl BasicBlock for BooleanCheckBasicBlock {
       coeffs: vec![r[0], r[1], r[2]],
     };
     let g_poly = inputs[0].first().unwrap().poly.clone().add(r_f_poly.mul_by_vanishing_poly(domain));
-    let g_x = util::msm::<G1Projective>(&srs.X1A, &g_poly.coeffs);
+    let g_x = util::gpu_msm_for_x1a(cache, &srs.IX1A as &Vec<IG1A>, 0, g_poly.coeffs.len(), &srs.X1A, &g_poly.coeffs);
 
     // compute q(x) = [g(x) - f(x)] / (x^N - 1) for proving g(x) = f(x) over the domain
     let q_poly = g_poly.clone().sub(&inputs[0].first().unwrap().poly.clone()).divide_by_vanishing_poly(domain).unwrap().0;
     let r_Q = r[3];
-    let q_x = util::msm::<G1Projective>(&srs.X1A, &q_poly.coeffs) + srs.Y1P * r_Q;
+    let q_x = util::gpu_msm_for_x1a(cache, &srs.IX1A as &Vec<IG1A>, 0, q_poly.coeffs.len(), &srs.X1A, &q_poly.coeffs) + srs.Y1P * r_Q;
 
     // compute t(x) = g(x) * (1 - g(x)) / (x^N - 1)
     let one_poly = DensePolynomial { coeffs: vec![Fr::one()] };
     let t_poly = g_poly.clone().mul(&one_poly.sub(&g_poly.clone()));
     let t_poly = t_poly.divide_by_vanishing_poly(domain).unwrap().0;
-    let t_x = util::msm::<G1Projective>(&srs.X1A, &t_poly.coeffs);
+    let t_x = util::gpu_msm_for_x1a(cache, &srs.IX1A as &Vec<IG1A>, 0, t_poly.coeffs.len(), &srs.X1A, &t_poly.coeffs);
 
     // Fiat-Shamir
     let mut bytes = Vec::new();
@@ -98,7 +99,7 @@ impl BasicBlock for BooleanCheckBasicBlock {
       coeffs: vec![-zeta, Fr::one()],
     };
     let h_poly = &temp1.add(&temp2.mul(&gamma_poly)) / &x_minus_zeta;
-    let h_poly_x = util::msm::<G1Projective>(&srs.X1A, &h_poly.coeffs) + srs.Y1P * r[5];
+    let h_poly_x = util::gpu_msm_for_x1a(cache, &srs.IX1A as &Vec<IG1A>, 0, h_poly.coeffs.len(), &srs.X1A, &h_poly.coeffs) + srs.Y1P * r[5];
     proof_g1.push(h_poly_x);
 
     // compute r + r_Q * (x^N - 1) for considering the blinding factor in secure opening
@@ -106,7 +107,7 @@ impl BasicBlock for BooleanCheckBasicBlock {
       coeffs: vec![inputs[0].first().unwrap().r],
     }
     .add(DensePolynomial { coeffs: vec![r_Q] }.mul_by_vanishing_poly(domain));
-    let r_plus_r_Q_x = util::msm::<G1Projective>(&srs.X1A, &r_plus_r_Q.coeffs);
+    let r_plus_r_Q_x = util::gpu_msm_for_x1a(cache, &srs.IX1A as &Vec<IG1A>, 0, r_plus_r_Q.coeffs.len(), &srs.X1A, &r_plus_r_Q.coeffs);
 
     // blinding factor
     let C = srs.X1P[0] * (gamma * r[4] + zeta * r[5]) - srs.X1P[1] * r[5] + r_plus_r_Q_x;

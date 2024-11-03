@@ -19,6 +19,11 @@ use rayon::range;
 use sha3::{Digest, Keccak256};
 use std::fs::{self, File};
 use std::io::Read;
+#[cfg(feature = "gpu")]
+use {
+  crate::util::{batch_gpu_msm_g1, multi_dim_to_flat_index},
+  icicle_bn254::curve::G1Affine as IG1A,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CQArrayType {
@@ -80,6 +85,40 @@ pub fn convert_to_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
   });
   a.par_map_inplace(|x| {
     *x = Data::new(srs, &x.raw);
+  });
+  a
+}
+
+#[cfg(feature = "gpu")]
+pub fn convert_to_data_gpu(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
+  if a.ndim() <= 1 {
+    return arr0(Data::new(srs, a.view().as_slice().unwrap())).into_dyn();
+  }
+  let mut a_flatten: Vec<Fr> = Vec::new();
+  let a_last_dim: usize = a.dim()[a.ndim() - 1];
+  let a_shape = a.shape()[..a.ndim() - 1].to_vec();
+  let a_shape_prod = a_shape.iter().product::<usize>();
+
+  let N = a_last_dim;
+  let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
+  let mut a = a.map_axis(Axis(a.ndim() - 1), |r| {
+    let raw = r.as_slice().unwrap().to_vec();
+    let f = DensePolynomial::from_coefficients_vec(domain.ifft(&raw));
+    a_flatten.extend(f.coeffs.clone());
+    Data {
+      raw: raw,
+      poly: f,
+      r: Fr::zero(),
+      g1: G1Projective::zero(),
+    }
+  });
+  let results = batch_gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &a_flatten as &Vec<Fr>, a_last_dim, a_shape_prod);
+  a.indexed_iter_mut().par_bridge().for_each(|(index, x)| {
+    let mut data = Data::new_wo_fftmsm(&x.raw);
+    let i = multi_dim_to_flat_index(&index, &IxDyn(&a_shape));
+    data.g1 = results[i];
+    data.poly = x.poly.clone();
+    *x = data;
   });
   a
 }

@@ -4,7 +4,7 @@
  * slicing and padding arrays.
  */
 use ark_bn254::Fr;
-use ndarray::{ArrayD, Axis, IxDyn, Slice, SliceInfo};
+use ndarray::{ArrayD, Axis, Dimension, IxDyn, Slice, SliceInfo};
 
 // slice the arr with the given indices. But this function is not used in the codebase currently.
 #[allow(dead_code)]
@@ -59,4 +59,9 @@ pub fn broadcastDims(dims: &Vec<&Vec<usize>>, N: usize) -> Vec<usize> {
   (0..len - N)
     .map(|i| dims.iter().map(|dim| if dim.len() >= len - i { dim[i + dim.len() - len] } else { 1 }).max().unwrap())
     .collect()
+}
+
+pub fn multi_dim_to_flat_index<D: Dimension>(multi_index: &D, shape: &D) -> usize {
+  // Calculate the flattened index by summing the product of each coordinate with its stride
+  multi_index.slice().iter().zip(shape.default_strides().slice().iter()).map(|(&coord, &stride)| coord * stride).sum()
 }

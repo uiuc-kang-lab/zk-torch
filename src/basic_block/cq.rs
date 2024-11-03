@@ -9,6 +9,7 @@ use ark_std::{
   ops::{Mul, Sub},
   One, UniformRand, Zero,
 };
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 use ndarray::{Array1, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
@@ -156,14 +157,21 @@ impl BasicBlock for CQBasicBlock {
       .divide_by_vanishing_poly(domain_n)
       .unwrap()
       .0;
-    let B_x = util::msm::<G1Projective>(&srs.X1A, &B_poly.coeffs);
-    let B_Q_x = util::msm::<G1Projective>(&srs.X1A, &B_Q_poly.coeffs);
+    let B_x = util::gpu_msm_for_x1a(cache, &srs.IX1A as &Vec<IG1A>, 0, B_poly.coeffs.len(), &srs.X1A, &B_poly.coeffs);
+    let B_Q_x = util::gpu_msm_for_x1a(cache, &srs.IX1A as &Vec<IG1A>, 0, B_Q_poly.coeffs.len(), &srs.X1A, &B_Q_poly.coeffs);
     let B_zero_div = if B_poly.is_zero() {
       G1Projective::zero()
     } else {
-      util::msm::<G1Projective>(&srs.X1A, &B_poly.coeffs[1..])
+      util::gpu_msm_for_x1a(cache, &srs.IX1A as &Vec<IG1A>, 0, B_poly.coeffs.len() - 1, &srs.X1A, &B_poly.coeffs[1..])
     };
-    let B_DC = util::msm::<G1Projective>(&srs.X1A[N - n..], &B_poly.coeffs);
+    let B_DC = util::gpu_msm_for_x1a(
+      cache,
+      &srs.IX1A as &Vec<IG1A>,
+      N - n,
+      N - n + B_poly.coeffs.len(),
+      &srs.X1A,
+      &B_poly.coeffs,
+    );
 
     let f_x_2 = util::msm::<G2Projective>(&srs.X2A, &input.poly.coeffs) + srs.Y2P * input.r;
 

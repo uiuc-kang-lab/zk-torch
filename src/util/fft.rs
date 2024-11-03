@@ -11,7 +11,7 @@ use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use rayon::prelude::*;
 #[cfg(feature = "gpu")]
 use {
-  crate::util::{gpu_set_random_device, gpu_ssm_g1, gpu_ssm_g2},
+  crate::util::{gpu_ssm_g1, gpu_ssm_g2},
   ark_bn254::{G1Projective, G2Projective},
   ark_ec::short_weierstrass::Projective,
   icicle_bn254::curve::{G1Projective as IG1P, G2Projective as IG2P, ScalarField},
@@ -164,19 +164,16 @@ impl GpuFft for Projective<ark_bn254::g2::Config> {
 
 #[cfg(feature = "gpu")]
 pub fn gpu_fft_g1(domain: GeneralEvaluationDomain<Fr>, points: &Vec<G1Projective>) -> Vec<G1Projective> {
-  gpu_set_random_device();
   gpu_fft_g1_helper(domain.group_gen(), points)
 }
 
 #[cfg(feature = "gpu")]
 pub fn gpu_fft_g2(domain: GeneralEvaluationDomain<Fr>, points: &Vec<G2Projective>) -> Vec<G2Projective> {
-  gpu_set_random_device();
   gpu_fft_g2_helper(domain.group_gen(), points)
 }
 
 #[cfg(feature = "gpu")]
 pub fn gpu_ifft_g1(domain: GeneralEvaluationDomain<Fr>, points: &Vec<G1Projective>) -> Vec<G1Projective> {
-  gpu_set_random_device();
   let points = gpu_fft_g1_helper(domain.group_gen_inv(), points);
   let scalars = vec![domain.size_inv(); points.len()];
   gpu_ssm_g1(&points, &scalars)
@@ -184,7 +181,6 @@ pub fn gpu_ifft_g1(domain: GeneralEvaluationDomain<Fr>, points: &Vec<G1Projectiv
 
 #[cfg(feature = "gpu")]
 pub fn gpu_ifft_g2(domain: GeneralEvaluationDomain<Fr>, points: &Vec<G2Projective>) -> Vec<G2Projective> {
-  gpu_set_random_device();
   let points = gpu_fft_g2_helper(domain.group_gen_inv(), points);
   let scalars = vec![domain.size_inv(); points.len()];
   gpu_ssm_g2(&points, &scalars)
@@ -192,7 +188,6 @@ pub fn gpu_ifft_g2(domain: GeneralEvaluationDomain<Fr>, points: &Vec<G2Projectiv
 
 #[cfg(feature = "gpu")]
 pub fn gpu_fft_g1_helper(omega: Fr, points: &Vec<G1Projective>) -> Vec<G1Projective> {
-  gpu_set_random_device();
   let size = points.len();
   let omega = vec![ScalarField::from_ark(omega)];
   let omega = HostOrDeviceSlice::on_host(omega);
@@ -200,15 +195,14 @@ pub fn gpu_fft_g1_helper(omega: Fr, points: &Vec<G1Projective>) -> Vec<G1Project
   let points = HostOrDeviceSlice::on_host(points);
   let results = vec![IG1P::zero(); size];
   let mut results: HostOrDeviceSlice<'_, IG1P> = HostOrDeviceSlice::on_host(results);
-  let start = std::time::Instant::now();
+  //let start = std::time::Instant::now();
   gfft::gfft(&omega, &points, &mut results).unwrap();
-  println!("fft {size}: {:?}", start.elapsed().as_micros());
+  //println!("fft {size}: {:?}", start.elapsed().as_micros());
   results.as_slice().par_iter().map(|x| x.to_ark()).collect()
 }
 
 #[cfg(feature = "gpu")]
 pub fn gpu_fft_g2_helper(omega: Fr, points: &Vec<G2Projective>) -> Vec<G2Projective> {
-  gpu_set_random_device();
   let size = points.len();
   let omega = vec![ScalarField::from_ark(omega)];
   let omega = HostOrDeviceSlice::on_host(omega);
@@ -216,8 +210,8 @@ pub fn gpu_fft_g2_helper(omega: Fr, points: &Vec<G2Projective>) -> Vec<G2Project
   let points = HostOrDeviceSlice::on_host(points);
   let results = vec![IG2P::zero(); size];
   let mut results: HostOrDeviceSlice<'_, IG2P> = HostOrDeviceSlice::on_host(results);
-  let start = std::time::Instant::now();
+  //let start = std::time::Instant::now();
   gfft::gfft(&omega, &points, &mut results).unwrap();
-  println!("fft2 {size}: {:?}", start.elapsed().as_micros());
+  //println!("fft2 {size}: {:?}", start.elapsed().as_micros());
   results.as_slice().par_iter().map(|x| x.to_ark()).collect()
 }

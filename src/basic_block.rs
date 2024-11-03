@@ -70,6 +70,28 @@ pub mod sub;
 pub mod sum;
 pub mod transpose;
 
+#[cfg(feature = "gpu")]
+use {
+  icicle_bn254::curve::{G1Affine as IG1A, G2Affine as IG2A},
+  icicle_core::traits::ArkConvertible,
+  icicle_cuda_runtime::memory::HostOrDeviceSlice,
+};
+
+#[cfg(feature = "gpu")]
+pub struct SRS {
+  pub X1A: Vec<G1Affine>,
+  pub X2A: Vec<G2Affine>,
+  pub X1P: Vec<G1Projective>,
+  pub X2P: Vec<G2Projective>,
+  pub Y1A: G1Affine,
+  pub Y2A: G2Affine,
+  pub Y1P: G1Projective,
+  pub Y2P: G2Projective,
+  pub IX1A: Vec<IG1A>,
+  pub IX2A: Vec<IG2A>,
+}
+
+#[cfg(not(feature = "gpu"))]
 pub struct SRS {
   pub X1A: Vec<G1Affine>,
   pub X2A: Vec<G2Affine>,
@@ -81,6 +103,7 @@ pub struct SRS {
   pub Y2P: G2Projective,
 }
 
+#[cfg(not(feature = "gpu"))]
 // During proofs and verifications, a cache is used to prevent recomputation.
 // These are the types of the elements in the cache.
 pub enum CacheValues {
@@ -89,6 +112,16 @@ pub enum CacheValues {
   RLCRandom(Fr),
   Data(Data),
   G2(G2Affine),
+}
+
+#[cfg(feature = "gpu")]
+pub enum CacheValues {
+  CQTableDict(HashMap<Fr, usize>),
+  CQ2TableDict(HashMap<(Fr, Fr), usize>),
+  RLCRandom(Fr),
+  Data(Data),
+  G2(G2Affine),
+  DevicePoint(HostOrDeviceSlice<'_, IG1A>),
 }
 
 // The cache is wrapped in Arc<Mutex<>> to allow multiple threads within the same role (either prover or verifier) to access it.
@@ -129,6 +162,16 @@ impl Data {
       r: Fr::rand(&mut rng),
     };
   }
+
+  pub fn new_wo_fftmsm(raw: &[Fr]) -> Data {
+    let mut rng = StdRng::from_entropy();
+    return Data {
+      raw: raw.to_vec(),
+      poly: ark_poly::polynomial::univariate::DensePolynomial::zero(),
+      g1: G1Projective::zero(),
+      r: Fr::rand(&mut rng),
+    };
+  }
 }
 
 #[derive(Clone, Deserialize, Serialize, Debug, PartialEq)]
@@ -160,7 +203,11 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
   // It defaults to running Data::new() on the last dimension of the outputs which runs an FFT and an MSM.
   // But for certain basic blocks such as add and reshape, this can be done much faster, and it should be overriden in these cases.
   fn encodeOutputs(&self, srs: &SRS, _model: &ArrayD<Data>, _inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
-    util::vec_iter(outputs).map(|x| util::convert_to_data(srs, x)).collect()
+    #[cfg(not(feature = "gpu"))]
+    let result = util::vec_iter(outputs).map(|x| util::convert_to_data(srs, x)).collect();
+    #[cfg(feature = "gpu")]
+    let result = util::vec_iter(outputs).map(|x| util::convert_to_data_gpu(srs, x)).collect();
+    result
   }
 
   // The subsequent setup/prove/verify functions run on encoded Data objects (vector commitments).
