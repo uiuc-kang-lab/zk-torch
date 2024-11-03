@@ -115,13 +115,13 @@ pub enum CacheValues {
 }
 
 #[cfg(feature = "gpu")]
-pub enum CacheValues {
+pub enum CacheValues<'a> {
   CQTableDict(HashMap<Fr, usize>),
   CQ2TableDict(HashMap<(Fr, Fr), usize>),
   RLCRandom(Fr),
   Data(Data),
   G2(G2Affine),
-  DevicePoint(HostOrDeviceSlice<'_, IG1A>),
+  DevicePoint(HostOrDeviceSlice<'a, IG1A>),
 }
 
 // The cache is wrapped in Arc<Mutex<>> to allow multiple threads within the same role (either prover or verifier) to access it.

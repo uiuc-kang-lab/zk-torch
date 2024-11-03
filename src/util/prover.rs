@@ -112,7 +112,7 @@ pub fn convert_to_data_gpu(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
       g1: G1Projective::zero(),
     }
   });
-  let results = batch_gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &a_flatten as &Vec<Fr>, a_last_dim, a_shape_prod);
+  let results = batch_gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &a_flatten as &Vec<Fr>, a_last_dim);
   a.indexed_iter_mut().par_bridge().for_each(|(index, x)| {
     let mut data = Data::new_wo_fftmsm(&x.raw);
     let i = multi_dim_to_flat_index(&index, &IxDyn(&a_shape));

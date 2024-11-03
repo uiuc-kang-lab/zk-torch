@@ -186,7 +186,7 @@ pub fn gpu_ssm_g2(points: &Vec<G2Projective>, scalars: &Vec<Fr>) -> Vec<G2Projec
 #[cfg(feature = "gpu")]
 pub fn gpu_msm_for_x1a(
   cache: ProveVerifyCache,
-  points: &Vec<IGA>,
+  points: &Vec<IG1A>,
   start: usize,
   end: usize,
   cpu_points: &[G1Affine],
@@ -201,7 +201,7 @@ pub fn gpu_msm_for_x1a(
 }
 
 #[cfg(feature = "gpu")]
-pub fn get_device_slice(cache: ProveVerifyCache, points: &Vec<IGA>, start: usize, end: usize) -> &HostOrDeviceSlice<'_, IG1A> {
+pub fn get_device_slice(cache: ProveVerifyCache, points: &Vec<IG1A>, start: usize, end: usize) -> &HostOrDeviceSlice<'_, IG1A> {
   let size = end - start;
   let mut cache = cache.lock().unwrap();
   let CacheValues::DevicePoint(slice) = cache.entry(format!("device_x1a_{:?}_{:?}", start, end)).or_insert_with(|| {
@@ -220,7 +220,7 @@ pub fn new_gpu_msm_g1(cpu_points: &[G1Affine], gpu_points: Option<&HostOrDeviceS
   if gpu_points.is_none() {
     let a: Vec<_> = cpu_points.par_iter().map(|x| IG1A::from_ark(*x)).collect();
     let b: Vec<_> = scalars.par_iter().map(|x| *x).collect();
-    gpu_msm_g1(&a, &b)
+    return gpu_msm_g1(&a, &b);
   }
   let gpu_points = gpu_points.unwrap();
   let scalars = scalars.par_iter().map(|x| ScalarField::from_ark(*x)).collect();

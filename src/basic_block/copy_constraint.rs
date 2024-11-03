@@ -281,9 +281,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     #[cfg(feature = "gpu")]
     let size = ssig_polys[0].coeffs.len();
     #[cfg(feature = "gpu")]
-    let batch = ssig_polys.len();
-    #[cfg(feature = "gpu")]
-    let ssig_xs = util::batch_gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &concatenated_coeffs as &Vec<Fr>, size, batch);
+    let ssig_xs = util::batch_gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &concatenated_coeffs as &Vec<Fr>, size);
     ssig_polys.append(&mut ssig_poly_evals);
 
     return (ssig_xs, vec![], ssig_polys);
@@ -321,7 +319,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
-    _cache: ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let input = inputs[0];
     let output = outputs[0];
@@ -482,9 +480,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     #[cfg(feature = "gpu")]
     let size = t_polys[0].coeffs.len();
     #[cfg(feature = "gpu")]
-    let batch = t_polys.len();
-    #[cfg(feature = "gpu")]
-    let t_xs = util::batch_gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &concatenated_coeffs as &Vec<Fr>, size, batch);
+    let t_xs = util::batch_gpu_msm_g1(&srs.IX1A as &Vec<IG1A>, &concatenated_coeffs as &Vec<Fr>, size);
 
     // Round 4: Compute openings
     // Fiat-Shamir
