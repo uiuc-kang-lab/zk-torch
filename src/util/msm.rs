@@ -14,8 +14,8 @@ use log::logger;
 use rayon::prelude::*;
 #[cfg(feature = "gpu")]
 use {
+  crate::basic_block::SRS,
   crate::util::{gpu_fft_g1, gpu_ifft_g1},
-  ark_bn254::G2Projective,
   ark_ec::short_weierstrass::{Affine, Projective},
   icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField},
   icicle_core::gfft,
@@ -193,7 +193,7 @@ pub fn gpu_msm_for_x1a(
   scalars: &[Fr],
 ) -> G1Projective {
   let size = end - start;
-  if size < 2048 {
+  if size < 1024 {
     return cpu_msm(&cpu_points[start..end], scalars);
   }
   let mut cache = cache.lock().unwrap();
@@ -234,7 +234,7 @@ pub fn gpu_msm_for_x2a(
   scalars: &[Fr],
 ) -> G2Projective {
   let size = end - start;
-  if size < 2048 {
+  if size < 1024 {
     return cpu_msm(&cpu_points[start..end], scalars);
   }
   let mut cache = cache.lock().unwrap();
@@ -266,14 +266,14 @@ pub fn new_gpu_msm_g2(cpu_points: &[G2Affine], gpu_points: Option<&HostOrDeviceS
 }
 
 #[cfg(feature = "gpu")]
-pub fn batch_gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>, size: usize) -> Vec<G1Projective> {
+pub fn batch_gpu_msm_g1(srs: &SRS, scalars: &Vec<Fr>, size: usize) -> Vec<G1Projective> {
   let batch = scalars.len() / size;
-  if size < 128 {
-    let points: Vec<_> = points.par_iter().map(|x| x.to_ark()).collect();
-    return (0..batch).map(|i| cpu_msm(&points, &scalars[i * size..(i + 1) * size])).collect();
+  if batch * size < 1024 {
+    return (0..batch).map(|i| cpu_msm(&srs.X1A[..size], &scalars[i * size..(i + 1) * size])).collect();
   }
+  let points = &srs.IX1A[..size];
   let cfg = icicle_core::msm::MSMConfig::default();
-  let points = HostOrDeviceSlice::on_host(points[..size].to_vec());
+  let points = HostOrDeviceSlice::on_host(points.to_vec());
   let scalars = scalars.par_iter().map(|x| ScalarField::from_ark(*x)).collect();
   let scalars = HostOrDeviceSlice::on_host(scalars);
   let results = vec![IG1P::zero(); batch];
