@@ -16,7 +16,6 @@ use ark_std::{
   ops::{Add, Mul, Sub},
   One, UniformRand, Zero,
 };
-use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 use ndarray::{azip, indices, ArrayD, ArrayView, ArrayView1, ArrayViewD, Axis, Dim, Dimension, IxDyn, IxDynImpl, NdIndex, Shape, Zip};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
@@ -26,6 +25,8 @@ use std::{
   default,
   iter::{once, repeat, Map},
 };
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 fn flat_index(shape: &IxDyn, idx: &Option<IxDyn>, N: usize) -> Option<(usize, usize)> {
   assert!(*idx == None || shape.ndim() == idx.as_ref().unwrap().ndim());
@@ -404,7 +405,10 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let Z_blind: Vec<_> = (0..3).map(|_| Fr::rand(&mut rng2)).collect();
     let Z_blind_poly = DensePolynomial::from_coefficients_vec(vec![Z_blind[0], Z_blind[1], Z_blind[2]]);
     let Z_poly = &Z_poly + &Z_blind_poly.mul(&DensePolynomial::from(domain.vanishing_polynomial()));
-    let Z_x = util::gpu_msm_for_x1a(cache, &srs.IX1A as &Vec<IG1A>, 0, Z_poly.coeffs.len(), &srs.X1A, &Z_poly.coeffs);
+    #[cfg(not(feature = "gpu"))]
+    let Z_x = util::msm::<G1Projective>(&srs.X1A, &Z_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let Z_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, Z_poly.coeffs.len(), &srs.X1A, &Z_poly.coeffs);
 
     // Round 3: Commit t (batched quotient polynomial of the below polynomials, p. 29 of [1])
     // Fiat-Shamir
@@ -517,7 +521,10 @@ impl BasicBlock for CopyConstraintBasicBlock {
     };
     let temp = Z_poly.sub(&Z_gz_poly);
     let Z_Q: DensePolynomial<_> = &temp / &Z_V;
-    let W_gx = util::gpu_msm_for_x1a(cache, &srs.IX1A as &Vec<IG1A>, 0, Z_Q.coeffs.len(), &srs.X1A, &Z_Q.coeffs);
+    #[cfg(not(feature = "gpu"))]
+    let W_gx = util::msm::<G1Projective>(&srs.X1A, &Z_Q.coeffs);
+    #[cfg(feature = "gpu")]
+    let W_gx = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, Z_Q.coeffs.len(), &srs.X1A, &Z_Q.coeffs);
 
     // Calculate opening quotient for batched quotient check (containing r, fjs, ssigs on p. 30 of [1])
     let ft_zs: Vec<_> = fj_zs.iter().enumerate().map(|(i, x)| beta * Fr::from((i + 1) as i32) * zeta + *x + gamma).collect();
@@ -557,7 +564,10 @@ impl BasicBlock for CopyConstraintBasicBlock {
     let q1_z = q1_poly.evaluate(&zeta);
     let q1_z_poly = DensePolynomial { coeffs: vec![q1_z] };
     let W_poly = &(q1_poly.sub(&q1_z_poly) + r_poly) / &q1_V;
-    let W_x = util::gpu_msm_for_x1a(cache, &srs.IX1A as &Vec<IG1A>, 0, W_poly.coeffs.len(), &srs.X1A, &W_poly.coeffs);
+    #[cfg(not(feature = "gpu"))]
+    let W_x = util::msm::<G1Projective>(&srs.X1A, &W_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let W_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, W_poly.coeffs.len(), &srs.X1A, &W_poly.coeffs);
 
     // Round 5 end randomness
     let mut bytes = Vec::new();

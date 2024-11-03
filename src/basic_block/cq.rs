@@ -9,11 +9,12 @@ use ark_std::{
   ops::{Mul, Sub},
   One, UniformRand, Zero,
 };
-use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 use ndarray::{Array1, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 #[derive(Debug)]
 pub struct CQBasicBlock {
@@ -157,15 +158,28 @@ impl BasicBlock for CQBasicBlock {
       .divide_by_vanishing_poly(domain_n)
       .unwrap()
       .0;
-    let B_x = util::gpu_msm_for_x1a(cache, &srs.IX1A as &Vec<IG1A>, 0, B_poly.coeffs.len(), &srs.X1A, &B_poly.coeffs);
-    let B_Q_x = util::gpu_msm_for_x1a(cache, &srs.IX1A as &Vec<IG1A>, 0, B_Q_poly.coeffs.len(), &srs.X1A, &B_Q_poly.coeffs);
+    #[cfg(not(feature = "gpu"))]
+    let B_x = util::msm::<G1Projective>(&srs.X1A, &B_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let B_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, B_poly.coeffs.len(), &srs.X1A, &B_poly.coeffs);
+    #[cfg(not(feature = "gpu"))]
+    let B_Q_x = util::msm::<G1Projective>(&srs.X1A, &B_Q_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let B_Q_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, B_Q_poly.coeffs.len(), &srs.X1A, &B_Q_poly.coeffs);
     let B_zero_div = if B_poly.is_zero() {
       G1Projective::zero()
     } else {
-      util::gpu_msm_for_x1a(cache, &srs.IX1A as &Vec<IG1A>, 0, B_poly.coeffs.len() - 1, &srs.X1A, &B_poly.coeffs[1..])
+      #[cfg(not(feature = "gpu"))]
+      let r = util::msm::<G1Projective>(&srs.X1A, &B_poly.coeffs[1..]);
+      #[cfg(feature = "gpu")]
+      let r = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, B_poly.coeffs.len() - 1, &srs.X1A, &B_poly.coeffs[1..]);
+      r
     };
+    #[cfg(not(feature = "gpu"))]
+    let B_DC = util::msm::<G1Projective>(&srs.X1A[N-n..], &B_poly.coeffs);
+    #[cfg(feature = "gpu")]
     let B_DC = util::gpu_msm_for_x1a(
-      cache,
+      &cache,
       &srs.IX1A as &Vec<IG1A>,
       N - n,
       N - n + B_poly.coeffs.len(),
@@ -173,7 +187,10 @@ impl BasicBlock for CQBasicBlock {
       &B_poly.coeffs,
     );
 
+    #[cfg(not(feature = "gpu"))]
     let f_x_2 = util::msm::<G2Projective>(&srs.X2A, &input.poly.coeffs) + srs.Y2P * input.r;
+    #[cfg(feature = "gpu")]
+    let f_x_2 = util::gpu_msm_for_x2a(&cache, &srs.IX2A as &Vec<IG2A>, 0, input.poly.coeffs.len(), &srs.X2A, &input.poly.coeffs) + srs.Y2P * input.r;
 
     // Blinding
     let mut rng2 = StdRng::from_entropy();

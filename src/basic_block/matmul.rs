@@ -9,6 +9,8 @@ use ark_std::{ops::Mul, ops::Sub, UniformRand, Zero};
 use ndarray::{arr1, arr2, ArrayD, Ix1, Ix2, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::iter::ParallelIterator;
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 fn index<'a, T>(A: &'a ArrayD<T>, i: usize) -> &'a T {
   if i == 0 {
@@ -131,27 +133,50 @@ impl BasicBlock for MatMulBasicBlock {
     // Calculate Left
     let left_raw: Vec<Fr> = (0..m).map(|i| flat_A.raw[i] * flat_B.raw[i]).collect();
     let left_poly = DensePolynomial::from_coefficients_vec(domain_m.ifft(&left_raw));
+    #[cfg(not(feature = "gpu"))]
     let left_x = util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let left_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, left_poly.coeffs.len(), &srs.X1A, &left_poly.coeffs);
     let left_Q_poly = flat_A.poly.mul(&flat_B.poly).sub(&left_poly).divide_by_vanishing_poly(domain_m).unwrap().0;
+    #[cfg(not(feature = "gpu"))]
     let left_Q_x = util::msm::<G1Projective>(&srs.X1A, &left_Q_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let left_Q_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, left_Q_poly.coeffs.len(), &srs.X1A, &left_Q_poly.coeffs);
     let left_zero = srs.X1A[0] * (Fr::from(m as u32).inverse().unwrap() * left_raw.iter().sum::<Fr>());
     let left_zero_div = if left_poly.is_zero() {
       G1Projective::zero()
     } else {
-      util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs[1..])
+      #[cfg(not(feature = "gpu"))]
+      let r = util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs[1..]);
+      #[cfg(feature = "gpu")]
+      let r = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, left_poly.coeffs.len()-1, &srs.X1A, &left_poly.coeffs[1..]);
+      r
     };
+    #[cfg(not(feature = "gpu"))]
     let flat_B_g2 = util::msm::<G2Projective>(&srs.X2A, &flat_B.poly.coeffs) + srs.Y2P * flat_B.r;
+    #[cfg(feature = "gpu")]
+    let flat_B_g2 = util::gpu_msm_for_x2a(&cache, &srs.IX2A as &Vec<IG2A>, 0, flat_B.poly.coeffs.len(), &srs.X2A, &flat_B.poly.coeffs) + srs.Y2P * flat_B.r;
 
     // Calculate Right
     let right_raw: Vec<Fr> = (0..n).map(|i| flat_C.raw[i] * beta_pow.raw[i]).collect();
     let right_poly = DensePolynomial::from_coefficients_vec(domain_n.ifft(&right_raw));
+    #[cfg(not(feature = "gpu"))]
     let right_x = util::msm::<G1Projective>(&srs.X1A, &right_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let right_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, right_poly.coeffs.len(), &srs.X1A, &right_poly.coeffs);
     let right_Q_poly = flat_C.poly.mul(&beta_pow.poly).sub(&right_poly).divide_by_vanishing_poly(domain_n).unwrap().0;
+    #[cfg(not(feature = "gpu"))]
     let right_Q_x = util::msm::<G1Projective>(&srs.X1A, &right_Q_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let right_Q_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, right_Q_poly.coeffs.len(), &srs.X1A, &right_Q_poly.coeffs);
     let right_zero_div = if right_poly.is_zero() {
       G1Projective::zero()
     } else {
-      util::msm::<G1Projective>(&srs.X1A, &right_poly.coeffs[1..])
+      #[cfg(not(feature = "gpu"))]
+      let r = util::msm::<G1Projective>(&srs.X1A, &right_poly.coeffs[1..]);
+      #[cfg(feature = "gpu")]
+      let r = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, right_poly.coeffs.len()-1, &srs.X1A, &right_poly.coeffs[1..]);
+      r
     };
 
     // Blinding
@@ -208,7 +233,14 @@ impl BasicBlock for MatMulBasicBlock {
       let mut cache = cache.lock().unwrap();
       let CacheValues::G2(beta_pow_g2) = cache
         .entry(format!("matmul_beta_msm_g2_{n}"))
-        .or_insert_with(|| CacheValues::G2(util::msm::<G2Projective>(&srs.X2A, &domain_n.ifft(&beta_pow)).into()))
+        .or_insert_with(|| {
+          let poly = domain_n.ifft(&beta_pow);
+          #[cfg(not(feature = "gpu"))]
+          let g2 = util::msm::<G2Projective>(&srs.X2A, &poly);
+          #[cfg(feature = "gpu")]
+          let g2 = util::gpu_msm_for_x2a(&cache, &srs.IX2A as &Vec<IG2A>, 0, poly.len(), &srs.X2A, &poly);
+          CacheValues::G2(g2.into())
+        })
       else {
         panic!("Cache type error")
       };

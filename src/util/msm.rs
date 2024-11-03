@@ -185,7 +185,7 @@ pub fn gpu_ssm_g2(points: &Vec<G2Projective>, scalars: &Vec<Fr>) -> Vec<G2Projec
 
 #[cfg(feature = "gpu")]
 pub fn gpu_msm_for_x1a(
-  cache: ProveVerifyCache,
+  cache: &ProveVerifyCache,
   points: &Vec<IG1A>,
   start: usize,
   end: usize,
@@ -196,13 +196,6 @@ pub fn gpu_msm_for_x1a(
   if size < 2048 {
     return cpu_msm(&cpu_points[start..end], scalars);
   }
-  let points = get_device_slice(cache, points, start, end);
-  new_gpu_msm_g1(cpu_points, Some(points), scalars)
-}
-
-#[cfg(feature = "gpu")]
-pub fn get_device_slice(cache: ProveVerifyCache, points: &Vec<IG1A>, start: usize, end: usize) -> &HostOrDeviceSlice<'_, IG1A> {
-  let size = end - start;
   let mut cache = cache.lock().unwrap();
   let CacheValues::DevicePoint(slice) = cache.entry(format!("device_x1a_{:?}_{:?}", start, end)).or_insert_with(|| {
     let mut slice = HostOrDeviceSlice::cuda_malloc(size).unwrap();
@@ -211,8 +204,7 @@ pub fn get_device_slice(cache: ProveVerifyCache, points: &Vec<IG1A>, start: usiz
   }) else {
     panic!("Cache type error")
   };
-
-  slice
+  new_gpu_msm_g1(cpu_points, Some(slice), scalars)
 }
 
 #[cfg(feature = "gpu")]
@@ -227,6 +219,47 @@ pub fn new_gpu_msm_g1(cpu_points: &[G1Affine], gpu_points: Option<&HostOrDeviceS
   let scalars = HostOrDeviceSlice::on_host(scalars);
   let results = vec![IG1P::zero(); 1];
   let mut results: HostOrDeviceSlice<'_, IG1P> = HostOrDeviceSlice::on_host(results);
+  let cfg = icicle_core::msm::MSMConfig::default();
+  icicle_core::msm::msm(&scalars, gpu_points, &cfg, &mut results).unwrap();
+  results.as_slice()[0].to_ark()
+}
+
+#[cfg(feature = "gpu")]
+pub fn gpu_msm_for_x2a(
+  cache: &ProveVerifyCache,
+  points: &Vec<IG2A>,
+  start: usize,
+  end: usize,
+  cpu_points: &[G2Affine],
+  scalars: &[Fr],
+) -> G2Projective {
+  let size = end - start;
+  if size < 2048 {
+    return cpu_msm(&cpu_points[start..end], scalars);
+  }
+  let mut cache = cache.lock().unwrap();
+  let CacheValues::DevicePoint2(slice) = cache.entry(format!("device_x2a_{:?}_{:?}", start, end)).or_insert_with(|| {
+    let mut slice = HostOrDeviceSlice::cuda_malloc(size).unwrap();
+    slice.copy_from_host(&points[start..end]);
+    CacheValues::DevicePoint2(slice)
+  }) else {
+    panic!("Cache type error")
+  };
+  new_gpu_msm_g2(cpu_points, Some(slice), scalars)
+}
+
+#[cfg(feature = "gpu")]
+pub fn new_gpu_msm_g2(cpu_points: &[G2Affine], gpu_points: Option<&HostOrDeviceSlice<IG2A>>, scalars: &[Fr]) -> G2Projective {
+  if gpu_points.is_none() {
+    let a: Vec<_> = cpu_points.par_iter().map(|x| IG2A::from_ark(*x)).collect();
+    let b: Vec<_> = scalars.par_iter().map(|x| *x).collect();
+    return gpu_msm_g2(&a, &b);
+  }
+  let gpu_points = gpu_points.unwrap();
+  let scalars = scalars.par_iter().map(|x| ScalarField::from_ark(*x)).collect();
+  let scalars = HostOrDeviceSlice::on_host(scalars);
+  let results = vec![IG2P::zero(); 1];
+  let mut results: HostOrDeviceSlice<'_, IG2P> = HostOrDeviceSlice::on_host(results);
   let cfg = icicle_core::msm::MSMConfig::default();
   icicle_core::msm::msm(&scalars, gpu_points, &cfg, &mut results).unwrap();
   results.as_slice()[0].to_ark()

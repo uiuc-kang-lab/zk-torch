@@ -8,6 +8,8 @@ use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain,
 use ark_std::{ops::Mul, ops::Sub, UniformRand, Zero};
 use ndarray::{Array, ArrayD, Axis};
 use rand::{rngs::StdRng, SeedableRng};
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 #[derive(Debug)]
 pub struct PermuteBasicBlock {
@@ -117,26 +119,46 @@ impl BasicBlock for PermuteBasicBlock {
     // Calculate Left
     let left_raw: Vec<Fr> = (0..m).map(|i| flat_L.raw[i] * alpha_pow[i * n]).collect();
     let left_poly = DensePolynomial::from_coefficients_vec(domain_m.ifft(&left_raw));
+    #[cfg(not(feature = "gpu"))]
     let left_x = util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let left_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, left_poly.coeffs.len(), &srs.X1A, &left_poly.coeffs);
     let left_Q_poly = flat_L.poly.mul(&b.poly).sub(&left_poly).divide_by_vanishing_poly(domain_m).unwrap().0;
+    #[cfg(not(feature = "gpu"))]
     let left_Q_x = util::msm::<G1Projective>(&srs.X1A, &left_Q_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let left_Q_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, left_Q_poly.coeffs.len(), &srs.X1A, &left_Q_poly.coeffs);
     let left_zero = srs.X1A[0] * (Fr::from(m as u32).inverse().unwrap() * left_raw.iter().sum::<Fr>());
     let left_zero_div = if left_poly.is_zero() {
       G1Projective::zero()
     } else {
-      util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs[1..])
+      #[cfg(not(feature = "gpu"))]
+      let r = util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs[1..]);
+      #[cfg(feature = "gpu")]
+      let r = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, left_poly.coeffs.len()-1, &srs.X1A, &left_poly.coeffs[1..]);
+      r
     };
 
     // Calculate Right
     let right_raw: Vec<Fr> = (0..m2).map(|i| flat_R.raw[i] * alpha_pow[self.permutation.1[i]]).collect();
     let right_poly = DensePolynomial::from_coefficients_vec(domain_m2.ifft(&right_raw));
+    #[cfg(not(feature = "gpu"))]
     let right_x = util::msm::<G1Projective>(&srs.X1A, &right_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let right_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, right_poly.coeffs.len(), &srs.X1A, &right_poly.coeffs);
     let right_Q_poly = flat_R.poly.mul(&d.poly).sub(&right_poly).divide_by_vanishing_poly(domain_m2).unwrap().0;
+    #[cfg(not(feature = "gpu"))]
     let right_Q_x = util::msm::<G1Projective>(&srs.X1A, &right_Q_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let right_Q_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, right_Q_poly.coeffs.len(), &srs.X1A, &right_Q_poly.coeffs);
     let right_zero_div = if right_poly.is_zero() {
       G1Projective::zero()
     } else {
-      util::msm::<G1Projective>(&srs.X1A, &right_poly.coeffs[1..])
+      #[cfg(not(feature = "gpu"))]
+      let r = util::msm::<G1Projective>(&srs.X1A, &right_poly.coeffs[1..]);
+      #[cfg(feature = "gpu")]
+      let r = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, right_poly.coeffs.len()-1, &srs.X1A, &right_poly.coeffs[1..]);
+      r
     };
 
     // Blinding
@@ -197,7 +219,14 @@ impl BasicBlock for PermuteBasicBlock {
       let mut cache = cache.lock().unwrap();
       let CacheValues::G2(b_g2) = cache
         .entry(format!("permute_b_msm_g2_{m}_{n}"))
-        .or_insert_with(|| CacheValues::G2(util::msm::<G2Projective>(&srs.X2A, &domain_m.ifft(&b)).into()))
+        .or_insert_with(|| {
+          let poly = domain_m.ifft(&b);
+          #[cfg(not(feature = "gpu"))]
+          let g2 = util::msm::<G2Projective>(&srs.X2A, &poly);
+          #[cfg(feature = "gpu")]
+          let g2 = util::gpu_msm_for_x2a(&cache, &srs.IX2A as &Vec<IG2A>, 0, poly.len(), &srs.X2A, &poly);
+          CacheValues::G2(g2.into())
+        })
       else {
         panic!("Cache type error")
       };
@@ -208,7 +237,14 @@ impl BasicBlock for PermuteBasicBlock {
       let mut cache = cache.lock().unwrap();
       let CacheValues::G2(d_g2) = cache
         .entry(format!("permute_d_msm_g2_{self:p}"))
-        .or_insert_with(|| CacheValues::G2(util::msm::<G2Projective>(&srs.X2A, &domain_m2.ifft(&d)).into()))
+        .or_insert_with(|| {
+          let poly = domain_m2.ifft(&d);
+          #[cfg(not(feature = "gpu"))]
+          let g2 = util::msm::<G2Projective>(&srs.X2A, &poly);
+          #[cfg(feature = "gpu")]
+          let g2 = util::gpu_msm_for_x2a(&cache, &srs.IX2A as &Vec<IG2A>, 0, poly.len(), &srs.X2A, &poly);
+          CacheValues::G2(g2.into())
+        })
       else {
         panic!("Cache type error")
       };

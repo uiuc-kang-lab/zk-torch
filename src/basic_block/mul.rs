@@ -5,6 +5,8 @@ use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationD
 use ark_std::{ops::Mul, ops::Sub, UniformRand};
 use ndarray::{azip, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 #[derive(Debug)]
 pub struct MulConstBasicBlock {
@@ -125,13 +127,19 @@ impl BasicBlock for MulBasicBlock {
     let out = &outputs[0].first().unwrap();
     let N = inp0.raw.len();
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
+    #[cfg(not(feature = "gpu"))]
     let gx2 = util::msm::<G2Projective>(&srs.X2A, &inp1.poly.coeffs) + srs.Y2P * inp1.r;
+    #[cfg(feature = "gpu")]
+    let gx2 = util::gpu_msm_for_x2a(&cache, &srs.IX2A as &Vec<IG2A>, 0, inp1.poly.coeffs.len(), &srs.X2A, &inp1.poly.coeffs) + srs.Y2P * inp1.r;
     let t = inp0.poly.mul(&inp1.poly).sub(&out.poly).divide_by_vanishing_poly(domain).unwrap().0;
 
     // Blinding
     let mut rng = StdRng::from_entropy();
     let r = Fr::rand(&mut rng);
+    #[cfg(not(feature = "gpu"))]
     let tx = util::msm::<G1Projective>(&srs.X1A, &t.coeffs) + srs.Y1P * r;
+    #[cfg(feature = "gpu")]
+    let tx = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, t.coeffs.len(), &srs.X1A, &t.coeffs) + srs.Y1P * r;
     let C = (inp0.g1 * inp1.r) + (inp1.g1 * inp0.r) + (srs.Y1P * (inp0.r * inp1.r)) - (srs.X1P[0] * out.r) - ((srs.X1P[N] - srs.X1P[0]) * r);
     return (vec![tx, C], vec![gx2], Vec::new());
   }

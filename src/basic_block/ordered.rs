@@ -13,6 +13,8 @@ use ndarray::{arr0, arr1, azip, s, ArrayD, Axis};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::ops::{Add, Mul, Sub};
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 // OrderedBasicBlock is a basic block that computes
 // d(omega^i) = f_s(x) - f_s(omega * x) for all i in [0, N)
@@ -62,33 +64,51 @@ impl BasicBlock for OrderedBasicBlock {
       coeffs: vec![r[0], r[1], r[2]],
     };
     let g_s_poly = data.poly.clone().add(r_f_s_poly.mul_by_vanishing_poly(domain));
+    #[cfg(not(feature = "gpu"))]
     let g_s_x = util::msm::<G1Projective>(&srs.X1A, &g_s_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let g_s_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, g_s_poly.coeffs.len(), &srs.X1A, &g_s_poly.coeffs);
 
     // compute g_d(x) = d(x) + r_d(x) * (x^N - 1) for secure opening
     let r_diff_poly = DensePolynomial {
       coeffs: vec![r[3], r[4], r[5]],
     };
     let g_diff_poly = diff.poly.clone().add(r_diff_poly.mul_by_vanishing_poly(domain));
+    #[cfg(not(feature = "gpu"))]
     let g_diff_x = util::msm::<G1Projective>(&srs.X1A, &g_diff_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let g_diff_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, g_diff_poly.coeffs.len(), &srs.X1A, &g_diff_poly.coeffs);
 
     let minus_one_poly = DensePolynomial::from_coefficients_vec(vec![-Fr::one()]);
     // compute q_s(x) = [f_s(x) - g_s(x)]/ (x^N - 1) for proving f_s(x) = g_s(x)
     let q_s_poly = r_f_s_poly.mul(&minus_one_poly);
     let r_Q_s = r[6];
+    #[cfg(not(feature = "gpu"))]
     let q_s_x = util::msm::<G1Projective>(&srs.X1A, &q_s_poly.coeffs) + srs.Y1P * r_Q_s;
+    #[cfg(feature = "gpu")]
+    let q_s_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, q_s_poly.coeffs.len(), &srs.X1A, &q_s_poly.coeffs) + srs.Y1P * r_Q_s;
     let r_s_plus_r_Q_s = DensePolynomial { coeffs: vec![r_Q_s] }.mul_by_vanishing_poly(domain).sub(&DensePolynomial {
       coeffs: vec![inputs[0].first().unwrap().r],
     });
+    #[cfg(not(feature = "gpu"))]
     let r_s_plus_r_Q_s_x = util::msm::<G1Projective>(&srs.X1A, &r_s_plus_r_Q_s.coeffs);
+    #[cfg(feature = "gpu")]
+    let r_s_plus_r_Q_s_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, r_s_plus_r_Q_s.coeffs.len(), &srs.X1A, &r_s_plus_r_Q_s.coeffs);
 
     // compute q_diff(x) = [d(x) - g_diff(x)]/ (x^N - 1) for proving d(x) = g_diff(x)
     let q_diff_poly = r_diff_poly.mul(&minus_one_poly);
     let r_Q_diff = r[7];
+    #[cfg(not(feature = "gpu"))]
     let q_diff_x = util::msm::<G1Projective>(&srs.X1A, &q_diff_poly.coeffs) + srs.Y1P * r_Q_diff;
+    #[cfg(feature = "gpu")]
+    let q_diff_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, q_diff_poly.coeffs.len(), &srs.X1A, &q_diff_poly.coeffs) + srs.Y1P * r_Q_diff;
     let r_diff_plus_r_Q_diff = DensePolynomial { coeffs: vec![r_Q_diff] }.mul_by_vanishing_poly(domain).sub(&DensePolynomial {
       coeffs: vec![outputs[0].first().unwrap().r],
     });
+    #[cfg(not(feature = "gpu"))]
     let r_diff_plus_r_Q_diff_x = util::msm::<G1Projective>(&srs.X1A, &r_diff_plus_r_Q_diff.coeffs);
+    #[cfg(feature = "gpu")]
+    let r_diff_plus_r_Q_diff_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, r_diff_plus_r_Q_diff.coeffs.len(), &srs.X1A, &r_diff_plus_r_Q_diff.coeffs);
 
     // Compute g_s(omega * x) polynomial
     let g_s_omega_poly = DensePolynomial {
@@ -102,7 +122,10 @@ impl BasicBlock for OrderedBasicBlock {
     // - g_d(x) + g_s(omega * x) - g_s(x) = 0
     let t_N_poly = &g_diff_poly.clone().add(g_s_omega_poly.clone()).sub(&g_s_poly);
     let t_poly = t_N_poly.divide_by_vanishing_poly(domain).unwrap().0;
+    #[cfg(not(feature = "gpu"))]
     let t_x = util::msm::<G1Projective>(&srs.X1A, &t_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let t_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, t_poly.coeffs.len(), &srs.X1A, &t_poly.coeffs);
 
     // Round 2: Compute openings
     // Fiat-Shamir
@@ -147,7 +170,10 @@ impl BasicBlock for OrderedBasicBlock {
       acc.add(x.mul(&DensePolynomial::from_coefficients_vec(vec![v_pows[i]])))
     });
     let h_poly = &h_numerator / &h_denominator;
+    #[cfg(not(feature = "gpu"))]
     let h_x = util::msm::<G1Projective>(&srs.X1A, &h_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let h_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, h_poly.coeffs.len(), &srs.X1A, &h_poly.coeffs);
 
     // compute h'(x) = SUM_i{[poly_i(x) - poly_i(omega * zeta)] * v^i} / (x - omega * zeta) for proving openings at omega * zeta are correct
     let h_prime_denominator = DensePolynomial::from_coefficients_vec(vec![-omega * zeta, Fr::one()]);
@@ -156,7 +182,10 @@ impl BasicBlock for OrderedBasicBlock {
       acc.add(x.mul(&DensePolynomial::from_coefficients_vec(vec![v_pows[i]])))
     });
     let h_prime_poly = &h_prime_numerator / &h_prime_denominator;
+    #[cfg(not(feature = "gpu"))]
     let h_prime_x = util::msm::<G1Projective>(&srs.X1A, &h_prime_poly.coeffs);
+    #[cfg(feature = "gpu")]
+    let h_prime_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, h_prime_poly.coeffs.len(), &srs.X1A, &h_prime_poly.coeffs);
 
     // Round 3 end randomness.
     let mut bytes = Vec::new();
