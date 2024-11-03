@@ -94,7 +94,7 @@ impl BasicBlock for MaxProofBasicBlock {
     _inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
-    _cache: ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let N = outputs[1].first().unwrap().raw.len();
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();

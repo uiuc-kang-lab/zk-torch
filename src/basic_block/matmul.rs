@@ -235,10 +235,7 @@ impl BasicBlock for MatMulBasicBlock {
         .entry(format!("matmul_beta_msm_g2_{n}"))
         .or_insert_with(|| {
           let poly = domain_n.ifft(&beta_pow);
-          #[cfg(not(feature = "gpu"))]
           let g2 = util::msm::<G2Projective>(&srs.X2A, &poly);
-          #[cfg(feature = "gpu")]
-          let g2 = util::gpu_msm_for_x2a(&cache, &srs.IX2A as &Vec<IG2A>, 0, poly.len(), &srs.X2A, &poly);
           CacheValues::G2(g2.into())
         })
       else {

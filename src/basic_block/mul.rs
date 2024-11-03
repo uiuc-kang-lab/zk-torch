@@ -120,7 +120,7 @@ impl BasicBlock for MulBasicBlock {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
-    _cache: ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let inp0 = &inputs[0].first().unwrap();
     let inp1 = &inputs[1].first().unwrap();

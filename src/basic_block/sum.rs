@@ -27,7 +27,7 @@ impl BasicBlock for SumBasicBlock {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
-    _cache: ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let input = inputs[0].first().unwrap();
     let m = input.raw.len();

@@ -45,7 +45,7 @@ impl BasicBlock for OrderedBasicBlock {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
-    _cache: ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let N = inputs[0].first().unwrap().raw.len();
     let domain = GeneralEvaluationDomain::<Fr>::new(N).unwrap();

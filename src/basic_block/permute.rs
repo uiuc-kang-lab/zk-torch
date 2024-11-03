@@ -221,10 +221,7 @@ impl BasicBlock for PermuteBasicBlock {
         .entry(format!("permute_b_msm_g2_{m}_{n}"))
         .or_insert_with(|| {
           let poly = domain_m.ifft(&b);
-          #[cfg(not(feature = "gpu"))]
           let g2 = util::msm::<G2Projective>(&srs.X2A, &poly);
-          #[cfg(feature = "gpu")]
-          let g2 = util::gpu_msm_for_x2a(&cache, &srs.IX2A as &Vec<IG2A>, 0, poly.len(), &srs.X2A, &poly);
           CacheValues::G2(g2.into())
         })
       else {
@@ -239,10 +236,7 @@ impl BasicBlock for PermuteBasicBlock {
         .entry(format!("permute_d_msm_g2_{self:p}"))
         .or_insert_with(|| {
           let poly = domain_m2.ifft(&d);
-          #[cfg(not(feature = "gpu"))]
           let g2 = util::msm::<G2Projective>(&srs.X2A, &poly);
-          #[cfg(feature = "gpu")]
-          let g2 = util::gpu_msm_for_x2a(&cache, &srs.IX2A as &Vec<IG2A>, 0, poly.len(), &srs.X2A, &poly);
           CacheValues::G2(g2.into())
         })
       else {
