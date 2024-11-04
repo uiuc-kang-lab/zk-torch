@@ -6,10 +6,10 @@ use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{UniformRand, Zero};
-use ndarray::{arr1, ArrayD};
-use rand::{rngs::StdRng, SeedableRng};
 #[cfg(feature = "gpu")]
 use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
+use ndarray::{arr1, ArrayD};
+use rand::{rngs::StdRng, SeedableRng};
 
 #[derive(Debug)]
 pub struct SumBasicBlock;
@@ -22,7 +22,8 @@ impl BasicBlock for SumBasicBlock {
   fn prove(
     &self,
     srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(not(feature = "gpu"))] _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(feature = "gpu")] _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>, &Vec<HostOrDeviceSlice<IG1A>>),
     _model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
@@ -40,7 +41,14 @@ impl BasicBlock for SumBasicBlock {
       #[cfg(not(feature = "gpu"))]
       let r = util::msm::<G1Projective>(&srs.X1A, &input.poly.coeffs[1..]);
       #[cfg(feature = "gpu")]
-      let r = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, input.poly.coeffs.len()-1, &srs.X1A, &input.poly.coeffs[1..]);
+      let r = util::gpu_msm_for_x1a(
+        &cache,
+        &srs.IX1A as &Vec<IG1A>,
+        0,
+        input.poly.coeffs.len() - 1,
+        &srs.X1A,
+        &input.poly.coeffs[1..],
+      );
       r
     } + srs.Y1P * zero_div_r;
     let C = -srs.X1P[1] * zero_div_r + srs.X1P[0] * (input.r - outputs[0].first().unwrap().r * Fr::from(m as u32).inverse().unwrap());

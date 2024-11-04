@@ -3,10 +3,10 @@ use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{ops::Mul, ops::Sub, UniformRand};
-use ndarray::{azip, ArrayD};
-use rand::{rngs::StdRng, SeedableRng};
 #[cfg(feature = "gpu")]
 use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
+use ndarray::{azip, ArrayD};
+use rand::{rngs::StdRng, SeedableRng};
 
 #[derive(Debug)]
 pub struct MulConstBasicBlock {
@@ -22,7 +22,8 @@ impl BasicBlock for MulConstBasicBlock {
   fn prove(
     &self,
     srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(not(feature = "gpu"))] _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(feature = "gpu")] _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>, &Vec<HostOrDeviceSlice<IG1A>>),
     _model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
@@ -62,7 +63,8 @@ impl BasicBlock for MulScalarBasicBlock {
   fn prove(
     &self,
     srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(not(feature = "gpu"))] _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(feature = "gpu")] _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>, &Vec<HostOrDeviceSlice<IG1A>>),
     _model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
@@ -115,7 +117,8 @@ impl BasicBlock for MulBasicBlock {
   fn prove(
     &self,
     srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(not(feature = "gpu"))] _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(feature = "gpu")] _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>, &Vec<HostOrDeviceSlice<IG1A>>),
     _model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,

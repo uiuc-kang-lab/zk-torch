@@ -153,7 +153,11 @@ impl Data {
     let fx = if f.is_zero() {
       G1Projective::zero()
     } else {
-      util::msm(&srs.X1A, &f.coeffs)
+      #[cfg(not(feature = "gpu"))]
+      let result = util::msm(&srs.X1A, &f.coeffs);
+      #[cfg(feature = "gpu")]
+      let result = util::new_gpu_msm_g1(&srs.X1A, None, &f.coeffs);
+      result
     };
     let mut rng = StdRng::from_entropy();
     return Data {
@@ -222,7 +226,8 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
   fn prove(
     &self,
     _srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(not(feature = "gpu"))] _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(feature = "gpu")] _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>, &Vec<HostOrDeviceSlice<IG1A>>),
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,

@@ -9,11 +9,11 @@ use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain, Polynomial};
 use ark_serialize::CanonicalSerialize;
 use ark_std::{cmp::max, One, UniformRand, Zero};
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 use ndarray::{arr0, arr1, azip, ArrayD, Axis};
 use rand::{rngs::StdRng, SeedableRng};
 use std::ops::{Mul, Sub};
-#[cfg(feature = "gpu")]
-use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 #[derive(Debug)]
 pub struct MaxBasicBlock;
@@ -89,7 +89,8 @@ impl BasicBlock for MaxProofBasicBlock {
   fn prove(
     &self,
     srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(not(feature = "gpu"))] _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(feature = "gpu")] _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>, &Vec<HostOrDeviceSlice<IG1A>>),
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,

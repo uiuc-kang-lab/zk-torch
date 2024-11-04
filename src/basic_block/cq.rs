@@ -9,12 +9,12 @@ use ark_std::{
   ops::{Mul, Sub},
   One, UniformRand, Zero,
 };
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 use ndarray::{Array1, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::collections::HashMap;
-#[cfg(feature = "gpu")]
-use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 #[derive(Debug)]
 pub struct CQBasicBlock {
@@ -92,7 +92,8 @@ impl BasicBlock for CQBasicBlock {
   fn prove(
     &self,
     srs: &SRS,
-    setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(not(feature = "gpu"))] setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(feature = "gpu")] setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>, &Vec<HostOrDeviceSlice<IG1A>>),
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
@@ -135,19 +136,31 @@ impl BasicBlock for CQBasicBlock {
       m_i
     };
     let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = m_i.iter().map(|(i, y)| (L_i_x_1[*i], Fr::from(*y as u32))).unzip();
+    #[cfg(not(feature = "gpu"))]
     let m_x = util::msm::<G1Projective>(&temp, &temp2);
+    #[cfg(feature = "gpu")]
+    let m_x = util::new_gpu_msm_g1(&temp, None, &temp2);
 
     let beta = Fr::rand(rng);
 
     // Calculate A
     let A_i: HashMap<usize, Fr> = m_i.iter().map(|(i, y)| (*i, Fr::from(*y as u32) * (model.raw[*i] + beta).inverse().unwrap())).collect();
     let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = A_i.iter().map(|(i, y)| (L_i_x_1[*i], *y)).unzip();
+    #[cfg(not(feature = "gpu"))]
     let A_x = util::msm::<G1Projective>(&temp, &temp2);
+    #[cfg(feature = "gpu")]
+    let A_x = util::new_gpu_msm_g1(&temp, None, &temp2);
     let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = A_i.iter().map(|(i, y)| (Q_i_x_1[*i], *y)).unzip();
+    #[cfg(not(feature = "gpu"))]
     let A_Q_x = util::msm::<G1Projective>(&temp, &temp2);
+    #[cfg(feature = "gpu")]
+    let A_Q_x = util::new_gpu_msm_g1(&temp, None, &temp2);
     let A_zero = srs.X1P[0] * (Fr::from(N as u32).inverse().unwrap() * A_i.iter().map(|(_, y)| *y).sum::<Fr>());
     let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = A_i.iter().map(|(i, y)| (L_i_0_x_1[*i], *y)).unzip();
+    #[cfg(not(feature = "gpu"))]
     let A_zero_div = util::msm::<G1Projective>(&temp, &temp2);
+    #[cfg(feature = "gpu")]
+    let A_zero_div = util::new_gpu_msm_g1(&temp, None, &temp2);
 
     // Calculate B
     let B_i: Vec<Fr> = input.raw.iter().map(|x| (*x + beta).inverse().unwrap()).collect();
@@ -176,7 +189,7 @@ impl BasicBlock for CQBasicBlock {
       r
     };
     #[cfg(not(feature = "gpu"))]
-    let B_DC = util::msm::<G1Projective>(&srs.X1A[N-n..], &B_poly.coeffs);
+    let B_DC = util::msm::<G1Projective>(&srs.X1A[N - n..], &B_poly.coeffs);
     #[cfg(feature = "gpu")]
     let B_DC = util::gpu_msm_for_x1a(
       &cache,

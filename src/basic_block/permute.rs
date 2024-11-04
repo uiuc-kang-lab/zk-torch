@@ -6,10 +6,10 @@ use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{ops::Mul, ops::Sub, UniformRand, Zero};
-use ndarray::{Array, ArrayD, Axis};
-use rand::{rngs::StdRng, SeedableRng};
 #[cfg(feature = "gpu")]
 use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
+use ndarray::{Array, ArrayD, Axis};
+use rand::{rngs::StdRng, SeedableRng};
 
 #[derive(Debug)]
 pub struct PermuteBasicBlock {
@@ -41,7 +41,8 @@ impl BasicBlock for PermuteBasicBlock {
   fn prove(
     &self,
     srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(not(feature = "gpu"))] _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(feature = "gpu")] _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>, &Vec<HostOrDeviceSlice<IG1A>>),
     _model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
@@ -127,7 +128,14 @@ impl BasicBlock for PermuteBasicBlock {
     #[cfg(not(feature = "gpu"))]
     let left_Q_x = util::msm::<G1Projective>(&srs.X1A, &left_Q_poly.coeffs);
     #[cfg(feature = "gpu")]
-    let left_Q_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, left_Q_poly.coeffs.len(), &srs.X1A, &left_Q_poly.coeffs);
+    let left_Q_x = util::gpu_msm_for_x1a(
+      &cache,
+      &srs.IX1A as &Vec<IG1A>,
+      0,
+      left_Q_poly.coeffs.len(),
+      &srs.X1A,
+      &left_Q_poly.coeffs,
+    );
     let left_zero = srs.X1A[0] * (Fr::from(m as u32).inverse().unwrap() * left_raw.iter().sum::<Fr>());
     let left_zero_div = if left_poly.is_zero() {
       G1Projective::zero()
@@ -135,7 +143,14 @@ impl BasicBlock for PermuteBasicBlock {
       #[cfg(not(feature = "gpu"))]
       let r = util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs[1..]);
       #[cfg(feature = "gpu")]
-      let r = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, left_poly.coeffs.len()-1, &srs.X1A, &left_poly.coeffs[1..]);
+      let r = util::gpu_msm_for_x1a(
+        &cache,
+        &srs.IX1A as &Vec<IG1A>,
+        0,
+        left_poly.coeffs.len() - 1,
+        &srs.X1A,
+        &left_poly.coeffs[1..],
+      );
       r
     };
 
@@ -150,14 +165,28 @@ impl BasicBlock for PermuteBasicBlock {
     #[cfg(not(feature = "gpu"))]
     let right_Q_x = util::msm::<G1Projective>(&srs.X1A, &right_Q_poly.coeffs);
     #[cfg(feature = "gpu")]
-    let right_Q_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, right_Q_poly.coeffs.len(), &srs.X1A, &right_Q_poly.coeffs);
+    let right_Q_x = util::gpu_msm_for_x1a(
+      &cache,
+      &srs.IX1A as &Vec<IG1A>,
+      0,
+      right_Q_poly.coeffs.len(),
+      &srs.X1A,
+      &right_Q_poly.coeffs,
+    );
     let right_zero_div = if right_poly.is_zero() {
       G1Projective::zero()
     } else {
       #[cfg(not(feature = "gpu"))]
       let r = util::msm::<G1Projective>(&srs.X1A, &right_poly.coeffs[1..]);
       #[cfg(feature = "gpu")]
-      let r = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, right_poly.coeffs.len()-1, &srs.X1A, &right_poly.coeffs[1..]);
+      let r = util::gpu_msm_for_x1a(
+        &cache,
+        &srs.IX1A as &Vec<IG1A>,
+        0,
+        right_poly.coeffs.len() - 1,
+        &srs.X1A,
+        &right_poly.coeffs[1..],
+      );
       r
     };
 
@@ -217,14 +246,11 @@ impl BasicBlock for PermuteBasicBlock {
 
     let b_g2 = {
       let mut cache = cache.lock().unwrap();
-      let CacheValues::G2(b_g2) = cache
-        .entry(format!("permute_b_msm_g2_{m}_{n}"))
-        .or_insert_with(|| {
-          let poly = domain_m.ifft(&b);
-          let g2 = util::msm::<G2Projective>(&srs.X2A, &poly);
-          CacheValues::G2(g2.into())
-        })
-      else {
+      let CacheValues::G2(b_g2) = cache.entry(format!("permute_b_msm_g2_{m}_{n}")).or_insert_with(|| {
+        let poly = domain_m.ifft(&b);
+        let g2 = util::msm::<G2Projective>(&srs.X2A, &poly);
+        CacheValues::G2(g2.into())
+      }) else {
         panic!("Cache type error")
       };
       b_g2.clone()
@@ -232,14 +258,11 @@ impl BasicBlock for PermuteBasicBlock {
 
     let d_g2 = {
       let mut cache = cache.lock().unwrap();
-      let CacheValues::G2(d_g2) = cache
-        .entry(format!("permute_d_msm_g2_{self:p}"))
-        .or_insert_with(|| {
-          let poly = domain_m2.ifft(&d);
-          let g2 = util::msm::<G2Projective>(&srs.X2A, &poly);
-          CacheValues::G2(g2.into())
-        })
-      else {
+      let CacheValues::G2(d_g2) = cache.entry(format!("permute_d_msm_g2_{self:p}")).or_insert_with(|| {
+        let poly = domain_m2.ifft(&d);
+        let g2 = util::msm::<G2Projective>(&srs.X2A, &poly);
+        CacheValues::G2(g2.into())
+      }) else {
         panic!("Cache type error")
       };
       d_g2.clone()
@@ -247,11 +270,17 @@ impl BasicBlock for PermuteBasicBlock {
 
     // Calculate flat_L
     let temp: Vec<_> = (0..n).map(|i| input[i].g1).collect();
+    #[cfg(not(feature = "gpu"))]
     let flat_L_g1 = util::msm::<G1Projective>(&temp, &alpha_pow[..n]).into();
+    #[cfg(feature = "gpu")]
+    let flat_L_g1 = util::new_gpu_msm_g1(&temp, None, &alpha_pow[..n]).into();
 
     // Calculate flat_R
     let temp: Vec<_> = (0..n2).map(|i| output[i].g1).collect();
+    #[cfg(not(feature = "gpu"))]
     let flat_R_g1 = util::msm::<G1Projective>(&temp, &c).into();
+    #[cfg(feature = "gpu")]
+    let flat_R_g1 = util::new_gpu_msm_g1(&temp, None, &c).into();
 
     // Check left(x) (left = flat_L * b)
     checks.push(vec![

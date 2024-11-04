@@ -6,11 +6,11 @@ use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{ops::Mul, ops::Sub, UniformRand, Zero};
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 use ndarray::{arr1, arr2, ArrayD, Ix1, Ix2, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::iter::ParallelIterator;
-#[cfg(feature = "gpu")]
-use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 fn index<'a, T>(A: &'a ArrayD<T>, i: usize) -> &'a T {
   if i == 0 {
@@ -57,7 +57,8 @@ impl BasicBlock for MatMulBasicBlock {
   fn prove(
     &self,
     srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(not(feature = "gpu"))] _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(feature = "gpu")] _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>, &Vec<HostOrDeviceSlice<IG1A>>),
     _model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
@@ -141,7 +142,14 @@ impl BasicBlock for MatMulBasicBlock {
     #[cfg(not(feature = "gpu"))]
     let left_Q_x = util::msm::<G1Projective>(&srs.X1A, &left_Q_poly.coeffs);
     #[cfg(feature = "gpu")]
-    let left_Q_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, left_Q_poly.coeffs.len(), &srs.X1A, &left_Q_poly.coeffs);
+    let left_Q_x = util::gpu_msm_for_x1a(
+      &cache,
+      &srs.IX1A as &Vec<IG1A>,
+      0,
+      left_Q_poly.coeffs.len(),
+      &srs.X1A,
+      &left_Q_poly.coeffs,
+    );
     let left_zero = srs.X1A[0] * (Fr::from(m as u32).inverse().unwrap() * left_raw.iter().sum::<Fr>());
     let left_zero_div = if left_poly.is_zero() {
       G1Projective::zero()
@@ -149,13 +157,27 @@ impl BasicBlock for MatMulBasicBlock {
       #[cfg(not(feature = "gpu"))]
       let r = util::msm::<G1Projective>(&srs.X1A, &left_poly.coeffs[1..]);
       #[cfg(feature = "gpu")]
-      let r = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, left_poly.coeffs.len()-1, &srs.X1A, &left_poly.coeffs[1..]);
+      let r = util::gpu_msm_for_x1a(
+        &cache,
+        &srs.IX1A as &Vec<IG1A>,
+        0,
+        left_poly.coeffs.len() - 1,
+        &srs.X1A,
+        &left_poly.coeffs[1..],
+      );
       r
     };
     #[cfg(not(feature = "gpu"))]
     let flat_B_g2 = util::msm::<G2Projective>(&srs.X2A, &flat_B.poly.coeffs) + srs.Y2P * flat_B.r;
     #[cfg(feature = "gpu")]
-    let flat_B_g2 = util::gpu_msm_for_x2a(&cache, &srs.IX2A as &Vec<IG2A>, 0, flat_B.poly.coeffs.len(), &srs.X2A, &flat_B.poly.coeffs) + srs.Y2P * flat_B.r;
+    let flat_B_g2 = util::gpu_msm_for_x2a(
+      &cache,
+      &srs.IX2A as &Vec<IG2A>,
+      0,
+      flat_B.poly.coeffs.len(),
+      &srs.X2A,
+      &flat_B.poly.coeffs,
+    ) + srs.Y2P * flat_B.r;
 
     // Calculate Right
     let right_raw: Vec<Fr> = (0..n).map(|i| flat_C.raw[i] * beta_pow.raw[i]).collect();
@@ -168,14 +190,28 @@ impl BasicBlock for MatMulBasicBlock {
     #[cfg(not(feature = "gpu"))]
     let right_Q_x = util::msm::<G1Projective>(&srs.X1A, &right_Q_poly.coeffs);
     #[cfg(feature = "gpu")]
-    let right_Q_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, right_Q_poly.coeffs.len(), &srs.X1A, &right_Q_poly.coeffs);
+    let right_Q_x = util::gpu_msm_for_x1a(
+      &cache,
+      &srs.IX1A as &Vec<IG1A>,
+      0,
+      right_Q_poly.coeffs.len(),
+      &srs.X1A,
+      &right_Q_poly.coeffs,
+    );
     let right_zero_div = if right_poly.is_zero() {
       G1Projective::zero()
     } else {
       #[cfg(not(feature = "gpu"))]
       let r = util::msm::<G1Projective>(&srs.X1A, &right_poly.coeffs[1..]);
       #[cfg(feature = "gpu")]
-      let r = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, right_poly.coeffs.len()-1, &srs.X1A, &right_poly.coeffs[1..]);
+      let r = util::gpu_msm_for_x1a(
+        &cache,
+        &srs.IX1A as &Vec<IG1A>,
+        0,
+        right_poly.coeffs.len() - 1,
+        &srs.X1A,
+        &right_poly.coeffs[1..],
+      );
       r
     };
 
@@ -231,14 +267,11 @@ impl BasicBlock for MatMulBasicBlock {
     let beta_pow = calc_pow(beta, n);
     let beta_pow_g2 = {
       let mut cache = cache.lock().unwrap();
-      let CacheValues::G2(beta_pow_g2) = cache
-        .entry(format!("matmul_beta_msm_g2_{n}"))
-        .or_insert_with(|| {
-          let poly = domain_n.ifft(&beta_pow);
-          let g2 = util::msm::<G2Projective>(&srs.X2A, &poly);
-          CacheValues::G2(g2.into())
-        })
-      else {
+      let CacheValues::G2(beta_pow_g2) = cache.entry(format!("matmul_beta_msm_g2_{n}")).or_insert_with(|| {
+        let poly = domain_n.ifft(&beta_pow);
+        let g2 = util::msm::<G2Projective>(&srs.X2A, &poly);
+        CacheValues::G2(g2.into())
+      }) else {
         panic!("Cache type error")
       };
       beta_pow_g2.clone()
@@ -246,15 +279,24 @@ impl BasicBlock for MatMulBasicBlock {
 
     // Calculate flat_A
     let temp: Vec<_> = (0..l).map(|i| index(inputs[0], i).g1).collect();
+    #[cfg(not(feature = "gpu"))]
     let flat_A_g1 = util::msm::<G1Projective>(&temp, &alpha_pow).into();
+    #[cfg(feature = "gpu")]
+    let flat_A_g1 = util::new_gpu_msm_g1(&temp, None, &alpha_pow).into();
 
     // Calculate flat_B
     let temp: Vec<_> = (0..n).map(|i| inputs[1][i].g1).collect();
+    #[cfg(not(feature = "gpu"))]
     let flat_B_g1 = util::msm::<G1Projective>(&temp, &beta_pow).into();
+    #[cfg(feature = "gpu")]
+    let flat_B_g1 = util::new_gpu_msm_g1(&temp, None, &beta_pow).into();
 
     // Calculate flat_C
     let temp: Vec<_> = (0..l).map(|i| index(outputs[0], i).g1).collect();
+    #[cfg(not(feature = "gpu"))]
     let flat_C_g1 = util::msm::<G1Projective>(&temp, &alpha_pow).into();
+    #[cfg(feature = "gpu")]
+    let flat_C_g1 = util::new_gpu_msm_g1(&temp, None, &alpha_pow).into();
 
     // Check left(x) (left_i = flat_A_i * flat_B_i)
     checks.push(vec![

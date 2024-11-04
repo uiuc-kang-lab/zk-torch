@@ -6,6 +6,8 @@ use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain, Polynomial};
 use ark_std::{UniformRand, Zero};
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 use ndarray::{ArrayD, Ix2, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
@@ -115,6 +117,7 @@ impl BasicBlock for CQLinBasicBlock {
     util::fft_in_place(domain_m, &mut temp);
     let mut Q: Vec<_> = (0..m).into_par_iter().map(|i| temp[i] * domain_m.element(i) * m_inv).collect();
     let M_x = (0..m).into_par_iter().map(|i| (0..n).map(|j| U2[i][j] * model[i].raw[j]).sum::<G2Projective>()).sum::<G2Projective>(); // TODO: Change to msm
+    let mut temp: Vec<_> = (0..m).into_par_iter().map(|i| srs.X1P[n * i]).collect();
 
     let mut setup = R;
     setup.append(&mut Q);
@@ -122,7 +125,8 @@ impl BasicBlock for CQLinBasicBlock {
     setup.append(&mut P_R);
     setup.append(&mut L_V_i_x_n);
     setup.append(&mut L_V_i_x);
-    setup.append(&mut L_H_i_x);
+    setup.append(&mut temp);
+    //setup.append(&mut L_H_i_x);
     (setup, vec![M_x.into()], Vec::new())
   }
 
@@ -139,6 +143,7 @@ impl BasicBlock for CQLinBasicBlock {
     let mut Q: Vec<_> = L_V_i_x.iter().map(|x| *x).collect();
     let mut S: Vec<_> = L_V_i_x.iter().map(|x| *x).collect();
     let mut P_R: Vec<_> = L_V_i_x.iter().map(|x| *x).collect();
+    let mut temp: Vec<_> = (0..m).into_par_iter().map(|i| srs.X1P[n * i]).collect();
 
     let M_x = srs.X2P[0].clone();
 
@@ -148,14 +153,16 @@ impl BasicBlock for CQLinBasicBlock {
     setup.append(&mut P_R);
     setup.append(&mut L_V_i_x_n);
     setup.append(&mut L_V_i_x);
-    setup.append(&mut L_H_i_x);
+    setup.append(&mut temp);
+    //setup.append(&mut L_H_i_x);
     (setup, vec![M_x.into()], Vec::new())
   }
 
   fn prove(
     &self,
     srs: &SRS,
-    setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(not(feature = "gpu"))] setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(feature = "gpu")] setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>, &Vec<HostOrDeviceSlice<IG1A>>),
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
@@ -223,22 +230,61 @@ impl BasicBlock for CQLinBasicBlock {
     let P_R = &setup.0[3 * m..4 * m];
     let L_V_i_x_n = &setup.0[4 * m..5 * m];
     let L_V_i_x = &setup.0[5 * m..6 * m];
-
-    let R_x = util::msm::<G1Projective>(R, &flat_A.raw).into();
-    let Q_x = util::msm::<G1Projective>(Q, &flat_A.raw).into();
     let temp: Vec<_> = (0..m).into_par_iter().map(|i| srs.X1A[n * i]).collect();
+
+    #[cfg(feature = "gpu")]
+    let R_host = &setup.3[0];
+    #[cfg(feature = "gpu")]
+    let Q_host = &setup.3[1];
+    #[cfg(feature = "gpu")]
+    let S_host = &setup.3[2];
+    #[cfg(feature = "gpu")]
+    let P_R_host = &setup.3[3];
+    #[cfg(feature = "gpu")]
+    let L_V_i_x_n_host = &setup.3[4];
+    #[cfg(feature = "gpu")]
+    let L_V_i_x_host = &setup.3[5];
+    #[cfg(feature = "gpu")]
+    let temp_host = &setup.3[6];
+
+    #[cfg(not(feature = "gpu"))]
+    let R_x = util::msm::<G1Projective>(R, &flat_A.raw).into();
+    #[cfg(feature = "gpu")]
+    let R_x = util::new_gpu_msm_g1(R, Some(R_host), &flat_A.raw).into();
+    #[cfg(not(feature = "gpu"))]
+    let Q_x = util::msm::<G1Projective>(Q, &flat_A.raw).into();
+    #[cfg(feature = "gpu")]
+    let Q_x = util::new_gpu_msm_g1(Q, Some(Q_host), &flat_A.raw).into();
+    #[cfg(not(feature = "gpu"))]
     let A_x = util::msm::<G1Projective>(&temp, &flat_A.poly.coeffs).into();
+    #[cfg(feature = "gpu")]
+    let A_x = util::new_gpu_msm_g1(&temp, Some(temp_host), &flat_A.poly.coeffs).into();
+    #[cfg(not(feature = "gpu"))]
     let S_x = util::msm::<G1Projective>(S, &flat_A.raw).into();
+    #[cfg(feature = "gpu")]
+    let S_x = util::new_gpu_msm_g1(S, Some(S_host), &flat_A.raw).into();
+    #[cfg(not(feature = "gpu"))]
     let P_x = util::msm::<G1Projective>(&srs.X1A[N - n..N], &flat_C.poly.coeffs).into();
+    #[cfg(feature = "gpu")]
+    let P_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, N - n, N, &srs.X1A, &flat_C.poly.coeffs);
+    #[cfg(not(feature = "gpu"))]
     let P_R_x: G1Affine = util::msm::<G1Projective>(&P_R, &flat_A.raw).into();
+    #[cfg(feature = "gpu")]
+    let P_R_x = util::new_gpu_msm_g1(P_R, Some(P_R_host), &flat_A.raw).into();
 
     let gamma = Fr::rand(rng);
     let gamma_n = gamma.pow(&[n as u64]);
     let z = flat_A.poly.evaluate(&gamma_n);
     let h_i: Vec<_> = (0..m).into_par_iter().map(|i| (flat_A.raw[i] - z) * (domain_m.element(i) - gamma_n).inverse().unwrap()).collect();
     let z = (srs.X1P[0] * z).into();
+    #[cfg(not(feature = "gpu"))]
     let pi = util::msm::<G1Projective>(&L_V_i_x, &h_i).into();
+    #[cfg(feature = "gpu")]
+    let pi = util::new_gpu_msm_g1(L_V_i_x, Some(L_V_i_x_host), &h_i).into();
+    #[cfg(not(feature = "gpu"))]
     let pi_1 = util::msm::<G1Projective>(&L_V_i_x_n, &h_i).into();
+    #[cfg(feature = "gpu")]
+    let pi_1 = util::new_gpu_msm_g1(L_V_i_x_n, Some(L_V_i_x_n_host), &h_i).into();
 
     let mut rng2 = StdRng::from_entropy();
     // R, Q, A, S, P, pR, pi, pi_1, M
@@ -310,11 +356,17 @@ impl BasicBlock for CQLinBasicBlock {
     };
     // Calculate flat_A
     let temp: Vec<_> = (0..l).map(|i| input[i].g1).collect();
+    #[cfg(not(feature = "gpu"))]
     let flat_A_g1 = util::msm::<G1Projective>(&temp, &alpha_pow);
+    #[cfg(feature = "gpu")]
+    let flat_A_g1 = util::new_gpu_msm_g1(&temp, None, &alpha_pow);
 
     // Calculate flat_C
     let temp: Vec<_> = (0..l).map(|i| output[i].g1).collect();
+    #[cfg(not(feature = "gpu"))]
     let flat_C_g1 = util::msm::<G1Projective>(&temp, &alpha_pow).into();
+    #[cfg(feature = "gpu")]
+    let flat_C_g1 = util::new_gpu_msm_g1(&temp, None, &alpha_pow).into();
 
     // Check A(x) M(x) = Z(X) Q(X) + R(X)
     checks.push(vec![

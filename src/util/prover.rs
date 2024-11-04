@@ -11,6 +11,7 @@ use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::Zero;
+use core::slice;
 use ndarray::{arr0, arr1, concatenate, Array1, ArrayD, Axis, IxDyn};
 use plonky2::{timed, util::timing::TimingTree};
 use rand::{rngs::StdRng, SeedableRng};
@@ -23,6 +24,8 @@ use std::io::Read;
 use {
   crate::util::{batch_gpu_msm_g1, multi_dim_to_flat_index},
   icicle_bn254::curve::G1Affine as IG1A,
+  icicle_core::traits::ArkConvertible,
+  icicle_cuda_runtime::memory::HostOrDeviceSlice,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -165,7 +168,8 @@ pub fn prove(
   srs: &SRS,
   inputs: &Vec<&ArrayD<Fr>>,
   outputs: Vec<Vec<ArrayD<Fr>>>,
-  setups: Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>)>,
+  #[cfg(not(feature = "gpu"))] setups: Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>)>,
+  #[cfg(feature = "gpu")] setups: Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>, &Vec<HostOrDeviceSlice<IG1A>>)>,
   models: Vec<&ArrayD<Data>>,
   graph: &mut Graph,
   timing: &mut TimingTree,
@@ -305,6 +309,7 @@ pub fn zktorch_kernel() {
   let setups =
     Vec::<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)>::deserialize_uncompressed(File::open(&CONFIG.prover.setup_path).unwrap())
       .unwrap();
+  #[cfg(not(feature = "gpu"))]
   let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>)> = util::vec_iter(&setups)
     .map(|x| {
       (
@@ -314,7 +319,45 @@ pub fn zktorch_kernel() {
       )
     })
     .collect();
+  #[cfg(not(feature = "gpu"))]
   let setups = setups.iter().map(|x| (&x.0, &x.1, &x.2)).collect();
+  #[cfg(feature = "gpu")]
+  let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>, Vec<HostOrDeviceSlice<IG1A>>)> = &setups
+    .iter()
+    .enumerate()
+    .map(|(i, x)| {
+      let bb = &graph.basic_blocks[i];
+      let bb_name = format!("{bb:?}");
+      let result = if bb_name.contains("CQLinBasicBlock") {
+        let setup_0: Vec<G1Affine> = util::vec_iter(&x.0).map(|y| (*y).into()).collect();
+        let m = setup_0.len() / 7;
+        let slices = (0..7)
+          .map(|j| {
+            let start = j * m;
+            let end = (j + 1) * m;
+            let setup_0_IG1A: Vec<IG1A> = setup_0[start..end].par_iter().map(|x| IG1A::from_ark(*x)).collect();
+            HostOrDeviceSlice::cuda_malloc(m).unwrap().copy_from_host(&setup_0_IG1A)
+          })
+          .collect();
+        (
+          util::vec_iter(&x.0).map(|y| (*y).into()).collect(),
+          util::vec_iter(&x.1).map(|y| (*y).into()).collect(),
+          util::vec_iter(&x.2).map(|y| (y.clone())).collect(),
+          slices,
+        )
+      } else {
+        (
+          util::vec_iter(&x.0).map(|y| (*y).into()).collect(),
+          util::vec_iter(&x.1).map(|y| (*y).into()).collect(),
+          util::vec_iter(&x.2).map(|y| (y.clone())).collect(),
+          vec![],
+        )
+      };
+      result
+    })
+    .collect();
+  #[cfg(feature = "gpu")]
+  let setups = setups.iter().map(|x| (&x.0, &x.1, &x.2, &x.3)).collect();
 
   #[cfg(not(feature = "mock_prove"))]
   let models = load_model();

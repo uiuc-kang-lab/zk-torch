@@ -9,12 +9,12 @@ use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain, Polynomial};
 use ark_serialize::CanonicalSerialize;
 use ark_std::{cmp::max, One, UniformRand, Zero};
+#[cfg(feature = "gpu")]
+use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 use ndarray::{arr0, arr1, azip, s, ArrayD, Axis};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use std::ops::{Add, Mul, Sub};
-#[cfg(feature = "gpu")]
-use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 
 // OneToOneBasicBlock is a basic block that checks if there exists a one-to-one mapping between
 // data and sorted_data. Besides, it checks the indices are sorted in the same way as the data.
@@ -33,7 +33,8 @@ impl BasicBlock for OneToOneBasicBlock {
   fn prove(
     &self,
     srs: &SRS,
-    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(not(feature = "gpu"))] _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    #[cfg(feature = "gpu")] _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>, &Vec<HostOrDeviceSlice<IG1A>>),
     _model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
@@ -94,7 +95,14 @@ impl BasicBlock for OneToOneBasicBlock {
     #[cfg(not(feature = "gpu"))]
     let g_idx_s_x = util::msm::<G1Projective>(&srs.X1A, &g_idx_s_poly.coeffs);
     #[cfg(feature = "gpu")]
-    let g_idx_s_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, g_idx_s_poly.coeffs.len(), &srs.X1A, &g_idx_s_poly.coeffs);
+    let g_idx_s_x = util::gpu_msm_for_x1a(
+      &cache,
+      &srs.IX1A as &Vec<IG1A>,
+      0,
+      g_idx_s_poly.coeffs.len(),
+      &srs.X1A,
+      &g_idx_s_poly.coeffs,
+    );
 
     let minus_one_poly = DensePolynomial::from_coefficients_vec(vec![-Fr::one()]);
     // compute q(x) = [f(x) - g(x)]/ (x^N - 1) for proving f(x) = g(x)
@@ -118,14 +126,22 @@ impl BasicBlock for OneToOneBasicBlock {
     #[cfg(not(feature = "gpu"))]
     let q_idx_x = util::msm::<G1Projective>(&srs.X1A, &q_idx_poly.coeffs) + srs.Y1P * r_Q_idx;
     #[cfg(feature = "gpu")]
-    let q_idx_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, q_idx_poly.coeffs.len(), &srs.X1A, &q_idx_poly.coeffs) + srs.Y1P * r_Q_idx;
+    let q_idx_x =
+      util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, q_idx_poly.coeffs.len(), &srs.X1A, &q_idx_poly.coeffs) + srs.Y1P * r_Q_idx;
     let r_idx_plus_r_Q_idx = DensePolynomial { coeffs: vec![r_Q_idx] }.mul_by_vanishing_poly(domain).sub(&DensePolynomial {
       coeffs: vec![inputs[1].first().unwrap().r],
     });
     #[cfg(not(feature = "gpu"))]
     let r_idx_plus_r_Q_idx_x = util::msm::<G1Projective>(&srs.X1A, &r_idx_plus_r_Q_idx.coeffs);
     #[cfg(feature = "gpu")]
-    let r_idx_plus_r_Q_idx_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, r_idx_plus_r_Q_idx.coeffs.len(), &srs.X1A, &r_idx_plus_r_Q_idx.coeffs);
+    let r_idx_plus_r_Q_idx_x = util::gpu_msm_for_x1a(
+      &cache,
+      &srs.IX1A as &Vec<IG1A>,
+      0,
+      r_idx_plus_r_Q_idx.coeffs.len(),
+      &srs.X1A,
+      &r_idx_plus_r_Q_idx.coeffs,
+    );
 
     // compute q_s(x) = [f_s(x) - g_s(x)]/ (x^N - 1) for proving f_s(x) = g_s(x)
     let q_s_poly = r_f_s_poly.mul(&minus_one_poly);
@@ -140,7 +156,14 @@ impl BasicBlock for OneToOneBasicBlock {
     #[cfg(not(feature = "gpu"))]
     let r_s_plus_r_Q_s_x = util::msm::<G1Projective>(&srs.X1A, &r_s_plus_r_Q_s.coeffs);
     #[cfg(feature = "gpu")]
-    let r_s_plus_r_Q_s_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, r_s_plus_r_Q_s.coeffs.len(), &srs.X1A, &r_s_plus_r_Q_s.coeffs);
+    let r_s_plus_r_Q_s_x = util::gpu_msm_for_x1a(
+      &cache,
+      &srs.IX1A as &Vec<IG1A>,
+      0,
+      r_s_plus_r_Q_s.coeffs.len(),
+      &srs.X1A,
+      &r_s_plus_r_Q_s.coeffs,
+    );
 
     // compute q_idx_s(x) = [f_idx_s(x) - g_idx_s(x)]/ (x^N - 1) for proving f_idx_s(x) = g_idx_s(x)
     let q_idx_s_poly = r_f_idx_s_poly.mul(&minus_one_poly);
@@ -148,14 +171,28 @@ impl BasicBlock for OneToOneBasicBlock {
     #[cfg(not(feature = "gpu"))]
     let q_idx_s_x = util::msm::<G1Projective>(&srs.X1A, &q_idx_s_poly.coeffs) + srs.Y1P * r_Q_idx_s;
     #[cfg(feature = "gpu")]
-    let q_idx_s_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, q_idx_s_poly.coeffs.len(), &srs.X1A, &q_idx_s_poly.coeffs) + srs.Y1P * r_Q_idx_s;
+    let q_idx_s_x = util::gpu_msm_for_x1a(
+      &cache,
+      &srs.IX1A as &Vec<IG1A>,
+      0,
+      q_idx_s_poly.coeffs.len(),
+      &srs.X1A,
+      &q_idx_s_poly.coeffs,
+    ) + srs.Y1P * r_Q_idx_s;
     let r_idx_s_plus_r_Q_idx_s = DensePolynomial { coeffs: vec![r_Q_idx_s] }.mul_by_vanishing_poly(domain).sub(&DensePolynomial {
       coeffs: vec![inputs[3].first().unwrap().r],
     });
     #[cfg(not(feature = "gpu"))]
     let r_idx_s_plus_r_Q_idx_s_x = util::msm::<G1Projective>(&srs.X1A, &r_idx_s_plus_r_Q_idx_s.coeffs);
     #[cfg(feature = "gpu")]
-    let r_idx_s_plus_r_Q_idx_s_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, r_idx_s_plus_r_Q_idx_s.coeffs.len(), &srs.X1A, &r_idx_s_plus_r_Q_idx_s.coeffs);
+    let r_idx_s_plus_r_Q_idx_s_x = util::gpu_msm_for_x1a(
+      &cache,
+      &srs.IX1A as &Vec<IG1A>,
+      0,
+      r_idx_s_plus_r_Q_idx_s.coeffs.len(),
+      &srs.X1A,
+      &r_idx_s_plus_r_Q_idx_s.coeffs,
+    );
 
     // Round 2: Commit Z
     // Fiat-Shamir
@@ -289,7 +326,14 @@ impl BasicBlock for OneToOneBasicBlock {
     #[cfg(not(feature = "gpu"))]
     let h_prime_x = util::msm::<G1Projective>(&srs.X1A, &h_prime_poly.coeffs);
     #[cfg(feature = "gpu")]
-    let h_prime_x = util::gpu_msm_for_x1a(&cache, &srs.IX1A as &Vec<IG1A>, 0, h_prime_poly.coeffs.len(), &srs.X1A, &h_prime_poly.coeffs);
+    let h_prime_x = util::gpu_msm_for_x1a(
+      &cache,
+      &srs.IX1A as &Vec<IG1A>,
+      0,
+      h_prime_poly.coeffs.len(),
+      &srs.X1A,
+      &h_prime_poly.coeffs,
+    );
 
     // Round 5 end randomness.
     let mut bytes = Vec::new();

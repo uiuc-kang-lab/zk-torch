@@ -169,7 +169,8 @@ impl Graph {
   pub fn prove(
     &mut self,
     srs: &SRS,
-    setups: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>)>,
+    #[cfg(not(feature = "gpu"))] setups: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>)>,
+    #[cfg(feature = "gpu")] setups: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>, &Vec<HostOrDeviceSlice<IG1A>>)>,
     models: &Vec<&ArrayD<Data>>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&Vec<&ArrayD<Data>>>,

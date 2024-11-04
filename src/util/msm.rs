@@ -122,7 +122,7 @@ impl GpuMsmProjective for Projective<ark_bn254::g2::Config> {
 #[cfg(feature = "gpu")]
 pub fn gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>) -> G1Projective {
   let size = ark_std::cmp::min(points.len(), scalars.len());
-  if size < 32 {
+  if size < 1024 {
     let points: Vec<_> = points.par_iter().map(|x| x.to_ark()).collect();
     return cpu_msm(&points, scalars);
   }
@@ -139,8 +139,8 @@ pub fn gpu_msm_g1(points: &Vec<IG1A>, scalars: &Vec<Fr>) -> G1Projective {
 #[cfg(feature = "gpu")]
 pub fn gpu_msm_g2(points: &Vec<IG2A>, scalars: &Vec<Fr>) -> G2Projective {
   let size = ark_std::cmp::min(points.len(), scalars.len());
-  if size < 32 {
-    let points: Vec<_> = points.iter().map(|x| x.to_ark()).collect();
+  if size < 1024 {
+    let points: Vec<_> = points.par_iter().map(|x| x.to_ark()).collect();
     return cpu_msm(&points, scalars);
   }
   let cfg = icicle_core::msm::MSMConfig::default();
@@ -198,8 +198,11 @@ pub fn gpu_msm_for_x1a(
   }
   let mut cache = cache.lock().unwrap();
   let CacheValues::DevicePoint(slice) = cache.entry(format!("device_x1a_{:?}_{:?}", start, end)).or_insert_with(|| {
+    let start = std::time::Instant::now();
     let mut slice = HostOrDeviceSlice::cuda_malloc(size).unwrap();
     slice.copy_from_host(&points[start..end]);
+    let end = start.elapsed();
+    println!("One time cost | copy_from_host {size}: {:?}ms", end.as_micros());
     CacheValues::DevicePoint(slice)
   }) else {
     panic!("Cache type error")
@@ -210,6 +213,10 @@ pub fn gpu_msm_for_x1a(
 #[cfg(feature = "gpu")]
 pub fn new_gpu_msm_g1(cpu_points: &[G1Affine], gpu_points: Option<&HostOrDeviceSlice<IG1A>>, scalars: &[Fr]) -> G1Projective {
   if gpu_points.is_none() {
+    let size = ark_std::cmp::min(cpu_points.len(), scalars.len());
+    if size < 1024 {
+      return cpu_msm(cpu_points, scalars);
+    }
     let a: Vec<_> = cpu_points.par_iter().map(|x| IG1A::from_ark(*x)).collect();
     let b: Vec<_> = scalars.par_iter().map(|x| *x).collect();
     return gpu_msm_g1(&a, &b);
@@ -251,6 +258,10 @@ pub fn gpu_msm_for_x2a(
 #[cfg(feature = "gpu")]
 pub fn new_gpu_msm_g2(cpu_points: &[G2Affine], gpu_points: Option<&HostOrDeviceSlice<IG2A>>, scalars: &[Fr]) -> G2Projective {
   if gpu_points.is_none() {
+    let size = ark_std::cmp::min(cpu_points.len(), scalars.len());
+    if size < 1024 {
+      return cpu_msm(cpu_points, scalars);
+    }
     let a: Vec<_> = cpu_points.par_iter().map(|x| IG2A::from_ark(*x)).collect();
     let b: Vec<_> = scalars.par_iter().map(|x| *x).collect();
     return gpu_msm_g2(&a, &b);
@@ -269,7 +280,8 @@ pub fn new_gpu_msm_g2(cpu_points: &[G2Affine], gpu_points: Option<&HostOrDeviceS
 pub fn batch_gpu_msm_g1(srs: &SRS, scalars: &Vec<Fr>, size: usize) -> Vec<G1Projective> {
   let batch = scalars.len() / size;
   if batch * size < 1024 {
-    return (0..batch).map(|i| cpu_msm(&srs.X1A[..size], &scalars[i * size..(i + 1) * size])).collect();
+    // TODO: check if this is the right threshold
+    return scalars.par_chunks(size).map(|x| cpu_msm(&srs.X1A[..size], x)).collect();
   }
   let points = &srs.IX1A[..size];
   let cfg = icicle_core::msm::MSMConfig::default();
