@@ -201,7 +201,7 @@ pub fn gpu_msm_for_x1a(
     let time_start = std::time::Instant::now();
     let mut slice = HostOrDeviceSlice::cuda_malloc(size).unwrap();
     slice.copy_from_host(&points[start..end]);
-    let time_end = start.elapsed();
+    let time_end = time_start.elapsed();
     println!("One time cost | copy_from_host {size}: {:?}ms", time_end.as_micros());
     CacheValues::DevicePoint(slice)
   }) else {

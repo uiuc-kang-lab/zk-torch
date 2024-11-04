@@ -6,7 +6,6 @@ use ndarray::{ArrayD, IxDyn, Zip};
 use rand::rngs::StdRng;
 #[cfg(feature = "gpu")]
 use {
-  icicle_bn254::curve::G1Affine as IG1A,
   icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField},
   icicle_core::traits::ArkConvertible,
   icicle_cuda_runtime::memory::HostOrDeviceSlice,

@@ -336,7 +336,8 @@ pub fn zktorch_kernel() {
             let start = j * m;
             let end = (j + 1) * m;
             let setup_0_IG1A: Vec<IG1A> = setup_0[start..end].par_iter().map(|x| IG1A::from_ark(*x)).collect();
-            HostOrDeviceSlice::cuda_malloc(m).unwrap().copy_from_host(&setup_0_IG1A)
+            let mut slice = HostOrDeviceSlice::cuda_malloc(m).unwrap();
+            slice.copy_from_host(&setup_0_IG1A)
           })
           .collect();
         (

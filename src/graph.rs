@@ -14,6 +14,12 @@ use rand::rngs::StdRng;
 use std::collections::HashMap;
 use std::fs::File;
 use std::sync::{Arc, Mutex};
+#[cfg(feature = "gpu")]
+use {
+  icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField},
+  icicle_core::traits::ArkConvertible,
+  icicle_cuda_runtime::memory::HostOrDeviceSlice,
+};
 
 #[derive(Debug)]
 pub struct Precomputable {
