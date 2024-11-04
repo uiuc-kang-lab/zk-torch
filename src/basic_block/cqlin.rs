@@ -254,19 +254,19 @@ impl BasicBlock for CQLinBasicBlock {
     #[cfg(not(feature = "gpu"))]
     let R_x = util::msm::<G1Projective>(R, &flat_A.raw).into();
     #[cfg(feature = "gpu")]
-    let R_x = util::new_gpu_msm_g1(R, Some(R_host), &flat_A.raw).into();
+    let R_x = util::new_gpu_msm_g1(R, None, &flat_A.raw).into();
     #[cfg(not(feature = "gpu"))]
     let Q_x = util::msm::<G1Projective>(Q, &flat_A.raw).into();
     #[cfg(feature = "gpu")]
-    let Q_x = util::new_gpu_msm_g1(Q, Some(Q_host), &flat_A.raw).into();
+    let Q_x = util::new_gpu_msm_g1(Q, None, &flat_A.raw).into();
     #[cfg(not(feature = "gpu"))]
     let A_x = util::msm::<G1Projective>(&temp, &flat_A.poly.coeffs).into();
     #[cfg(feature = "gpu")]
-    let A_x = util::new_gpu_msm_g1(&temp, Some(temp_host), &flat_A.poly.coeffs).into();
+    let A_x = util::new_gpu_msm_g1(&temp, None, &flat_A.poly.coeffs).into();
     #[cfg(not(feature = "gpu"))]
     let S_x = util::msm::<G1Projective>(S, &flat_A.raw).into();
     #[cfg(feature = "gpu")]
-    let S_x = util::new_gpu_msm_g1(S, Some(S_host), &flat_A.raw).into();
+    let S_x = util::new_gpu_msm_g1(S, None, &flat_A.raw).into();
     #[cfg(not(feature = "gpu"))]
     let P_x = util::msm::<G1Projective>(&srs.X1A[N - n..N], &flat_C.poly.coeffs).into();
     #[cfg(feature = "gpu")]
@@ -274,7 +274,7 @@ impl BasicBlock for CQLinBasicBlock {
     #[cfg(not(feature = "gpu"))]
     let P_R_x: G1Affine = util::msm::<G1Projective>(&P_R, &flat_A.raw).into();
     #[cfg(feature = "gpu")]
-    let P_R_x = util::new_gpu_msm_g1(P_R, Some(P_R_host), &flat_A.raw).into();
+    let P_R_x = util::new_gpu_msm_g1(P_R, None, &flat_A.raw).into();
 
     let gamma = Fr::rand(rng);
     let gamma_n = gamma.pow(&[n as u64]);
@@ -284,11 +284,11 @@ impl BasicBlock for CQLinBasicBlock {
     #[cfg(not(feature = "gpu"))]
     let pi = util::msm::<G1Projective>(&L_V_i_x, &h_i).into();
     #[cfg(feature = "gpu")]
-    let pi = util::new_gpu_msm_g1(L_V_i_x, Some(L_V_i_x_host), &h_i).into();
+    let pi = util::new_gpu_msm_g1(L_V_i_x, None, &h_i).into();
     #[cfg(not(feature = "gpu"))]
     let pi_1 = util::msm::<G1Projective>(&L_V_i_x_n, &h_i).into();
     #[cfg(feature = "gpu")]
-    let pi_1 = util::new_gpu_msm_g1(L_V_i_x_n, Some(L_V_i_x_n_host), &h_i).into();
+    let pi_1 = util::new_gpu_msm_g1(L_V_i_x_n, None, &h_i).into();
 
     let mut rng2 = StdRng::from_entropy();
     // R, Q, A, S, P, pR, pi, pi_1, M
