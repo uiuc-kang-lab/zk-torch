@@ -9,11 +9,16 @@ use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain, Polynomial};
 use ark_serialize::CanonicalSerialize;
 use ark_std::{cmp::max, One, UniformRand, Zero};
-#[cfg(feature = "gpu")]
-use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 use ndarray::{arr0, arr1, azip, ArrayD, Axis};
 use rand::{rngs::StdRng, SeedableRng};
 use std::ops::{Mul, Sub};
+#[cfg(feature = "gpu")]
+use {
+  icicle_bn254::curve::G1Affine as IG1A,
+  icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField},
+  icicle_core::traits::ArkConvertible,
+  icicle_cuda_runtime::memory::HostOrDeviceSlice,
+};
 
 #[derive(Debug)]
 pub struct MaxBasicBlock;

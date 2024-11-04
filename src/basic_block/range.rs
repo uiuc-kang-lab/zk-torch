@@ -24,6 +24,13 @@ use std::{
   collections::HashMap,
   iter::{once, repeat},
 };
+#[cfg(feature = "gpu")]
+use {
+  icicle_bn254::curve::G1Affine as IG1A,
+  icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField},
+  icicle_core::traits::ArkConvertible,
+  icicle_cuda_runtime::memory::HostOrDeviceSlice,
+};
 
 // RangeConstBasicBlock is a basic block that creates a tensor of a range of values.
 // The range is defined by three constants: the start, limit, and delta values.

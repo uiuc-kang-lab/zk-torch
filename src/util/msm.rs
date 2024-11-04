@@ -198,11 +198,11 @@ pub fn gpu_msm_for_x1a(
   }
   let mut cache = cache.lock().unwrap();
   let CacheValues::DevicePoint(slice) = cache.entry(format!("device_x1a_{:?}_{:?}", start, end)).or_insert_with(|| {
-    let start = std::time::Instant::now();
+    let time_start = std::time::Instant::now();
     let mut slice = HostOrDeviceSlice::cuda_malloc(size).unwrap();
     slice.copy_from_host(&points[start..end]);
-    let end = start.elapsed();
-    println!("One time cost | copy_from_host {size}: {:?}ms", end.as_micros());
+    let time_end = start.elapsed();
+    println!("One time cost | copy_from_host {size}: {:?}ms", time_end.as_micros());
     CacheValues::DevicePoint(slice)
   }) else {
     panic!("Cache type error")

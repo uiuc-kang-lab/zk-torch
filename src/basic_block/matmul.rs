@@ -6,11 +6,16 @@ use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::{ops::Mul, ops::Sub, UniformRand, Zero};
-#[cfg(feature = "gpu")]
-use icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField};
 use ndarray::{arr1, arr2, ArrayD, Ix1, Ix2, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::iter::ParallelIterator;
+#[cfg(feature = "gpu")]
+use {
+  icicle_bn254::curve::G1Affine as IG1A,
+  icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField},
+  icicle_core::traits::ArkConvertible,
+  icicle_cuda_runtime::memory::HostOrDeviceSlice,
+};
 
 fn index<'a, T>(A: &'a ArrayD<T>, i: usize) -> &'a T {
   if i == 0 {

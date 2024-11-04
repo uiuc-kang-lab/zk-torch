@@ -322,7 +322,7 @@ pub fn zktorch_kernel() {
   #[cfg(not(feature = "gpu"))]
   let setups = setups.iter().map(|x| (&x.0, &x.1, &x.2)).collect();
   #[cfg(feature = "gpu")]
-  let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>, Vec<HostOrDeviceSlice<IG1A>>)> = &setups
+  let setups: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>, Vec<HostOrDeviceSlice<IG1A>>)> = setups
     .iter()
     .enumerate()
     .map(|(i, x)| {
