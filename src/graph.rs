@@ -261,7 +261,8 @@ impl Graph {
           );
           return vec![];
         }
-        println!("{} | verifying {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
+        let verify_id = format!("{} | verifying {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
+        println!("{}", verify_id);
         let myInputs = n
           .inputs
           .iter()
@@ -275,7 +276,7 @@ impl Graph {
           .collect();
         let pairings = timed!(
           timing,
-          "verify",
+          &verify_id,
           self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, cache.clone())
         );
         let mut bytes = Vec::new();
