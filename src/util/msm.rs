@@ -77,7 +77,7 @@ pub fn toeplitz_mul(domain: GeneralEvaluationDomain<Fr>, m: &Vec<Fr>, a: &Vec<G1
   r
 }
 
-fn cpu_msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {
+pub fn cpu_msm<P: VariableBaseMSM>(a: &[P::MulBase], b: &[P::ScalarField]) -> P {
   let max_threads = rayon::current_num_threads();
   let size = ark_std::cmp::min(a.len(), b.len());
   if max_threads > size {

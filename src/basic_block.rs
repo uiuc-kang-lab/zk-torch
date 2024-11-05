@@ -208,11 +208,7 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
   // It defaults to running Data::new() on the last dimension of the outputs which runs an FFT and an MSM.
   // But for certain basic blocks such as add and reshape, this can be done much faster, and it should be overriden in these cases.
   fn encodeOutputs(&self, srs: &SRS, _model: &ArrayD<Data>, _inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
-    #[cfg(not(feature = "gpu"))]
-    let result = util::vec_iter(outputs).map(|x| util::convert_to_data(srs, x)).collect();
-    #[cfg(feature = "gpu")]
-    let result = util::vec_iter(outputs).map(|x| util::convert_to_data_gpu(srs, x)).collect();
-    result
+    util::vec_iter(outputs).map(|x| util::convert_to_data(srs, x)).collect()
   }
 
   // The subsequent setup/prove/verify functions run on encoded Data objects (vector commitments).
