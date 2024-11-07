@@ -63,6 +63,7 @@ pub struct DivConstProofBasicBlock {
   pub c: u32,
 }
 
+// Proving will fail if numbers are out of range of fr_to_int conversion
 impl BasicBlock for DivConstProofBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 1);
@@ -76,6 +77,7 @@ impl BasicBlock for DivConstProofBasicBlock {
       })
       .collect::<Vec<_>>();
 
+    // r nonnegative, checked with CQ
     let r = util::array_into_iter(inputs[0])
       .map(|x| {
         let x = util::fr_to_int(*x) as i128;
@@ -83,6 +85,7 @@ impl BasicBlock for DivConstProofBasicBlock {
       })
       .collect::<Vec<_>>();
 
+    // 2b - r nonnegative, checked with CQ
     let diff = r
       .iter()
       .map(|x| {
@@ -114,6 +117,7 @@ impl BasicBlock for DivConstProofBasicBlock {
     vec![div, r, diff]
   }
 
+  // Must be used with 2b - r, r nonnegative checks, checked with CQ
   fn prove(
     &self,
     srs: &SRS,
@@ -184,7 +188,7 @@ impl BasicBlock for DivConstProofBasicBlock {
     let mut f_x = G1Affine::zero();
 
     // check diff = 2b - r
-    // check 2a + b = 2b * div + r
+    // f(x) = 2a + b - 2b * div + r RLC over each elements
     for (i, (idx, _)) in a.indexed_iter().enumerate() {
       assert!(diff[&idx].g1 == srs.X1A[0] * Fr::from(2) * b - r[&idx].g1);
       let cons = a[&idx].g1 * Fr::from(2) + srs.X1A[0] * b - div[&idx].g1 * Fr::from(2) * b - r[&idx].g1;
