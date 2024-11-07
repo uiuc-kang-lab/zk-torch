@@ -184,6 +184,7 @@ impl BasicBlock for DivConstProofBasicBlock {
     let mut f_x = G1Affine::zero();
 
     // check diff = 2b - r
+    // check 2a + b = 2b * div + r
     for (i, (idx, _)) in a.indexed_iter().enumerate() {
       assert!(diff[&idx].g1 == srs.X1A[0] * Fr::from(2) * b - r[&idx].g1);
       let cons = a[&idx].g1 * Fr::from(2) + srs.X1A[0] * b - div[&idx].g1 * Fr::from(2) * b - r[&idx].g1;
