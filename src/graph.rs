@@ -292,6 +292,7 @@ impl Graph {
       util::combine_pairing_checks(&pairings.iter().flatten().collect())
     );
     let pairing_check = timed!(timing, "pairings", Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()));
+    #[cfg(not(feature = "mock_prove"))]
     assert_eq!(pairing_check, PairingOutput::zero());
   }
 
