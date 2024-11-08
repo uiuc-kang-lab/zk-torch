@@ -80,6 +80,10 @@ fn parse_onnx_constants<'a>(
             Fr::from(y as i32)
           }))
         }
+        DatumType::I8 => {
+          let tensor = tensor.into_array::<i8>().unwrap();
+          Ok(tensor.map(|x| Fr::from(*x)))
+        }
         DatumType::I64 => {
           let tensor = tensor.into_array::<i64>().unwrap();
           Ok(tensor.map(|x| Fr::from(*x)))

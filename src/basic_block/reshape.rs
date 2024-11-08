@@ -14,12 +14,12 @@ impl BasicBlock for ReshapeBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 1);
     assert!(inputs[0].shape().last() == self.shape.last());
-    Ok(vec![inputs[0].view().into_shape(&self.shape[..]).unwrap().to_owned()])
+    Ok(vec![inputs[0].as_standard_layout().into_shape(&self.shape[..]).unwrap().to_owned()])
   }
 
   fn encodeOutputs(&self, _srs: &SRS, _model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, _outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
     let n = self.shape.len();
-    vec![inputs[0].view().into_shape(&self.shape[..n - 1]).unwrap().to_owned()]
+    vec![inputs[0].as_standard_layout().into_shape(&self.shape[..n - 1]).unwrap().to_owned()]
   }
 
   fn verify(

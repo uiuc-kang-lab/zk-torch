@@ -30,7 +30,7 @@ fn main() {
   };
   let inputs = inputs.iter().map(|x| x).collect();
   let models = models.iter().map(|x| &x.0).collect();
-  let _outputs = run(&inputs, &graph, &models, &mut timing);
+  let _outputs = run(&inputs, &graph, &models, &mut timing).unwrap();
 
   timing.print();
   println!("Witness generation done");

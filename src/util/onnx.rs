@@ -25,7 +25,8 @@ pub fn get_shape_from_onnx_tensor(tensor: &Tensor) -> Vec<usize> {
       if let tract_onnx::pb::tensor_shape_proto::dimension::Value::DimValue(x) = x.value.as_ref().unwrap() {
         *x as usize
       } else {
-        panic!("Unknown dimension")
+        1
+        //panic!("Unknown dimension")
       }
     })
     .collect::<Vec<_>>()
@@ -56,8 +57,17 @@ pub fn generate_fake_tensor(dtype: DataType, shape: Vec<usize>) -> ArrayD<Fr> {
   eprintln!("\x1b[93mWARNING\x1b[0m: Generating fake tensor for ONNX model. This is only for testing purposes.");
   let mut rng = StdRng::from_entropy();
   let val_num = shape.iter().fold(1, |acc, x| acc * x);
+  let value_for_gptj = match rng.gen_range(0..100) {
+    0..=96 => 0, // 90% chance for 0
+
+    97..=98 => -1, // 2% chance for -1
+
+    _ => 1, // 2% chance for 1
+  };
+
   let input = match dtype {
-    DataType::Float | DataType::Float16 | DataType::Double => (0..val_num).map(|_| Fr::from(rng.gen_range(-2..2))).collect(),
+    DataType::Float | DataType::Float16 | DataType::Double => (0..val_num).map(|_| Fr::from(rng.gen_range(-2..3))).collect(),
+    //DataType::Float | DataType::Float16 | DataType::Double => (0..val_num).map(|_| Fr::from(value_for_gptj)).collect(),
     DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => (0..val_num).map(|_| Fr::from(1)).collect(),
     DataType::Uint8 | DataType::Uint16 | DataType::Uint32 | DataType::Uint64 => (0..val_num).map(|_| Fr::from(1)).collect(),
     DataType::Bool => (0..val_num).map(|_| Fr::from(rng.gen_range(0..2))).collect(),
