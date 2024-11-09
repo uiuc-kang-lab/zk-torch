@@ -81,7 +81,9 @@ impl BasicBlock for DivConstProofBasicBlock {
     let r = util::array_into_iter(inputs[0])
       .map(|x| {
         let x = util::fr_to_int(*x) as i128;
-        Fr::from(((x + self.c as i128) % (2 * self.c as i128) + x % (2 * self.c as i128)) % (2 * self.c as i128))
+        let remainder = ((x + self.c as i128) % (2 * self.c as i128) + x % (2 * self.c as i128)) % (2 * self.c as i128);
+        let remainder = if remainder < 0 { remainder + 2 * self.c as i128 } else { remainder };
+        Fr::from(remainder)
       })
       .collect::<Vec<_>>();
 
@@ -153,7 +155,6 @@ impl BasicBlock for DivConstProofBasicBlock {
       C_r += alpha_pows[i] * (Fr::from(2) * a[&idx].r - Fr::from(2) * b * div[&idx].r - r[&idx].r);
     }
     let q_poly = poly.divide_by_vanishing_poly(domain).unwrap().0;
-    println!("poly {:?}", poly.divide_by_vanishing_poly(domain).unwrap().1);
     let Q_x = util::msm::<G1Projective>(&srs.X1A, &q_poly.coeffs);
 
     let mut rng2 = StdRng::from_entropy();
@@ -190,7 +191,7 @@ impl BasicBlock for DivConstProofBasicBlock {
     // check diff = 2b - r
     // f(x) = 2a + b - 2b * div + r RLC over each elements
     for (i, (idx, _)) in a.indexed_iter().enumerate() {
-      // assert!(diff[&idx].g1 == srs.X1A[0] * Fr::from(2) * b - r[&idx].g1);
+      assert!(diff[&idx].g1 == srs.X1A[0] * Fr::from(2) * b - r[&idx].g1);
       let cons = a[&idx].g1 * Fr::from(2) + srs.X1A[0] * b - div[&idx].g1 * Fr::from(2) * b - r[&idx].g1;
       f_x = (f_x + cons * alpha_pows[i]).into();
     }
