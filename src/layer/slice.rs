@@ -86,6 +86,21 @@ impl Layer for SliceLayer {
     let mut graph = Graph::new();
     let starts: Vec<_> = constants[1].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x) as i32).collect();
     let ends: Vec<_> = constants[2].unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x) as i32).collect();
+    // special case for sdxl text encoder 1
+    if starts.len() == 1 && ends.len() == 1 && starts[0] == -1 && ends[0] == -1 {
+      let input_shape_pad: Vec<_> = input_shapes[0].iter().map(|&x| util::next_pow(x as u32) as usize).collect();
+      let output_shape = vec![1];
+      let permutation = ArrayD::from_shape_vec(vec![1], vec![Some(IxDyn(&output_shape))]).unwrap();
+      let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
+        permutation,
+        input_dim: IxDyn(&input_shape_pad),
+        padding_partition: copy_constraint::PaddingEnum::Zero,
+      }));
+      let slice_output = graph.addNode(cc, vec![(-1, 0)]);
+      graph.outputs.push((slice_output, 0));
+
+      return (graph, vec![output_shape], vec![input_types[0]]);
+    }
     // steps and axes might be optional
     let axes: Vec<_> = match constants.get(3) {
       Some(x) => x.unwrap().0.as_slice().unwrap().iter().map(|x| util::fr_to_int(*x) as i32).collect(),

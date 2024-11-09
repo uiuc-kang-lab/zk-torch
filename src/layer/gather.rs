@@ -77,8 +77,15 @@ impl Layer for GatherLayer {
     attributes: &Vec<&AttributeProto>,
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
-    let axis: isize = attributes.iter().filter(|x| x.name == "axis").next().unwrap().i as isize;
-    let axis = (if axis < 0 { input_shapes[0].len() as isize + axis } else { axis }) as usize;
+
+    let axis_result = attributes.iter().filter(|x| x.name == "axis").next();
+    let axis: usize;
+    if let Some(x) = axis_result {
+      let axis_i = x.i as isize;
+      axis = (if axis_i < 0 { input_shapes[0].len() as isize + axis_i } else { axis_i }) as usize;
+    } else {
+      axis = 0;
+    }
 
     let mut indices_output = -2;
     // Avoid unwrapping a None value

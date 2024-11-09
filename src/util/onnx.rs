@@ -58,9 +58,9 @@ pub fn generate_fake_tensor(dtype: DataType, shape: Vec<usize>) -> ArrayD<Fr> {
   let mut rng = StdRng::from_entropy();
   let val_num = shape.iter().fold(1, |acc, x| acc * x);
   let value_for_gptj = match rng.gen_range(0..100) {
-    0..=80 => 0, // 90% chance for 0
+    0..=89 => 0, // 90% chance for 0
 
-    81..=90 => -1, // 2% chance for -1
+    90..=94 => -1, // 2% chance for -1
 
     _ => 1, // 2% chance for 1
   };
