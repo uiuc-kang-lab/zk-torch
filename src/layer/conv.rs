@@ -99,16 +99,16 @@ fn splat_input(
 }
 
 // Splats weights into shape (inp_channels * kernel_dims product x out_channels) such that each row corresponds to flattened kernels for each input channel
-fn splat_weights(weights: &ArrayD<Fr>, is_transpose: bool) -> Vec<Vec<Fr>> {
+fn splat_weights(weights_shape: &Vec<usize>, weights: &ArrayD<Fr>, is_transpose: bool) -> Vec<Vec<Fr>> {
   let mut weights_cells = vec![];
   let mut weight_row_idx = 0;
 
   // Input and output channel positions are swapped between Conv and ConvTranspose
-  let out_channels = if is_transpose { weights.shape()[1] } else { weights.shape()[0] };
-  let in_channels = if is_transpose { weights.shape()[0] } else { weights.shape()[1] };
+  let out_channels = if is_transpose { weights_shape[1] } else { weights_shape[0] };
+  let in_channels = if is_transpose { weights_shape[0] } else { weights_shape[1] };
   // (inp_channels * kernel_dims product x out_channels)
   for ck in 0..in_channels {
-    for ch_idx in indices(IxDyn(&weights.shape()[2..])) {
+    for ch_idx in indices(IxDyn(&weights_shape[2..])) {
       weights_cells.push(vec![]);
       for chan_out in 0..out_channels {
         let mut idx = if is_transpose { vec![ck, chan_out] } else { vec![chan_out, ck] };
@@ -184,7 +184,7 @@ macro_rules! create_conv_layer {
         }));
 
         // Matmul
-        let weights_splatted = splat_weights(constants[1].unwrap().0, $is_transpose);
+        let weights_splatted = splat_weights(&weight_shape, constants[1].unwrap().0, $is_transpose);
         let weights_padded = splat_pad(&weights_splatted, &Fr::zero());
         let cqlin = graph.addBB(Box::new(RepeaterBasicBlock {
           basic_block: Box::new(CQLinBasicBlock { setup: weights_padded }),
@@ -269,7 +269,7 @@ macro_rules! create_conv_layer {
 
         let mut reshape_shape = vec![1];
         reshape_shape.append(&mut out_dims.iter().map(|x| x.next_power_of_two()).collect());
-        reshape_shape.push(cout);
+        reshape_shape.push(cout.next_power_of_two());
         let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: reshape_shape }));
 
         // Splat input with transpose+permute with 1x1 optimization or with copy constraint otherwise

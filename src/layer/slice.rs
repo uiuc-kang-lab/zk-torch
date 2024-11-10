@@ -61,6 +61,7 @@ fn get_slice(
     if end > input_shape_pad[i] {
       real_end = input_dim[i];
     }
+    println!("start {}, real_end {}, step {}", start, real_end, step);
     while start < real_end {
       result_idx[axis].push(start);
       real_output_shape[axis] += 1;
@@ -121,7 +122,7 @@ impl Layer for SliceLayer {
       .enumerate()
       .map(|(i, &x)| {
         if x < 0 {
-          (input_shapes[0][axes[i]] as i32 + x) as usize
+          (input_shapes[0][axes[i]] as i32 + x + 1) as usize
         } else {
           x as usize
         }
