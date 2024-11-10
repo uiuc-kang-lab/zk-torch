@@ -134,6 +134,6 @@ pub fn verify(srs: &SRS, graph: &Graph, timing: &mut TimingTree) {
   timed!(
     timing,
     "verify",
-    graph.verify(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng)
+    graph.verify(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng, timing)
   );
 }

@@ -241,6 +241,7 @@ impl Graph {
     outputs: &Vec<&Vec<&ArrayD<DataEnc>>>,
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)>,
     rng: &mut StdRng,
+    timing: &mut TimingTree,
   ) {
     assert!(self.nodes.len() == self.precomputable.prove_and_verify.len());
     let cache = Arc::new(Mutex::new(HashMap::new()));
@@ -260,7 +261,8 @@ impl Graph {
           );
           return vec![];
         }
-        println!("{} | verifying {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
+        let verify_id = format!("{} | verifying {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
+        println!("{}", verify_id);
         let myInputs = n
           .inputs
           .iter()
@@ -272,7 +274,11 @@ impl Graph {
             }
           })
           .collect();
-        let pairings = self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, cache.clone());
+        let pairings = timed!(
+          timing,
+          &verify_id,
+          self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, cache.clone())
+        );
         let mut bytes = Vec::new();
         let temp: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (proofs[i].0.clone(), proofs[i].1.clone(), proofs[i].2.clone());
         temp.serialize_uncompressed(&mut bytes).unwrap();
@@ -280,8 +286,13 @@ impl Graph {
         pairings
       })
       .collect();
-    let pairings = util::combine_pairing_checks(&pairings.iter().flatten().collect());
-    assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
+    let pairings = timed!(
+      timing,
+      "combine pairings",
+      util::combine_pairing_checks(&pairings.iter().flatten().collect())
+    );
+    let pairing_check = timed!(timing, "pairings", Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()));
+    assert_eq!(pairing_check, PairingOutput::zero());
   }
 
   // This function should be only used for debugging purposes (it is very slow).
