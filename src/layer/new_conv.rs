@@ -11,6 +11,7 @@ use ndarray::Dim;
 use ndarray::Dimension;
 use ndarray::IxDyn;
 use ndarray::{s, Array1, ArrayD};
+use rayon::prelude::*; // Import Rayon traits
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
 
@@ -24,55 +25,61 @@ pub fn get_kernel_copy_array(
   let input_width = input_shape[1];
   let kernel_height = kernel_shape[0];
   let kernel_width = kernel_shape[1];
+  let stride_height = strides[0];
+  let stride_width = strides[1];
+  let padding_top = paddings[0];
+  let padding_left = paddings[1];
+  let padding_bottom = paddings[2];
+  let padding_right = paddings[3];
 
   // Calculate the dimensions of the output matrix
-  let output_height = ((input_height - kernel_height + paddings[0] + paddings[2]) / strides[0]) + 1;
-  let output_width = ((input_width - kernel_width + paddings[1] + paddings[3]) / strides[1]) + 1;
+  let output_height = ((input_height + padding_top + padding_bottom - kernel_height) / stride_height) + 1;
+  let output_width = ((input_width + padding_left + padding_right - kernel_width) / stride_width) + 1;
 
-  // Create a padded input matrix
-  let mut padded_matrix = vec![vec![-1; input_width + paddings[1] + paddings[3]]; input_height + paddings[0] + paddings[2]];
-  let mut value = 0;
-  for i in 0..input_height {
-    for j in 0..input_width {
-      padded_matrix[i + paddings[0]][j + paddings[1]] = value;
-      value += 1;
-    }
-  }
+  // Total number of input positions
+  let input_size = input_height * input_width;
+  // Total number of output positions
+  let output_size = output_height * output_width;
 
-  // Initialize the output matrix
-  let mut output = Vec::new();
+  // Initialize copy_matrix as a Vec of length output_size * input_size
+  let mut copy_matrix = vec![None; output_size * input_size];
 
-  // Perform the 2D convolution
-  for i in 0..output_height {
-    for j in 0..output_width {
-      let mut kernel_vec = Vec::new();
-      for ki in 0..kernel_height {
-        for kj in 0..kernel_width {
-          let input_value = padded_matrix[i * strides[0] + ki][j * strides[1] + kj];
-          kernel_vec.push(input_value);
+  // Parallelize over output positions using Rayon
+  copy_matrix.par_chunks_mut(input_size).enumerate().for_each(|(output_idx, chunk)| {
+    let i_o = output_idx / output_width;
+    let j_o = output_idx % output_width;
+
+    // Compute the top-left corner of the kernel in the input
+    let start_i = (i_o * stride_height) as isize - padding_top as isize;
+    let start_j = (j_o * stride_width) as isize - padding_left as isize;
+
+    // For each position in the kernel
+    for k_i in 0..kernel_height {
+      for k_j in 0..kernel_width {
+        let i_i = start_i + k_i as isize;
+        let j_i = start_j + k_j as isize;
+
+        // Check if the position is within the input bounds
+        if i_i >= 0 && i_i < input_height as isize && j_i >= 0 && j_i < input_width as isize {
+          let input_idx = (i_i as usize) * input_width + (j_i as usize);
+
+          // The index in the kernel is (k_i, k_j)
+          chunk[input_idx] = Some(IxDyn(&[k_i, k_j]));
         }
       }
-      output.push(kernel_vec);
     }
-  }
+  });
 
-  let mut copy_matrix = Vec::new();
-  let output_len = output.len();
-  for i in 0..output_len {
-    let mut copy_matrix_row = vec![None; input_width * input_height];
-    for (idx, val) in output[i].iter().enumerate() {
-      if val != &-1 {
-        copy_matrix_row[*val as usize] = Some(IxDyn(&vec![idx / kernel_width, idx % kernel_width]));
-      }
-    }
-    copy_matrix.extend(copy_matrix_row);
-  }
+  // Convert copy_matrix to ArrayD
+  let copy_matrix_array = ArrayD::from_shape_vec(IxDyn(&[output_size, input_size]), copy_matrix).unwrap();
 
-  let copy_matrix_array = ArrayD::from_shape_vec(IxDyn(&[output_len, input_width * input_height]), copy_matrix).unwrap();
+  // Pad to power of two
   let copy_matrix_array = pad_to_pow_of_two(&copy_matrix_array, &None);
+
+  // Reverse axes
   let copy_matrix_array = copy_matrix_array.reversed_axes();
 
-  (copy_matrix_array, output_len)
+  (copy_matrix_array, output_size)
 }
 
 pub struct Conv2dLayer;
@@ -88,21 +95,21 @@ impl Layer for Conv2dLayer {
     let weight_shape = input_shapes[1];
     let ch_dims = weight_shape[2..].to_vec();
 
-    let orig_input_shape: Vec<usize> = match attributes.iter().filter(|x| x.name == "orig_input_shape").next() {
+    let orig_input_shape: Vec<usize> = match attributes.iter().find(|x| x.name == "orig_input_shape") {
       Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
       None => panic!("orig_input_shape not found"),
     };
     let dims = orig_input_shape[2..].to_vec();
 
-    let strides = match attributes.iter().filter(|x| x.name == "strides").next() {
+    let strides = match attributes.iter().find(|x| x.name == "strides") {
       Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
       None => vec![1; dims.len()],
     };
-    let pads = match attributes.iter().filter(|x| x.name == "pads").next() {
+    let pads = match attributes.iter().find(|x| x.name == "pads") {
       Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
       None => vec![0; 2 * dims.len()],
     };
-    let _dilations = match attributes.iter().filter(|x| x.name == "dilations").next() {
+    let _dilations = match attributes.iter().find(|x| x.name == "dilations") {
       Some(v) => v
         .ints
         .iter()
@@ -124,7 +131,7 @@ impl Layer for Conv2dLayer {
 
     // Split
     let split_bb = graph.addBB(Box::new(SplitBasicBlock {
-      axis: 1 as usize,
+      axis: 1,
       split: vec![1; util::next_pow(input_shapes[0][1] as u32) as usize],
     }));
     let split_output = graph.addNode(split_bb, vec![(-1, 0)]);
@@ -153,6 +160,7 @@ impl Layer for Conv2dLayer {
     let kernel = constants[1].unwrap().0;
     let (copy_array, output_dim) = get_kernel_copy_array(&dims, &ch_dims, &strides, &pads);
     let mut c_outs = Vec::new();
+
     for c_out in 0..weight_shape[0] {
       let mut cqlin_outputs = Vec::new();
       for c_in in 0..weight_shape[1] {
@@ -171,12 +179,12 @@ impl Layer for Conv2dLayer {
       }
       let add_output = cqlin_outputs.pop().unwrap();
 
-      // change SF
+      // Change SF
       let change_SF_output = graph.addNode(change_SF, vec![(add_output, 0)]);
       let _ = graph.addNode(change_SF_check, vec![(add_output, 0), (change_SF_output, 0)]);
 
       let mut c_output = change_SF_output;
-      // add bias
+      // Add bias
       if constants.len() > 2 {
         let b = constants[2].unwrap().0.slice(s![c_out]).into_dyn().to_owned();
         let bias = graph.addBB(Box::new(Const2BasicBlock { c: b }));
@@ -187,7 +195,7 @@ impl Layer for Conv2dLayer {
       c_outs.push(c_output);
     }
 
-    for _t in 0..util::next_pow(weight_shape[0] as u32) as usize - weight_shape[0] {
+    for _ in 0..util::next_pow(weight_shape[0] as u32) as usize - weight_shape[0] {
       let constantOfShape = graph.addBB(Box::new(ConstOfShapeBasicBlock {
         c: Fr::zero(),
         shape: vec![1, 1, util::next_pow(output_dim as u32) as usize],
