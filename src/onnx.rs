@@ -203,6 +203,8 @@ fn get_local_graph(
     "Erf" => Ok(ErfLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Conv" => Ok(ConvLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "ConvTranspose" => Ok(ConvTransposeLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Conv2D" => Ok(Conv2dLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "MaxPool2D" => Ok(MaxPool2dLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Max" => Ok(MaxLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Min" => Ok(MinLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "MaxPool" => Ok(MaxPoolLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
