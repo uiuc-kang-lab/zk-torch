@@ -89,11 +89,8 @@ impl Layer for MaxPool2dLayer {
       None => panic!("kernel_shape not found"),
     };
 
-    let orig_input_shape: Vec<usize> = match attributes.iter().filter(|x| x.name == "orig_input_shape").next() {
-      Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
-      None => panic!("orig_input_shape not found"),
-    };
-    let dims = orig_input_shape[2..].to_vec();
+    // only support square image for now
+    let dims = vec![(input_shapes[0][2] as f64).sqrt() as usize, 2];
 
     let strides = match attributes.iter().filter(|x| x.name == "strides").next() {
       Some(v) => v.ints.iter().map(|x| *x as usize).collect(),

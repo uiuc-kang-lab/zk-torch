@@ -76,14 +76,12 @@ impl Layer for Conv2dLayer {
     attributes: &Vec<&AttributeProto>,
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
+    let input_shape = input_shapes[0];
     let weight_shape = input_shapes[1];
     let ch_dims = weight_shape[2..].to_vec();
 
-    let orig_input_shape: Vec<usize> = match attributes.iter().find(|x| x.name == "orig_input_shape") {
-      Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
-      None => panic!("orig_input_shape not found"),
-    };
-    let dims = orig_input_shape[2..].to_vec();
+    // only support square image for now
+    let dims = vec![(input_shape[2] as f64).sqrt() as usize, 2];
 
     let strides = match attributes.iter().find(|x| x.name == "strides") {
       Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
