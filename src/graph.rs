@@ -52,11 +52,7 @@ impl Graph {
     let mut outputs = vec![vec![]; self.nodes.len()];
     let res: Result<(), util::CQOutOfRangeError> = self.nodes.iter().enumerate().try_for_each(|(i, n)| {
       let bb_info = format!("{:?}", self.basic_blocks[n.basic_block]);
-      println!(
-        "{} | running {i} {:.300}",
-        self.layer_names[i],
-        bb_info,
-      );
+      println!("{} | running {i} {:.300}", self.layer_names[i], bb_info,);
       let myInputs = n
         .inputs
         .iter()
