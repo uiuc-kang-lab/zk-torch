@@ -90,7 +90,7 @@ impl Layer for MaxPool2dLayer {
     };
 
     // only support square image for now
-    let dims = vec![(input_shapes[0][2] as f64).sqrt() as usize, 2];
+    let dims = vec![(input_shapes[0][2] as f64).sqrt() as usize; 2];
 
     let strides = match attributes.iter().filter(|x| x.name == "strides").next() {
       Some(v) => v.ints.iter().map(|x| *x as usize).collect(),

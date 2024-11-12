@@ -81,7 +81,7 @@ impl Layer for Conv2dLayer {
     let ch_dims = weight_shape[2..].to_vec();
 
     // only support square image for now
-    let dims = vec![(input_shape[2] as f64).sqrt() as usize, 2];
+    let dims = vec![(input_shape[2] as f64).sqrt() as usize; 2];
 
     let strides = match attributes.iter().find(|x| x.name == "strides") {
       Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
