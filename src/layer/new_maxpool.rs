@@ -161,10 +161,13 @@ impl Layer for MaxPool2dLayer {
       for idx in 0..ch_dims[0] * ch_dims[1] {
         let mut k = Array2::<Fr>::zeros((ch_dims[0], ch_dims[1]));
         k[(idx / ch_dims[1], idx % ch_dims[1])] = Fr::one();
-        let k = k.into_dyn();
-        let cqlin_setup = ArrayD::from_shape_fn(copy_array.shape(), |i| if let Some(idx) = &copy_array[&i] { k[idx] } else { Fr::zero() });
+        let k = k.into_raw_vec();
         let cqlin = graph.addBB(Box::new(RepeaterBasicBlock {
-          basic_block: Box::new(CQLinBasicBlock { setup: cqlin_setup }),
+          basic_block: Box::new(SparseCQLinBasicBlock {
+            kernel: k,
+            indices: copy_array.clone(),
+            input_len: util::next_pow((dims[0] * dims[1]) as u32) as usize,
+          }),
           N: 1,
         }));
         let cqlin_output = graph.addNode(cqlin, vec![(split_output, c_in)]);

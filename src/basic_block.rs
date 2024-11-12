@@ -12,7 +12,7 @@ pub use constant::{Const2BasicBlock, ConstBasicBlock, ConstOfShapeBasicBlock};
 pub use copy_constraint::CopyConstraintBasicBlock;
 pub use cq::CQBasicBlock;
 pub use cq2::CQ2BasicBlock;
-pub use cqlin::CQLinBasicBlock;
+pub use cqlin::{CQLinBasicBlock, SparseCQLinBasicBlock};
 pub use div::{DivConstBasicBlock, DivScalarBasicBlock, ModConstBasicBlock};
 pub use eq::{ElementwiseEqBasicBlock, EqBasicBlock};
 pub use id::IdBasicBlock;

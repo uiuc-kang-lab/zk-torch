@@ -20,66 +20,50 @@ pub fn get_kernel_copy_array(
   kernel_shape: &Vec<usize>,
   strides: &Vec<usize>,
   paddings: &Vec<usize>,
-) -> (ArrayD<Option<IxDyn>>, usize) {
+) -> (Vec<Vec<Option<usize>>>, usize) {
   let input_height = input_shape[0];
   let input_width = input_shape[1];
   let kernel_height = kernel_shape[0];
   let kernel_width = kernel_shape[1];
-  let stride_height = strides[0];
-  let stride_width = strides[1];
-  let padding_top = paddings[0];
-  let padding_left = paddings[1];
-  let padding_bottom = paddings[2];
-  let padding_right = paddings[3];
-
   // Calculate the dimensions of the output matrix
-  let output_height = ((input_height + padding_top + padding_bottom - kernel_height) / stride_height) + 1;
-  let output_width = ((input_width + padding_left + padding_right - kernel_width) / stride_width) + 1;
-
-  // Total number of input positions
-  let input_size = input_height * input_width;
-  // Total number of output positions
-  let output_size = output_height * output_width;
-
-  // Initialize copy_matrix as a Vec of length output_size * input_size
-  let mut copy_matrix = vec![None; output_size * input_size];
-
-  // Parallelize over output positions using Rayon
-  copy_matrix.par_chunks_mut(input_size).enumerate().for_each(|(output_idx, chunk)| {
-    let i_o = output_idx / output_width;
-    let j_o = output_idx % output_width;
-
-    // Compute the top-left corner of the kernel in the input
-    let start_i = (i_o * stride_height) as isize - padding_top as isize;
-    let start_j = (j_o * stride_width) as isize - padding_left as isize;
-
-    // For each position in the kernel
-    for k_i in 0..kernel_height {
-      for k_j in 0..kernel_width {
-        let i_i = start_i + k_i as isize;
-        let j_i = start_j + k_j as isize;
-
-        // Check if the position is within the input bounds
-        if i_i >= 0 && i_i < input_height as isize && j_i >= 0 && j_i < input_width as isize {
-          let input_idx = (i_i as usize) * input_width + (j_i as usize);
-
-          // The index in the kernel is (k_i, k_j)
-          chunk[input_idx] = Some(IxDyn(&[k_i, k_j]));
+  let output_height = ((input_height - kernel_height + paddings[0] + paddings[2]) / strides[0]) + 1;
+  let output_width = ((input_width - kernel_width + paddings[1] + paddings[3]) / strides[1]) + 1;
+  // Create a padded input matrix
+  let mut padded_matrix = vec![vec![-1; input_width + paddings[1] + paddings[3]]; input_height + paddings[0] + paddings[2]];
+  let mut value = 0;
+  for i in 0..input_height {
+    for j in 0..input_width {
+      padded_matrix[i + paddings[0]][j + paddings[1]] = value;
+      value += 1;
+    }
+  }
+  // Initialize the output matrix
+  let mut output = Vec::new();
+  // Perform the 2D convolution
+  for i in 0..output_height {
+    for j in 0..output_width {
+      let mut kernel_vec = Vec::new();
+      for ki in 0..kernel_height {
+        for kj in 0..kernel_width {
+          let input_value = padded_matrix[i * strides[0] + ki][j * strides[1] + kj];
+          if input_value != -1 {
+            kernel_vec.push(Some(input_value as usize));
+          } else {
+            kernel_vec.push(None);
+          }
         }
       }
+      output.push(kernel_vec);
     }
-  });
+  }
+  // pad to pow of 2
+  let pad_output_len = util::next_pow(output.len() as u32) as usize;
+  let output_len = output.len();
+  for _ in 0..pad_output_len - output_len {
+    output.push(vec![None; kernel_height * kernel_width]);
+  }
 
-  // Convert copy_matrix to ArrayD
-  let copy_matrix_array = ArrayD::from_shape_vec(IxDyn(&[output_size, input_size]), copy_matrix).unwrap();
-
-  // Pad to power of two
-  let copy_matrix_array = pad_to_pow_of_two(&copy_matrix_array, &None);
-
-  // Reverse axes
-  let copy_matrix_array = copy_matrix_array.reversed_axes();
-
-  (copy_matrix_array, output_size)
+  (output, output_len)
 }
 
 pub struct Conv2dLayer;
@@ -164,10 +148,13 @@ impl Layer for Conv2dLayer {
     for c_out in 0..weight_shape[0] {
       let mut cqlin_outputs = Vec::new();
       for c_in in 0..weight_shape[1] {
-        let k = kernel.slice(s![c_out, c_in, .., ..]).into_dyn().to_owned();
-        let cqlin_setup = ArrayD::from_shape_fn(copy_array.shape(), |i| if let Some(idx) = &copy_array[&i] { k[idx] } else { Fr::zero() });
+        let k = kernel.slice(s![c_out, c_in, .., ..]).to_owned().into_raw_vec();
         let cqlin = graph.addBB(Box::new(RepeaterBasicBlock {
-          basic_block: Box::new(CQLinBasicBlock { setup: cqlin_setup }),
+          basic_block: Box::new(SparseCQLinBasicBlock {
+            kernel: k,
+            indices: copy_array.clone(),
+            input_len: util::next_pow((dims[0] * dims[1]) as u32) as usize,
+          }),
           N: 1,
         }));
         let cqlin_output = graph.addNode(cqlin, vec![(split_output, c_in)]);
