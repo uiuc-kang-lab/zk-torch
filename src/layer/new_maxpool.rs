@@ -99,14 +99,10 @@ impl Layer for MaxPool2dLayer {
       Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
       None => vec![1; dims.len()],
     };
-    // strides should all be the same for now
-    assert!(strides.iter().all(|&x| x == strides[0]));
     let pads = match attributes.iter().filter(|x| x.name == "pads").next() {
       Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
       None => vec![0; 2 * dims.len()],
     };
-    // pads should all be the same for now
-    assert!(pads.iter().all(|&x| x == pads[0]));
     let _dilations = match attributes.iter().filter(|x| x.name == "dilations").next() {
       Some(v) => v
         .ints
