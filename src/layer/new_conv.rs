@@ -281,6 +281,9 @@ impl Layer for LargeConv2dLayer {
       axis: 2,
       split: vec![1; util::next_pow(input_shapes[0][2] as u32) as usize],
     }));
+    let squeeze_axis_2 = graph.addBB(Box::new(ReshapeBasicBlock {
+      shape: vec![1, 1, util::next_pow(input_shapes[0][3] as u32) as usize],
+    }));
 
     // Scale down
     let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
@@ -318,6 +321,7 @@ impl Layer for LargeConv2dLayer {
         let k = kernel.slice(s![c_out, c_in, .., ..]).to_owned().into_raw_vec();
         let split_output_1 = graph.addNode(split_bb_1, vec![(split_output, c_in)]);
         for (i_arr, copy_array) in sub_copy_arrays.iter().enumerate() {
+          let squeeze = graph.addNode(squeeze_axis_2, vec![(split_output_1, i_arr)]);
           let cqlin = graph.addBB(Box::new(RepeaterBasicBlock {
             basic_block: Box::new(SparseCQLinBasicBlock {
               kernel: k.clone(),
@@ -326,7 +330,7 @@ impl Layer for LargeConv2dLayer {
             }),
             N: 1,
           }));
-          let cqlin_output = graph.addNode(cqlin, vec![(split_output_1, i_arr)]);
+          let cqlin_output = graph.addNode(cqlin, vec![(squeeze, 0)]);
           cqlin_outputs.push(cqlin_output);
         }
       }
