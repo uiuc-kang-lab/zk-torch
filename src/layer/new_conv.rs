@@ -76,7 +76,7 @@ pub fn split_copy_array(copy_array: Vec<Vec<Option<usize>>>, pieces: usize, cut_
       for j in 0..copy_array[i].len() {
         if let Some(v) = copy_array[i][j] {
           if v / cut_dim == p {
-            row.push(Some(v));
+            row.push(Some(v % cut_dim));
           } else {
             row.push(None);
           }
