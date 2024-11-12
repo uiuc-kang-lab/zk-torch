@@ -145,6 +145,7 @@ impl Layer for Conv2dLayer {
 
     // Scale down
     let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
+    let sf_float = onnx::SF_FLOAT.read().unwrap().to_owned();
     let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
       input_SF: sf_log * 2,
       output_SF: sf_log,
@@ -193,17 +194,18 @@ impl Layer for Conv2dLayer {
       }
       let add_output = cqlin_outputs.pop().unwrap();
 
-      // Change SF
-      let change_SF_output = graph.addNode(change_SF, vec![(add_output, 0)]);
-      let _ = graph.addNode(change_SF_check, vec![(add_output, 0), (change_SF_output, 0)]);
-
-      let mut c_output = change_SF_output;
+      let mut c_output = add_output;
       // Add bias
       if constants.len() > 2 {
-        let b = constants[2].unwrap().0.slice(s![c_out]).into_dyn().to_owned();
+        let b = constants[2].unwrap().0.slice(s![c_out]).into_dyn().to_owned().map(
+          |x| {
+            let y = (util::fr_to_int(*x) as f32 * sf_float).round();
+            Fr::from(y as i32)
+          },
+        );
         let bias = graph.addBB(Box::new(Const2BasicBlock { c: b }));
         let bias_output = graph.addNode(bias, vec![]);
-        c_output = graph.addNode(add, vec![(change_SF_output, 0), (bias_output, 0)]);
+        c_output = graph.addNode(add, vec![(add_output, 0), (bias_output, 0)]);
       }
 
       c_outs.push(c_output);
@@ -219,7 +221,12 @@ impl Layer for Conv2dLayer {
     }
 
     let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: 1 }));
-    let output = graph.addNode(concat, c_outs.iter().map(|&c_out| (c_out, 0)).collect());
+    let concat_output = graph.addNode(concat, c_outs.iter().map(|&c_out| (c_out, 0)).collect());
+
+    // Change SF
+    let output = graph.addNode(change_SF, vec![(concat_output, 0)]);
+    let _ = graph.addNode(change_SF_check, vec![(concat_output, 0), (output, 0)]);
+
     let output_shape = vec![1, weight_shape[0], output_dim];
     graph.outputs.push((output, 0));
     (graph, vec![output_shape], vec![input_types[0]])
@@ -287,6 +294,7 @@ impl Layer for LargeConv2dLayer {
 
     // Scale down
     let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
+    let sf_float = onnx::SF_FLOAT.read().unwrap().to_owned();
     let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {
       input_SF: sf_log * 2,
       output_SF: sf_log,
@@ -340,17 +348,18 @@ impl Layer for LargeConv2dLayer {
       }
       let add_output = cqlin_outputs.pop().unwrap();
 
-      // Change SF
-      let change_SF_output = graph.addNode(change_SF, vec![(add_output, 0)]);
-      let _ = graph.addNode(change_SF_check, vec![(add_output, 0), (change_SF_output, 0)]);
-
-      let mut c_output = change_SF_output;
+      let mut c_output = add_output;
       // Add bias
       if constants.len() > 2 {
-        let b = constants[2].unwrap().0.slice(s![c_out]).into_dyn().to_owned();
+        let b = constants[2].unwrap().0.slice(s![c_out]).into_dyn().to_owned().map(
+          |x| {
+            let y = (util::fr_to_int(*x) as f32 * sf_float).round();
+            Fr::from(y as i32)
+          },
+        );
         let bias = graph.addBB(Box::new(Const2BasicBlock { c: b }));
         let bias_output = graph.addNode(bias, vec![]);
-        c_output = graph.addNode(add, vec![(change_SF_output, 0), (bias_output, 0)]);
+        c_output = graph.addNode(add, vec![(add_output, 0), (bias_output, 0)]);
       }
 
       c_outs.push(c_output);
@@ -366,7 +375,12 @@ impl Layer for LargeConv2dLayer {
     }
 
     let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: 1 }));
-    let output = graph.addNode(concat, c_outs.iter().map(|&c_out| (c_out, 0)).collect());
+    let concat_output = graph.addNode(concat, c_outs.iter().map(|&c_out| (c_out, 0)).collect());
+
+    // Change SF
+    let output = graph.addNode(change_SF, vec![(concat_output, 0)]);
+    let _ = graph.addNode(change_SF_check, vec![(concat_output, 0), (output, 0)]);
+
     let output_shape = vec![1, weight_shape[0], output_dim];
     graph.outputs.push((output, 0));
     (graph, vec![output_shape], vec![input_types[0]])
