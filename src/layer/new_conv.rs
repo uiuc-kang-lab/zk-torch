@@ -6,12 +6,12 @@ use crate::util;
 use crate::util::pad_to_pow_of_two;
 use crate::CONFIG;
 use ark_bn254::Fr;
-use ark_std::Zero;
+use ark_std::{One, Zero};
 use ndarray::indices;
 use ndarray::Dim;
 use ndarray::Dimension;
 use ndarray::IxDyn;
-use ndarray::{s, Array1, ArrayD};
+use ndarray::{s, Array1, Array2, ArrayD};
 use rayon::prelude::*; // Import Rayon traits
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
@@ -104,6 +104,7 @@ impl Layer for Conv2dLayer {
     let input_shape = input_shapes[0];
     let weight_shape = input_shapes[1];
     let ch_dims = weight_shape[2..].to_vec();
+    let kernel = constants[1].unwrap().0;
 
     // only support square image for now
     let dims = vec![(input_shape[2] as f64).sqrt() as usize; 2];
@@ -136,13 +137,6 @@ impl Layer for Conv2dLayer {
       N: 1,
     }));
 
-    // Split
-    let split_bb = graph.addBB(Box::new(SplitBasicBlock {
-      axis: 1,
-      split: vec![1; util::next_pow(input_shapes[0][1] as u32) as usize],
-    }));
-    let split_output = graph.addNode(split_bb, vec![(-1, 0)]);
-
     // Scale down
     let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
     let sf_float = onnx::SF_FLOAT.read().unwrap().to_owned();
@@ -164,8 +158,72 @@ impl Layer for Conv2dLayer {
       N: 1,
     }));
 
+    if ch_dims[0] == 1 && ch_dims[1] == 1 {
+      let mut input_index = -1;
+      if strides[0] == 2 && strides[1] == 2 {
+        let local_pad = vec![0, 0, 0, 0];
+        let (local_copy_array, _) = get_kernel_copy_array(&dims, &strides, &strides, &local_pad);
+        let local_input_len = util::next_pow((dims[0] * dims[1]) as u32) as usize;
+        let mut k = Array2::<Fr>::zeros((strides[0], strides[1]));
+        k[(0, 0)] = Fr::one();
+        let cqlin = graph.addBB(Box::new(RepeaterBasicBlock {
+          basic_block: Box::new(SparseCQLinBasicBlock {
+            kernel: k.into_raw_vec(),
+            indices: local_copy_array,
+            input_len: local_input_len,
+          }),
+          N: 2,
+        }));
+        input_index = graph.addNode(cqlin, vec![(input_index, 0)]);
+      }
+      let n = input_shapes[0].len();
+      let (mut a, mut b) = (input_shapes[0][n - 2], input_shapes[0][n - 1] / (strides[0] * strides[1]));
+      let mut c = weight_shape[0];
+      a = util::next_pow(a as u32) as usize;
+      b = util::next_pow(b as u32) as usize;
+      c = util::next_pow(c as u32) as usize;
+      let permutation_1 = ((0..b).map(|x| x * a).collect(), (0..a).collect());
+      let permutation_2 = ((0..c).map(|x| x * b).collect(), (0..b).collect());
+      let transpose = graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(PermuteBasicBlock { permutation: permutation_1 }),
+        N: 2,
+      }));
+      let k = kernel.clone().into_shape((weight_shape[0], weight_shape[1])).unwrap();
+      let cqlin = graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(CQLinBasicBlock {
+          setup: k.t().to_owned().into_dyn(),
+        }),
+        N: 2,
+      }));
+      let transpose_output = graph.addNode(transpose, vec![(input_index, 0)]);
+      let cqlin_output = graph.addNode(cqlin, vec![(transpose_output, 0)]);
+      let mut output = graph.addNode(change_SF, vec![(cqlin_output, 0)]);
+      let _ = graph.addNode(change_SF_check, vec![(cqlin_output, 0), (output, 0)]);
+      if constants.len() > 2 {
+        let b = constants[2].unwrap().0;
+        let bias = graph.addBB(Box::new(Const2BasicBlock { c: b.clone() }));
+        let bias_output = graph.addNode(bias, vec![]);
+        output = graph.addNode(add, vec![(output, 0), (bias_output, 0)]);
+      }
+      let transpose_2 = graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(PermuteBasicBlock { permutation: permutation_2 }),
+        N: 2,
+      }));
+      let output = graph.addNode(transpose_2, vec![(output, 0)]);
+
+      graph.outputs.push((output, 0));
+      let output_shape = vec![1, weight_shape[0], input_shapes[0][n - 1] / (strides[0] * strides[1])];
+      return (graph, vec![output_shape], vec![input_types[0]]);
+    }
+
+    // Split
+    let split_bb = graph.addBB(Box::new(SplitBasicBlock {
+      axis: 1,
+      split: vec![1; util::next_pow(input_shapes[0][1] as u32) as usize],
+    }));
+    let split_output = graph.addNode(split_bb, vec![(-1, 0)]);
+
     // Matmul
-    let kernel = constants[1].unwrap().0;
     let (copy_array, output_dim) = get_kernel_copy_array(&dims, &ch_dims, &strides, &pads);
     let input_len = util::next_pow((dims[0] * dims[1]) as u32) as usize;
     let output_len = copy_array.len();
@@ -197,12 +255,10 @@ impl Layer for Conv2dLayer {
       let mut c_output = add_output;
       // Add bias
       if constants.len() > 2 {
-        let b = constants[2].unwrap().0.slice(s![c_out]).into_dyn().to_owned().map(
-          |x| {
-            let y = (util::fr_to_int(*x) as f32 * sf_float).round();
-            Fr::from(y as i32)
-          },
-        );
+        let b = constants[2].unwrap().0.slice(s![c_out]).into_dyn().to_owned().map(|x| {
+          let y = (util::fr_to_int(*x) as f32 * sf_float).round();
+          Fr::from(y as i32)
+        });
         let bias = graph.addBB(Box::new(Const2BasicBlock { c: b }));
         let bias_output = graph.addNode(bias, vec![]);
         c_output = graph.addNode(add, vec![(add_output, 0), (bias_output, 0)]);
@@ -351,12 +407,10 @@ impl Layer for LargeConv2dLayer {
       let mut c_output = add_output;
       // Add bias
       if constants.len() > 2 {
-        let b = constants[2].unwrap().0.slice(s![c_out]).into_dyn().to_owned().map(
-          |x| {
-            let y = (util::fr_to_int(*x) as f32 * sf_float).round();
-            Fr::from(y as i32)
-          },
-        );
+        let b = constants[2].unwrap().0.slice(s![c_out]).into_dyn().to_owned().map(|x| {
+          let y = (util::fr_to_int(*x) as f32 * sf_float).round();
+          Fr::from(y as i32)
+        });
         let bias = graph.addBB(Box::new(Const2BasicBlock { c: b }));
         let bias_output = graph.addNode(bias, vec![]);
         c_output = graph.addNode(add, vec![(add_output, 0), (bias_output, 0)]);
