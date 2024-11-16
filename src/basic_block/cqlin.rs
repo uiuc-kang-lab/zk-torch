@@ -29,20 +29,39 @@ pub struct SparseCQLinBasicBlock {
 impl BasicBlock for SparseCQLinBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 1);
+    assert!(inputs[0].ndim() == 1 || inputs[0].ndim() == 2);
     // Only support 1d input for now
-    assert!(inputs[0].ndim() == 1);
-    let input = inputs[0];
-    let mut output = Vec::new();
-    for i in 0..self.indices.len() {
-      let mut sum = Fr::zero();
-      for j in 0..self.indices[i].len() {
-        if let Some(idx) = self.indices[i][j] {
-          sum += self.kernel[j] * input[idx];
+    if inputs[0].ndim() == 1 {
+      let input = inputs[0];
+      let mut output = Vec::new();
+      for i in 0..self.indices.len() {
+        let mut sum = Fr::zero();
+        for j in 0..self.indices[i].len() {
+          if let Some(idx) = self.indices[i][j] {
+            sum += self.kernel[j] * input[idx];
+          }
         }
+        output.push(sum);
       }
-      output.push(sum);
+      Ok(vec![ArrayD::from_shape_vec(IxDyn(&[output.len()]), output).unwrap()])
+    } else {
+      let input = inputs[0];
+      let mut output = Vec::new();
+      for k in 0..input.shape()[0] {
+        let mut sum = Fr::zero();
+        for i in 0..self.indices.len() {
+          for j in 0..self.indices[i].len() {
+            if let Some(idx) = self.indices[i][j] {
+              sum += self.kernel[j] * input[[k, idx]];
+            }
+          }
+        }
+        output.push(sum);
+      }
+      Ok(vec![
+        ArrayD::from_shape_vec(IxDyn(&[input.shape()[0], self.indices.len()]), output).unwrap()
+      ])
     }
-    Ok(vec![ArrayD::from_shape_vec(IxDyn(&[output.len()]), output).unwrap()])
   }
 
   #[cfg(not(feature = "mock_prove"))]
