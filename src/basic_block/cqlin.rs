@@ -48,15 +48,15 @@ impl BasicBlock for SparseCQLinBasicBlock {
       let input = inputs[0];
       let mut output = Vec::new();
       for k in 0..input.shape()[0] {
-        let mut sum = Fr::zero();
         for i in 0..self.indices.len() {
+          let mut sum = Fr::zero();
           for j in 0..self.indices[i].len() {
             if let Some(idx) = self.indices[i][j] {
               sum += self.kernel[j] * input[[k, idx]];
             }
           }
+          output.push(sum);
         }
-        output.push(sum);
       }
       Ok(vec![
         ArrayD::from_shape_vec(IxDyn(&[input.shape()[0], self.indices.len()]), output).unwrap()
