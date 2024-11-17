@@ -79,16 +79,15 @@ impl BasicBlock for CreateSelectorBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     let max_pool_output = inputs[0];
     let mut outputs = vec![Array1::<Fr>::zeros(max_pool_output.len()); inputs.len() - 1];
-    for i in 0..max_pool_output.len() {
-      let num = max_pool_output[i];
+    max_pool_output.iter().enumerate().for_each(|(i, &num)| {
       for j in 1..inputs.len() {
-        let compared = inputs[j][i];
+        let compared = inputs[j].clone().into_raw_vec()[i];
         if num == compared {
           outputs[j - 1][i] = Fr::one();
         }
         break;
       }
-    }
+    });
     let outputs = outputs.into_iter().map(|x| x.into_dyn()).collect();
     Ok(outputs)
   }
