@@ -73,6 +73,27 @@ impl BasicBlock for MaxPool2dBasicBlock {
   }
 }
 
+#[derive(Debug)]
+pub struct CreateSelectorBasicBlock;
+impl BasicBlock for CreateSelectorBasicBlock {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
+    let max_pool_output = inputs[0];
+    let mut outputs = vec![Array1::<Fr>::zeros(max_pool_output.len()); inputs.len() - 1];
+    for i in 0..max_pool_output.len() {
+      let num = max_pool_output[i];
+      for j in 1..inputs.len() {
+        let compared = inputs[j][i];
+        if num == compared {
+          outputs[j - 1][i] = Fr::one();
+        }
+        break;
+      }
+    }
+    let outputs = outputs.into_iter().map(|x| x.into_dyn()).collect();
+    Ok(outputs)
+  }
+}
+
 pub struct MaxPool2dLayer;
 
 impl Layer for MaxPool2dLayer {
@@ -131,6 +152,20 @@ impl Layer for MaxPool2dLayer {
       basic_block: Box::new(SubBasicBlock {}),
       N: 1,
     }));
+    let add = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(AddBasicBlock {}),
+      N: 1,
+    }));
+    let create_selector = graph.addBB(Box::new(CreateSelectorBasicBlock {}));
+    let bool_check = graph.addBB(Box::new(BooleanCheckBasicBlock {}));
+    let mul = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(MulBasicBlock {}),
+      N: 1,
+    }));
+    let eq = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(EqBasicBlock {}),
+      N: 1,
+    }));
 
     // Split
     let split_bb = graph.addBB(Box::new(SplitBasicBlock {
@@ -151,6 +186,7 @@ impl Layer for MaxPool2dLayer {
     // Matmul
     let (copy_array, output_dim) = get_kernel_copy_array(&dims, &ch_dims, &strides, &pads);
     for c_in in 0..input_shapes[0][1] {
+      let mut out_and_selectors = vec![(split_maxpool_output, c_in)];
       for idx in 0..ch_dims[0] * ch_dims[1] {
         let mut k = Array2::<Fr>::zeros((ch_dims[0], ch_dims[1]));
         k[(idx / ch_dims[1], idx % ch_dims[1])] = Fr::one();
@@ -167,7 +203,22 @@ impl Layer for MaxPool2dLayer {
         let sub_output = graph.addNode(sub, vec![(split_maxpool_output, c_in), (cqlin_output, 0)]);
         // Check if the remainder sub_output is non-negative
         let _ = graph.addNode(range_check, vec![(sub_output, 0)]);
+        out_and_selectors.push((cqlin_output, 0));
       }
+      let selector_output = graph.addNode(create_selector, out_and_selectors.clone());
+
+      let mut to_sum = Vec::new();
+      for idx in 0..ch_dims[0] * ch_dims[1] {
+        let _ = graph.addNode(bool_check, vec![(selector_output, idx)]);
+        let mul_output = graph.addNode(mul, vec![(selector_output, idx), out_and_selectors[idx + 1]]);
+        to_sum.push((mul_output, 0));
+      }
+      while to_sum.len() > 1 {
+        let add_output = graph.addNode(add, vec![to_sum.pop().unwrap(), to_sum.pop().unwrap()]);
+        to_sum.push((add_output, 0));
+      }
+      let add_output = to_sum.pop().unwrap();
+      let _ = graph.addNode(eq, vec![add_output, (split_maxpool_output, c_in)]);
     }
 
     let output_shape = vec![1, input_shapes[0][1], output_dim];
