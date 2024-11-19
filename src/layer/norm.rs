@@ -462,7 +462,12 @@ impl Layer for InstanceNormLayer {
     let split = graph.addBB(Box::new(SplitBasicBlock { axis: 0, split: split_ind }));
     let split_x_ind = vec![1; util::next_pow(shape_for_split_x[0] as u32) as usize];
     let split_x = graph.addBB(Box::new(SplitBasicBlock { axis: 0, split: split_x_ind }));
-    let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: 0 }));
+    let mut split_shape = shape_for_split_x.clone();
+    split_shape[0] = 1;
+    let concat = graph.addBB(Box::new(ConcatBasicBlock {
+      axis: 1,
+      input_shapes: vec![split_shape; util::next_pow(scale_shape[0] as u32) as usize],
+    }));
     let reshape_concat = graph.addBB(Box::new(ReshapeBasicBlock {
       shape: X_shape.iter().map(|x| util::next_pow(*x as u32) as usize).collect(),
     }));
