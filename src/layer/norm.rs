@@ -400,13 +400,6 @@ impl Layer for InstanceNormLayer {
       basic_block: Box::new(DivScalarBasicBlock { output_SF: sf }),
       N: 1,
     }));
-    let one = graph.addBB(Box::new(Const2BasicBlock {
-      c: arr1(&vec![Fr::from(1)]).into_dyn(),
-    }));
-    let add_one = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(AddBasicBlock {}),
-      N: 1,
-    }));
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
         setup: util::CQArrayType::NonNegative,
@@ -449,7 +442,7 @@ impl Layer for InstanceNormLayer {
     }));
     let negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
-        setup: util::CQArrayType::NonPositive,
+        setup: util::CQArrayType::Negative,
       }),
       N: 1,
     }));
@@ -469,10 +462,7 @@ impl Layer for InstanceNormLayer {
     let split = graph.addBB(Box::new(SplitBasicBlock { axis: 0, split: split_ind }));
     let split_x_ind = vec![1; util::next_pow(shape_for_split_x[0] as u32) as usize];
     let split_x = graph.addBB(Box::new(SplitBasicBlock { axis: 0, split: split_x_ind }));
-    let concat = graph.addBB(Box::new(ConcatBasicBlock {
-      axis: 0,
-      input_shapes: input_shapes.iter().map(|x| x.clone().clone()).collect(),
-    }));
+    let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: 0 }));
     let reshape_concat = graph.addBB(Box::new(ReshapeBasicBlock {
       shape: X_shape.iter().map(|x| util::next_pow(*x as u32) as usize).collect(),
     }));
@@ -553,18 +543,16 @@ impl Layer for InstanceNormLayer {
     let split_sub_output = graph.addNode(split_x, vec![(x_minus_mean_output, 0)]); // N*C outputs (shape: [1, D1, D2, ..., DN])
     let split_sqrt_output = graph.addNode(split_x, vec![(sqrt_output, 0)]); // N*C outputs (shape: [1, 1, 1, ..., 1])
     let split_scale_output = graph.addNode(split, vec![(scale_output, 0)]); // C outputs (shape: [1, 1, 1, ..., 1])
-    let one_output = graph.addNode(one, vec![]);
     let mut tmp_outputs = vec![];
     // here we perform the batch normalization for each channel
     let (N, C) = (mean_shape_padded[0], mean_shape_padded[1]);
     for n in 0..N as usize {
       for c in 0..C as usize {
         let idx = n * C as usize + c;
-        let add_sqrt_output = graph.addNode(add_one, vec![(split_sqrt_output, idx), (one_output, 0)]);
-        let div_output = graph.addNode(div, vec![(split_sub_output, idx), (add_sqrt_output, 0)]);
+        let div_output = graph.addNode(div, vec![(split_sub_output, idx), (split_sqrt_output, idx)]);
         let a_SF2 = graph.addNode(mul_SF2, vec![(split_sub_output, idx)]);
-        let a_SF2_plus_b = graph.addNode(add, vec![(a_SF2, 0), (add_sqrt_output, 0)]);
-        let b2 = graph.addNode(mul_2, vec![(add_sqrt_output, 0)]);
+        let a_SF2_plus_b = graph.addNode(add, vec![(a_SF2, 0), (split_sqrt_output, idx)]);
+        let b2 = graph.addNode(mul_2, vec![(split_sqrt_output, idx)]);
         let qb2 = graph.addNode(mul_scalar, vec![(div_output, 0), (b2, 0)]);
         let qb2_plus_r = graph.addNode(add, vec![(qb2, 0), (div_output, 1)]);
         let _ = graph.addNode(eq, vec![(a_SF2_plus_b, 0), (qb2_plus_r, 0)]);
