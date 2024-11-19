@@ -295,7 +295,11 @@ impl Layer for LSTMLayer {
     }
 
     // sublayer 22: Concat H_list
-    let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: 0 }));
+    let shape = vec![1, num_directions, batch_size, hidden_size].iter().map(|&x| util::next_pow(x as u32) as usize).collect();
+    let concat = graph.addBB(Box::new(ConcatBasicBlock {
+      axis: 0,
+      input_shapes: vec![shape; H_list.len()],
+    }));
     let output = graph.addNode(concat, H_list.iter().map(|&H_t| (H_t, 0)).collect());
 
     graph.outputs.push((output, 0)); // Y

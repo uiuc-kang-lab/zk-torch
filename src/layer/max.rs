@@ -90,7 +90,10 @@ impl Layer for MinLayer {
         padding_partition: copy_constraint::PaddingEnum::Zero,
       }));
 
-      let concat_inputs = graph.addBB(Box::new(ConcatBasicBlock { axis: 0 }));
+      let concat_inputs = graph.addBB(Box::new(ConcatBasicBlock {
+        axis: 0,
+        input_shapes: vec![input_shape_padded.clone(); 2],
+      }));
 
       let mut concat_shape = input_shape_padded.clone();
       concat_shape[0] = 2 * concat_shape[0];
