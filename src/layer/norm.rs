@@ -3,6 +3,7 @@ use crate::graph::*;
 use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
+use crate::util::CQArrayType;
 use ark_bn254::Fr;
 use ndarray::{arr1, Array1, ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
@@ -311,18 +312,12 @@ impl Layer for InstanceNormLayer {
       basic_block: Box::new(SumBasicBlock {}),
       N: 1,
     }));
-    let div_const = graph.addBB(Box::new(DivConstBasicBlock {
-      c: X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y) as f32,
+    let div_const = graph.addBB(Box::new(DivConstProofBasicBlock {
+      c: X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y as u32),
     }));
     let div_const_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQ2BasicBlock {
-        setup: Some((
-          Box::new(DivConstBasicBlock {
-            c: X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y) as f32,
-          }),
-          *onnx::CQ_RANGE_LOWER,
-          *onnx::CQ_RANGE,
-        )),
+      basic_block: Box::new(CQBasicBlock {
+        setup: CQArrayType::NonNegative,
       }),
       N: 1,
     }));
@@ -475,7 +470,8 @@ impl Layer for InstanceNormLayer {
     let cc_output = graph.addNode(cc, vec![(-1, 0)]);
     let sum_output = graph.addNode(sum, vec![(cc_output, 0)]);
     let mean_output = graph.addNode(div_const, vec![(sum_output, 0)]);
-    let _ = graph.addNode(div_const_check, vec![(sum_output, 0), (mean_output, 0)]);
+    let _ = graph.addNode(div_const_check, vec![(mean_output, 1)]);
+    let _ = graph.addNode(div_const_check, vec![(mean_output, 2)]);
     let mean_output = graph.addNode(reshape_0, vec![(mean_output, 0)]);
 
     // compute var (shape: [N, C, 1, ..., 1])
