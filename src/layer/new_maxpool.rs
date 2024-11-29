@@ -1,6 +1,6 @@
 use crate::basic_block::*;
 use crate::graph::*;
-use crate::layer::new_conv::get_kernel_copy_array;
+use crate::layer::new_conv::get_kernel_map;
 use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
@@ -11,7 +11,8 @@ use ndarray::indices;
 use ndarray::Dim;
 use ndarray::Dimension;
 use ndarray::IxDyn;
-use ndarray::{s, Array1, Array2, ArrayD};
+use ndarray::{s, Array1, Array2, Array4, ArrayD};
+use std::sync::Arc;
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
 
@@ -109,16 +110,22 @@ impl Layer for MaxPool2dLayer {
       None => panic!("kernel_shape not found"),
     };
 
+    let in_channel: usize = match attributes.iter().filter(|x| x.name == "in_channel").next() {
+      Some(v) => v.i as usize,
+      None => panic!("in_channel not found"),
+    };
+
     // only support square image for now
-    let dims = vec![(input_shapes[0][2] as f64).sqrt() as usize; 2];
+    let input_h = ((input_shapes[0][1] / in_channel) as f64).sqrt() as usize;
+    let dims = vec![input_h, input_h];
 
     let strides = match attributes.iter().filter(|x| x.name == "strides").next() {
       Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
-      None => vec![1; dims.len()],
+      None => vec![1; 2],
     };
     let pads = match attributes.iter().filter(|x| x.name == "pads").next() {
       Some(v) => v.ints.iter().map(|x| *x as usize).collect(),
-      None => vec![0; 2 * dims.len()],
+      None => vec![0; 4],
     };
     let _dilations = match attributes.iter().filter(|x| x.name == "dilations").next() {
       Some(v) => v
@@ -134,6 +141,16 @@ impl Layer for MaxPool2dLayer {
       None => vec![1; dims.len() - 2],
     };
 
+    let (mut a, mut b) = (input_shapes[0][1] / in_channel, in_channel);
+    a = util::next_pow(a as u32) as usize;
+    b = util::next_pow(b as u32) as usize;
+    let permutation_1 = ((0..b).map(|x| x * a).collect(), (0..a).collect());
+    let transpose_1 = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(PermuteBasicBlock { permutation: permutation_1 }),
+      N: 2,
+    }));
+    let transpose_output_1 = graph.addNode(transpose_1, vec![(-1, 0)]);
+
     // MaxPool2d
     let maxpool = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(MaxPool2dBasicBlock {
@@ -144,18 +161,21 @@ impl Layer for MaxPool2dLayer {
       }),
       N: 1,
     }));
-    let maxpool_output = graph.addNode(maxpool, vec![(-1, 0)]);
+    let maxpool_output = graph.addNode(maxpool, vec![(transpose_output_1, 0)]);
 
     // Sub
     let sub = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(SubBasicBlock {}),
       N: 1,
     }));
-    let add = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(AddBasicBlock {}),
+    let multi_add = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(MultipleAddBasicBlock {}),
       N: 1,
     }));
-    let create_selector = graph.addBB(Box::new(CreateSelectorBasicBlock {}));
+    let create_selector = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(CreateSelectorBasicBlock {}),
+      N: 1,
+    }));
     let bool_check = graph.addBB(Box::new(BooleanCheckBasicBlock {}));
     let mul = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(MulBasicBlock {}),
@@ -166,14 +186,6 @@ impl Layer for MaxPool2dLayer {
       N: 1,
     }));
 
-    // Split
-    let split_bb = graph.addBB(Box::new(SplitBasicBlock {
-      axis: 1 as usize,
-      split: vec![1; util::next_pow(input_shapes[0][1] as u32) as usize],
-    }));
-    let split_output = graph.addNode(split_bb, vec![(-1, 0)]);
-    let split_maxpool_output = graph.addNode(split_bb, vec![(maxpool_output, 0)]);
-
     // CQ to check if x >= 0
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
@@ -182,45 +194,50 @@ impl Layer for MaxPool2dLayer {
       N: 1,
     }));
 
+    graph.shared_kernels = Some(Vec::new());
     // Matmul
-    let (copy_array, output_dim) = get_kernel_copy_array(&dims, &ch_dims, &strides, &pads);
-    for c_in in 0..input_shapes[0][1] {
-      let mut out_and_selectors = vec![(split_maxpool_output, c_in)];
-      for idx in 0..ch_dims[0] * ch_dims[1] {
-        let mut k = Array2::<Fr>::zeros((ch_dims[0], ch_dims[1]));
-        k[(idx / ch_dims[1], idx % ch_dims[1])] = Fr::one();
-        let k = k.into_raw_vec();
-        let cqlin = graph.addBB(Box::new(RepeaterBasicBlock {
-          basic_block: Box::new(SparseCQLinBasicBlock {
-            kernel: k,
-            indices: copy_array.clone(),
-            input_len: util::next_pow((dims[0] * dims[1]) as u32) as usize,
-          }),
-          N: 1,
-        }));
-        let cqlin_output = graph.addNode(cqlin, vec![(split_output, c_in)]);
-        let sub_output = graph.addNode(sub, vec![(split_maxpool_output, c_in), (cqlin_output, 0)]);
-        // Check if the remainder sub_output is non-negative
-        let _ = graph.addNode(range_check, vec![(sub_output, 0)]);
-        out_and_selectors.push((cqlin_output, 0));
-      }
-      let selector_output = graph.addNode(create_selector, out_and_selectors.clone());
-
-      let mut to_sum = Vec::new();
-      for idx in 0..ch_dims[0] * ch_dims[1] {
-        let _ = graph.addNode(bool_check, vec![(selector_output, idx)]);
-        let mul_output = graph.addNode(mul, vec![(selector_output, idx), out_and_selectors[idx + 1]]);
-        to_sum.push((mul_output, 0));
-      }
-      while to_sum.len() > 1 {
-        let add_output = graph.addNode(add, vec![to_sum.pop().unwrap(), to_sum.pop().unwrap()]);
-        to_sum.push((add_output, 0));
-      }
-      let add_output = to_sum.pop().unwrap();
-      let _ = graph.addNode(eq, vec![add_output, (split_maxpool_output, c_in)]);
+    let (copy_array, output_dim) = get_kernel_map(&vec![1, dims[0], dims[1]], &vec![1, 1, ch_dims[0], ch_dims[1]], &strides, &pads);
+    let mut out_and_selectors = vec![(maxpool_output, 0)];
+    for idx in 0..ch_dims[0] * ch_dims[1] {
+      let mut k = Array4::<i128>::zeros((1, 1, ch_dims[0], ch_dims[1]));
+      k[(0, 0, idx / ch_dims[1], idx % ch_dims[1])] = 1;
+      graph.shared_kernels.as_mut().unwrap().push(Arc::new(k.into_dyn()));
+      let cqlin = graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(SparseCQLinBasicBlock {
+          kernel: Arc::clone(&graph.shared_kernels.as_ref().unwrap()[idx]),
+          indices: copy_array.clone(),
+          input_len: util::next_pow((dims[0] * dims[1]) as u32) as usize,
+          output_len: util::next_pow((output_dim) as u32) as usize,
+        }),
+        N: 2,
+      }));
+      let cqlin_output = graph.addNode(cqlin, vec![(transpose_output_1, 0)]);
+      let sub_output = graph.addNode(sub, vec![(maxpool_output, 0), (cqlin_output, 0)]);
+      // Check if the remainder sub_output is non-negative
+      let _ = graph.addNode(range_check, vec![(sub_output, 0)]);
+      out_and_selectors.push((cqlin_output, 0));
     }
+    let selector_output = graph.addNode(create_selector, out_and_selectors.clone());
 
-    let output_shape = vec![1, input_shapes[0][1], output_dim];
+    let mut to_sum = Vec::new();
+    for idx in 0..ch_dims[0] * ch_dims[1] {
+      let _ = graph.addNode(bool_check, vec![(selector_output, idx)]);
+      let mul_output = graph.addNode(mul, vec![(selector_output, idx), out_and_selectors[idx + 1]]);
+      to_sum.push((mul_output, 0));
+    }
+    let add_output = graph.addNode(multi_add, to_sum);
+    let _ = graph.addNode(eq, vec![(add_output, 0), (maxpool_output, 0)]);
+
+    let c = in_channel * output_dim;
+    let c = util::next_pow(c as u32) as usize;
+    let permutation = (vec![0], (0..c).collect());
+    let transpose = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(PermuteBasicBlock { permutation }),
+      N: 2,
+    }));
+    let maxpool_output = graph.addNode(transpose, vec![(maxpool_output, 0)]);
+
+    let output_shape = vec![1, in_channel * output_dim];
     graph.outputs.push((maxpool_output, 0));
     (graph, vec![output_shape], vec![input_types[0]])
   }

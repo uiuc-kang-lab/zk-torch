@@ -9,20 +9,39 @@ use ark_std::{UniformRand, Zero};
 use ndarray::{ArrayD, Ix2, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
+use std::collections::HashMap;
+use std::sync::Arc;
 
-fn get_model_element(kernel: &Vec<Fr>, indices: &Vec<Vec<Option<usize>>>, i: usize, j: usize) -> Fr {
-  if let Some(idx) = indices[j][i] {
-    kernel[idx]
+fn get_model_element(kernel: &ArrayD<i128>, indices: &HashMap<(usize, usize), KernelIdx>, i: usize, j: usize) -> Fr {
+  if indices.contains_key(&(j, i)) {
+    let idx = indices[&(j, i)];
+    Fr::from(idx.get_kernel_weight(kernel))
   } else {
     Fr::zero()
   }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum KernelIdx {
+  TwoD(usize, usize, usize, usize),
+  ThreeD(usize, usize, usize, usize, usize),
+}
+
+impl KernelIdx {
+  fn get_kernel_weight(&self, kernel: &ArrayD<i128>) -> Fr {
+    match self {
+      KernelIdx::TwoD(co, ci, kh, kw) => Fr::from(kernel[[*co, *ci, *kh, *kw]]),
+      KernelIdx::ThreeD(co, ci, k1, k2, k3) => Fr::from(kernel[[*co, *ci, *k1, *k2, *k3]]),
+    }
+  }
+}
+
 #[derive(Debug)]
 pub struct SparseCQLinBasicBlock {
-  pub kernel: Vec<Fr>,
-  pub indices: Vec<Vec<Option<usize>>>,
+  pub kernel: Arc<ArrayD<i128>>,
+  pub indices: HashMap<(usize, usize), KernelIdx>, // (out_idx, in_idx) -> kernel_idx
   pub input_len: usize,
+  pub output_len: usize,
 }
 
 // input is rows of A, model is rows of B, outputs are rows of C
@@ -33,41 +52,29 @@ impl BasicBlock for SparseCQLinBasicBlock {
     // Only support 1d input for now
     if inputs[0].ndim() == 1 {
       let input = inputs[0];
-      let mut output = Vec::new();
-      for i in 0..self.indices.len() {
-        let mut sum = Fr::zero();
-        for j in 0..self.indices[i].len() {
-          if let Some(idx) = self.indices[i][j] {
-            sum += self.kernel[j] * input[idx];
-          }
-        }
-        output.push(sum);
+      let mut output = vec![Fr::zero(); self.output_len];
+      for ((out_idx, in_idx), kernel_idx) in &self.indices {
+        output[*out_idx] += Fr::from(kernel_idx.get_kernel_weight(&self.kernel)) * input[*in_idx];
       }
       Ok(vec![ArrayD::from_shape_vec(IxDyn(&[output.len()]), output).unwrap()])
     } else {
       let input = inputs[0];
-      let mut output = Vec::new();
-      for k in 0..input.shape()[0] {
-        for i in 0..self.indices.len() {
-          let mut sum = Fr::zero();
-          for j in 0..self.indices[i].len() {
-            if let Some(idx) = self.indices[i][j] {
-              sum += self.kernel[j] * input[[k, idx]];
-            }
-          }
-          output.push(sum);
+      let mut outputs = Vec::new();
+      for _ in 0..input.shape()[0] {
+        let mut output = vec![Fr::zero(); self.output_len];
+        for ((out_idx, in_idx), kernel_idx) in &self.indices {
+          output[*out_idx] += Fr::from(kernel_idx.get_kernel_weight(&self.kernel)) * input[*in_idx];
         }
+        outputs.extend(output);
       }
-      Ok(vec![
-        ArrayD::from_shape_vec(IxDyn(&[input.shape()[0], self.indices.len()]), output).unwrap()
-      ])
+      Ok(vec![ArrayD::from_shape_vec(IxDyn(&[input.shape()[0], self.output_len]), outputs).unwrap()])
     }
   }
 
   #[cfg(not(feature = "mock_prove"))]
   fn setup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     let m = self.input_len;
-    let n = self.indices.len();
+    let n = self.output_len;
     let N = srs.X2P.len() - 1;
     let m_inv = Fr::from(m as u64).inverse().unwrap();
     let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
@@ -160,7 +167,7 @@ impl BasicBlock for SparseCQLinBasicBlock {
   fn setup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     eprintln!("\x1b[93mWARNING\x1b[0m: MockSetup is enabled. This is only for testing purposes.");
     let m = self.input_len;
-    let n = self.indices.len();
+    let n = self.output_len;
 
     let mut L_H_i_x = srs.X1P[..n].to_vec();
     let mut L_V_i_x_n: Vec<_> = srs.X1P[..m].into_par_iter().map(|x| (*x).into()).collect();
@@ -194,7 +201,7 @@ impl BasicBlock for SparseCQLinBasicBlock {
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let l = inputs[0].len();
     let m = self.input_len;
-    let n = self.indices.len();
+    let n = self.output_len;
     let N = srs.X2P.len() - 1;
     let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
     let alpha = {
@@ -310,7 +317,7 @@ impl BasicBlock for SparseCQLinBasicBlock {
     let mut checks = Vec::new();
     let l = inputs[0].len();
     let m = self.input_len;
-    let n = self.indices.len();
+    let n = self.output_len;
     let N = srs.X2P.len() - 1;
 
     let [R_x, Q_x, A_x, S_x, P_x, P_R_x, pi, pi_1, z, C1, C2, C3, C4, C5, C6] = proof.0[..] else {

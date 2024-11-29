@@ -45,6 +45,7 @@ pub struct Graph {
   pub layer_names: Vec<String>,
   pub nodes: Vec<Node>,
   pub outputs: Vec<(i32, usize)>,
+  pub shared_kernels: Option<Vec<Arc<ArrayD<i128>>>>,
 }
 
 impl Graph {
@@ -363,6 +364,7 @@ impl Graph {
       layer_names: vec![],
       nodes: vec![],
       outputs: vec![],
+      shared_kernels: None,
     }
   }
 

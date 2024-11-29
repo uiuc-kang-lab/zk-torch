@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 use crate::util::{self, ark_de, ark_se};
-pub use add::AddBasicBlock;
+pub use add::{AddBasicBlock, MultipleAddBasicBlock};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};

@@ -204,7 +204,13 @@ fn get_local_graph(
     "Conv" => Ok(ConvLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "ConvTranspose" => Ok(ConvTransposeLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Conv2D" => Ok(Conv2dLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
-    "LargeConv2D" => Ok(LargeConv2dLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Conv3D" => Ok(Conv3dLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Conv3DTranspose" => Ok(Conv3dTransposeLayer::graph(
+      &input_shapes,
+      &input_types,
+      &node_constants,
+      &node_attributes,
+    )),
     "MaxPool2D" => Ok(MaxPool2dLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Max" => Ok(MaxLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Min" => Ok(MinLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
@@ -241,6 +247,17 @@ fn update_graph_w_local_graph(
       graph.precomputable.setup[idx] = graph.precomputable.setup[idx] && precomputable;
     }
   }
+
+  let mut concatenated = if graph.shared_kernels.is_none() {
+    Some(Vec::new())
+  } else {
+    graph.shared_kernels.take()
+  };
+  if let Some(p_local) = local_graph.shared_kernels {
+    concatenated.as_mut().unwrap().extend(p_local);
+  }
+  graph.shared_kernels = concatenated;
+
   // pushing nodes in a local graph to update graph.nodes
   let start_idx = graph.nodes.len() as i32;
   for local_node in local_graph.nodes.iter() {
@@ -393,6 +410,7 @@ pub fn load_file(filename: &str) -> (Graph, Vec<(ArrayD<Fr>, DatumType)>) {
     layer_names: vec![],
     nodes: vec![],
     outputs: vec![],
+    shared_kernels: None,
   };
   let mut outputs_idx = create_output_indices(constants, &mut graph);
 

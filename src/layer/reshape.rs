@@ -57,6 +57,21 @@ impl Layer for ReshapeLayer {
       }));
       let output = graph.addNode(reshape, vec![(-1, 0)]);
       graph.outputs.push((output, 0));
+    } else if startShape.len() == 2 && endShape.len() == 3 {
+      // optimization for Resnet-50
+      let mut a = endShape[1];
+      let mut b = endShape[2];
+      a = util::next_pow(a as u32) as usize;
+      b = util::next_pow(b as u32) as usize;
+      let permutation = ((0..a).map(|x| x * b).collect(), (0..b).collect());
+      let permute = graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(PermuteBasicBlock { permutation }),
+        N: 2,
+      }));
+      let permute_output = graph.addNode(permute, vec![(-1, 0)]);
+      let unsq = graph.addBB(Box::new(UnsqueezeBasicBlock {}));
+      let unsq_output = graph.addNode(unsq, vec![(permute_output, 0)]);
+      graph.outputs.push((unsq_output, 0));
     } else if startShape.len() == 0 {
       // special case: arr0 --> [1,1,...]
       let unsq = graph.addBB(Box::new(UnsqueezeBasicBlock {}));
