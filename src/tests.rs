@@ -58,6 +58,7 @@ fn testBasicBlocks() {
   let N: usize = 1 << 6;
   let n: usize = 1 << 3;
   let a = ArrayD::from_shape_fn(IxDyn(&[N]), |_| Fr::rand(&mut rng));
+  let a_d = ArrayD::from_shape_fn(IxDyn(&[N]), |_| Fr::from(rng.gen_range(0..1_000_000_001)));
   let a_n = a.slice(s![..n]).to_owned().into_dyn();
   let a_0 = arr0(a[0]).into_dyn();
   let b = ArrayD::from_shape_fn(IxDyn(&[N]), |_| Fr::rand(&mut rng));
@@ -72,6 +73,9 @@ fn testBasicBlocks() {
   testBasicBlock(MulBasicBlock {}, srs, &empty, &vec![&a, &b]);
   testBasicBlock(MulConstBasicBlock { c: 12345 }, srs, &empty, &vec![&a]);
   testBasicBlock(MulScalarBasicBlock {}, srs, &empty, &vec![&a, &a_0]);
+  testBasicBlock(DivConstProofBasicBlock { c: 16 }, srs, &empty, &vec![&a_d]);
+  let a_1 = a_d.clone().into_shape(vec![8, 8]).unwrap();
+  testBasicBlock(DivConstProofBasicBlock { c: 16 }, srs, &empty, &vec![&a_1]);
   testBasicBlock(AddBasicBlock {}, srs, &empty, &vec![&a_0, &b]);
   testBasicBlock(AddBasicBlock {}, srs, &empty, &vec![&b, &a_0]);
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a_0, &b]);
