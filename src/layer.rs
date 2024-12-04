@@ -22,7 +22,7 @@ pub use max::{MaxLayer, MinLayer};
 pub use mul::MulLayer;
 use ndarray::ArrayD;
 pub use neg::NegLayer;
-pub use new_conv::{Conv2dLayer, Conv3dLayer, Conv3dTransposeLayer};
+pub use new_conv::Conv2dLayer;
 pub use new_maxpool::MaxPool2dLayer;
 pub use nonlinear::*;
 pub use norm::{BatchNormLayer, InstanceNormLayer};

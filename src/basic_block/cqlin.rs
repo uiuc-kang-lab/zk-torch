@@ -23,8 +23,8 @@ fn get_model_element(kernel: &ArrayD<i128>, indices: &HashMap<(usize, usize), Ke
 
 #[derive(Debug, Clone, Copy)]
 pub enum KernelIdx {
-  TwoD(usize, usize, usize, usize),
-  ThreeD(usize, usize, usize, usize, usize),
+  TwoD(usize, usize, usize, usize), // (out_ch, in_ch, kh, kw)
+  ThreeD(usize, usize, usize, usize, usize), // (out_ch, in_ch, k1, k2, k3)
 }
 
 impl KernelIdx {
@@ -44,7 +44,8 @@ pub struct SparseCQLinBasicBlock {
   pub output_len: usize,
 }
 
-// input is rows of A, model is rows of B, outputs are rows of C
+// Transform length-m input to length-n output using a sparse n by m matrix K, 
+// where the ij-th element is defined by kernel[KernelIdx]
 impl BasicBlock for SparseCQLinBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 1);
