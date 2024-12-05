@@ -161,6 +161,7 @@ fn get_local_graph(
     "Sin" => Ok(SinLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Sub" => Ok(SubLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Einsum" => Ok(EinsumLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Greater" => Ok(GreaterLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Less" => Ok(LessLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "LSTM" => Ok(LSTMLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),

@@ -21,3 +21,21 @@ impl BasicBlock for LessBasicBlock {
     Ok(vec![r])
   }
 }
+
+// perform element-wise greater than comparison for two 1-d arrays
+#[derive(Debug)]
+pub struct GreaterBasicBlock;
+impl BasicBlock for GreaterBasicBlock {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
+    assert!(inputs.len() == 2 && inputs[0].ndim() <= 1 && inputs[1].ndim() <= 1);
+    let mut r = ArrayD::zeros(IxDyn(&[std::cmp::max(inputs[0].len(), inputs[1].len())]));
+    if inputs[0].len() == 1 && inputs[1].ndim() > 0 {
+      azip!((r in &mut r, &x in inputs[1]) *r = Fr::from((util::fr_to_int(x) <= util::fr_to_int(*inputs[0].first().unwrap())) as i32));
+    } else if inputs[1].len() == 1 {
+      azip!((r in &mut r, &x in inputs[0]) *r = Fr::from((util::fr_to_int(x) > util::fr_to_int(*inputs[1].first().unwrap())) as i32));
+    } else {
+      azip!((r in &mut r, &x in inputs[0], &y in inputs[1]) *r = Fr::from((util::fr_to_int(x) > util::fr_to_int(y)) as i32));
+    }
+    Ok(vec![r])
+  }
+}

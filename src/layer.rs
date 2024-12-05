@@ -15,7 +15,7 @@ pub use flatten::FlattenLayer;
 pub use gather::GatherLayer;
 pub use gathernd::GatherNDLayer;
 pub use gemm::GemmLayer;
-pub use less::LessLayer;
+pub use less::{GreaterLayer, LessLayer};
 pub use lstm::LSTMLayer;
 pub use matmul::{MatMulLayer, MultiHeadMatMulLayer};
 pub use max::{MaxLayer, MinLayer};

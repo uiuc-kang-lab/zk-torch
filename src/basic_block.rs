@@ -16,7 +16,7 @@ pub use cqlin::CQLinBasicBlock;
 pub use div::{DivConstBasicBlock, DivConstProofBasicBlock, DivScalarBasicBlock, ModConstBasicBlock};
 pub use eq::{ElementwiseEqBasicBlock, EqBasicBlock};
 pub use id::IdBasicBlock;
-pub use less::LessBasicBlock;
+pub use less::{GreaterBasicBlock, LessBasicBlock};
 pub use matmul::MatMulBasicBlock;
 pub use max::{MaxBasicBlock, MaxProofBasicBlock};
 pub use mul::{MulBasicBlock, MulConstBasicBlock, MulScalarBasicBlock};
