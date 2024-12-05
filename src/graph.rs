@@ -52,8 +52,7 @@ impl Graph {
   pub fn run(&self, inputs: &Vec<&ArrayD<Fr>>, models: &Vec<&ArrayD<Fr>>) -> Result<Vec<Vec<ArrayD<Fr>>>, util::CQOutOfRangeError> {
     let mut outputs = vec![vec![]; self.nodes.len()];
     let res: Result<(), util::CQOutOfRangeError> = self.nodes.iter().enumerate().try_for_each(|(i, n)| {
-      let bb_info = format!("{:?}", self.basic_blocks[n.basic_block]);
-      println!("{} | running {i} {:.300}", self.layer_names[i], bb_info,);
+      println!("{} | running {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
       let myInputs = n
         .inputs
         .iter()
@@ -90,18 +89,17 @@ impl Graph {
     let mut outputsEnc = vec![vec![]; self.nodes.len()];
     self.nodes.iter().enumerate().for_each(|(i, n)| {
       let precomputable = self.precomputable.encodeOutputs[i];
-      let bb_info = format!("{:?}", self.basic_blocks[n.basic_block]);
       if precomputable {
         // Skip encodeOutputs for some layers if they are precomputable.
         // These layers require no proving and verifying, and their outputs are not used as inputs of
         // `encodeOutputs` in any other layers that need proving and verifying.
         println!(
-          "{} | skipping encodingOutputs for {i} {:.300} because the output is precomputable and will not be used as input in any layer that needs proving and verifying",
-          self.layer_names[i], bb_info
+          "{} | skipping encodingOutputs for {i} {:?} because the output is precomputable and will not be used as input in any layer that needs proving and verifying",
+          self.layer_names[i], self.basic_blocks[n.basic_block]
         );
         return;
       }
-      let encode_id = format!("{} | encoding node {i} {:.300}", self.layer_names[i], bb_info);
+      let encode_id = format!("{} | encoding node {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
       println!("{}", encode_id);
       let myInputs = n
         .inputs
@@ -132,17 +130,16 @@ impl Graph {
       .enumerate()
       .map(|(i, (b, m))| {
         let precomputable = self.precomputable.setup[i];
-        let bb_info = format!("{:?}", b);
         if precomputable {
           // Skip setup for some basicblocks if they are precomputable.
           // These basicblocks require no proving and verifying since they are not used in any layer that needs proving and verifying.
           println!(
-            "skipping setup for {:?} {:.300} because the basicblock is not used in any layer that needs proving and verifying",
-            i, bb_info
+            "skipping setup for {:?} {:?} because the basicblock is not used in any layer that needs proving and verifying",
+            i, b
           );
           return (vec![], vec![], vec![]);
         }
-        println!("setting up {:?} {:.300}", i, bb_info);
+        println!("setting up {:?} {:?}", i, b);
         let bb_name = format!("{b:?}");
         let save_cq_layer_setup = CONFIG.prover.enable_layer_setup && (bb_name.contains("CQ2BasicBlock") || bb_name.contains("CQBasicBlock"));
         #[cfg(not(feature = "mock_prove"))]
@@ -189,17 +186,16 @@ impl Graph {
       .enumerate()
       .map(|(i, n)| {
         let precomputable = self.precomputable.prove_and_verify[i];
-        let bb_info = format!("{:?}", self.basic_blocks[n.basic_block]);
         if precomputable {
           // Skip proving for some layers if they are precomputable.
           // These layers require no proving and verifying as their inputs are known (i.e., constants) during graph construction.
           println!(
-            "{} | skipping proving for {i} {:.300} because this layer is precomputable given the constant inputs",
-            self.layer_names[i], bb_info
+            "{} | skipping proving for {i} {:?} because this layer is precomputable given the constant inputs",
+            self.layer_names[i], self.basic_blocks[n.basic_block]
           );
           return (vec![], vec![], vec![]);
         }
-        let prove_id = format!("{} | proving {i} {:.300}", self.layer_names[i], bb_info);
+        let prove_id = format!("{} | proving {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
         println!("{}", prove_id);
         let myInputs = n
           .inputs
@@ -257,17 +253,16 @@ impl Graph {
       .enumerate()
       .map(|(i, n)| {
         let precomputable = self.precomputable.prove_and_verify[i];
-        let bb_info = format!("{:?}", self.basic_blocks[n.basic_block]);
         if precomputable {
           // Skip verifying for some layers if they are precomputable.
           // These layers require no proving and verifying as their inputs are known (i.e., constants) during graph construction.
           println!(
-            "{} | skipping verifying for {i} {:.300} because this layer is precomputable given the constant inputs",
-            self.layer_names[i], bb_info
+            "{} | skipping verifying for {i} {:?} because this layer is precomputable given the constant inputs",
+            self.layer_names[i], self.basic_blocks[n.basic_block]
           );
           return vec![];
         }
-        let verify_id = format!("{} | verifying {i} {:.300}", self.layer_names[i], bb_info);
+        let verify_id = format!("{} | verifying {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
         println!("{}", verify_id);
         let myInputs = n
           .inputs
@@ -318,13 +313,12 @@ impl Graph {
     self.nodes.iter().enumerate().for_each(|(i, n)| {
       println!("verifying (debug mode) {i} {:?}", self.basic_blocks[n.basic_block]);
       let precomputable = self.precomputable.prove_and_verify[i];
-      let bb_info = format!("{:?}", self.basic_blocks[n.basic_block]);
       if precomputable {
         // Skip verifying for some layers if they are precomputable.
         // These layers require no proving and verifying as their inputs are known (i.e., constants) during graph construction.
         println!(
-          "{} | skipping verifying for {i} {:.300} because this layer is precomputable given the constant inputs",
-          self.layer_names[i], bb_info
+          "{} | skipping verifying for {i} {:?} because this layer is precomputable given the constant inputs",
+          self.layer_names[i], self.basic_blocks[n.basic_block]
         );
         return;
       }
