@@ -233,6 +233,107 @@ impl Graph {
       .collect()
   }
 
+  pub fn batch_prove(
+    &mut self,
+    srs: &SRS,
+    setups: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>)>,
+    models: &Vec<&ArrayD<Data>>,
+    inputs: &Vec<&ArrayD<Data>>,
+    outputs: &Vec<&Vec<&ArrayD<Data>>>,
+    rng: &mut StdRng,
+    timing: &mut TimingTree,
+  ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> {
+    assert!(self.nodes.len() == self.precomputable.prove_and_verify.len());
+    let cache = Arc::new(Mutex::new(HashMap::new()));
+
+    let mut batch_prove_state = Arc::new(Mutex::new(HashMap::new()));
+    let _ = self.nodes.iter().enumerate().map(|(i, n)| {
+      let precomputable = self.precomputable.prove_and_verify[i];
+      if precomputable {
+        // Skip proving for some layers if they are precomputable.
+        // These layers require no proving and verifying as their inputs are known (i.e., constants) during graph construction.
+        println!(
+          "{} | skipping proving for {i} {:?} because this layer is precomputable given the constant inputs",
+          self.layer_names[i], self.basic_blocks[n.basic_block]
+        );
+      } else {
+        let prove_id = format!("{} | proving {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
+        println!("{}", prove_id);
+        let myInputs = n
+          .inputs
+          .iter()
+          .map(|(basicblock_idx, output_idx)| {
+            if *basicblock_idx < 0 {
+              inputs[*output_idx + (-basicblock_idx - 1) as usize]
+            } else {
+              &(outputs[*basicblock_idx as usize][*output_idx])
+            }
+          })
+          .collect();
+        timed!(
+          timing,
+          &prove_id,
+          self.basic_blocks[n.basic_block].batch_prove_first(
+            srs,
+            setups[n.basic_block],
+            &mut batch_prove_state,
+            models[n.basic_block],
+            &myInputs,
+            outputs[i],
+            rng,
+            cache.clone(),
+          )
+        );
+        timed!(
+          timing,
+          &prove_id,
+          self.basic_blocks[n.basic_block].batch_prove_second(
+            srs,
+            setups[n.basic_block],
+            &mut batch_prove_state,
+            models[n.basic_block],
+            &myInputs,
+            outputs[i],
+            rng,
+            cache.clone(),
+          )
+        );
+        timed!(
+          timing,
+          &prove_id,
+          self.basic_blocks[n.basic_block].batch_prove_third(
+            srs,
+            setups[n.basic_block],
+            &mut batch_prove_state,
+            models[n.basic_block],
+            &myInputs,
+            outputs[i],
+            rng,
+            cache.clone(),
+          )
+        );
+      }
+    });
+
+    let guard = batch_prove_state.lock().unwrap();
+    let prove_id = format!("| proving ");
+    guard
+      .iter()
+      .map(|x| {
+        let proof = timed!(timing, &prove_id, x.1 .0.batch_prove(srs, &x.1 .1, rng));
+        let proof: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (
+          proof.0.iter().map(|x| (*x).into()).collect(),
+          proof.1.iter().map(|x| (*x).into()).collect(),
+          proof.2.iter().map(|x| (*x).into()).collect(),
+        );
+        let mut bytes = Vec::new();
+        proof.serialize_uncompressed(&mut bytes).unwrap();
+        util::add_randomness(rng, bytes);
+        proof
+      })
+      .collect()
+  }
+
   pub fn verify(
     &self,
     srs: &SRS,

@@ -91,11 +91,32 @@ pub enum CacheValues {
   G2(G2Affine),
 }
 
+pub enum BatchProveStateValues {
+  CQ(
+    usize,
+    HashMap<usize, usize>,
+    G2Projective,
+    Vec<G1Affine>,
+    Vec<DensePolynomial<Fr>>,
+    Vec<Fr>,
+    Vec<G1Projective>,
+    Vec<Fr>,
+  ),
+}
+
+pub enum BatchVerifyStateValues {
+  CQ(usize, Vec<G1Affine>),
+}
+
 // The cache is wrapped in Arc<Mutex<>> to allow multiple threads within the same role (either prover or verifier) to access it.
 // Arc (Atomic Reference Counting) enables safe sharing of the cache between threads,
 // while Mutex ensures that only one thread can write to the cache at a time, preventing race conditions.
 // Note: Each prover and verifier maintains its own separate cache. There is no cache sharing between the prover and verifier.
 pub type ProveVerifyCache = Arc<Mutex<HashMap<String, CacheValues>>>;
+
+pub type BatchProveState = Arc<Mutex<HashMap<String, (Box<dyn BasicBlock>, BatchProveStateValues)>>>;
+
+pub type BatchVerifyState = Arc<Mutex<HashMap<String, (Box<dyn BasicBlock>, BatchVerifyStateValues)>>>;
 
 pub type PairingCheck = Vec<(G1Affine, G2Affine)>;
 
@@ -184,6 +205,54 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
     (Vec::new(), Vec::new(), Vec::new())
   }
 
+  fn batch_prove_first(
+    &self,
+    _srs: &SRS,
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    _batch_prove_state: &mut BatchProveState,
+    _model: &ArrayD<Data>,
+    _inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) {
+  }
+
+  fn batch_prove_second(
+    &self,
+    _srs: &SRS,
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    _batch_prove_state: &mut BatchProveState,
+    _model: &ArrayD<Data>,
+    _inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) {
+  }
+
+  fn batch_prove_third(
+    &self,
+    _srs: &SRS,
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    _batch_prove_state: &mut BatchProveState,
+    _model: &ArrayD<Data>,
+    _inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) {
+  }
+
+  fn batch_prove(
+    &self,
+    _srs: &SRS,
+    _batch_prove_values: &BatchProveStateValues,
+    _rng: &mut StdRng,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    (Vec::new(), Vec::new(), Vec::new())
+  }
+
   fn verify(
     &self,
     _srs: &SRS,
@@ -191,6 +260,31 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
     _inputs: &Vec<&ArrayD<DataEnc>>,
     _outputs: &Vec<&ArrayD<DataEnc>>,
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> Vec<PairingCheck> {
+    vec![]
+  }
+
+  fn batch_verify_first(
+    &self,
+    _batch_verify_state: &mut BatchVerifyState,
+    _model: &ArrayD<DataEnc>,
+    _inputs: &Vec<&ArrayD<DataEnc>>,
+    _outputs: &Vec<&ArrayD<DataEnc>>,
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) {
+  }
+
+  fn batch_verify(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<DataEnc>,
+    _inputs: &Vec<&ArrayD<DataEnc>>,
+    _outputs: &Vec<&ArrayD<DataEnc>>,
+    _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    _batch_verify_values: &BatchVerifyStateValues,
     _rng: &mut StdRng,
     _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
