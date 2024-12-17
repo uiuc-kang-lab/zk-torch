@@ -96,7 +96,15 @@ pub enum BatchProveStateValues {
     usize,
     HashMap<usize, usize>,
     G2Projective,
-    Vec<G1Affine>,
+    Vec<DensePolynomial<Fr>>,
+    Vec<Fr>,
+    Vec<G1Projective>,
+    Vec<Fr>,
+  ),
+  CQ2(
+    usize,
+    HashMap<usize, usize>,
+    G2Projective,
     Vec<DensePolynomial<Fr>>,
     Vec<Fr>,
     Vec<G1Projective>,
@@ -105,7 +113,7 @@ pub enum BatchProveStateValues {
 }
 
 pub enum BatchVerifyStateValues {
-  CQ(usize, Vec<G1Affine>),
+  CQ(usize, usize, G1Affine, Vec<G1Affine>),
 }
 
 // The cache is wrapped in Arc<Mutex<>> to allow multiple threads within the same role (either prover or verifier) to access it.
@@ -275,18 +283,15 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
     _rng: &mut StdRng,
     _cache: ProveVerifyCache,
   ) {
+    let _ = _batch_verify_state;
   }
 
   fn batch_verify(
     &self,
     _srs: &SRS,
-    _model: &ArrayD<DataEnc>,
-    _inputs: &Vec<&ArrayD<DataEnc>>,
-    _outputs: &Vec<&ArrayD<DataEnc>>,
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _batch_verify_values: &BatchVerifyStateValues,
     _rng: &mut StdRng,
-    _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     vec![]
   }

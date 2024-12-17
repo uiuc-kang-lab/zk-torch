@@ -12,7 +12,7 @@ use tract_onnx::prelude::DatumType;
 // when output_idx equals to 0, the layer returns the quotient. (Div)
 // when output_idx equals to 1, the layer returns the remainder. (Mod)
 macro_rules! create_division_layer {
-  ($layer_name:ident, $const_block:ident, $output_idx:expr) => {
+  ($layer_name:ident, $const_block:ident, $const_enum:ident, $output_idx:expr) => {
     pub struct $layer_name;
 
     impl Layer for $layer_name {
@@ -48,12 +48,16 @@ macro_rules! create_division_layer {
           // Add a basic block for range checking with custom setup
           let const_check = if input_shapes[0].len() == input_shapes[1].len() && input_shapes[0].len() == 0 {
             graph.addBB(Box::new(CQ2BasicBlock {
-              setup: Some((Box::new($const_block { c: c_value as _ }), *onnx::CQ_RANGE_LOWER, *onnx::CQ_RANGE)),
+              op: cq2::CQ2BasicBlockOps::$const_enum(c_value as _),
+              offset: *onnx::CQ_RANGE_LOWER,
+              size: *onnx::CQ_RANGE,
             }))
           } else {
             graph.addBB(Box::new(RepeaterBasicBlock {
               basic_block: Box::new(CQ2BasicBlock {
-                setup: Some((Box::new($const_block { c: c_value as _ }), *onnx::CQ_RANGE_LOWER, *onnx::CQ_RANGE)),
+                op: cq2::CQ2BasicBlockOps::$const_enum(c_value as _),
+                offset: *onnx::CQ_RANGE_LOWER,
+                size: *onnx::CQ_RANGE,
               }),
               N: 1,
             }))
@@ -168,5 +172,5 @@ macro_rules! create_division_layer {
 }
 
 // Create DivLayer and ModLayer using the macro
-create_division_layer!(DivLayer, DivConstBasicBlock, 0);
-create_division_layer!(ModLayer, ModConstBasicBlock, 1);
+create_division_layer!(DivLayer, DivConstBasicBlock, DivConst, 0);
+create_division_layer!(ModLayer, ModConstBasicBlock, ModConst, 1);

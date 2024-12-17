@@ -126,14 +126,9 @@ impl Layer for LSTMLayer {
       }));
       let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
-          setup: Some((
-            Box::new(ChangeSFBasicBlock {
-              input_SF: sf_log * 2,
-              output_SF: sf_log,
-            }),
-            *onnx::CQ_RANGE_LOWER,
-            *onnx::CQ_RANGE,
-          )),
+          op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
+          offset: *onnx::CQ_RANGE_LOWER,
+          size: *onnx::CQ_RANGE,
         }),
         N: 1,
       }));
@@ -203,14 +198,9 @@ impl Layer for LSTMLayer {
       }));
       let sigmoid_check = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
-          setup: Some((
-            Box::new(SigmoidBasicBlock {
-              input_SF: sf_log * 2,
-              output_SF: sf_log,
-            }),
-            *onnx::CQ_RANGE_LOWER,
-            *onnx::CQ_RANGE,
-          )),
+          op: cq2::CQ2BasicBlockOps::Sigmoid(sf_log * 2, sf_log),
+          offset: *onnx::CQ_RANGE_LOWER,
+          size: *onnx::CQ_RANGE,
         }),
         N: 1,
       }));
@@ -232,14 +222,9 @@ impl Layer for LSTMLayer {
       }));
       let tanh_check = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
-          setup: Some((
-            Box::new(TanhBasicBlock {
-              input_SF: sf_log * 2,
-              output_SF: sf_log,
-            }),
-            *onnx::CQ_RANGE_LOWER,
-            *onnx::CQ_RANGE,
-          )),
+          op: cq2::CQ2BasicBlockOps::Tanh(sf_log * 2, sf_log),
+          offset: *onnx::CQ_RANGE_LOWER,
+          size: *onnx::CQ_RANGE,
         }),
         N: 1,
       }));
