@@ -82,15 +82,6 @@ fn testBasicBlocks() {
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a_0, &b]);
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&b, &a_0]);
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a_0, &a_0]);
-  testBasicBlock(
-    CQBasicBlock {
-      setup: util::CQArrayType::Custom(a.iter().map(|x| *x).collect::<Vec<_>>()),
-    },
-    srs,
-    &a,
-    &vec![&a_n],
-  );
-  // testBasicBlock(CQ2BasicBlock { setup: None }, srs, &ab, &vec![&a_n, &b_n]);
   testBasicBlock(SumBasicBlock {}, srs, &empty, &vec![&a]);
 
   let data_to_split = ArrayD::from_shape_fn(IxDyn(&[4, 2]), |_| Fr::rand(&mut rng));
@@ -144,8 +135,18 @@ fn testBasicBlocks() {
 
 fn testBatchProve<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) {
   let mut rng = StdRng::from_entropy();
-  let outputs = basic_block.run(model, inputs);
-  let outputs = if outputs.is_ok() { outputs.unwrap() } else { panic!("Error in run") };
+  let outputs: Vec<_> = inputs.iter().map(|input| basic_block.run(model, &vec![input])).collect();
+  let outputs: Vec<_> = outputs
+    .iter()
+    .map(|output| {
+      if output.is_ok() {
+        output.clone().unwrap()
+      } else {
+        panic!("Error in run")
+      }
+    })
+    .flatten()
+    .collect();
   let outputs: Vec<&ArrayD<Fr>> = outputs.iter().map(|x| x).collect();
   let model = convert_to_data(srs, model);
   let setup = basic_block.setup(srs, &model);
@@ -187,7 +188,20 @@ fn testBatchProve<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
       cache.clone(),
     );
   }
+  for input in inputs.iter() {
+    basic_block.batch_prove_third(
+      srs,
+      setup,
+      &mut batch_prove_state,
+      &model,
+      &vec![input],
+      &outputs,
+      &mut rng,
+      cache.clone(),
+    );
+  }
   let guard = batch_prove_state.lock().unwrap();
+  println!("keys {:?}", guard.keys());
   let proofs: HashMap<_, (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> = guard
     .keys()
     .map(|key| {
@@ -210,9 +224,10 @@ fn testBatchProve<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
 
   let mut batch_verify_state = Arc::new(Mutex::new(HashMap::new()));
   for input in inputs.iter() {
-    basic_block.batch_verify_first(&mut batch_verify_state, &model, &vec![input], &outputs, &mut rng, cache.clone());
+    basic_block.batch_verify_first(&mut batch_verify_state, &model, &vec![input], &outputs, &mut rng2, cache.clone());
   }
   let guard = batch_verify_state.lock().unwrap();
+  println!("keys {:?}", guard.keys());
   let pairings: Vec<_> = guard
     .keys()
     .map(|key| {
@@ -223,7 +238,7 @@ fn testBatchProve<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
         &proof.2.iter().map(|y| *y).collect(),
       );
       let (bb, values) = guard.get(key).unwrap();
-      bb.batch_verify(srs, proof, values, &mut rng)
+      bb.batch_verify(srs, proof, values, &mut rng2)
     })
     .flatten()
     .collect();
@@ -239,7 +254,7 @@ fn test_batch() {
   let N: usize = 1 << 6;
   let a = ArrayD::from_shape_fn(IxDyn(&[N]), |_| Fr::from(rng.gen_range(0..10)));
   let a_1 = ArrayD::from_shape_fn(IxDyn(&[N]), |_| Fr::from(rng.gen_range(0..10)));
-  testBasicBlock(
+  testBatchProve(
     CQBasicBlock {
       setup: util::CQArrayType::Custom(((0..N).map(|x| Fr::from(x as i32))).collect::<Vec<_>>()),
     },

@@ -34,6 +34,7 @@ pub use rope::RoPEBasicBlock;
 use serde::{Deserialize, Serialize};
 pub use sort::SortBasicBlock;
 pub use split::SplitBasicBlock;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 pub use sub::SubBasicBlock;
@@ -94,21 +95,21 @@ pub enum CacheValues {
 pub enum BatchProveStateValues {
   CQ(
     usize,
-    HashMap<usize, usize>,
+    RefCell<HashMap<usize, usize>>,
     G2Projective,
     Vec<DensePolynomial<Fr>>,
     Vec<Fr>,
     Vec<G1Projective>,
-    Vec<Fr>,
+    RefCell<Vec<Fr>>,
   ),
   CQ2(
     usize,
-    HashMap<usize, usize>,
+    RefCell<HashMap<usize, usize>>,
     G2Projective,
     Vec<DensePolynomial<Fr>>,
     Vec<Fr>,
     Vec<G1Projective>,
-    Vec<Fr>,
+    RefCell<Vec<Fr>>,
   ),
 }
 
