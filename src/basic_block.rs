@@ -123,9 +123,9 @@ pub enum BatchVerifyStateValues {
 // Note: Each prover and verifier maintains its own separate cache. There is no cache sharing between the prover and verifier.
 pub type ProveVerifyCache = Arc<Mutex<HashMap<String, CacheValues>>>;
 
-pub type BatchProveState = Arc<Mutex<HashMap<String, (Box<dyn BasicBlock>, BatchProveStateValues)>>>;
+pub type BatchProveState = RefCell<HashMap<String, (Box<dyn BasicBlock>, BatchProveStateValues)>>;
 
-pub type BatchVerifyState = Arc<Mutex<HashMap<String, (Box<dyn BasicBlock>, BatchVerifyStateValues)>>>;
+pub type BatchVerifyState = RefCell<HashMap<String, (Box<dyn BasicBlock>, BatchVerifyStateValues)>>;
 
 pub type PairingCheck = Vec<(G1Affine, G2Affine)>;
 

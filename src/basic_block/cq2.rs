@@ -222,8 +222,8 @@ impl BasicBlock for CQ2BasicBlock {
         table_dict.insert((model[0].raw[i], model[1].raw[i]), i);
       }
     }
-    let mut guard = batch_prove_state.lock().unwrap();
-    match guard.get_mut(&key) {
+    let mut state_mut_ref = batch_prove_state.borrow_mut();
+    match state_mut_ref.get_mut(&key) {
       Some(value) => {
         if let (_, BatchProveStateValues::CQ2(n, m_i, T_x_2, polys, _, _, _)) = value {
           for x in inputs[0].raw.iter().zip(inputs[1].raw.iter()) {
@@ -249,7 +249,7 @@ impl BasicBlock for CQ2BasicBlock {
             m_i.entry(table_dict.get(&temp).unwrap().clone()).and_modify(|y| *y += 1).or_insert(1);
           }
         }
-        guard.insert(
+        state_mut_ref.insert(
           key.to_string(),
           (
             Box::new(self.clone()),
@@ -292,8 +292,8 @@ impl BasicBlock for CQ2BasicBlock {
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
 
     let key = format!("{:?}_{}", self, inputs[0].raw.len());
-    let mut guard = batch_prove_state.lock().unwrap();
-    match guard.get_mut(&key) {
+    let mut state_mut_ref = batch_prove_state.borrow_mut();
+    match state_mut_ref.get_mut(&key) {
       Some(value) => {
         if let (_, BatchProveStateValues::CQ2(n, m_i, T_x_2, polys, rngs, _, _)) = value {
           let alpha = if rngs.len() == 0 { Fr::rand(rng) } else { rngs[0] };
@@ -351,8 +351,8 @@ impl BasicBlock for CQ2BasicBlock {
     assert!(n <= N);
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let key = format!("{:?}_{}", self, n);
-    let mut guard = batch_prove_state.lock().unwrap();
-    match guard.get_mut(&key) {
+    let mut state_mut_ref = batch_prove_state.borrow_mut();
+    match state_mut_ref.get_mut(&key) {
       Some(value) => {
         if let (_, BatchProveStateValues::CQ2(n, m_i, T_x_2, polys, rngs, proof_0, proof_2)) = value {
           let alpha = rngs[0];
@@ -375,13 +375,13 @@ impl BasicBlock for CQ2BasicBlock {
             };
             let B_DC = util::msm::<G1Projective>(&srs.X1A[N - *n..], &B_poly.coeffs);
 
-            let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = m_i.borrow().iter().map(|(i, y)| (L_i_x_1[*i], Fr::from(*y as u32))).unzip();
+            let m_ref = m_i.borrow();
+            let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = m_ref.iter().map(|(i, y)| (L_i_x_1[*i], Fr::from(*y as u32))).unzip();
             let m_x = util::msm::<G1Projective>(&temp, &temp2);
 
             // Calculate A
             // element to m/(t + beta)
-            let A_i: HashMap<usize, Fr> = m_i
-              .borrow()
+            let A_i: HashMap<usize, Fr> = m_ref
               .iter()
               .map(|(i, y)| {
                 (
@@ -474,17 +474,18 @@ impl BasicBlock for CQ2BasicBlock {
       let W_poly = &q1_poly.sub(&q1_z_poly) / &q1_V;
       let W_x = util::msm::<G1Projective>(&srs.X1A, &W_poly.coeffs);
 
-      let fz_prod: Fr = proof_2.borrow()[3..].iter().product();
+      let p_ref = proof_2.borrow();
+      let fz_prod: Fr = p_ref[3..].iter().product();
       let mut rng2 = StdRng::from_entropy();
-      let r = &proof_2.borrow()[..2];
-      let r_sum = proof_2.borrow()[2];
+      let r = &p_ref[..2];
+      let r_sum = p_ref[2];
       let C5 = -(srs.X1P[*n] - srs.X1P[0]) * r[0] + srs.X1P[0] * fz_prod * r[1];
       let r = Fr::rand(&mut rng2);
       let C6 = -(srs.X1P[1] - srs.X1P[0] * zeta) * r + srs.X1P[0] * r_sum;
 
       let mut proof = proof_0.clone();
       proof.append(&mut vec![W_x, C5, C6]);
-      (proof, vec![*T_x_2], proof_2.borrow().to_vec())
+      (proof, vec![*T_x_2], p_ref[3..].to_vec())
     } else {
       (vec![], vec![], vec![])
     }

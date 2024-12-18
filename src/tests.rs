@@ -9,6 +9,7 @@ use ark_std::{One, Zero};
 use core::panic;
 use ndarray::{arr0, concatenate, s, ArrayD, Axis, IxDyn};
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -162,7 +163,7 @@ fn testBatchProve<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
   let outputs: Vec<&ArrayD<Data>> = outputs.iter().map(|output| output).collect();
   let mut rng2 = rng.clone();
   let cache = Arc::new(Mutex::new(HashMap::new()));
-  let mut batch_prove_state = Arc::new(Mutex::new(HashMap::new()));
+  let mut batch_prove_state = RefCell::new(HashMap::new());
 
   for input in inputs.iter() {
     basic_block.batch_prove_first(
@@ -200,12 +201,11 @@ fn testBatchProve<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
       cache.clone(),
     );
   }
-  let guard = batch_prove_state.lock().unwrap();
-  println!("keys {:?}", guard.keys());
-  let proofs: HashMap<_, (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> = guard
+  let state_ref = batch_prove_state.borrow();
+  let proofs: HashMap<_, (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> = state_ref
     .keys()
     .map(|key| {
-      let (bb, values) = guard.get(key).unwrap();
+      let (bb, values) = state_ref.get(key).unwrap();
       let proof = bb.batch_prove(srs, values, &mut rng);
       let proof = (
         proof.0.iter().map(|y| (*y).into()).collect(),
@@ -222,13 +222,13 @@ fn testBatchProve<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
   let outputs: Vec<&ArrayD<DataEnc>> = outputs.iter().map(|output| output).collect();
   let cache = Arc::new(Mutex::new(HashMap::new()));
 
-  let mut batch_verify_state = Arc::new(Mutex::new(HashMap::new()));
+  let mut batch_verify_state = RefCell::new(HashMap::new());
   for input in inputs.iter() {
     basic_block.batch_verify_first(&mut batch_verify_state, &model, &vec![input], &outputs, &mut rng2, cache.clone());
   }
-  let guard = batch_verify_state.lock().unwrap();
-  println!("keys {:?}", guard.keys());
-  let pairings: Vec<_> = guard
+
+  let state_ref = batch_verify_state.borrow();
+  let pairings: Vec<_> = state_ref
     .keys()
     .map(|key| {
       let proof = proofs.get(key).unwrap();
@@ -237,7 +237,7 @@ fn testBatchProve<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
         &proof.1.iter().map(|y| *y).collect(),
         &proof.2.iter().map(|y| *y).collect(),
       );
-      let (bb, values) = guard.get(key).unwrap();
+      let (bb, values) = state_ref.get(key).unwrap();
       bb.batch_verify(srs, proof, values, &mut rng2)
     })
     .flatten()

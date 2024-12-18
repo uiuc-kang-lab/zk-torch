@@ -11,6 +11,7 @@ use ark_std::Zero;
 use ndarray::ArrayD;
 use plonky2::{timed, util::timing::TimingTree};
 use rand::rngs::StdRng;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::File;
 use std::sync::{Arc, Mutex};
@@ -246,7 +247,7 @@ impl Graph {
     assert!(self.nodes.len() == self.precomputable.prove_and_verify.len());
     let cache = Arc::new(Mutex::new(HashMap::new()));
 
-    let mut batch_prove_state = Arc::new(Mutex::new(HashMap::new()));
+    let mut batch_prove_state = RefCell::new(HashMap::new());
     let _: Vec<_> = self
       .nodes
       .iter()
@@ -383,8 +384,8 @@ impl Graph {
       })
       .collect();
 
-    let guard = batch_prove_state.lock().unwrap();
-    guard
+    let state_ref = batch_prove_state.borrow();
+    state_ref
       .iter()
       .map(|x| {
         let prove_id = format!("| batch prove {:?}", x.0);
