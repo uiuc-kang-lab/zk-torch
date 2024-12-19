@@ -22,6 +22,7 @@ use std::{
   cmp::max,
   collections::HashMap,
   sync::{Arc, Mutex},
+  time::Instant,
 };
 
 #[derive(Debug, Clone)]
@@ -208,7 +209,10 @@ impl BasicBlock for CQBasicBlock {
           let f_poly = &input.poly + &DensePolynomial::from_coefficients_vec(vec![beta]);
           let B_poly = &polys[0] + &Evaluations::from_vec_and_domain(B_i.clone(), domain_n).interpolate();
           let f_prod = &polys[1];
+          let start = Instant::now();
           let diff = &polys[2].mul(&f_poly) + f_prod;
+          let duration = start.elapsed();
+          println!("diff deg {}, time: {:?}", diff.degree(), duration);
           let f_prod = f_poly.mul(f_prod);
           let new_polys = vec![B_poly, f_prod, diff];
           *value = (
@@ -273,6 +277,9 @@ impl BasicBlock for CQBasicBlock {
             // Calculate A
             // element to m/(t + beta)
             let beta = rngs[0];
+            // let betas = util::calc_pow(beta, *n);
+            // assert!(&B_poly.evaluate(&beta) * &f_prod.evaluate(&beta) - Fr::one() == *&B_Q_poly.evaluate(&beta) * (betas[*n - 1] - Fr::one()));
+
             let A_i: HashMap<usize, Fr> = m_ref.iter().map(|(i, y)| (*i, Fr::from(*y as u32) * (model.raw[*i] + beta).inverse().unwrap())).collect();
             // lagrange basis of value
             let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = A_i.iter().map(|(i, y)| (L_i_x_1[*i], *y)).unzip();
@@ -285,7 +292,7 @@ impl BasicBlock for CQBasicBlock {
             let A_zero_div = util::msm::<G1Projective>(&temp, &temp2);
 
             let mut rng2 = StdRng::from_entropy();
-            let r: Vec<_> = (0..10).map(|_| Fr::rand(&mut rng2)).collect();
+            let r: Vec<_> = (0..9).map(|_| Fr::rand(&mut rng2)).collect();
             let commits = vec![m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC];
             let mut commits: Vec<G1Projective> = commits.iter().enumerate().map(|(i, x)| (*x) + srs.Y1P * r[i]).collect();
             let mut C = vec![
@@ -294,6 +301,9 @@ impl BasicBlock for CQBasicBlock {
               -srs.X1P[1] * r[7] + srs.X1P[0] * (r[5] - r[3] * Fr::from(N as u32) * Fr::from(*n as u32).inverse().unwrap()),
               -srs.X1P[0] * r[8] + srs.X1P[N - *n] * r[5],
             ];
+            if proof_2.borrow().len() < 2 {
+              proof_2.borrow_mut().push(Fr::zero());
+            }
             proof_2.borrow_mut().append(&mut vec![r[5], r[6], Fr::zero()]);
             commits.append(&mut C);
             (commits, proof_2)
@@ -305,10 +315,6 @@ impl BasicBlock for CQBasicBlock {
           let zeta = if rngs.len() == 1 { Fr::rand(rng) } else { rngs[1] };
           let mu = if rngs.len() == 1 { Fr::rand(rng) } else { rngs[2] };
           let mu_pow = if rngs.len() == 1 { mu } else { rngs[3] * mu };
-          // println!("beta {:?}", beta);
-          // println!("zeta {:?}", zeta);
-          // println!("mu {:?}", mu);
-          // println!("mu_pow {:?}", mu_pow);
           let f_poly = &input.poly + &DensePolynomial::from_coefficients_vec(vec![beta]);
           let q1_poly: DensePolynomial<Fr> = if polys.len() < 4 {
             f_poly.mul(mu_pow)
@@ -352,21 +358,20 @@ impl BasicBlock for CQBasicBlock {
       let p_ref = proof_2.borrow();
       let f_zs = &p_ref[5..];
       let fz_prod: Fr = f_zs.iter().product();
-      let diff_prod: Fr = f_zs[1..].iter().product();
-      let diffs: Vec<_> = f_zs[1..].iter().map(|x| diff_prod / x).collect();
-      let diffs_sum: Fr = diffs.iter().sum();
-      // println!("diff_prod {:?}", diff_prod);
-      // println!("diffs {:?}", diffs);
-      // println!("diffs_sum {:?}", diffs_sum);
-      // println!("fz_prod {:?}", fz_prod);
-      // println!("f_prod {:?}", f_prod.evaluate(&zeta));
-      // println!("diff: {:?}", diff.evaluate(&zeta));
       let mut rng2 = StdRng::from_entropy();
       // [input0.r, input1.r, B_x, B_Q_x]
       let r = &p_ref[..4];
       let r_sum = p_ref[4];
       let zetas = util::calc_pow(zeta, *n);
-      let C5 = -srs.X1P[0] * (zetas[n - 1] - Fr::one()) * r[3] + srs.X1P[0] * (fz_prod * r[2] - diffs_sum * r[0] - diffs[0] * r[1]);
+      let diff_r = if f_zs.len() == 1 {
+        Fr::zero()
+      } else {
+        let diff_prod: Fr = f_zs[1..].iter().product();
+        let diffs: Vec<_> = f_zs[1..].iter().map(|x| diff_prod / x).collect();
+        let diffs_sum: Fr = diffs.iter().sum();
+        diffs_sum * r[0] + diffs[0] * r[1]
+      };
+      let C5 = srs.X1P[0] * (fz_prod * r[2] - diff_r - (zetas[n - 1] - Fr::one()) * r[3]);
       let r = Fr::rand(&mut rng2);
       let C6 = -(srs.X1P[1] - srs.X1P[0] * zeta) * r + srs.X1P[0] * r_sum;
 
@@ -433,16 +438,16 @@ impl BasicBlock for CQBasicBlock {
     let mus = util::calc_pow(mu, m);
     let fz_sum: Fr = f_zs.iter().enumerate().map(|(i, x)| *x * mus[i]).sum();
     let fz_prod: Fr = f_zs.iter().product();
-    // println!("fz_prod {:?}", fz_prod);
-    // println!("diff {:?}", diff);
     let f_sum: G1Projective = f_xs.iter().enumerate().map(|(i, x)| (*x + srs.X1A[0] * beta) * mus[i]).sum();
 
-    let diff_prod: Fr = f_zs[1..].iter().product();
-    let diffs: Vec<_> = f_zs[1..].iter().map(|x| diff_prod / x).collect();
-    let diffs_sum: Fr = diffs.iter().sum();
-    println!("diff_prod {:?}", diff_prod);
-    println!("diffs_sum {:?}", diffs_sum);
-    let diff_g1 = (f_xs[0] + srs.X1A[0] * beta) * diffs_sum + (f_xs[1] + srs.X1A[0] * beta) * diffs[0];
+    let diff_g1 = if f_zs.len() == 1 {
+      srs.X1P[0]
+    } else {
+      let diff_prod: Fr = f_zs[1..].iter().product();
+      let diffs: Vec<_> = f_zs[1..].iter().map(|x| diff_prod / x).collect();
+      let diffs_sum: Fr = diffs.iter().sum();
+      (f_xs[0] + srs.X1A[0] * beta) * diffs_sum + (f_xs[1] + srs.X1A[0] * beta) * diffs[0]
+    };
 
     // Check A(x) (A_i = m_i/(t_i+beta))
     checks.push(vec![

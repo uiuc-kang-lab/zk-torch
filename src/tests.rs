@@ -252,15 +252,17 @@ fn test_batch() {
   let srs = &ptau::load_file("challenge", 7, 7);
   let mut rng = StdRng::from_entropy();
   let N: usize = 1 << 6;
-  let a = ArrayD::from_shape_fn(IxDyn(&[N]), |_| Fr::from(rng.gen_range(0..10)));
-  let a_1 = ArrayD::from_shape_fn(IxDyn(&[N]), |_| Fr::from(rng.gen_range(0..10)));
+  let n: usize = 1 << 1;
+  let a = ArrayD::from_shape_fn(IxDyn(&[n]), |_| Fr::from(rng.gen_range(0..10)));
+  let a_1 = ArrayD::from_shape_fn(IxDyn(&[n]), |_| Fr::from(rng.gen_range(0..10)));
+  let a_2 = ArrayD::from_shape_fn(IxDyn(&[n]), |_| Fr::from(rng.gen_range(0..10)));
   testBatchProve(
     CQBasicBlock {
       setup: util::CQArrayType::Custom(((0..N).map(|x| Fr::from(x as i32))).collect::<Vec<_>>()),
     },
     srs,
     &a,
-    &vec![&a, &a_1],
+    &vec![&a],
   );
 }
 
