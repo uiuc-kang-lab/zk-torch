@@ -127,6 +127,9 @@ pub type BatchProveState = RefCell<HashMap<String, (Box<dyn BasicBlock>, BatchPr
 
 pub type BatchVerifyState = RefCell<HashMap<String, (Box<dyn BasicBlock>, BatchVerifyStateValues)>>;
 
+// key -> (batch id, # inputs)
+pub type BatchCounters = RefCell<HashMap<String, (usize, usize)>>;
+
 pub type PairingCheck = Vec<(G1Affine, G2Affine)>;
 
 #[derive(Clone, Deserialize, Serialize, Debug)]
@@ -219,6 +222,7 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
     _srs: &SRS,
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     _batch_prove_state: &mut BatchProveState,
+    _batch_counters: &mut BatchCounters,
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
@@ -232,6 +236,7 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
     _srs: &SRS,
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     _batch_prove_state: &mut BatchProveState,
+    _batch_counters: &mut BatchCounters,
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
@@ -245,6 +250,7 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
     _srs: &SRS,
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     _batch_prove_state: &mut BatchProveState,
+    _batch_counters: &mut BatchCounters,
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,

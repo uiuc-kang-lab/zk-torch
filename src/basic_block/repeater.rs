@@ -1,4 +1,4 @@
-use super::{BasicBlock, BatchProveState, BatchProveStateValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use super::{BasicBlock, BatchCounters, BatchProveState, BatchProveStateValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::{ndarr_azip, util};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::univariate::DensePolynomial;
@@ -168,6 +168,7 @@ impl BasicBlock for RepeaterBasicBlock {
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     mut batch_prove_state: &mut BatchProveState,
+    batch_counters: &mut BatchCounters,
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
@@ -179,7 +180,7 @@ impl BasicBlock for RepeaterBasicBlock {
       let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
       let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
       let mut rng = rng.clone();
-      let _ = self.basic_block.batch_prove_first(srs, setup, &mut batch_prove_state, model, &localInputs, &localOutputs, &mut rng, cache.clone());
+      let _ = self.basic_block.batch_prove_first(srs, setup, &mut batch_prove_state, batch_counters, model, &localInputs, &localOutputs, &mut rng, cache.clone());
     });
   }
 
@@ -188,6 +189,7 @@ impl BasicBlock for RepeaterBasicBlock {
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     mut batch_prove_state: &mut BatchProveState,
+    batch_counters: &mut BatchCounters,
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
@@ -199,7 +201,7 @@ impl BasicBlock for RepeaterBasicBlock {
       let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
       let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
       let mut rng = rng.clone();
-      let _ = self.basic_block.batch_prove_second(srs, setup, &mut batch_prove_state, model, &localInputs, &localOutputs, &mut rng, cache.clone());
+      let _ = self.basic_block.batch_prove_second(srs, setup, &mut batch_prove_state, batch_counters, model, &localInputs, &localOutputs, &mut rng, cache.clone());
     });
   }
 
@@ -208,6 +210,7 @@ impl BasicBlock for RepeaterBasicBlock {
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     mut batch_prove_state: &mut BatchProveState,
+    batch_counters: &mut BatchCounters,
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
@@ -219,7 +222,7 @@ impl BasicBlock for RepeaterBasicBlock {
       let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
       let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
       let mut rng = rng.clone();
-      let _ = self.basic_block.batch_prove_third(srs, setup, &mut batch_prove_state, model, &localInputs, &localOutputs, &mut rng, cache.clone());
+      let _ = self.basic_block.batch_prove_third(srs, setup, &mut batch_prove_state, batch_counters, model, &localInputs, &localOutputs, &mut rng, cache.clone());
     });
   }
 

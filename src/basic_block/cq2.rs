@@ -198,6 +198,7 @@ impl BasicBlock for CQ2BasicBlock {
     _srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     batch_prove_state: &mut BatchProveState,
+    batch_counters: &mut BatchCounters,
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
@@ -210,7 +211,8 @@ impl BasicBlock for CQ2BasicBlock {
     assert!(inputs[0].raw.len() == inputs[1].raw.len());
     let n = inputs[0].raw.len();
 
-    let key = format!("{:?}_{}", self, inputs[0].raw.len());
+    let tag = format!("{:?}_{}", self, inputs[0].raw.len());
+    let key = util::update_batch_counters(batch_counters, &tag, 8);
     let mut cache = cache.lock().unwrap();
     let CacheValues::CQ2TableDict(table_dict) =
       cache.entry(format!("cq2_table_dict_{:p}", self)).or_insert_with(|| CacheValues::CQ2TableDict(HashMap::new()))
@@ -278,6 +280,7 @@ impl BasicBlock for CQ2BasicBlock {
     _srs: &SRS,
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     batch_prove_state: &mut BatchProveState,
+    batch_counters: &mut BatchCounters,
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
@@ -291,7 +294,8 @@ impl BasicBlock for CQ2BasicBlock {
     assert!(n <= N);
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
 
-    let key = format!("{:?}_{}", self, inputs[0].raw.len());
+    let tag = format!("{:?}_{}", self, inputs[0].raw.len());
+    let key = util::update_batch_counters(batch_counters, &tag, 8);
     let mut state_mut_ref = batch_prove_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
@@ -332,6 +336,7 @@ impl BasicBlock for CQ2BasicBlock {
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     batch_prove_state: &mut BatchProveState,
+    batch_counters: &mut BatchCounters,
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
@@ -350,7 +355,8 @@ impl BasicBlock for CQ2BasicBlock {
 
     assert!(n <= N);
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
-    let key = format!("{:?}_{}", self, n);
+    let tag = format!("{:?}_{}", self, inputs[0].raw.len());
+    let key = util::update_batch_counters(batch_counters, &tag, 8);
     let mut state_mut_ref = batch_prove_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {

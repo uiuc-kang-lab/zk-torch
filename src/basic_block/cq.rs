@@ -1,8 +1,8 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 use super::{
-  BasicBlock, BatchProveState, BatchProveStateValues, BatchVerifyState, BatchVerifyStateValues, CacheValues, Data, DataEnc, PairingCheck,
-  ProveVerifyCache, SRS,
+  BasicBlock, BatchCounters, BatchProveState, BatchProveStateValues, BatchVerifyState, BatchVerifyStateValues, CacheValues, Data, DataEnc,
+  PairingCheck, ProveVerifyCache, SRS,
 };
 use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -103,6 +103,7 @@ impl BasicBlock for CQBasicBlock {
     _srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     batch_prove_state: &mut BatchProveState,
+    batch_counters: &mut BatchCounters,
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
@@ -115,7 +116,8 @@ impl BasicBlock for CQBasicBlock {
     let N = model.raw.len();
     assert!(n <= N);
 
-    let key = format!("{:?}_{}", self, input.raw.len());
+    let tag = format!("{:?}_{}", self, input.raw.len());
+    let key = util::update_batch_counters(batch_counters, &tag, 8);
     let mut cache = cache.lock().unwrap();
     let CacheValues::CQTableDict(table_dict) =
       cache.entry(format!("cq_table_dict_{:p}", self)).or_insert_with(|| CacheValues::CQTableDict(HashMap::new()))
@@ -186,6 +188,7 @@ impl BasicBlock for CQBasicBlock {
     _srs: &SRS,
     _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     batch_prove_state: &mut BatchProveState,
+    batch_counters: &mut BatchCounters,
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
@@ -199,7 +202,8 @@ impl BasicBlock for CQBasicBlock {
     assert!(n <= N);
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
 
-    let key = format!("{:?}_{}", self, input.raw.len());
+    let tag = format!("{:?}_{}", self, input.raw.len());
+    let key = util::update_batch_counters(batch_counters, &tag, 8);
     let mut state_mut_ref = batch_prove_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
@@ -231,6 +235,7 @@ impl BasicBlock for CQBasicBlock {
     srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     batch_prove_state: &mut BatchProveState,
+    batch_counters: &mut BatchCounters,
     model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
@@ -249,7 +254,8 @@ impl BasicBlock for CQBasicBlock {
 
     assert!(n <= N);
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
-    let key = format!("{:?}_{}", self, input.raw.len());
+    let tag = format!("{:?}_{}", self, input.raw.len());
+    let key = util::update_batch_counters(batch_counters, &tag, 8);
     let mut state_mut_ref = batch_prove_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {

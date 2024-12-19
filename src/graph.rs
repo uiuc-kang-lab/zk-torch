@@ -248,6 +248,7 @@ impl Graph {
     let cache = Arc::new(Mutex::new(HashMap::new()));
 
     let mut batch_prove_state = RefCell::new(HashMap::new());
+    let mut batch_counters = RefCell::new(HashMap::new());
     let _: Vec<_> = self
       .nodes
       .iter()
@@ -282,6 +283,7 @@ impl Graph {
               srs,
               setups[n.basic_block],
               &mut batch_prove_state,
+              &mut batch_counters,
               models[n.basic_block],
               &myInputs,
               outputs[i],
@@ -292,6 +294,7 @@ impl Graph {
         }
       })
       .collect();
+    let mut batch_counters = RefCell::new(HashMap::new());
     let _: Vec<_> = self
       .nodes
       .iter()
@@ -329,6 +332,7 @@ impl Graph {
               srs,
               setups[n.basic_block],
               &mut batch_prove_state,
+              &mut batch_counters,
               models[n.basic_block],
               &myInputs,
               outputs[i],
@@ -339,6 +343,7 @@ impl Graph {
         }
       })
       .collect();
+    let mut batch_counters = RefCell::new(HashMap::new());
     let _: Vec<_> = self
       .nodes
       .iter()
@@ -373,6 +378,7 @@ impl Graph {
               srs,
               setups[n.basic_block],
               &mut batch_prove_state,
+              &mut batch_counters,
               models[n.basic_block],
               &myInputs,
               outputs[i],
