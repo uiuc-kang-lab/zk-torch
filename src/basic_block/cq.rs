@@ -117,7 +117,7 @@ impl BasicBlock for CQBasicBlock {
     assert!(n <= N);
 
     let tag = format!("{:?}_{}", self, input.raw.len());
-    let key = util::update_batch_counters(batch_counters, &tag, 8);
+    let key = util::update_batch_counters(batch_counters, &tag, 20);
     let mut cache = cache.lock().unwrap();
     let CacheValues::CQTableDict(table_dict) =
       cache.entry(format!("cq_table_dict_{:p}", self)).or_insert_with(|| CacheValues::CQTableDict(HashMap::new()))
@@ -207,7 +207,7 @@ impl BasicBlock for CQBasicBlock {
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
 
     let tag = format!("{:?}_{}", self, input.raw.len());
-    let key = util::update_batch_counters(batch_counters, &tag, 8);
+    let key = util::update_batch_counters(batch_counters, &tag, 20);
     let mut state_mut_ref = batch_prove_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
@@ -260,7 +260,7 @@ impl BasicBlock for CQBasicBlock {
     assert!(n <= N);
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let tag = format!("{:?}_{}", self, input.raw.len());
-    let key = util::update_batch_counters(batch_counters, &tag, 8);
+    let key = util::update_batch_counters(batch_counters, &tag, 20);
     let mut state_mut_ref = batch_prove_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
