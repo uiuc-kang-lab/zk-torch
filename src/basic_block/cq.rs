@@ -144,9 +144,18 @@ impl BasicBlock for CQBasicBlock {
             p_ref.push(input.r);
           }
           drop(p_ref);
+          polys.borrow_mut().push(input.poly.clone());
           *value = (
             Box::new(self.clone()),
-            BatchProveStateValues::CQ(*n, RefCell::clone(m_i), *T_x_2, polys.clone(), vec![], vec![], RefCell::clone(proof_2)),
+            BatchProveStateValues::CQ(
+              *n,
+              RefCell::clone(m_i),
+              *T_x_2,
+              RefCell::clone(polys),
+              vec![],
+              vec![],
+              RefCell::clone(proof_2),
+            ),
           );
         } else {
         }
@@ -167,12 +176,7 @@ impl BasicBlock for CQBasicBlock {
               n,
               RefCell::new(m_i),
               setup.1[0].into(),
-              vec![
-                DensePolynomial::from_coefficients_vec(vec![Fr::zero()]),
-                DensePolynomial::from_coefficients_vec(vec![Fr::one()]),
-                DensePolynomial::from_coefficients_vec(vec![Fr::zero()]),
-                DensePolynomial::from_coefficients_vec(vec![Fr::zero()]),
-              ],
+              RefCell::new(vec![DensePolynomial::from_coefficients_vec(vec![Fr::zero()])]),
               vec![],
               vec![],
               RefCell::new(vec![input.r]),
@@ -210,18 +214,19 @@ impl BasicBlock for CQBasicBlock {
         if let (_, BatchProveStateValues::CQ(n, m_i, T_x_2, polys, rngs, _, proof_2)) = value {
           let beta = if rngs.len() == 0 { Fr::rand(rng) } else { rngs[0] };
           let B_i: Vec<Fr> = input.raw.iter().map(|x| (*x + beta).inverse().unwrap()).collect();
-          let f_poly = &input.poly + &DensePolynomial::from_coefficients_vec(vec![beta]);
-          let B_poly = &polys[0] + &Evaluations::from_vec_and_domain(B_i.clone(), domain_n).interpolate();
-          let f_prod = &polys[1];
-          let start = Instant::now();
-          let diff = &polys[2].mul(&f_poly) + f_prod;
-          let duration = start.elapsed();
-          println!("diff deg {}, time: {:?}", diff.degree(), duration);
-          let f_prod = f_poly.mul(f_prod);
-          let new_polys = vec![B_poly, f_prod, diff];
+          let agg_B = &polys.borrow()[0].clone();
+          polys.borrow_mut()[0] = agg_B + &Evaluations::from_vec_and_domain(B_i.clone(), domain_n).interpolate();
           *value = (
             Box::new(self.clone()),
-            BatchProveStateValues::CQ(*n, RefCell::clone(m_i), *T_x_2, new_polys, vec![beta], vec![], RefCell::clone(proof_2)),
+            BatchProveStateValues::CQ(
+              *n,
+              RefCell::clone(m_i),
+              *T_x_2,
+              RefCell::clone(polys),
+              vec![beta],
+              vec![],
+              RefCell::clone(proof_2),
+            ),
           )
         } else {
         }
@@ -261,14 +266,17 @@ impl BasicBlock for CQBasicBlock {
       Some(value) => {
         if let (_, BatchProveStateValues::CQ(n, m_i, T_x_2, polys, rngs, proof_0, proof_2)) = value {
           let (proof, proof_2) = if proof_0.len() == 0 {
-            let B_poly = &polys[0];
-            let f_prod = &polys[1];
-            let diff = &polys[2];
+            let poly_ref = polys.borrow();
+            let B_poly = &poly_ref[0];
+            let beta = rngs[0];
+            let fs: Vec<_> = poly_ref[1..].iter().map(|x| x + &DensePolynomial::from_coefficients_vec(vec![beta])).collect();
+            let f_prod = util::mul_polys(&fs);
+            let diffs: Vec<_> = poly_ref[1..].iter().map(|x| &f_prod / x).collect();
+            let diff = diffs.iter().fold(DensePolynomial::zero(), |acc, x| acc + x.clone());
 
-            let B_Q_poly = B_poly.mul(f_prod).sub(diff).divide_by_vanishing_poly(domain_n).unwrap().0;
+            let B_Q_poly = B_poly.mul(&f_prod).sub(&diff).divide_by_vanishing_poly(domain_n).unwrap().0;
             let B_x = util::msm::<G1Projective>(&srs.X1A, &B_poly.coeffs);
             let B_Q_x = util::msm::<G1Projective>(&srs.X1A, &B_Q_poly.coeffs);
-            // let diff_x = util::msm::<G1Projective>(&srs.X1A, &diff.coeffs);
             let B_zero_div = if B_poly.is_zero() {
               G1Projective::zero()
             } else {
@@ -282,7 +290,6 @@ impl BasicBlock for CQBasicBlock {
 
             // Calculate A
             // element to m/(t + beta)
-            let beta = rngs[0];
             // let betas = util::calc_pow(beta, *n);
             // assert!(&B_poly.evaluate(&beta) * &f_prod.evaluate(&beta) - Fr::one() == *&B_Q_poly.evaluate(&beta) * (betas[*n - 1] - Fr::one()));
 
@@ -322,11 +329,13 @@ impl BasicBlock for CQBasicBlock {
           let mu = if rngs.len() == 1 { Fr::rand(rng) } else { rngs[2] };
           let mu_pow = if rngs.len() == 1 { mu } else { rngs[3] * mu };
           let f_poly = &input.poly + &DensePolynomial::from_coefficients_vec(vec![beta]);
-          let q1_poly: DensePolynomial<Fr> = if polys.len() < 4 {
+          let poly_ref = polys.borrow();
+          let q1_poly: DensePolynomial<Fr> = if poly_ref.len() > 0 {
             f_poly.mul(mu_pow)
           } else {
-            &polys[3] + &input.poly.mul(mu_pow)
+            &poly_ref[0] + &input.poly.mul(mu_pow)
           };
+          drop(poly_ref);
 
           let f_z = f_poly.evaluate(&zeta);
           let agg_r = proof_2.borrow()[4];
@@ -334,11 +343,17 @@ impl BasicBlock for CQBasicBlock {
           proof_2.borrow_mut().push(f_z);
 
           let new_rngs = vec![rngs[0], zeta, mu, mu_pow];
-          let mut new_polys = polys[..3].to_vec();
-          new_polys.push(q1_poly);
           *value = (
             Box::new(self.clone()),
-            BatchProveStateValues::CQ(*n, RefCell::clone(m_i), *T_x_2, new_polys, new_rngs, proof, RefCell::clone(proof_2)),
+            BatchProveStateValues::CQ(
+              *n,
+              RefCell::clone(m_i),
+              *T_x_2,
+              RefCell::new(vec![q1_poly]),
+              new_rngs,
+              proof,
+              RefCell::clone(proof_2),
+            ),
           )
         } else {
         }
@@ -352,7 +367,7 @@ impl BasicBlock for CQBasicBlock {
       let zeta = rngs[1];
       // let diff = &polys[2];
       // let f_prod = &polys[1];
-      let q1_poly = &polys[3];
+      let q1_poly = &polys.borrow()[0];
       let q1_z = q1_poly.evaluate(&zeta);
       let q1_z_poly = DensePolynomial { coeffs: vec![q1_z] };
       let q1_V = DensePolynomial {
