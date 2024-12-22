@@ -369,7 +369,7 @@ impl BasicBlock for CQ2BasicBlock {
             let beta = rngs[0];
             let fs: Vec<_> = poly_ref[1..].iter().map(|x| x + &DensePolynomial::from_coefficients_vec(vec![beta])).collect();
             let f_prod = util::mul_polys(&fs);
-            let diffs: Vec<_> = poly_ref[1..].iter().map(|x| &f_prod / x).collect();
+            let diffs: Vec<_> = fs.iter().map(|x| &f_prod / x).collect();
             let diff = diffs.iter().fold(DensePolynomial::zero(), |acc, x| acc + x.clone());
 
             let agg_model_g1 = model[0].g1 + model[1].g1 * alpha;

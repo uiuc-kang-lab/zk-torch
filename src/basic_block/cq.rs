@@ -271,7 +271,7 @@ impl BasicBlock for CQBasicBlock {
             let beta = rngs[0];
             let fs: Vec<_> = poly_ref[1..].iter().map(|x| x + &DensePolynomial::from_coefficients_vec(vec![beta])).collect();
             let f_prod = util::mul_polys(&fs);
-            let diffs: Vec<_> = poly_ref[1..].iter().map(|x| &f_prod / x).collect();
+            let diffs: Vec<_> = fs.iter().map(|x| &f_prod / x).collect();
             let diff = diffs.iter().fold(DensePolynomial::zero(), |acc, x| acc + x.clone());
 
             let B_Q_poly = B_poly.mul(&f_prod).sub(&diff).divide_by_vanishing_poly(domain_n).unwrap().0;
