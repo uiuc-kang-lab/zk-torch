@@ -5,7 +5,11 @@ use super::{
   ProveVerifyCache, SRS,
 };
 use crate::util;
-use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_ec::{
+  pairing::{Pairing, PairingOutput},
+  CurveGroup,
+};
 use ark_ff::Field;
 use ark_poly::{
   evaluations::univariate::Evaluations, univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain, Polynomial,
@@ -22,7 +26,6 @@ use std::{
   cmp::max,
   collections::HashMap,
   sync::{Arc, Mutex},
-  time::Instant,
 };
 
 #[derive(Debug, Clone)]
@@ -130,7 +133,7 @@ impl BasicBlock for CQBasicBlock {
     let mut state_mut_ref = batch_prove_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
-        if let (_, BatchProveStateValues::CQ(n, m_i, T_x_2, polys, _, _, proof_2)) = value {
+        if let (_, BatchProveStateValues::CQ(n, m_i, g2s, polys, _, _, proof_2)) = value {
           for x in input.raw.iter() {
             if !table_dict.contains_key(x) {
               println!("{:?},{:?}", x, -*x);
@@ -144,7 +147,15 @@ impl BasicBlock for CQBasicBlock {
           drop(p_ref);
           *value = (
             Box::new(self.clone()),
-            BatchProveStateValues::CQ(*n, RefCell::clone(m_i), *T_x_2, polys.clone(), vec![], vec![], RefCell::clone(proof_2)),
+            BatchProveStateValues::CQ(
+              *n,
+              RefCell::clone(m_i),
+              g2s.clone(),
+              polys.clone(),
+              vec![],
+              vec![],
+              RefCell::clone(proof_2),
+            ),
           );
         } else {
         }
@@ -164,7 +175,7 @@ impl BasicBlock for CQBasicBlock {
             BatchProveStateValues::CQ(
               n,
               RefCell::new(m_i),
-              setup.1[0].into(),
+              vec![setup.1[0].into()],
               vec![
                 DensePolynomial::from_coefficients_vec(vec![Fr::zero()]),
                 DensePolynomial::from_coefficients_vec(vec![Fr::one()]),
@@ -203,21 +214,26 @@ impl BasicBlock for CQBasicBlock {
     let mut state_mut_ref = batch_prove_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
-        if let (_, BatchProveStateValues::CQ(n, m_i, T_x_2, polys, rngs, _, proof_2)) = value {
+        if let (_, BatchProveStateValues::CQ(n, m_i, g2s, polys, rngs, _, proof_2)) = value {
           let beta = if rngs.len() == 0 { Fr::rand(rng) } else { rngs[0] };
           let B_i: Vec<Fr> = input.raw.iter().map(|x| (*x + beta).inverse().unwrap()).collect();
           let f_poly = &input.poly + &DensePolynomial::from_coefficients_vec(vec![beta]);
           let B_poly = &polys[0] + &Evaluations::from_vec_and_domain(B_i.clone(), domain_n).interpolate();
           let f_prod = &polys[1];
-          let start = Instant::now();
           let diff = &polys[2].mul(&f_poly) + f_prod;
-          let duration = start.elapsed();
-          println!("diff deg {}, time: {:?}", diff.degree(), duration);
           let f_prod = f_poly.mul(f_prod);
           let new_polys = vec![B_poly, f_prod, diff];
           *value = (
             Box::new(self.clone()),
-            BatchProveStateValues::CQ(*n, RefCell::clone(m_i), *T_x_2, new_polys, vec![beta], vec![], RefCell::clone(proof_2)),
+            BatchProveStateValues::CQ(
+              *n,
+              RefCell::clone(m_i),
+              g2s.clone(),
+              new_polys,
+              vec![beta],
+              vec![],
+              RefCell::clone(proof_2),
+            ),
           )
         } else {
         }
@@ -253,8 +269,8 @@ impl BasicBlock for CQBasicBlock {
     let mut state_mut_ref = batch_prove_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
-        if let (_, BatchProveStateValues::CQ(n, m_i, T_x_2, polys, rngs, proof_0, proof_2)) = value {
-          let (proof, proof_2) = if proof_0.len() == 0 {
+        if let (_, BatchProveStateValues::CQ(n, m_i, g2s, polys, rngs, proof_0, proof_2)) = value {
+          let (proof, proof_2, f_prod_x) = if proof_0.len() == 0 {
             let B_poly = &polys[0];
             let f_prod = &polys[1];
             let diff = &polys[2];
@@ -262,13 +278,16 @@ impl BasicBlock for CQBasicBlock {
             let B_Q_poly = B_poly.mul(f_prod).sub(diff).divide_by_vanishing_poly(domain_n).unwrap().0;
             let B_x = util::msm::<G1Projective>(&srs.X1A, &B_poly.coeffs);
             let B_Q_x = util::msm::<G1Projective>(&srs.X1A, &B_Q_poly.coeffs);
-            // let diff_x = util::msm::<G1Projective>(&srs.X1A, &diff.coeffs);
             let B_zero_div = if B_poly.is_zero() {
               G1Projective::zero()
             } else {
               util::msm::<G1Projective>(&srs.X1A, &B_poly.coeffs[1..])
             };
             let B_DC = util::msm::<G1Projective>(&srs.X1A[N - *n..], &B_poly.coeffs);
+
+            let f_prod_x_2 = util::msm::<G2Projective>(&srs.X2A, &f_prod.coeffs);
+            let f_prod_x = util::msm::<G1Projective>(&srs.X1A, &f_prod.coeffs);
+            let diff_x = util::msm::<G1Projective>(&srs.X1A, &diff.coeffs);
 
             let m_ref = m_i.borrow();
             let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = m_ref.iter().map(|(i, y)| (L_i_x_1[*i], Fr::from(*y as u32))).unzip();
@@ -277,8 +296,6 @@ impl BasicBlock for CQBasicBlock {
             // Calculate A
             // element to m/(t + beta)
             let beta = rngs[0];
-            // let betas = util::calc_pow(beta, *n);
-            // assert!(&B_poly.evaluate(&beta) * &f_prod.evaluate(&beta) - Fr::one() == *&B_Q_poly.evaluate(&beta) * (betas[*n - 1] - Fr::one()));
 
             let A_i: HashMap<usize, Fr> = m_ref.iter().map(|(i, y)| (*i, Fr::from(*y as u32) * (model.raw[*i] + beta).inverse().unwrap())).collect();
             // lagrange basis of value
@@ -292,9 +309,10 @@ impl BasicBlock for CQBasicBlock {
             let A_zero_div = util::msm::<G1Projective>(&temp, &temp2);
 
             let mut rng2 = StdRng::from_entropy();
-            let r: Vec<_> = (0..9).map(|_| Fr::rand(&mut rng2)).collect();
-            let commits = vec![m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC];
+            let r: Vec<_> = (0..11).map(|_| Fr::rand(&mut rng2)).collect();
+            let commits = vec![m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC, diff_x, f_prod_x];
             let mut commits: Vec<G1Projective> = commits.iter().enumerate().map(|(i, x)| (*x) + srs.Y1P * r[i]).collect();
+            println!("B_x, B_Q_x: {:?}, {:?}", commits[5].into_affine(), commits[6].into_affine());
             let mut C = vec![
               -(srs.X1P[N] - srs.X1P[0]) * r[2] + model.g1 * r[1] + A_x * model.r + (srs.Y1P * model.r * r[1]) + srs.X1P[0] * (r[1] * beta - r[0]),
               -srs.X1P[1] * r[4] + srs.X1P[0] * (r[1] - r[3]),
@@ -304,11 +322,11 @@ impl BasicBlock for CQBasicBlock {
             if proof_2.borrow().len() < 2 {
               proof_2.borrow_mut().push(Fr::zero());
             }
-            proof_2.borrow_mut().append(&mut vec![r[5], r[6], Fr::zero()]);
+            proof_2.borrow_mut().append(&mut vec![r[5], r[6], r[9], r[10], Fr::zero()]);
             commits.append(&mut C);
-            (commits, proof_2)
+            (commits, proof_2, f_prod_x_2 + srs.Y2P * r[10])
           } else {
-            (proof_0.clone(), &mut RefCell::clone(proof_2))
+            (proof_0.clone(), &mut RefCell::clone(proof_2), g2s[1])
           };
 
           let beta = rngs[0];
@@ -323,8 +341,8 @@ impl BasicBlock for CQBasicBlock {
           };
 
           let f_z = f_poly.evaluate(&zeta);
-          let agg_r = proof_2.borrow()[4];
-          proof_2.borrow_mut()[4] = agg_r + input.r * mu_pow;
+          let agg_r = proof_2.borrow()[6];
+          proof_2.borrow_mut()[6] = agg_r + input.r * mu_pow;
           proof_2.borrow_mut().push(f_z);
 
           let new_rngs = vec![rngs[0], zeta, mu, mu_pow];
@@ -332,7 +350,15 @@ impl BasicBlock for CQBasicBlock {
           new_polys.push(q1_poly);
           *value = (
             Box::new(self.clone()),
-            BatchProveStateValues::CQ(*n, RefCell::clone(m_i), *T_x_2, new_polys, new_rngs, proof, RefCell::clone(proof_2)),
+            BatchProveStateValues::CQ(
+              *n,
+              RefCell::clone(m_i),
+              vec![g2s[0], f_prod_x],
+              new_polys,
+              new_rngs,
+              proof,
+              RefCell::clone(proof_2),
+            ),
           )
         } else {
         }
@@ -342,7 +368,7 @@ impl BasicBlock for CQBasicBlock {
   }
 
   fn batch_prove(&self, srs: &SRS, batch_prove_values: &BatchProveStateValues, _rng: &mut StdRng) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
-    if let BatchProveStateValues::CQ(n, _, T_x_2, polys, rngs, proof_0, proof_2) = batch_prove_values {
+    if let BatchProveStateValues::CQ(n, _, g2s, polys, rngs, proof_0, proof_2) = batch_prove_values {
       let zeta = rngs[1];
       // let diff = &polys[2];
       // let f_prod = &polys[1];
@@ -356,28 +382,18 @@ impl BasicBlock for CQBasicBlock {
       let W_x = util::msm::<G1Projective>(&srs.X1A, &W_poly.coeffs);
 
       let p_ref = proof_2.borrow();
-      let f_zs = &p_ref[5..];
-      let fz_prod: Fr = f_zs.iter().product();
+      let f_zs = &p_ref[6..];
       let mut rng2 = StdRng::from_entropy();
-      // [input0.r, input1.r, B_x, B_Q_x]
-      let r = &p_ref[..4];
-      let r_sum = p_ref[4];
-      let zetas = util::calc_pow(zeta, *n);
-      let diff_r = if f_zs.len() == 1 {
-        Fr::zero()
-      } else {
-        let diff_prod: Fr = f_zs[1..].iter().product();
-        let diffs: Vec<_> = f_zs[1..].iter().map(|x| diff_prod / x).collect();
-        let diffs_sum: Fr = diffs.iter().sum();
-        diffs_sum * r[0] + diffs[0] * r[1]
-      };
-      let C5 = srs.X1P[0] * (fz_prod * r[2] - diff_r - (zetas[n - 1] - Fr::one()) * r[3]);
+      // [input0.r, input1.r, B_x, B_Q_x, diff_x, f_prod]
+      let r = &p_ref[..6];
+      let r_sum = p_ref[6];
+      let C5 = -srs.X1P[0] * r[4] - (srs.X1P[*n] - srs.X1P[0]) * r[3] + (proof_0[5] - srs.Y1P * r[2]) * r[5] + proof_0[10] * r[2];
       let r = Fr::rand(&mut rng2);
       let C6 = -(srs.X1P[1] - srs.X1P[0] * zeta) * r + srs.X1P[0] * r_sum;
 
       let mut proof = proof_0.clone();
       proof.append(&mut vec![W_x + srs.Y1P * r, C5, C6]);
-      (proof, vec![*T_x_2], f_zs.to_vec())
+      (proof, g2s.clone(), f_zs.to_vec())
     } else {
       (vec![], vec![], vec![])
     }
@@ -421,10 +437,10 @@ impl BasicBlock for CQBasicBlock {
     rng: &mut StdRng,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
-    let [m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC, C1, C2, C3, C4, W_x, C5, C6] = proof.0[..] else {
+    let [m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC, diff_x, prod_x, C1, C2, C3, C4, W_x, C5, C6] = proof.0[..] else {
       panic!("Wrong proof format")
     };
-    let [T_x_2] = proof.1[..] else { panic!("Wrong proof format") };
+    let [T_x_2, prod_x_2] = proof.1[..] else { panic!("Wrong proof format") };
     let f_zs = proof.2;
 
     let beta = Fr::rand(rng);
@@ -439,15 +455,9 @@ impl BasicBlock for CQBasicBlock {
     let fz_sum: Fr = f_zs.iter().enumerate().map(|(i, x)| *x * mus[i]).sum();
     let fz_prod: Fr = f_zs.iter().product();
     let f_sum: G1Projective = f_xs.iter().enumerate().map(|(i, x)| (*x + srs.X1A[0] * beta) * mus[i]).sum();
-
-    let diff_g1 = if f_zs.len() == 1 {
-      srs.X1P[0]
-    } else {
-      let diff_prod: Fr = f_zs[1..].iter().product();
-      let diffs: Vec<_> = f_zs[1..].iter().map(|x| diff_prod / x).collect();
-      let diffs_sum: Fr = diffs.iter().sum();
-      (f_xs[0] + srs.X1A[0] * beta) * diffs_sum + (f_xs[1] + srs.X1A[0] * beta) * diffs[0]
-    };
+    println!("B_x, B_Q_x: {:?}, {:?}", B_x, B_Q_x);
+    println!("fz_prod: {:?}", fz_prod);
+    println!("zeta^n: {:?}", zetas[*n - 1]);
 
     // Check A(x) (A_i = m_i/(t_i+beta))
     checks.push(vec![
@@ -474,9 +484,13 @@ impl BasicBlock for CQBasicBlock {
 
     // Check B(x) (B_i = sum ())
     checks.push(vec![
-      ((B_x * fz_prod - diff_g1 - B_Q_x * (zetas[*n - 1] - Fr::one())).into(), srs.X2A[0]),
+      (B_x, prod_x_2),
+      (-diff_x, srs.X2A[0]),
+      (-B_Q_x, (srs.X2A[*n] - srs.X2A[0]).into()),
       (-C5, srs.Y2A),
     ]);
+
+    // Check f_x_2 is the G2 equivalent of the input
 
     // Check W(x) (W(x) = (F(x) - F(zeta)) / (x - zeta))
     // where F(x) is RLC'd input polynomials
