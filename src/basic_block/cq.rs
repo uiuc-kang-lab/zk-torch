@@ -117,7 +117,7 @@ impl BasicBlock for CQBasicBlock {
     assert!(n <= N);
 
     let tag = format!("{:?}_{}", self, input.raw.len());
-    let key = util::update_batch_counters(batch_counters, &tag, 20);
+    let key = util::update_batch_counters(batch_counters, &tag, 16);
     let mut cache = cache.lock().unwrap();
     let CacheValues::CQTableDict(table_dict) =
       cache.entry(format!("cq_table_dict_{:p}", self)).or_insert_with(|| CacheValues::CQTableDict(HashMap::new()))
@@ -207,7 +207,7 @@ impl BasicBlock for CQBasicBlock {
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
 
     let tag = format!("{:?}_{}", self, input.raw.len());
-    let key = util::update_batch_counters(batch_counters, &tag, 20);
+    let key = util::update_batch_counters(batch_counters, &tag, 16);
     let mut state_mut_ref = batch_prove_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
@@ -260,7 +260,7 @@ impl BasicBlock for CQBasicBlock {
     assert!(n <= N);
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let tag = format!("{:?}_{}", self, input.raw.len());
-    let key = util::update_batch_counters(batch_counters, &tag, 20);
+    let key = util::update_batch_counters(batch_counters, &tag, 16);
     let mut state_mut_ref = batch_prove_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
@@ -273,6 +273,9 @@ impl BasicBlock for CQBasicBlock {
             let f_prod = util::mul_polys(&fs);
             let diffs: Vec<_> = fs.iter().map(|x| &f_prod / x).collect();
             let diff = diffs.iter().fold(DensePolynomial::zero(), |acc, x| acc + x.clone());
+
+            let f_prod_x_2 = util::msm::<G2Projective>(&srs.X2A, &f_prod.coeffs);
+            let diff_x = util::msm::<G1Projective>(&srs.X1A, &diff.coeffs);
 
             let B_Q_poly = B_poly.mul(&f_prod).sub(&diff).divide_by_vanishing_poly(domain_n).unwrap().0;
             let B_x = util::msm::<G1Projective>(&srs.X1A, &B_poly.coeffs);

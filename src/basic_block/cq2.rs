@@ -212,7 +212,7 @@ impl BasicBlock for CQ2BasicBlock {
     let n = inputs[0].raw.len();
 
     let tag = format!("{:?}_{}", self, inputs[0].raw.len());
-    let key = util::update_batch_counters(batch_counters, &tag, 20);
+    let key = util::update_batch_counters(batch_counters, &tag, 16);
     let mut cache = cache.lock().unwrap();
     let CacheValues::CQ2TableDict(table_dict) =
       cache.entry(format!("cq2_table_dict_{:p}", self)).or_insert_with(|| CacheValues::CQ2TableDict(HashMap::new()))
@@ -298,7 +298,7 @@ impl BasicBlock for CQ2BasicBlock {
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
 
     let tag = format!("{:?}_{}", self, inputs[0].raw.len());
-    let key = util::update_batch_counters(batch_counters, &tag, 20);
+    let key = util::update_batch_counters(batch_counters, &tag, 16);
     let mut state_mut_ref = batch_prove_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
@@ -357,7 +357,7 @@ impl BasicBlock for CQ2BasicBlock {
     assert!(n <= N);
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let tag = format!("{:?}_{}", self, inputs[0].raw.len());
-    let key = util::update_batch_counters(batch_counters, &tag, 20);
+    let key = util::update_batch_counters(batch_counters, &tag, 16);
     let mut state_mut_ref = batch_prove_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
@@ -371,6 +371,9 @@ impl BasicBlock for CQ2BasicBlock {
             let f_prod = util::mul_polys(&fs);
             let diffs: Vec<_> = fs.iter().map(|x| &f_prod / x).collect();
             let diff = diffs.iter().fold(DensePolynomial::zero(), |acc, x| acc + x.clone());
+
+            let f_prod_x_2 = util::msm::<G2Projective>(&srs.X2A, &f_prod.coeffs);
+            let diff_x = util::msm::<G1Projective>(&srs.X1A, &diff.coeffs);
 
             let agg_model_g1 = model[0].g1 + model[1].g1 * alpha;
             let agg_model_r = model[0].r + model[1].r * alpha;
