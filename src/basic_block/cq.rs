@@ -370,8 +370,6 @@ impl BasicBlock for CQBasicBlock {
   fn batch_prove(&self, srs: &SRS, batch_prove_values: &BatchProveStateValues, _rng: &mut StdRng) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     if let BatchProveStateValues::CQ(n, _, g2s, polys, rngs, proof_0, proof_2) = batch_prove_values {
       let zeta = rngs[1];
-      // let diff = &polys[2];
-      // let f_prod = &polys[1];
       let q1_poly = &polys[3];
       let q1_z = q1_poly.evaluate(&zeta);
       let q1_z_poly = DensePolynomial { coeffs: vec![q1_z] };
@@ -382,7 +380,7 @@ impl BasicBlock for CQBasicBlock {
       let W_x = util::msm::<G1Projective>(&srs.X1A, &W_poly.coeffs);
 
       let p_ref = proof_2.borrow();
-      let f_zs = &p_ref[6..];
+      let f_zs = &p_ref[7..];
       let mut rng2 = StdRng::from_entropy();
       // [input0.r, input1.r, B_x, B_Q_x, diff_x, f_prod]
       let r = &p_ref[..6];
