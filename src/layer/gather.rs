@@ -34,11 +34,10 @@ impl Layer for GatherLayer {
     let mut graph = Graph::new();
     let mut indices_output = -2;
     // Avoid unwrapping a None value
-    if input_shapes[1].len() == 0 {
+    if input_shapes[1].len() == 0 || constants.len() > 1 && constants[1].is_some() {
       let indices = constants[1].unwrap().0.mapv(|x| {
-        // util::fr_to_int(x)
-        if x > Fr::from(input_shapes[0][0] as i64) {
-          Fr::from(input_shapes[0][0] as i64) + x
+        if x > Fr::from(input_shapes[0][0] as i128) {
+          Fr::from(input_shapes[0][0] as i128 + util::fr_to_int(x))
         } else {
           x
         }

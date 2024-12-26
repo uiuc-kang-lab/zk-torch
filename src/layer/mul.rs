@@ -69,7 +69,7 @@ impl Layer for MulLayer {
       };
       let constantOfShape = graph.addBB(Box::new(ConstOfShapeBasicBlock {
         c: Fr::one(),
-        shape: input_shapes[broadcast_idx].clone(),
+        shape: input_shapes[broadcast_idx].iter().map(|x| x.next_power_of_two()).collect(),
       }));
       let mul_scalar = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(MulScalarBasicBlock {}),
