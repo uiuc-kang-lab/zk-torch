@@ -50,13 +50,9 @@ impl Layer for ReduceMeanLayer {
         let div_output = graph.addNode(div, vec![(add_output, 0)]);
         let div_check = graph.addBB(Box::new(RepeaterBasicBlock {
           basic_block: Box::new(CQ2BasicBlock {
-            setup: Some((
-              Box::new(DivConstBasicBlock {
-                c: input_shapes[0][axes[0]] as f32,
-              }),
-              *onnx::CQ_RANGE_LOWER,
-              *onnx::CQ_RANGE,
-            )),
+            op: cq2::CQ2BasicBlockOps::DivConst(input_shapes[0][axes[0]] as f32),
+            offset: *onnx::CQ_RANGE_LOWER,
+            size: *onnx::CQ_RANGE,
           }),
           N: 1,
         }));
