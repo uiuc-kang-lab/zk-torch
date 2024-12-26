@@ -292,7 +292,7 @@ pub fn zktorch_kernel() {
   prove(&srs, &inputs, outputs.unwrap(), setups, models, &mut graph, &mut timing);
 
   // Verify
-  #[cfg(not(feature = "mock_prove"))]
+  // #[cfg(not(feature = "mock_prove"))]
   verify(&srs, &graph, &mut timing);
 
   // Measure proof size

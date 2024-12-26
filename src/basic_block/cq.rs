@@ -117,7 +117,7 @@ impl BasicBlock for CQBasicBlock {
     assert!(n <= N);
 
     let tag = format!("{:?}_{}", self, input.raw.len());
-    let key = util::update_batch_counters(batch_counters, &tag, 16);
+    let key = util::update_batch_counters(batch_counters, &tag, 8);
     let mut cache = cache.lock().unwrap();
     let CacheValues::CQTableDict(table_dict) =
       cache.entry(format!("cq_table_dict_{:p}", self)).or_insert_with(|| CacheValues::CQTableDict(HashMap::new()))
@@ -207,7 +207,7 @@ impl BasicBlock for CQBasicBlock {
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
 
     let tag = format!("{:?}_{}", self, input.raw.len());
-    let key = util::update_batch_counters(batch_counters, &tag, 16);
+    let key = util::update_batch_counters(batch_counters, &tag, 8);
     let mut state_mut_ref = batch_prove_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
@@ -260,7 +260,7 @@ impl BasicBlock for CQBasicBlock {
     assert!(n <= N);
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let tag = format!("{:?}_{}", self, input.raw.len());
-    let key = util::update_batch_counters(batch_counters, &tag, 16);
+    let key = util::update_batch_counters(batch_counters, &tag, 8);
     let mut state_mut_ref = batch_prove_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
@@ -293,8 +293,6 @@ impl BasicBlock for CQBasicBlock {
 
             // Calculate A
             // element to m/(t + beta)
-            // let betas = util::calc_pow(beta, *n);
-            // assert!(&B_poly.evaluate(&beta) * &f_prod.evaluate(&beta) - Fr::one() == *&B_Q_poly.evaluate(&beta) * (betas[*n - 1] - Fr::one()));
 
             let A_i: HashMap<usize, Fr> = m_ref.iter().map(|(i, y)| (*i, Fr::from(*y as u32) * (model.raw[*i] + beta).inverse().unwrap())).collect();
             // lagrange basis of value
@@ -445,10 +443,10 @@ impl BasicBlock for CQBasicBlock {
     rng: &mut StdRng,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
-    let [m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC, C1, C2, C3, C4, W_x, C5, C6] = proof.0[..] else {
+    let [m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC, diff_x, prod_x, C1, C2, C3, C4, W_x, C5, C6] = proof.0[..] else {
       panic!("Wrong proof format")
     };
-    let [T_x_2] = proof.1[..] else { panic!("Wrong proof format") };
+    let [T_x_2, prod_x_2] = proof.1[..] else { panic!("Wrong proof format") };
     let f_zs = proof.2;
 
     let beta = Fr::rand(rng);
@@ -458,20 +456,9 @@ impl BasicBlock for CQBasicBlock {
     let BatchVerifyStateValues::CQ(n, N, model_g1, f_xs) = batch_verify_values;
 
     let m = f_zs.len();
-    let zetas = util::calc_pow(zeta, *n);
     let mus = util::calc_pow(mu, m);
     let fz_sum: Fr = f_zs.iter().enumerate().map(|(i, x)| *x * mus[i]).sum();
-    let fz_prod: Fr = f_zs.iter().product();
     let f_sum: G1Projective = f_xs.iter().enumerate().map(|(i, x)| (*x + srs.X1A[0] * beta) * mus[i]).sum();
-
-    let diff_g1 = if f_zs.len() == 1 {
-      srs.X1P[0]
-    } else {
-      let diff_prod: Fr = f_zs[1..].iter().product();
-      let diffs: Vec<_> = f_zs[1..].iter().map(|x| diff_prod / x).collect();
-      let diffs_sum: Fr = diffs.iter().sum();
-      (f_xs[0] + srs.X1A[0] * beta) * diffs_sum + (f_xs[1] + srs.X1A[0] * beta) * diffs[0]
-    };
 
     // Check A(x) (A_i = m_i/(t_i+beta))
     checks.push(vec![
@@ -498,9 +485,13 @@ impl BasicBlock for CQBasicBlock {
 
     // Check B(x) (B_i = sum ())
     checks.push(vec![
-      ((B_x * fz_prod - diff_g1 - B_Q_x * (zetas[*n - 1] - Fr::one())).into(), srs.X2A[0]),
+      (B_x, prod_x_2),
+      (-diff_x, srs.X2A[0]),
+      (-B_Q_x, (srs.X2A[*n] - srs.X2A[0]).into()),
       (-C5, srs.Y2A),
     ]);
+
+    // Check f_x_2 is the G2 equivalent of the input
 
     // Check W(x) (W(x) = (F(x) - F(zeta)) / (x - zeta))
     // where F(x) is RLC'd input polynomials
