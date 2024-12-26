@@ -475,9 +475,9 @@ impl Graph {
     &self,
     srs: &SRS,
     models: &Vec<&ArrayD<DataEnc>>,
-    proofs: &HashMap<String, (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&Vec<&ArrayD<DataEnc>>>,
+    proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)>,
     rng: &mut StdRng,
     timing: &mut TimingTree,
   ) {
@@ -501,7 +501,10 @@ impl Graph {
             self.layer_names[i], self.basic_blocks[n.basic_block]
           );
         }
-        let verify_id = format!("{} | verifying {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
+        let verify_id = format!(
+          "{} | verifying first round {i} {:?}",
+          self.layer_names[i], self.basic_blocks[n.basic_block]
+        );
         println!("{}", verify_id);
         let myInputs = n
           .inputs
@@ -533,15 +536,16 @@ impl Graph {
     let state_ref = batch_verify_state.borrow();
     let pairings: Vec<_> = state_ref
       .iter()
-      .map(|x| {
+      .enumerate()
+      .map(|(i, x)| {
         let verify_id = format!("| batch verify {:?}", x.0);
-        let proof = proofs.get(x.0).unwrap();
+        let proof = proofs[i];
         let proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>) = (
           &proof.0.iter().map(|x| (*x).into()).collect(),
           &proof.1.iter().map(|x| (*x).into()).collect(),
           &proof.2.iter().map(|x| (*x).into()).collect(),
         );
-        x.1 .0.batch_verify(srs, proof, &x.1 .1, rng)
+        timed!(timing, &verify_id, x.1 .0.batch_verify(srs, proof, &x.1 .1, rng))
       })
       .collect();
     let pairings = timed!(
