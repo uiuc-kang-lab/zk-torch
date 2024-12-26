@@ -227,7 +227,7 @@ impl BasicBlock for CQ2BasicBlock {
     let mut state_mut_ref = batch_prove_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
-        if let (_, BatchProveStateValues::CQ2(n, m_i, T_x_2, _, _, _, _)) = value {
+        if let (_, BatchProveStateValues::CQ2(n, m_i, g2s, _, _, _, _, _)) = value {
           for x in inputs[0].raw.iter().zip(inputs[1].raw.iter()) {
             let temp = (*x.0, *x.1);
             if !table_dict.contains_key(&temp) {
@@ -240,11 +240,12 @@ impl BasicBlock for CQ2BasicBlock {
             BatchProveStateValues::CQ2(
               *n,
               RefCell::clone(m_i),
-              *T_x_2,
+              g2s.clone(),
               RefCell::new(vec![DensePolynomial::from_coefficients_vec(vec![Fr::zero()])]),
               vec![],
               vec![],
               RefCell::new(vec![]),
+              vec![],
             ),
           )
         } else {
@@ -266,11 +267,12 @@ impl BasicBlock for CQ2BasicBlock {
             BatchProveStateValues::CQ2(
               n,
               RefCell::new(m_i),
-              setup.1[0].into(),
+              vec![setup.1[0].into()],
               RefCell::new(vec![DensePolynomial::from_coefficients_vec(vec![Fr::zero()])]),
               vec![],
               vec![],
               RefCell::new(vec![]),
+              vec![],
             ),
           ),
         );
@@ -302,10 +304,15 @@ impl BasicBlock for CQ2BasicBlock {
     let mut state_mut_ref = batch_prove_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
-        if let (_, BatchProveStateValues::CQ2(n, m_i, T_x_2, polys, rngs, _, _)) = value {
+        if let (_, BatchProveStateValues::CQ2(n, m_i, g2s, polys, rngs, _, proof_2, _)) = value {
           let alpha = if rngs.len() == 0 { Fr::rand(rng) } else { rngs[0] };
           let beta = if rngs.len() == 0 { Fr::rand(rng) } else { rngs[1] };
           let agg_input: Vec<_> = inputs[0].raw.iter().zip(inputs[1].raw.iter()).map(|(x, y)| *x + *y * alpha).collect();
+          let mut p_ref = proof_2.borrow_mut();
+          if p_ref.len() < 2 {
+            p_ref.push(inputs[0].r + inputs[1].r * alpha);
+          }
+          drop(p_ref);
 
           let B_i: Vec<Fr> = agg_input.iter().map(|x| (*x + beta).inverse().unwrap()).collect();
           let agg_input_poly = DensePolynomial::from_coefficients_vec(domain_n.ifft(&agg_input));
@@ -318,11 +325,12 @@ impl BasicBlock for CQ2BasicBlock {
             BatchProveStateValues::CQ2(
               *n,
               RefCell::clone(m_i),
-              *T_x_2,
+              g2s.clone(),
               RefCell::clone(polys),
               vec![alpha, beta],
               vec![],
-              RefCell::new(vec![]),
+              RefCell::clone(proof_2),
+              vec![],
             ),
           )
         } else {
@@ -361,9 +369,9 @@ impl BasicBlock for CQ2BasicBlock {
     let mut state_mut_ref = batch_prove_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
-        if let (_, BatchProveStateValues::CQ2(n, m_i, T_x_2, polys, rngs, proof_0, proof_2)) = value {
+        if let (_, BatchProveStateValues::CQ2(n, m_i, g2s, polys, rngs, proof_0, proof_2, op_polys)) = value {
           let alpha = rngs[0];
-          let (proof, proof_2) = if proof_0.len() == 0 {
+          let (proof, proof_2, f_prod_x, f_prod) = if proof_0.len() == 0 {
             let poly_ref = polys.borrow();
             let B_poly = &poly_ref[0];
             let beta = rngs[0];
@@ -415,8 +423,8 @@ impl BasicBlock for CQ2BasicBlock {
             let A_zero_div = util::msm::<G1Projective>(&temp, &temp2);
 
             let mut rng2 = StdRng::from_entropy();
-            let r: Vec<_> = (0..9).map(|_| Fr::rand(&mut rng2)).collect();
-            let mut proof: Vec<_> = vec![m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC]
+            let r: Vec<_> = (0..11).map(|_| Fr::rand(&mut rng2)).collect();
+            let mut proof: Vec<_> = vec![m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC, diff_x]
               .iter()
               .enumerate()
               .map(|(i, x)| (*x) + srs.Y1P * r[i])
@@ -431,10 +439,14 @@ impl BasicBlock for CQ2BasicBlock {
               -srs.X1P[1] * r[7] + srs.X1P[0] * (r[5] - r[3] * Fr::from(N as u32) * Fr::from(*n as u32).inverse().unwrap()),
               -srs.X1P[0] * r[8] + srs.X1P[N - *n] * r[5],
             ];
+            if proof_2.borrow().len() < 2 {
+              proof_2.borrow_mut().push(Fr::zero());
+            }
+            proof_2.borrow_mut().append(&mut vec![r[6], r[5], r[9], r[10], Fr::zero()]);
             proof.append(&mut C);
-            (proof, &mut RefCell::new(vec![r[6], r[5], Fr::zero()]))
+            (proof, proof_2, f_prod_x_2 + srs.Y2P * r[10], f_prod)
           } else {
-            (proof_0.clone(), proof_2)
+            (proof_0.clone(), &mut RefCell::clone(proof_2), g2s[1], op_polys[1].clone())
           };
 
           let zeta = if rngs.len() == 2 { Fr::rand(rng) } else { rngs[2] };
@@ -443,31 +455,33 @@ impl BasicBlock for CQ2BasicBlock {
           let agg_input: Vec<_> = inputs[0].raw.iter().zip(inputs[1].raw.iter()).map(|(x, y)| *x + *y * alpha).collect();
           let agg_input_r = inputs[0].r + inputs[1].r * alpha;
           let agg_input_poly = DensePolynomial::from_coefficients_vec(domain_n.ifft(&agg_input));
-          let poly_ref = polys.borrow();
-          let q1_poly: DensePolynomial<Fr> = if poly_ref.len() > 0 {
+          let q1_poly: DensePolynomial<Fr> = if op_polys.len() == 0 {
             agg_input_poly.mul(mu_pow)
           } else {
-            &poly_ref[0] + &agg_input_poly.mul(mu_pow)
+            &op_polys[0] + &agg_input_poly.mul(mu_pow)
           };
-          drop(poly_ref);
+          if op_polys.len() == 0 {
+            op_polys.append(&mut vec![q1_poly, f_prod]);
+          } else {
+            op_polys[0] = q1_poly;
+          }
           let f_z = agg_input_poly.evaluate(&zeta);
-          let agg_r = proof_2.borrow()[2];
-          proof_2.borrow_mut()[2] = agg_r + agg_input_r * mu_pow;
+          let agg_r = proof_2.borrow()[6];
+          proof_2.borrow_mut()[6] = agg_r + agg_input_r * mu_pow;
           proof_2.borrow_mut().push(f_z);
 
           let new_rngs = vec![rngs[0], rngs[1], zeta, mu, mu_pow];
-          // let mut new_polys = polys[..3].to_vec();
-          // new_polys.push(q1_poly);
           *value = (
             Box::new(self.clone()),
             BatchProveStateValues::CQ2(
               *n,
               RefCell::clone(m_i),
-              *T_x_2,
-              RefCell::new(vec![q1_poly]),
+              vec![g2s[0], f_prod_x],
+              RefCell::new(vec![]),
               new_rngs,
               proof.clone(),
               RefCell::clone(proof_2),
+              op_polys.clone(),
             ),
           )
         } else {
@@ -478,9 +492,9 @@ impl BasicBlock for CQ2BasicBlock {
   }
 
   fn batch_prove(&self, srs: &SRS, batch_prove_values: &BatchProveStateValues, _rng: &mut StdRng) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
-    if let BatchProveStateValues::CQ2(n, _, T_x_2, polys, rngs, proof_0, proof_2) = batch_prove_values {
+    if let BatchProveStateValues::CQ2(n, _, g2s, _, rngs, proof_0, proof_2, op_polys) = batch_prove_values {
       let zeta = rngs[2];
-      let q1_poly = &polys.borrow()[0];
+      let q1_poly = &op_polys[0];
       let q1_z = q1_poly.evaluate(&zeta);
       let q1_z_poly = DensePolynomial { coeffs: vec![q1_z] };
       let q1_V = DensePolynomial {
@@ -489,118 +503,140 @@ impl BasicBlock for CQ2BasicBlock {
       let W_poly = &q1_poly.sub(&q1_z_poly) / &q1_V;
       let W_x = util::msm::<G1Projective>(&srs.X1A, &W_poly.coeffs);
 
+      let f_prod = &op_polys[1];
+      let f_prod_z = f_prod.evaluate(&zeta);
+      let f_prod_z_poly = DensePolynomial { coeffs: vec![f_prod_z] };
+      let W_2_poly = &f_prod.sub(&f_prod_z_poly) / &q1_V;
+      let W_x_2 = util::msm::<G2Projective>(&srs.X2A, &W_2_poly.coeffs);
+
       let p_ref = proof_2.borrow();
-      let fz_prod: Fr = p_ref[3..].iter().product();
       let mut rng2 = StdRng::from_entropy();
-      let r = &p_ref[..2];
-      let r_sum = p_ref[2];
-      let C5 = -(srs.X1P[*n] - srs.X1P[0]) * r[0] + srs.X1P[0] * fz_prod * r[1];
-      let r = Fr::rand(&mut rng2);
-      let C6 = -(srs.X1P[1] - srs.X1P[0] * zeta) * r + srs.X1P[0] * r_sum;
+      let r = &p_ref[..6];
+      let r_sum = p_ref[6];
+      let f_zs = &p_ref[7..];
+      // [input0.r, input1.r, B_x, B_Q_x, diff_x, f_prod]
+      let C5 = -srs.X1P[0] * r[4] - (srs.X1P[*n] - srs.X1P[0]) * r[3] + (proof_0[5] - srs.Y1P * r[2]) * r[5]; //+ proof_0[10] * r[2];
+      let r_w = Fr::rand(&mut rng2);
+      let C6 = -(srs.X1P[1] - srs.X1P[0] * zeta) * r_w + srs.X1P[0] * r_sum;
+      let r_w_2 = Fr::rand(&mut rng2);
+      let C7 = -(srs.X1P[1] - srs.X1P[0] * zeta) * r_w_2 + srs.X1P[0] * r[5];
 
       let mut proof = proof_0.clone();
-      proof.append(&mut vec![W_x, C5, C6]);
-      (proof, vec![*T_x_2], p_ref[3..].to_vec())
+      proof.append(&mut vec![W_x + srs.Y1P * r_w, C5, C6, C7]);
+      let mut proof_1 = g2s.clone();
+      proof_1.append(&mut vec![W_x_2 + srs.Y2P * r_w_2]);
+      (proof, proof_1, f_zs.to_vec())
     } else {
       (vec![], vec![], vec![])
     }
   }
 
-  // fn batch_verify_first(
-  //   &self,
-  //   batch_verify_state: &mut BatchVerifyState,
-  //   model: &ArrayD<DataEnc>,
-  //   inputs: &Vec<&ArrayD<DataEnc>>,
-  //   _outputs: &Vec<&ArrayD<DataEnc>>,
-  //   _rng: &mut StdRng,
-  //   _cache: ProveVerifyCache,
-  // ) {
-  //   let input = inputs[0].first().unwrap();
-  //   let model = model.first().unwrap();
-  //   let key = format!("{:?}_{}", self, input.len);
-  //   let mut guard = batch_verify_state.lock().unwrap();
-  //   match guard.get_mut(&key) {
-  //     Some(value) => {
-  //       let (_, BatchVerifyStateValues::CQ(n, N, _, g1s)) = value;
-  //       let mut new_g1s = g1s.clone();
-  //       new_g1s.push(input.g1);
-  //       *value = (Box::new(self.clone()), BatchVerifyStateValues::CQ(*n, *N, model.g1, new_g1s))
-  //     }
-  //     _ => {
-  //       let N = model.len;
-  //       guard.insert(
-  //         key,
-  //         (Box::new(self.clone()), BatchVerifyStateValues::CQ(input.len, N, model.g1, vec![input.g1])),
-  //       );
-  //     }
-  //   };
-  // }
+  fn batch_verify_first(
+    &self,
+    batch_verify_state: &mut BatchVerifyState,
+    batch_counters: &mut BatchCounters,
+    model: &ArrayD<DataEnc>,
+    inputs: &Vec<&ArrayD<DataEnc>>,
+    _outputs: &Vec<&ArrayD<DataEnc>>,
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) {
+    let input = inputs[0].first().unwrap();
+    let model = model.first().unwrap();
+    let tag = format!("{:?}_{}", self, input.len);
+    let key = util::update_batch_counters(batch_counters, &tag, 8);
+    let mut state_mut_ref = batch_verify_state.borrow_mut();
+    match state_mut_ref.get_mut(&key) {
+      Some(value) => {
+        let (_, BatchVerifyStateValues::CQ(n, N, _, g1s)) = value;
+        let mut new_g1s = g1s.clone();
+        new_g1s.push(input.g1);
+        *value = (Box::new(self.clone()), BatchVerifyStateValues::CQ(*n, *N, model.g1, new_g1s))
+      }
+      _ => {
+        let N = model.len;
+        state_mut_ref.insert(
+          key,
+          (Box::new(self.clone()), BatchVerifyStateValues::CQ(input.len, N, model.g1, vec![input.g1])),
+        );
+      }
+    };
+  }
 
-  // fn batch_verify(
-  //   &self,
-  //   srs: &SRS,
-  //   proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
-  //   batch_verify_values: &BatchVerifyStateValues,
-  //   rng: &mut StdRng,
-  // ) -> Vec<PairingCheck> {
-  //   let mut checks = Vec::new();
-  //   let [m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC, C1, C2, C3, C4, W_x, C5, C6] = proof.0[..] else {
-  //     panic!("Wrong proof format")
-  //   };
-  //   let [T_x_2] = proof.1[..] else { panic!("Wrong proof format") };
-  //   let f_zs = proof.2;
+  fn batch_verify(
+    &self,
+    srs: &SRS,
+    proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    batch_verify_values: &BatchVerifyStateValues,
+    rng: &mut StdRng,
+  ) -> Vec<PairingCheck> {
+    let mut checks = Vec::new();
+    let [m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC, diff_x, C1, C2, C3, C4, W_x, C5, C6, C7] = proof.0[..] else {
+      panic!("Wrong proof format")
+    };
+    let [T_x_2, prod_x_2, W_x_2] = proof.1[..] else {
+      panic!("Wrong proof format")
+    };
+    let f_zs = proof.2;
 
-  //   let beta = Fr::rand(rng);
-  //   let zeta = Fr::rand(rng);
-  //   let mu = Fr::rand(rng);
+    let beta = Fr::rand(rng);
+    let zeta = Fr::rand(rng);
+    let mu = Fr::rand(rng);
 
-  //   let BatchVerifyStateValues::CQ(n, N, model_g1, f_xs) = batch_verify_values;
+    let BatchVerifyStateValues::CQ(n, N, model_g1, f_xs) = batch_verify_values;
 
-  //   let zetas = util::calc_pow(zeta, f_zs.len());
-  //   let mus = util::calc_pow(mu, f_zs.len());
-  //   let fz_sum: Fr = f_zs.iter().enumerate().map(|(i, x)| *x * mus[i]).sum();
-  //   let fz_prod = f_zs.iter().product();
-  //   let diff: Fr = f_zs.iter().map(|x| &fz_prod / x).sum();
-  //   let f_sum: G1Projective = f_xs.iter().enumerate().map(|(i, x)| (*x + srs.X1A[0] * beta) * mus[i]).sum();
+    let zetas = util::calc_pow(zeta, f_zs.len());
+    let mus = util::calc_pow(mu, f_zs.len());
+    let fz_sum: Fr = f_zs.iter().enumerate().map(|(i, x)| *x * mus[i]).sum();
+    let fz_prod = f_zs.iter().product();
+    let diff: Fr = f_zs.iter().map(|x| &fz_prod / x).sum();
+    let f_sum: G1Projective = f_xs.iter().enumerate().map(|(i, x)| (*x + srs.X1A[0] * beta) * mus[i]).sum();
+    let fz_prod: Fr = f_zs.iter().product();
 
-  //   // Check A(x) (A_i = m_i/(t_i+beta))
-  //   checks.push(vec![
-  //     (A_x, T_x_2),
-  //     ((A_x * beta - m_x).into(), srs.X2A[0]),
-  //     (-A_Q_x, (srs.X2A[*N] - srs.X2A[0]).into()),
-  //     (-C1, srs.Y2A),
-  //   ]);
+    // Check A(x) (A_i = m_i/(t_i+beta))
+    checks.push(vec![
+      (A_x, T_x_2),
+      ((A_x * beta - m_x).into(), srs.X2A[0]),
+      (-A_Q_x, (srs.X2A[*N] - srs.X2A[0]).into()),
+      (-C1, srs.Y2A),
+    ]);
 
-  //   // Check T_x_2 is the G2 equivalent of the model
-  //   checks.push(vec![(*model_g1, srs.X2A[0]), (srs.X1A[0], -T_x_2)]);
+    // Check T_x_2 is the G2 equivalent of the model
+    checks.push(vec![(*model_g1, srs.X2A[0]), (srs.X1A[0], -T_x_2)]);
 
-  //   // Check A(x) - A(0) is divisible by x
-  //   checks.push(vec![((A_x - A_zero).into(), srs.X2A[0]), (-A_zero_div, srs.X2A[1]), (-C2, srs.Y2A)]);
+    // Check A(x) - A(0) is divisible by x
+    checks.push(vec![((A_x - A_zero).into(), srs.X2A[0]), (-A_zero_div, srs.X2A[1]), (-C2, srs.Y2A)]);
 
-  //   // Assume B(0) = A(0)*N/n (which assumes ∑A=∑B)
-  //   let B_0: G1Affine = (A_zero * (Fr::from(*N as u32) * Fr::from(*n as u32).inverse().unwrap())).into();
+    // Assume B(0) = A(0)*N/n (which assumes ∑A=∑B)
+    let B_0: G1Affine = (A_zero * (Fr::from(*N as u32) * Fr::from(*n as u32).inverse().unwrap())).into();
 
-  //   // Check B(x) - B(0) is divisible by x
-  //   checks.push(vec![((B_x - B_0).into(), srs.X2A[0]), (-B_zero_div, srs.X2A[1]), (-C3, srs.Y2A)]);
+    // Check B(x) - B(0) is divisible by x
+    checks.push(vec![((B_x - B_0).into(), srs.X2A[0]), (-B_zero_div, srs.X2A[1]), (-C3, srs.Y2A)]);
 
-  //   // Degree check B
-  //   checks.push(vec![(B_x, srs.X2A[N - n]), (-B_DC, srs.X2A[0]), (-C4, srs.Y2A)]);
+    // Degree check B
+    checks.push(vec![(B_x, srs.X2A[N - n]), (-B_DC, srs.X2A[0]), (-C4, srs.Y2A)]);
 
-  //   // Check B(x) (B_i = sum ())
-  //   checks.push(vec![
-  //     (
-  //       (B_x * fz_prod - srs.X1A[0] * diff - B_Q_x * (zetas[n - 1] - Fr::one())).into(),
-  //       srs.X2A[0],
-  //     ),
-  //     (-C5, srs.Y2A),
-  //   ]);
+    // Check B(x) (B_i = sum ())
+    checks.push(vec![
+      (B_x, prod_x_2),
+      (-diff_x, srs.X2A[0]),
+      (-B_Q_x, (srs.X2A[*n] - srs.X2A[0]).into()),
+      (-C5, srs.Y2A),
+    ]);
 
-  //   checks.push(vec![
-  //     ((-W_x, (srs.X2P[1] - srs.X2A[0] * zeta).into())),
-  //     ((f_sum - srs.X1A[0] * fz_sum).into(), srs.X2A[0]),
-  //     (-C6, srs.Y2A),
-  //   ]);
+    checks.push(vec![
+      ((-W_x, (srs.X2P[1] - srs.X2A[0] * zeta).into())),
+      ((f_sum - srs.X1A[0] * fz_sum).into(), srs.X2A[0]),
+      (-C6, srs.Y2A),
+    ]);
 
-  //   checks
-  // }
+    let fz_prod_x: G2Affine = (srs.X2A[0] * fz_prod).into();
+    checks.push(vec![
+      (((srs.X1P[1] - srs.X1A[0] * zeta).into(), -W_x_2)),
+      (srs.X1A[0], (prod_x_2 - fz_prod_x).into()),
+      (-C7, srs.Y2A),
+    ]);
+
+    checks
+  }
 }

@@ -98,20 +98,22 @@ pub enum BatchProveStateValues {
   CQ(
     usize,
     RefCell<HashMap<usize, usize>>,
-    G2Projective,
+    Vec<G2Projective>,
     RefCell<Vec<DensePolynomial<Fr>>>,
     Vec<Fr>,
     Vec<G1Projective>,
     RefCell<Vec<Fr>>,
+    Vec<DensePolynomial<Fr>>,
   ),
   CQ2(
     usize,
     RefCell<HashMap<usize, usize>>,
-    G2Projective,
+    Vec<G2Projective>,
     RefCell<Vec<DensePolynomial<Fr>>>,
     Vec<Fr>,
     Vec<G1Projective>,
     RefCell<Vec<Fr>>,
+    Vec<DensePolynomial<Fr>>,
   ),
 }
 
@@ -286,6 +288,7 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
   fn batch_verify_first(
     &self,
     _batch_verify_state: &mut BatchVerifyState,
+    _batch_counters: &mut BatchCounters,
     _model: &ArrayD<DataEnc>,
     _inputs: &Vec<&ArrayD<DataEnc>>,
     _outputs: &Vec<&ArrayD<DataEnc>>,

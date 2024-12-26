@@ -223,35 +223,45 @@ fn testBatchProve<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
       (key, (proof.0, proof.1, proof.2))
     })
     .collect();
-  // let model = model.map(|x| DataEnc::new(srs, x));
-  // let inputs: Vec<ArrayD<DataEnc>> = inputs.iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect();
-  // let inputs: Vec<&ArrayD<DataEnc>> = inputs.iter().map(|input| input).collect();
-  // let outputs: Vec<ArrayD<DataEnc>> = outputs.iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect();
-  // let outputs: Vec<&ArrayD<DataEnc>> = outputs.iter().map(|output| output).collect();
-  // let cache = Arc::new(Mutex::new(HashMap::new()));
+  let model = model.map(|x| DataEnc::new(srs, x));
+  let inputs: Vec<ArrayD<DataEnc>> = inputs.iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect();
+  let inputs: Vec<&ArrayD<DataEnc>> = inputs.iter().map(|input| input).collect();
+  let outputs: Vec<ArrayD<DataEnc>> = outputs.iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect();
+  let outputs: Vec<&ArrayD<DataEnc>> = outputs.iter().map(|output| output).collect();
+  let cache = Arc::new(Mutex::new(HashMap::new()));
 
-  // let mut batch_verify_state = RefCell::new(HashMap::new());
-  // for input in inputs.iter() {
-  //   basic_block.batch_verify_first(&mut batch_verify_state, &model, &vec![input], &outputs, &mut rng2, cache.clone());
-  // }
+  let mut batch_counters = RefCell::new(HashMap::new());
+  let mut batch_verify_state = RefCell::new(HashMap::new());
+  for input in inputs.iter() {
+    basic_block.batch_verify_first(
+      &mut batch_verify_state,
+      &mut batch_counters,
+      &model,
+      &vec![input],
+      &outputs,
+      &mut rng2,
+      cache.clone(),
+    );
+  }
 
-  // let state_ref = batch_verify_state.borrow();
-  // let pairings: Vec<_> = state_ref
-  //   .keys()
-  //   .map(|key| {
-  //     let proof = proofs.get(key).unwrap();
-  //     let proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>) = (
-  //       &proof.0.iter().map(|y| *y).collect(),
-  //       &proof.1.iter().map(|y| *y).collect(),
-  //       &proof.2.iter().map(|y| *y).collect(),
-  //     );
-  //     let (bb, values) = state_ref.get(key).unwrap();
-  //     bb.batch_verify(srs, proof, values, &mut rng2)
-  //   })
-  //   .flatten()
-  //   .collect();
-  // let pairings = pairings.iter().map(|x| x).collect();
-  // let pairings = util::combine_pairing_checks(&pairings);
+  let state_ref = batch_verify_state.borrow();
+  println!("bv keys {:?}", state_ref.keys());
+  let pairings: Vec<_> = state_ref
+    .keys()
+    .map(|key| {
+      let proof = proofs.get(key).unwrap();
+      let proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>) = (
+        &proof.0.iter().map(|y| *y).collect(),
+        &proof.1.iter().map(|y| *y).collect(),
+        &proof.2.iter().map(|y| *y).collect(),
+      );
+      let (bb, values) = state_ref.get(key).unwrap();
+      bb.batch_verify(srs, proof, values, &mut rng2)
+    })
+    .flatten()
+    .collect();
+  let pairings = pairings.iter().map(|x| x).collect();
+  let pairings = util::combine_pairing_checks(&pairings);
   // assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
 }
 

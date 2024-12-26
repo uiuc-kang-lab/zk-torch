@@ -471,6 +471,88 @@ impl Graph {
     // assert_eq!(pairing_check, PairingOutput::zero());
   }
 
+  pub fn batch_verify(
+    &self,
+    srs: &SRS,
+    models: &Vec<&ArrayD<DataEnc>>,
+    proofs: &HashMap<String, (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)>,
+    inputs: &Vec<&ArrayD<DataEnc>>,
+    outputs: &Vec<&Vec<&ArrayD<DataEnc>>>,
+    rng: &mut StdRng,
+    timing: &mut TimingTree,
+  ) {
+    assert!(self.nodes.len() == self.precomputable.prove_and_verify.len());
+    let cache = Arc::new(Mutex::new(HashMap::new()));
+
+    let mut batch_verify_state = RefCell::new(HashMap::new());
+    let mut batch_counters = RefCell::new(HashMap::new());
+
+    let _: Vec<_> = self
+      .nodes
+      .iter()
+      .enumerate()
+      .map(|(i, n)| {
+        let precomputable = self.precomputable.prove_and_verify[i];
+        if precomputable {
+          // Skip verifying for some layers if they are precomputable.
+          // These layers require no proving and verifying as their inputs are known (i.e., constants) during graph construction.
+          println!(
+            "{} | skipping verifying for {i} {:?} because this layer is precomputable given the constant inputs",
+            self.layer_names[i], self.basic_blocks[n.basic_block]
+          );
+        }
+        let verify_id = format!("{} | verifying {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
+        println!("{}", verify_id);
+        let myInputs = n
+          .inputs
+          .iter()
+          .map(|(basicblock_idx, output_idx)| {
+            if *basicblock_idx < 0 {
+              inputs[*output_idx + (-basicblock_idx - 1) as usize]
+            } else {
+              &(outputs[*basicblock_idx as usize][*output_idx])
+            }
+          })
+          .collect();
+        timed!(
+          timing,
+          &verify_id,
+          self.basic_blocks[n.basic_block].batch_verify_first(
+            &mut batch_verify_state,
+            &mut batch_counters,
+            &models[n.basic_block],
+            &myInputs,
+            outputs[i],
+            rng,
+            cache.clone(),
+          )
+        );
+      })
+      .collect();
+
+    let state_ref = batch_verify_state.borrow();
+    let pairings: Vec<_> = state_ref
+      .iter()
+      .map(|x| {
+        let verify_id = format!("| batch verify {:?}", x.0);
+        let proof = proofs.get(x.0).unwrap();
+        let proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>) = (
+          &proof.0.iter().map(|x| (*x).into()).collect(),
+          &proof.1.iter().map(|x| (*x).into()).collect(),
+          &proof.2.iter().map(|x| (*x).into()).collect(),
+        );
+        x.1 .0.batch_verify(srs, proof, &x.1 .1, rng)
+      })
+      .collect();
+    let pairings = timed!(
+      timing,
+      "combine pairings",
+      util::combine_pairing_checks(&pairings.iter().flatten().collect())
+    );
+    let pairing_check = timed!(timing, "pairings", Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()));
+    // assert_eq!(pairing_check, PairingOutput::zero());
+  }
+
   // This function should be only used for debugging purposes (it is very slow).
   // It verifies the proofs without combining pairing checks so that we can see which BasicBlock is failing.
   pub fn verify_for_each_pairing(
