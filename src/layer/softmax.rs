@@ -28,14 +28,9 @@ impl Layer for SoftmaxLayer {
     }));
     let exp_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
-        setup: Some((
-          Box::new(ExpBasicBlock {
-            input_SF: sf_log,
-            output_SF: sf_log,
-          }),
-          (-(*onnx::CQ_RANGE as i32) + 1) as i128,
-          *onnx::CQ_RANGE,
-        )),
+        op: cq2::CQ2BasicBlockOps::Exp(sf_log, sf_log),
+        offset: (-(*onnx::CQ_RANGE as i32) + 1) as i128,
+        size: *onnx::CQ_RANGE,
       }),
       N: 1,
     }));
@@ -49,14 +44,9 @@ impl Layer for SoftmaxLayer {
     }));
     let rec_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
-        setup: Some((
-          Box::new(ReciprocalBasicBlock {
-            input_SF: sf_log,
-            output_SF: sf_log,
-          }),
-          0,
-          *onnx::CQ_RANGE,
-        )),
+        op: cq2::CQ2BasicBlockOps::Reciprocal(sf_log, sf_log),
+        offset: 0,
+        size: *onnx::CQ_RANGE,
       }),
       N: 1,
     }));
@@ -70,14 +60,9 @@ impl Layer for SoftmaxLayer {
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
-        setup: Some((
-          Box::new(ChangeSFBasicBlock {
-            input_SF: sf_log * 2,
-            output_SF: sf_log,
-          }),
-          *onnx::CQ_RANGE_LOWER,
-          *onnx::CQ_RANGE,
-        )),
+        op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
+        offset: *onnx::CQ_RANGE_LOWER,
+        size: *onnx::CQ_RANGE,
       }),
       N: 1,
     }));

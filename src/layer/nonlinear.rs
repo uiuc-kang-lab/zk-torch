@@ -8,7 +8,7 @@ use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
 
 macro_rules! define_nonlinear_layer {
-  ($struct_name:ident, $basic_block:ident) => {
+  ($struct_name:ident, $basic_block:ident, $enum_name:ident) => {
     pub struct $struct_name;
 
     impl Layer for $struct_name {
@@ -26,14 +26,9 @@ macro_rules! define_nonlinear_layer {
         }));
         let layer_check = graph.addBB(Box::new(RepeaterBasicBlock {
           basic_block: Box::new(CQ2BasicBlock {
-            setup: Some((
-              Box::new($basic_block {
-                input_SF: sf_log,
-                output_SF: sf_log,
-              }),
-              *onnx::CQ_RANGE_LOWER,
-              *onnx::CQ_RANGE,
-            )),
+            op: cq2::CQ2BasicBlockOps::$enum_name(sf_log, sf_log),
+            offset: *onnx::CQ_RANGE_LOWER,
+            size: *onnx::CQ_RANGE,
           }),
           N: 1,
         }));
@@ -47,14 +42,14 @@ macro_rules! define_nonlinear_layer {
 }
 
 // Using the macro to define nonlinear layers
-define_nonlinear_layer!(ReLULayer, ReLUBasicBlock);
-define_nonlinear_layer!(CeilLayer, CeilBasicBlock);
-define_nonlinear_layer!(ErfLayer, ErfBasicBlock);
-define_nonlinear_layer!(ExpLayer, ExpBasicBlock);
-define_nonlinear_layer!(SigmoidLayer, SigmoidBasicBlock);
-define_nonlinear_layer!(TanhLayer, TanhBasicBlock);
-define_nonlinear_layer!(CosLayer, CosBasicBlock);
-define_nonlinear_layer!(SinLayer, SinBasicBlock);
-define_nonlinear_layer!(TanLayer, TanBasicBlock);
-define_nonlinear_layer!(ReciprocalLayer, ReciprocalBasicBlock);
-define_nonlinear_layer!(GeLULayer, GeLUBasicBlock);
+define_nonlinear_layer!(ReLULayer, ReLUBasicBlock, ReLU);
+define_nonlinear_layer!(CeilLayer, CeilBasicBlock, Ceil);
+define_nonlinear_layer!(ErfLayer, ErfBasicBlock, Erf);
+define_nonlinear_layer!(ExpLayer, ExpBasicBlock, Exp);
+define_nonlinear_layer!(SigmoidLayer, SigmoidBasicBlock, Sigmoid);
+define_nonlinear_layer!(TanhLayer, TanhBasicBlock, Tanh);
+define_nonlinear_layer!(CosLayer, CosBasicBlock, Cos);
+define_nonlinear_layer!(SinLayer, SinBasicBlock, Sin);
+define_nonlinear_layer!(TanLayer, TanBasicBlock, Tan);
+define_nonlinear_layer!(ReciprocalLayer, ReciprocalBasicBlock, Reciprocal);
+define_nonlinear_layer!(GeLULayer, GeLUBasicBlock, GeLU);
