@@ -31,11 +31,11 @@ use std::{
 
 fn swap_for_concat(ssig: &Vec<Vec<Fr>>, input_shapes: &Vec<Vec<usize>>, N_inp: Vec<usize>, N_out: usize) -> Vec<Vec<Fr>> {
   let mut ssig = ssig.clone();
-  let input_dim_products = input_shapes.iter().map(|shape| shape[..shape.len() - 1].iter().product::<usize>()).collect::<Vec<_>>();
+  let input_dim_products = input_shapes.iter().map(|shape| shape[..shape.len() - 1].iter().map(|v| util::next_pow(*v as u32) as usize).product::<usize>()).collect::<Vec<_>>();
   let input_last_dims = input_shapes.iter().map(|shape| shape[shape.len() - 1]).collect::<Vec<_>>();
   let output_start_index = input_dim_products.iter().sum::<usize>();
 
-  // k-th output poly
+  // i-th output poly
   for i in 0..input_dim_products[0] {
     let mut out_j = 0;
     for inp_id in 0..input_shapes.len() {
@@ -81,7 +81,8 @@ pub struct ConcatLastDimBasicBlock {
 impl BasicBlock for ConcatLastDimBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     let axis = inputs[0].shape().len() - 1;
-    let r = ndarray::concatenate(Axis(axis), &inputs.iter().map(|x| x.view()).collect::<Vec<_>>()).unwrap();
+    let input_sliced = inputs.iter().enumerate().map(|(i, x)| util::slice_nd_array(x.to_owned().clone(), &self.input_shapes[i])).collect::<Vec<_>>();
+    let r = ndarray::concatenate(Axis(axis), &input_sliced.iter().map(|x| x.view()).collect::<Vec<_>>()).unwrap();
     let r = util::pad_to_pow_of_two(&r, &Fr::zero());
     Ok(vec![r])
   }
@@ -97,8 +98,8 @@ impl BasicBlock for ConcatLastDimBasicBlock {
     let domain = GeneralEvaluationDomain::<Fr>::new(N_out).unwrap();
 
     // m is the number of polynomials
-    let output_dim_product = output_shape[..output_shape.len() - 1].iter().product::<usize>();
-    let input_dim_products = self.input_shapes.iter().map(|shape| shape[..shape.len() - 1].iter().product::<usize>()).collect::<Vec<_>>();
+    let output_dim_product = output_shape[..output_shape.len() - 1].iter().map(|v| util::next_pow(*v as u32) as usize).product::<usize>();
+    let input_dim_products = self.input_shapes.iter().map(|shape| shape[..shape.len() - 1].iter().map(|v| util::next_pow(*v as u32) as usize).product::<usize>()).collect::<Vec<_>>();
     let m = output_dim_product + input_dim_products.iter().sum::<usize>();
 
     let ssig: Vec<_> = (0..m).map(|i| (0..N_out).map(|j| Fr::from((i + 1) as i32) * domain.element(j)).collect::<Vec<_>>()).collect::<Vec<_>>();
@@ -106,6 +107,29 @@ impl BasicBlock for ConcatLastDimBasicBlock {
     let mut ssig_poly_evals: Vec<_> = ssig.par_iter().map(|x| DensePolynomial::from_coefficients_vec(x.to_vec())).collect();
     let mut ssig_polys: Vec<_> = ssig.par_iter().map(|x| DensePolynomial::from_coefficients_vec(domain.ifft(x))).collect();
     let ssig_xs: Vec<_> = ssig_polys.iter().map(|x| util::msm::<G1Projective>(&srs.X1A, &x.coeffs)).collect();
+    ssig_polys.append(&mut ssig_poly_evals);
+
+    return (ssig_xs, vec![], ssig_polys);
+  }
+
+  fn mockSetup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+    let mut output_shape = self.input_shapes[0].clone();
+    let output_shape_len = output_shape.len();
+    output_shape[output_shape_len - 1] = self.input_shapes.iter().map(|x| x[x.len() - 1]).sum();
+    output_shape[output_shape_len - 1] = util::next_pow(output_shape[output_shape.len() - 1] as u32) as usize;
+
+    let N_out = output_shape[output_shape.len() - 1];
+    let domain = GeneralEvaluationDomain::<Fr>::new(N_out).unwrap();
+
+    // m is the number of polynomials
+    let output_dim_product = output_shape[..output_shape.len() - 1].iter().map(|v| util::next_pow(*v as u32) as usize).product::<usize>();
+    let input_dim_products = self.input_shapes.iter().map(|shape| shape[..shape.len() - 1].iter().map(|v| util::next_pow(*v as u32) as usize).product::<usize>()).collect::<Vec<_>>();
+    let m = output_dim_product + input_dim_products.iter().sum::<usize>();
+
+    let ssig: Vec<_> = (0..m).map(|i| (0..N_out).map(|j| Fr::from((i + 1) as i32) * domain.element(j)).collect::<Vec<_>>()).collect::<Vec<_>>();
+    let mut ssig_poly_evals: Vec<_> = ssig.par_iter().map(|x| DensePolynomial::from_coefficients_vec(x.to_vec())).collect();
+    let mut ssig_polys: Vec<_> = ssig_poly_evals.clone();
+    let ssig_xs: Vec<_> = (0..m).map(|_| srs.X1P[0].clone()).collect();
     ssig_polys.append(&mut ssig_poly_evals);
 
     return (ssig_xs, vec![], ssig_polys);
@@ -133,6 +157,7 @@ impl BasicBlock for ConcatLastDimBasicBlock {
     let output_evals: Vec<Vec<Fr>> = outputs[0].par_iter().map(|x| x.raw.clone()).collect();
     io_evals.push(output_evals);
     let io_evals: Vec<Vec<_>> = io_evals.into_iter().flatten().collect();
+    println!("io_evals len: {}", io_evals.len());
 
     // m is the number of polynomials
     let m = io_evals.len();
@@ -180,6 +205,7 @@ impl BasicBlock for ConcatLastDimBasicBlock {
     let ssig_polys_len = ssig_polys.len();
     let ssig_poly_evals = &ssig_polys[ssig_polys_len / 2..];
     let ssig_polys = &ssig_polys[..ssig_polys_len / 2];
+    println!("ssig_polys len: {}", ssig_polys.len());
 
     // Round 1.5: compute q(x)s = [fj_blind(x) - fj(x)] / (x^N - 1) for proving fj_blind(x) = fj(x)
     // Fiat Shamir
@@ -379,8 +405,8 @@ impl BasicBlock for ConcatLastDimBasicBlock {
     let output_shape_len = output_shape.len();
     output_shape[output_shape_len - 1] = self.input_shapes.iter().map(|x| x[x.len() - 1]).sum();
     output_shape[output_shape_len - 1] = util::next_pow(output_shape[output_shape.len() - 1] as u32) as usize;
-    let output_dim_product = output_shape[..output_shape.len() - 1].iter().product::<usize>();
-    let input_dim_products = self.input_shapes.iter().map(|shape| shape[..shape.len() - 1].iter().product::<usize>()).collect::<Vec<_>>();
+    let output_dim_product = output_shape[..output_shape.len() - 1].iter().map(|v| util::next_pow(*v as u32) as usize).product::<usize>();
+    let input_dim_products = self.input_shapes.iter().map(|shape| shape[..shape.len() - 1].iter().map(|v| util::next_pow(*v as u32) as usize).product::<usize>()).collect::<Vec<_>>();
     let m = output_dim_product + input_dim_products.iter().sum::<usize>();
 
     let [qj_x, Z_x] = proof.0[..2] else { panic!("Wrong proof format") };
