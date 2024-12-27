@@ -31,26 +31,16 @@ impl Layer for CastLayer {
     };
     let change_sf_check = if input_shapes[0].len() == 0 {
       graph.addBB(Box::new(CQ2BasicBlock {
-        setup: Some((
-          Box::new(ChangeSFBasicBlock {
-            input_SF: input_SF,
-            output_SF: output_SF,
-          }),
-          *onnx::CQ_RANGE_LOWER,
-          *onnx::CQ_RANGE,
-        )),
+        op: cq2::CQ2BasicBlockOps::ChangeSF(input_SF, output_SF),
+        offset: *onnx::CQ_RANGE_LOWER,
+        size: *onnx::CQ_RANGE,
       }))
     } else {
       graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
-          setup: Some((
-            Box::new(ChangeSFBasicBlock {
-              input_SF: input_SF,
-              output_SF: output_SF,
-            }),
-            *onnx::CQ_RANGE_LOWER,
-            *onnx::CQ_RANGE,
-          )),
+          op: cq2::CQ2BasicBlockOps::ChangeSF(input_SF, output_SF),
+          offset: *onnx::CQ_RANGE_LOWER,
+          size: *onnx::CQ_RANGE,
         }),
         N: 1,
       }))

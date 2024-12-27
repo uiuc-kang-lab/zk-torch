@@ -136,4 +136,14 @@ pub fn verify(srs: &SRS, graph: &Graph, timing: &mut TimingTree) {
     "verify",
     graph.verify(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng, timing)
   );
+
+  let batch_proof =
+    Vec::<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)>::deserialize_uncompressed_unchecked(File::open(&CONFIG.prover.batch_proof_path).unwrap()).unwrap();
+  let batch_proof = batch_proof.iter().map(|x| (&x.0, &x.1, &x.2)).collect();
+  #[cfg(not(feature = "debug"))]
+  timed!(
+    timing,
+    "batch verify",
+    graph.batch_verify(srs, &modelsEnc, &inputsEnc, &outputsEnc, &batch_proof, &mut rng, timing)
+  );
 }

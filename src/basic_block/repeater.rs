@@ -1,4 +1,4 @@
-use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use super::{BasicBlock, BatchCounters, BatchProveState, BatchProveStateValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::{ndarr_azip, util};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::univariate::DensePolynomial;
@@ -163,6 +163,79 @@ impl BasicBlock for RepeaterBasicBlock {
     proof
   }
 
+  fn batch_prove_first(
+    &self,
+    srs: &SRS,
+    setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    mut batch_prove_state: &mut BatchProveState,
+    batch_counters: &mut BatchCounters,
+    model: &ArrayD<Data>,
+    inputs: &Vec<&ArrayD<Data>>,
+    outputs: &Vec<&ArrayD<Data>>,
+    rng: &mut StdRng,
+    cache: ProveVerifyCache,
+  ) {
+    let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
+    ndarr_azip!(((localInputs, localOutputs) in &mut temp) {
+      let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
+      let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
+      let mut rng = rng.clone();
+      let _ = self.basic_block.batch_prove_first(srs, setup, &mut batch_prove_state, batch_counters, model, &localInputs, &localOutputs, &mut rng, cache.clone());
+    });
+  }
+
+  fn batch_prove_second(
+    &self,
+    srs: &SRS,
+    setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    mut batch_prove_state: &mut BatchProveState,
+    batch_counters: &mut BatchCounters,
+    model: &ArrayD<Data>,
+    inputs: &Vec<&ArrayD<Data>>,
+    outputs: &Vec<&ArrayD<Data>>,
+    rng: &mut StdRng,
+    cache: ProveVerifyCache,
+  ) {
+    let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
+    ndarr_azip!(((localInputs, localOutputs) in &mut temp) {
+      let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
+      let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
+      let mut rng = rng.clone();
+      let _ = self.basic_block.batch_prove_second(srs, setup, &mut batch_prove_state, batch_counters, model, &localInputs, &localOutputs, &mut rng, cache.clone());
+    });
+  }
+
+  fn batch_prove_third(
+    &self,
+    srs: &SRS,
+    setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    mut batch_prove_state: &mut BatchProveState,
+    batch_counters: &mut BatchCounters,
+    model: &ArrayD<Data>,
+    inputs: &Vec<&ArrayD<Data>>,
+    outputs: &Vec<&ArrayD<Data>>,
+    rng: &mut StdRng,
+    cache: ProveVerifyCache,
+  ) {
+    let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
+    ndarr_azip!(((localInputs, localOutputs) in &mut temp) {
+      let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
+      let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
+      let mut rng = rng.clone();
+      let _ = self.basic_block.batch_prove_third(srs, setup, &mut batch_prove_state, batch_counters, model, &localInputs, &localOutputs, &mut rng, cache.clone());
+    });
+  }
+
+  fn batch_prove(&self, srs: &SRS, batch_prove_values: &BatchProveStateValues, rng: &mut StdRng) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    let proof = self.basic_block.batch_prove(srs, &batch_prove_values, rng);
+    let proof = (
+      proof.0.into_iter().collect(),
+      proof.1.into_iter().collect(),
+      proof.2.into_iter().collect(),
+    );
+    proof
+  }
+
   fn verify(
     &self,
     srs: &SRS,
@@ -200,6 +273,94 @@ impl BasicBlock for RepeaterBasicBlock {
       *x = temp;
     });
     let pairings = empty.into_iter().flatten().collect();
+
+    pairings
+  }
+}
+
+#[derive(Debug)]
+pub struct RepeaterEstBasicBlock {
+  pub basic_block: Box<dyn BasicBlock>,
+  pub N: usize,
+}
+
+impl BasicBlock for RepeaterEstBasicBlock {
+  fn genModel(&self) -> ArrayD<Fr> {
+    self.basic_block.genModel()
+  }
+
+  fn run(&self, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
+    let temp = broadcastN::<Fr, Fr>(inputs, None, self.N);
+    let temp = temp.map(|(subArrays, _)| {
+      let subArrays: Vec<_> = util::vec_iter(subArrays).map(|y| y).collect();
+      self.basic_block.run(model, &subArrays)
+    });
+    if temp.iter().any(|x| x.is_err()) {
+      return Err(util::CQOutOfRangeError {
+        input: temp.iter().filter_map(|x| x.as_ref().err()).next().unwrap().input,
+      });
+    }
+    let temp = temp.map(|x| x.as_ref().unwrap());
+    let temp = temp.map(|x| x.iter().map(|y| y).collect());
+    let temp = temp.map(|x| x);
+    Ok(combineArr(&temp))
+  }
+
+  fn encodeOutputs(&self, srs: &SRS, model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
+    let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
+    let mut empty = ArrayD::from_elem(temp.shape(), vec![]);
+    ndarr_azip!(((localInputs, localOutputs) in &mut temp, x in &mut empty) {
+      let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
+      let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
+      *x = self.basic_block.encodeOutputs(srs, model, &localInputs, &localOutputs);
+    });
+    let temp = empty.map(|x| x.iter().map(|y| y).collect());
+    let temp = temp.map(|x| x);
+    combineArr(&temp)
+  }
+
+  fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+    self.basic_block.setup(srs, model)
+  }
+
+  fn prove(
+    &self,
+    srs: &SRS,
+    setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    model: &ArrayD<Data>,
+    inputs: &Vec<&ArrayD<Data>>,
+    outputs: &Vec<&ArrayD<Data>>,
+    rng: &mut StdRng,
+    cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    let temp = broadcastN(inputs, Some(outputs), self.N - 1);
+    // just prove one instance instead of proving all instances
+    let (localInput, localOutput) = temp.first().unwrap();
+    let localInput: Vec<_> = localInput.iter().map(|y| y).collect();
+    let localOutput: Vec<_> = localOutput.as_ref().unwrap().iter().map(|y| y).collect();
+    let mut rng = rng.clone();
+    let proof = self.basic_block.prove(srs, setup, model, &localInput, &localOutput, &mut rng, cache.clone());
+    proof
+  }
+
+  fn verify(
+    &self,
+    srs: &SRS,
+    model: &ArrayD<DataEnc>,
+    inputs: &Vec<&ArrayD<DataEnc>>,
+    outputs: &Vec<&ArrayD<DataEnc>>,
+    proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    rng: &mut StdRng,
+    cache: ProveVerifyCache,
+  ) -> Vec<PairingCheck> {
+    let temp = broadcastN(inputs, Some(outputs), self.N - 1);
+
+    let (localInputs, localOutputs) = temp.first().unwrap();
+    let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
+    let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
+    let localProof = (&proof.0.to_vec(), &proof.1.to_vec(), &proof.2.to_vec());
+    let mut rng = rng.clone();
+    let pairings = self.basic_block.verify(srs, model, &localInputs, &localOutputs, localProof, &mut rng, cache.clone());
 
     pairings
   }

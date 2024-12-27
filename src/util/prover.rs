@@ -169,6 +169,12 @@ pub fn prove(
   // Prove:
   let proofs = timed!(timing, "prove", graph.prove(srs, &setups, &models, &inputs, &outputs, &mut rng, timing));
   proofs.serialize_uncompressed(File::create(&CONFIG.prover.proof_path).unwrap()).unwrap();
+  let batch_proofs = timed!(
+    timing,
+    "prove",
+    graph.batch_prove(srs, &setups, &models, &inputs, &outputs, &mut rng, timing)
+  );
+  batch_proofs.serialize_uncompressed(File::create(&CONFIG.prover.batch_proof_path).unwrap()).unwrap();
 }
 
 #[cfg(not(feature = "mock_prove"))]
@@ -286,7 +292,7 @@ pub fn zktorch_kernel() {
   prove(&srs, &inputs, outputs.unwrap(), setups, models, &mut graph, &mut timing);
 
   // Verify
-  //#[cfg(not(feature = "mock_prove"))]
+  // #[cfg(not(feature = "mock_prove"))]
   verify(&srs, &graph, &mut timing);
 
   // Measure proof size

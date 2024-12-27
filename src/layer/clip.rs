@@ -20,11 +20,13 @@ impl Layer for ClipLayer {
     let min = util::fr_to_int(constants[1].unwrap().0.as_slice().unwrap()[0]) as f32;
     let max = util::fr_to_int(constants[2].unwrap().0.as_slice().unwrap()[0]) as f32;
 
-    let clip = graph.addBB(Box::new(ClipBasicBlock { min: min, max: max }));
+    let clip = graph.addBB(Box::new(ClipBasicBlock { min, max }));
     let clip_output = graph.addNode(clip, vec![(-1, 0)]);
     let clip_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
-        setup: Some((Box::new(ClipBasicBlock { min: min, max: max }), *onnx::CQ_RANGE_LOWER, *onnx::CQ_RANGE)),
+        op: cq2::CQ2BasicBlockOps::Clip(min, max),
+        offset: *onnx::CQ_RANGE_LOWER,
+        size: *onnx::CQ_RANGE,
       }),
       N: 1,
     }));

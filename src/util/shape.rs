@@ -4,7 +4,7 @@
  * slicing and padding arrays.
  */
 use ark_bn254::Fr;
-use ndarray::{ArrayD, Axis, IxDyn, Slice, SliceInfo};
+use ndarray::{ArrayD, Axis, Dimension, IxDyn, Slice, SliceInfo};
 
 // slice the arr with the given indices. But this function is not used in the codebase currently.
 #[allow(dead_code)]
@@ -17,6 +17,24 @@ pub fn slice_nd_array(arr: ArrayD<Fr>, indices: &[usize]) -> ArrayD<Fr> {
 
   // Slice the array
   arr.slice_move(slice_info)
+}
+
+pub fn flatten_last_dimension(arr: &ArrayD<Fr>) -> ArrayD<Vec<Fr>> {
+  let shape = arr.shape().to_vec();
+  let new_shape = IxDyn(&shape[..shape.len() - 1]);
+
+  ArrayD::from_shape_fn(new_shape, |idx| {
+    let mut full_idx = idx.as_array_view().to_vec();
+    full_idx.push(0);
+    let slice = arr.slice_each_axis(|ax| {
+      if ax.axis.index() < full_idx.len() - 1 {
+        ndarray::Slice::from(full_idx[ax.axis.index()]..=full_idx[ax.axis.index()])
+      } else {
+        ndarray::Slice::from(..)
+      }
+    });
+    slice.to_owned().into_raw_vec()
+  })
 }
 
 // Pads each dimension of input by the corresponding amount in padding on both ends.

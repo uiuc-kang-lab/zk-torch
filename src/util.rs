@@ -1,4 +1,5 @@
 pub use arithmetic::*;
+pub use batch::*;
 pub use config::*;
 pub use copy_constraint::*;
 pub use err::*;
@@ -14,6 +15,7 @@ pub use shape::*;
 pub use verifier::*;
 
 pub mod arithmetic;
+pub mod batch;
 pub mod config;
 pub mod copy_constraint;
 pub mod err;

@@ -38,6 +38,7 @@ pub struct ProverConfig {
   pub enc_input_path: String,
   pub enc_output_path: String,
   pub proof_path: String,
+  pub batch_proof_path: String,
   pub enable_layer_setup: bool,
 }
 

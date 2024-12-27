@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 use crate::util::{self, ark_de, ark_se};
-pub use add::AddBasicBlock;
+pub use add::{AddAlongAxisBasicBlock, AddBasicBlock, MultipleAddBasicBlock};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
@@ -9,14 +9,15 @@ pub use bool_check::BooleanCheckBasicBlock;
 pub use clip::ClipBasicBlock;
 pub use concat::{ConcatBasicBlock, ConcatLastDimBasicBlock};
 pub use constant::{Const2BasicBlock, ConstBasicBlock, ConstOfShapeBasicBlock};
+pub use conv::{Conv2DAddBasicBlock, Conv3DAddBasicBlock, Conv3DTransposeBasicBlock};
 pub use copy_constraint::CopyConstraintBasicBlock;
 pub use cq::CQBasicBlock;
 pub use cq2::CQ2BasicBlock;
 pub use cqlin::CQLinBasicBlock;
-pub use div::{DivConstBasicBlock, DivScalarBasicBlock, ModConstBasicBlock};
+pub use div::{DivConstBasicBlock, DivConstProofBasicBlock, DivScalarBasicBlock, ModConstBasicBlock};
 pub use eq::{ElementwiseEqBasicBlock, EqBasicBlock};
 pub use id::IdBasicBlock;
-pub use less::LessBasicBlock;
+pub use less::{GreaterBasicBlock, LessBasicBlock};
 pub use matmul::MatMulBasicBlock;
 pub use max::{MaxBasicBlock, MaxProofBasicBlock};
 pub use mul::{MulBasicBlock, MulConstBasicBlock, MulScalarBasicBlock};
@@ -28,12 +29,13 @@ pub use permute::PermuteBasicBlock;
 use rand::{rngs::StdRng, SeedableRng};
 pub use range::RangeConstBasicBlock;
 use rayon::prelude::*;
-pub use repeater::RepeaterBasicBlock;
+pub use repeater::{RepeaterBasicBlock, RepeaterEstBasicBlock};
 pub use reshape::ReshapeBasicBlock;
 pub use rope::RoPEBasicBlock;
 use serde::{Deserialize, Serialize};
 pub use sort::SortBasicBlock;
 pub use split::SplitBasicBlock;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 pub use sub::SubBasicBlock;
@@ -45,6 +47,7 @@ pub mod bool_check;
 pub mod clip;
 pub mod concat;
 pub mod constant;
+pub mod conv;
 pub mod copy_constraint;
 pub mod cq;
 pub mod cq2;
@@ -91,11 +94,45 @@ pub enum CacheValues {
   G2(G2Affine),
 }
 
+pub enum BatchProveStateValues {
+  CQ(
+    usize,
+    RefCell<HashMap<usize, usize>>,
+    Vec<G2Projective>,
+    RefCell<Vec<DensePolynomial<Fr>>>,
+    Vec<Fr>,
+    Vec<G1Projective>,
+    RefCell<Vec<Fr>>,
+    Vec<DensePolynomial<Fr>>,
+  ),
+  CQ2(
+    usize,
+    RefCell<HashMap<usize, usize>>,
+    Vec<G2Projective>,
+    RefCell<Vec<DensePolynomial<Fr>>>,
+    Vec<Fr>,
+    Vec<G1Projective>,
+    RefCell<Vec<Fr>>,
+    Vec<DensePolynomial<Fr>>,
+  ),
+}
+
+pub enum BatchVerifyStateValues {
+  CQ(usize, usize, G1Affine, Vec<G1Affine>),
+}
+
 // The cache is wrapped in Arc<Mutex<>> to allow multiple threads within the same role (either prover or verifier) to access it.
 // Arc (Atomic Reference Counting) enables safe sharing of the cache between threads,
 // while Mutex ensures that only one thread can write to the cache at a time, preventing race conditions.
 // Note: Each prover and verifier maintains its own separate cache. There is no cache sharing between the prover and verifier.
 pub type ProveVerifyCache = Arc<Mutex<HashMap<String, CacheValues>>>;
+
+pub type BatchProveState = RefCell<HashMap<String, (Box<dyn BasicBlock>, BatchProveStateValues)>>;
+
+pub type BatchVerifyState = RefCell<HashMap<String, (Box<dyn BasicBlock>, BatchVerifyStateValues)>>;
+
+// key -> (batch id, # inputs)
+pub type BatchCounters = RefCell<HashMap<String, (usize, usize)>>;
 
 pub type PairingCheck = Vec<(G1Affine, G2Affine)>;
 
@@ -184,6 +221,57 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
     (Vec::new(), Vec::new(), Vec::new())
   }
 
+  fn batch_prove_first(
+    &self,
+    _srs: &SRS,
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    _batch_prove_state: &mut BatchProveState,
+    _batch_counters: &mut BatchCounters,
+    _model: &ArrayD<Data>,
+    _inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) {
+  }
+
+  fn batch_prove_second(
+    &self,
+    _srs: &SRS,
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    _batch_prove_state: &mut BatchProveState,
+    _batch_counters: &mut BatchCounters,
+    _model: &ArrayD<Data>,
+    _inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) {
+  }
+
+  fn batch_prove_third(
+    &self,
+    _srs: &SRS,
+    _setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
+    _batch_prove_state: &mut BatchProveState,
+    _batch_counters: &mut BatchCounters,
+    _model: &ArrayD<Data>,
+    _inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) {
+  }
+
+  fn batch_prove(
+    &self,
+    _srs: &SRS,
+    _batch_prove_values: &BatchProveStateValues,
+    _rng: &mut StdRng,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    (Vec::new(), Vec::new(), Vec::new())
+  }
+
   fn verify(
     &self,
     _srs: &SRS,
@@ -193,6 +281,29 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
     _cache: ProveVerifyCache,
+  ) -> Vec<PairingCheck> {
+    vec![]
+  }
+
+  fn batch_verify_first(
+    &self,
+    _batch_verify_state: &mut BatchVerifyState,
+    _batch_counters: &mut BatchCounters,
+    _model: &ArrayD<DataEnc>,
+    _inputs: &Vec<&ArrayD<DataEnc>>,
+    _outputs: &Vec<&ArrayD<DataEnc>>,
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) {
+    let _ = _batch_verify_state;
+  }
+
+  fn batch_verify(
+    &self,
+    _srs: &SRS,
+    _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    _batch_verify_values: &BatchVerifyStateValues,
+    _rng: &mut StdRng,
   ) -> Vec<PairingCheck> {
     vec![]
   }

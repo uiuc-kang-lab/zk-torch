@@ -18,7 +18,7 @@ use std::path::Path;
 
 pub static CONFIG_FILE: Lazy<String> = Lazy::new(|| {
   let args: Vec<String> = env::args().collect();
-  if args.len() != 2 {
+  if args.len() < 2 {
     panic!("Usage: cargo run -- <config file>");
   }
   args[1].clone()

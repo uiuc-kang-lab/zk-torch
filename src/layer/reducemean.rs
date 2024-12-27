@@ -38,8 +38,31 @@ impl Layer for ReduceMeanLayer {
 
     // Only support reducing along one or two axis
     assert!(axes.len() == 1 || axes.len() == 2);
-    // reducing along the last axis
-    assert!(axes.iter().any(|&x| x == input_shapes[0].len() - 1));
+    // reducing along the last axis or not
+    if axes.iter().all(|&x| x != input_shapes[0].len() - 1) {
+      if axes.len() == 1 && axes[0] == 1 {
+        // the resnet case
+        let add_along_axis = graph.addBB(Box::new(AddAlongAxisBasicBlock { axis: axes[0] }));
+        let add_output = graph.addNode(add_along_axis, vec![(-1, 0)]);
+        let div = graph.addBB(Box::new(DivConstBasicBlock {
+          c: input_shapes[0][axes[0]] as f32,
+        }));
+        let div_output = graph.addNode(div, vec![(add_output, 0)]);
+        let div_check = graph.addBB(Box::new(RepeaterBasicBlock {
+          basic_block: Box::new(CQ2BasicBlock {
+            op: cq2::CQ2BasicBlockOps::DivConst(input_shapes[0][axes[0]] as f32),
+            offset: *onnx::CQ_RANGE_LOWER,
+            size: *onnx::CQ_RANGE,
+          }),
+          N: 1,
+        }));
+        let _ = graph.addNode(div_check, vec![(add_output, 0), (div_output, 0)]);
+        graph.outputs.push((div_output, 0));
+        let mut outputShape = input_shapes[0].clone();
+        outputShape[axes[0]] = 1;
+        return (graph, vec![outputShape], vec![input_types[0]]);
+      }
+    }
 
     let n = input_shapes[0].len();
     let mut a = input_shapes[0][n - 1];
@@ -61,13 +84,9 @@ impl Layer for ReduceMeanLayer {
     }));
     let div_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
-        setup: Some((
-          Box::new(DivConstBasicBlock {
-            c: input_shapes[0][input_shapes[0].len() - 1] as f32,
-          }),
-          *onnx::CQ_RANGE_LOWER,
-          *onnx::CQ_RANGE,
-        )),
+        op: cq2::CQ2BasicBlockOps::DivConst(input_shapes[0][input_shapes[0].len() - 1] as f32),
+        offset: *onnx::CQ_RANGE_LOWER,
+        size: *onnx::CQ_RANGE,
       }),
       N: 1,
     }));
