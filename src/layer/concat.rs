@@ -97,7 +97,10 @@ impl Layer for ConcatLayer {
       let n_input = input_shapes.len();
       let n_input_padded = util::next_pow(n_input as u32) as usize;
 
-      let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: axis as usize }));
+      let concat = graph.addBB(Box::new(ConcatBasicBlock {
+        axis: axis as usize,
+        input_shapes: input_shapes.iter().map(|x| (*x).clone()).collect(),
+      }));
       let mut concat_input: Vec<_> = (0..n_input).map(|i| (-(i as i32 + 1), 0)).collect();
       for _ in 0..n_input_padded - n_input {
         concat_input.push((constantOfShape_output, 0));

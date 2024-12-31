@@ -1,0 +1,26 @@
+task: sample
+onnx:
+  model_path: unet.onnx
+  input_path:
+ptau:
+  ptau_path: /projects/illinois/eng/cs/ddkang/bjchen4/challenge_0085
+  pow_len_log: 28
+  loaded_pow_len_log: 28
+sf:
+  scale_factor_log: 3
+  cq_range_log: 27
+  cq_range_lower_log: 26
+prover:
+  model_path: models
+  setup_path: setups
+  enc_model_path: modelsEnc
+  enc_input_path: inputsEnc
+  enc_output_path: outputsEnc
+  proof_path: proofs
+  batch_proof_path: batch_proofs
+  enable_layer_setup: true
+verifier:
+  enc_model_path: modelsEnc
+  enc_input_path: inputsEnc
+  enc_output_path: outputsEnc
+  proof_path: proofs

@@ -137,6 +137,7 @@ impl Layer for MultiHeadMatMulLayer {
     }
     let concat = graph.addBB(Box::new(ConcatBasicBlock {
       axis: output_shape.len() - 2,
+      input_shapes: vec![input_shapes[0].to_vec()],
     }));
     let multihead_output = graph.addNode(concat, inputs_to_concat);
     let change_SF_output = graph.addNode(change_SF, vec![(multihead_output, 0)]);
