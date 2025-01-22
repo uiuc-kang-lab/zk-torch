@@ -119,7 +119,7 @@ pub enum BatchProveStateValues {
 }
 
 pub enum BatchVerifyStateValues {
-  CQ(usize, usize, G1Affine, Vec<G1Affine>),
+  CQ(usize, usize, G1Affine, Vec<G1Affine>, Fr),
 }
 
 // The cache is wrapped in Arc<Mutex<>> to allow multiple threads within the same role (either prover or verifier) to access it.

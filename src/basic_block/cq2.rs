@@ -538,7 +538,7 @@ impl BasicBlock for CQ2BasicBlock {
     model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     _outputs: &Vec<&ArrayD<DataEnc>>,
-    _rng: &mut StdRng,
+    rng: &mut StdRng,
     _cache: ProveVerifyCache,
   ) {
     let input = inputs[0].first().unwrap();
@@ -548,16 +548,19 @@ impl BasicBlock for CQ2BasicBlock {
     let mut state_mut_ref = batch_verify_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
-        let (_, BatchVerifyStateValues::CQ(n, N, _, g1s)) = value;
+        let (_, BatchVerifyStateValues::CQ(n, N, _, g1s, beta)) = value;
         let mut new_g1s = g1s.clone();
         new_g1s.push(input.g1);
-        *value = (Box::new(self.clone()), BatchVerifyStateValues::CQ(*n, *N, model.g1, new_g1s))
+        *value = (Box::new(self.clone()), BatchVerifyStateValues::CQ(*n, *N, model.g1, new_g1s, *beta))
       }
       _ => {
         let N = model.len;
         state_mut_ref.insert(
           key,
-          (Box::new(self.clone()), BatchVerifyStateValues::CQ(input.len, N, model.g1, vec![input.g1])),
+          (
+            Box::new(self.clone()),
+            BatchVerifyStateValues::CQ(input.len, N, model.g1, vec![input.g1], Fr::rand(rng)),
+          ),
         );
       }
     };
@@ -579,11 +582,10 @@ impl BasicBlock for CQ2BasicBlock {
     };
     let f_zs = proof.2;
 
-    let beta = Fr::rand(rng);
     let zeta = Fr::rand(rng);
     let mu = Fr::rand(rng);
 
-    let BatchVerifyStateValues::CQ(n, N, model_g1, f_xs) = batch_verify_values;
+    let BatchVerifyStateValues::CQ(n, N, model_g1, f_xs, beta) = batch_verify_values;
 
     let zetas = util::calc_pow(zeta, f_zs.len());
     let mus = util::calc_pow(mu, f_zs.len());

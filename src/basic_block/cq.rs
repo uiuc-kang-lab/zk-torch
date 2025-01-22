@@ -411,9 +411,10 @@ impl BasicBlock for CQBasicBlock {
       let domain_n = GeneralEvaluationDomain::<Fr>::new(*n).unwrap();
       let beta = rngs[0];
       let zeta = rngs[1];
-      println!("beta {:?}", beta);
       let mu = rngs[2];
-      println!("{} {}", N, n);
+      println!("beta {:?}", beta);
+      println!("zeta {:?}", zeta);
+      println!("mu {:?}", mu);
 
       let [m_x, A_x, A_Q_x, A_zero_div, B_x, B_Q_x, B_zero_div, S_x, Q_C_x, C1] = proof_0[..] else {
         panic!("Wrong proof format")
@@ -505,7 +506,7 @@ impl BasicBlock for CQBasicBlock {
     model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     _outputs: &Vec<&ArrayD<DataEnc>>,
-    _rng: &mut StdRng,
+    rng: &mut StdRng,
     _cache: ProveVerifyCache,
   ) {
     let input = inputs[0].first().unwrap();
@@ -515,16 +516,20 @@ impl BasicBlock for CQBasicBlock {
     let mut state_mut_ref = batch_verify_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
-        let (_, BatchVerifyStateValues::CQ(n, N, _, g1s)) = value;
+        let (_, BatchVerifyStateValues::CQ(n, N, _, g1s, beta)) = value;
         let mut new_g1s = g1s.clone();
         new_g1s.push(input.g1);
-        *value = (Box::new(self.clone()), BatchVerifyStateValues::CQ(*n, *N, model.g1, new_g1s))
+        *value = (Box::new(self.clone()), BatchVerifyStateValues::CQ(*n, *N, model.g1, new_g1s, *beta))
       }
       _ => {
         let N = model.len;
+        let beta = Fr::rand(rng);
         state_mut_ref.insert(
           key,
-          (Box::new(self.clone()), BatchVerifyStateValues::CQ(input.len, N, model.g1, vec![input.g1])),
+          (
+            Box::new(self.clone()),
+            BatchVerifyStateValues::CQ(input.len, N, model.g1, vec![input.g1], beta),
+          ),
         );
       }
     };
@@ -543,13 +548,13 @@ impl BasicBlock for CQBasicBlock {
     };
     let [T_x_2] = proof.1[..] else { panic!("Wrong proof format") };
     let f_zs = proof.2;
-
-    let beta = Fr::rand(rng);
     let zeta = Fr::rand(rng);
-    println!("beta {:?}", beta);
     let mu = Fr::rand(rng);
 
-    let BatchVerifyStateValues::CQ(n, N, model_g1, input_xs) = batch_verify_values;
+    let BatchVerifyStateValues::CQ(n, N, model_g1, input_xs, beta) = batch_verify_values;
+    println!("beta {:?}", beta);
+    println!("zeta {:?}", zeta);
+    println!("mu {:?}", mu);
 
     let domain_n = GeneralEvaluationDomain::<Fr>::new(*n).unwrap();
     let domain_N = GeneralEvaluationDomain::<Fr>::new(*N).unwrap();
@@ -593,7 +598,7 @@ impl BasicBlock for CQBasicBlock {
     let z_x = util::msm::<G2Projective>(&srs.X2A, &z_poly.coeffs);
     checks.push(vec![
       (A_x, T_x_2),
-      ((A_x * (beta + mu) - m_x + S_x * mu * mu).into(), srs.X2A[0]),
+      ((A_x * (*beta + mu) - m_x + S_x * mu * mu).into(), srs.X2A[0]),
       (
         (-B_x * mu * Fr::from(*n as u32) * Fr::from(*N as u32).inverse().unwrap()).into(),
         z_x.into(),
