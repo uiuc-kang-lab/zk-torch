@@ -97,6 +97,7 @@ pub enum CacheValues {
 pub enum BatchProveStateValues {
   CQ(
     usize,
+    usize,
     RefCell<HashMap<usize, usize>>,
     Vec<G2Projective>,
     RefCell<Vec<DensePolynomial<Fr>>>,
