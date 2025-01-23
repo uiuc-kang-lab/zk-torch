@@ -40,7 +40,12 @@ impl BasicBlock for MaxPool2dCandidateBasicBlock {
           let input_i = i * self.strides[0];
           let input_j = j * self.strides[1];
           for c in 0..C_in {
-            candidates[k][[0, i * output_w + j, c]] = input[[0, (input_i + k_i) * self.input_shape[2] + input_j + k_j, c]];
+            // consider padding = 1, 1, 1, 1
+            if (input_i + k_i) == 0 || (input_j + k_j) == 0 || (input_i + k_i) > self.input_shape[1] || (input_j + k_j) > self.input_shape[2] {
+              candidates[k][[0, i * output_w + j, c]] = Fr::zero();
+            } else {
+              candidates[k][[0, i * output_w + j, c]] = input[[0, (input_i + k_i - 1) * self.input_shape[2] + input_j + k_j - 1, c]];
+            }
           }
         }
       }
@@ -69,7 +74,11 @@ impl BasicBlock for MaxPool2dCandidateBasicBlock {
           let k_j = k % self.kernel_shape[1];
           let input_i = i * self.strides[0];
           let input_j = j * self.strides[1];
-          candidates[k][[0, i * output_w + j]] = inputs[0][[0, (input_i + k_i) * self.input_shape[2] + input_j + k_j]].clone();
+          if (input_i + k_i) == 0 || (input_j + k_j) == 0 || (input_i + k_i) > self.input_shape[1] || (input_j + k_j) > self.input_shape[2] {
+            candidates[k][[0, i * output_w + j]] = data_zero.clone();
+          } else {
+            candidates[k][[0, i * output_w + j]] = inputs[0][[0, (input_i + k_i - 1) * self.input_shape[2] + input_j + k_j - 1]].clone();
+          }
         }
       }
       candidates[k] = util::pad_to_pow_of_two(&candidates[k], &data_zero);

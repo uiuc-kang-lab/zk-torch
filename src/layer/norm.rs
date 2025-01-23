@@ -57,7 +57,8 @@ impl Layer for BatchNormLayer {
       // epsilon is not provided, use the default value
       1e-5
     };
-    epsilon *= onnx::SF_FLOAT.read().unwrap().to_owned();
+    // epsilon *= onnx::SF_FLOAT.read().unwrap().to_owned();
+    epsilon = 1.0;
 
     let epsilon = graph.addBB(Box::new(Const2BasicBlock {
       c: arr1(&vec![Fr::from(epsilon.round() as i32)]).into_dyn(),
