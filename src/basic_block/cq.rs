@@ -103,7 +103,7 @@ impl BasicBlock for CQBasicBlock {
 
   fn batch_prove_first(
     &self,
-    srs: &SRS,
+    _srs: &SRS,
     setup: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>),
     batch_prove_state: &mut BatchProveState,
     batch_counters: &mut BatchCounters,
@@ -145,13 +145,9 @@ impl BasicBlock for CQBasicBlock {
           let mut p_ref = proof_2.borrow_mut();
           if p_ref.len() < 2 {
             p_ref.push(input.r);
-            let af: G1Affine = (input.g1 + srs.Y1P * input.r).into();
-            println!("g1 {:?}", af);
-            println!("{:?}", input.r);
           }
           drop(p_ref);
           polys.borrow_mut().push(input.poly.clone());
-          println!("polys {:?}", polys);
           *value = (
             Box::new(self.clone()),
             BatchProveStateValues::CQ(
@@ -167,6 +163,7 @@ impl BasicBlock for CQBasicBlock {
             ),
           );
         } else {
+          panic!("Invalid batch prove state value type")
         }
       }
       _ => {
@@ -177,10 +174,6 @@ impl BasicBlock for CQBasicBlock {
           }
           m_i.entry(table_dict.get(x).unwrap().clone()).and_modify(|y| *y += 1).or_insert(1);
         }
-        println!("inp g1 {:?}", input.g1);
-        let af: G1Affine = (input.g1 + srs.Y1P * input.r).into();
-        println!("g1 {:?}", af);
-        println!("{:?}", input.r);
         state_mut_ref.insert(
           key,
           (
@@ -246,6 +239,7 @@ impl BasicBlock for CQBasicBlock {
             ),
           )
         } else {
+          panic!("Invalid batch prove state value type")
         }
       }
       _ => {}
@@ -282,7 +276,6 @@ impl BasicBlock for CQBasicBlock {
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
         if let (_, BatchProveStateValues::CQ(n, N, m_i, g2s, polys, rngs, proof_0, proof_2, op_polys)) = value {
-          println!("{} {}", N, n);
           let (proof, proof_2, f_prod, B_Q_poly, diff) = if proof_0.len() == 0 {
             let mut poly_ref = polys.borrow_mut();
             let B_poly = poly_ref[0].clone();
@@ -293,7 +286,7 @@ impl BasicBlock for CQBasicBlock {
             let diff = diffs.iter().fold(DensePolynomial::zero(), |acc, x| acc + x.clone());
 
             let mut rng2 = StdRng::from_entropy();
-            let r: Vec<_> = (0..11).map(|_| Fr::rand(&mut rng2)).collect();
+            let r: Vec<_> = (0..5).map(|_| Fr::rand(&mut rng2)).collect();
 
             let mut v_N = vec![Fr::zero(); *N + 1];
             v_N[*N] = Fr::one();
@@ -391,6 +384,7 @@ impl BasicBlock for CQBasicBlock {
             ),
           )
         } else {
+          panic!("Invalid batch prove state value type")
         }
       }
       _ => {}
@@ -403,9 +397,6 @@ impl BasicBlock for CQBasicBlock {
       let beta = rngs[0];
       let zeta = rngs[1];
       let mu = rngs[2];
-      println!("beta {:?}", beta);
-      println!("zeta {:?}", zeta);
-      println!("mu {:?}", mu);
 
       let [m_x, A_x, A_Q_x, A_zero_div, B_x, B_Q_x, B_zero_div, S_x, Q_C_x, C1] = proof_0[..] else {
         panic!("Wrong proof format")
@@ -438,7 +429,6 @@ impl BasicBlock for CQBasicBlock {
             .iter()
             .fold(Fr::zero(), |acc, x| acc + x.clone())])))
       };
-      println!("{:?} {:?}", p_ref[0], p_ref[1]);
       let diff_r = if fs.len() == 1 {
         Fr::zero()
       } else if fs.len() == 2 {
@@ -487,10 +477,13 @@ impl BasicBlock for CQBasicBlock {
     let mut state_mut_ref = batch_verify_state.borrow_mut();
     match state_mut_ref.get_mut(&key) {
       Some(value) => {
-        let (_, BatchVerifyStateValues::CQ(n, N, _, g1s, beta)) = value;
-        let mut new_g1s = g1s.clone();
-        new_g1s.push(input.g1);
-        *value = (Box::new(self.clone()), BatchVerifyStateValues::CQ(*n, *N, model.g1, new_g1s, *beta))
+        if let (_, BatchVerifyStateValues::CQ(n, N, _, g1s, beta)) = value {
+          let mut new_g1s = g1s.clone();
+          new_g1s.push(input.g1);
+          *value = (Box::new(self.clone()), BatchVerifyStateValues::CQ(*n, *N, model.g1, new_g1s, *beta))
+        } else {
+          panic!("Invalid batch verify state value type")
+        }
       }
       _ => {
         let N = model.len;
@@ -522,69 +515,66 @@ impl BasicBlock for CQBasicBlock {
     let zeta = Fr::rand(rng);
     let mu = Fr::rand(rng);
 
-    let BatchVerifyStateValues::CQ(n, N, model_g1, input_xs, beta) = batch_verify_values;
-    println!("beta {:?}", beta);
-    println!("zeta {:?}", zeta);
-    println!("mu {:?}", mu);
+    if let BatchVerifyStateValues::CQ(n, N, model_g1, input_xs, beta) = batch_verify_values {
+      let domain_n = GeneralEvaluationDomain::<Fr>::new(*n).unwrap();
+      let m = f_zs.len();
+      let mus = util::calc_pow(mu, m);
+      let fz_sum: Fr = f_zs.iter().enumerate().map(|(i, x)| *x * mus[i]).sum();
+      let f_xs: Vec<_> = input_xs.iter().map(|x| (*x + srs.X1A[0] * beta)).collect();
+      let f_sum: G1Projective = f_xs.iter().enumerate().map(|(i, x)| *x * mus[i]).sum();
+      let fz_prod: Fr = f_zs.iter().product();
+      let fz_prod_1: Fr = f_zs[1..].iter().product();
+      let diffs: Vec<_> = f_zs[1..].iter().map(|x| &fz_prod_1 / x).collect();
+      let diff_x = if f_xs.len() == 1 {
+        srs.X1A[0] * Fr::one()
+      } else if f_xs.len() == 2 {
+        f_xs[0] + f_xs[1]
+      } else {
+        f_xs[1] * diffs[0] + f_xs[0] * diffs.iter().fold(Fr::zero(), |acc, x| acc + x.clone())
+      };
+      let v_poly = domain_n.vanishing_polynomial();
+      let v_z = v_poly.evaluate(&zeta);
+      let D_x: G1Affine = (B_x * fz_prod - diff_x - B_Q_x * v_z).into();
 
-    let domain_n = GeneralEvaluationDomain::<Fr>::new(*n).unwrap();
-    let m = f_zs.len();
-    let mus = util::calc_pow(mu, m);
-    let fz_sum: Fr = f_zs.iter().enumerate().map(|(i, x)| *x * mus[i]).sum();
-    let f_xs: Vec<_> = input_xs.iter().map(|x| (*x + srs.X1A[0] * beta)).collect();
-    let f_sum: G1Projective = f_xs.iter().enumerate().map(|(i, x)| *x * mus[i]).sum();
-    let fz_prod: Fr = f_zs.iter().product();
-    let fz_prod_1: Fr = f_zs[1..].iter().product();
-    let diffs: Vec<_> = f_zs[1..].iter().map(|x| &fz_prod_1 / x).collect();
-    println!("len {} {}", f_zs.len(), f_xs.len());
-    let diff_x = if f_xs.len() == 1 {
-      srs.X1A[0] * Fr::one()
-    } else if f_xs.len() == 2 {
-      f_xs[0] + f_xs[1]
+      // Check A(x) (A_i = m_i/(t_i+beta))
+      let mut v_N = vec![Fr::zero(); N + 1];
+      v_N[*N] = Fr::one();
+      v_N[0] = -Fr::one();
+      let z_poly = DensePolynomial::from_coefficients_vec(v_N).divide_by_vanishing_poly(domain_n).unwrap().0;
+      let z_x = util::msm::<G2Projective>(&srs.X2A, &z_poly.coeffs);
+      checks.push(vec![
+        (A_x, T_x_2),
+        ((A_x * (*beta + mu) - m_x + S_x * mu * mu).into(), srs.X2A[0]),
+        (
+          (-B_x * mu * Fr::from(*n as u32) * Fr::from(*N as u32).inverse().unwrap()).into(),
+          z_x.into(),
+        ),
+        ((-Q_x, (srs.X2A[*N] - srs.X2A[0]).into())),
+        ((-R_C_x * mu).into(), srs.X2A[1]),
+        (-C1, srs.Y2A),
+      ]);
+
+      // Check T_x_2 is the G2 equivalent of the model
+      checks.push(vec![(*model_g1, srs.X2A[0]), (srs.X1A[0], -T_x_2)]);
+
+      // Check D(x) (D(x) = B(x) * F(x) - diff(x) - B_Q(x) * v(x))
+      let zeta_x: G2Affine = (srs.X2A[0] * zeta).into();
+      if f_xs.len() == 1 {
+        checks.push(vec![((D_x, srs.X2A[0])), (-P_x, (srs.X2A[1] - zeta_x).into())]);
+      } else {
+        checks.push(vec![((D_x, srs.X2A[0])), (-P_x, (srs.X2A[1] - zeta_x).into()), (-C2, srs.Y2A)]);
+      };
+
+      // Check W(x) (W(x) = (F(x) - F(zeta)) / (x - zeta))
+      // where F(x) is RLC'd input polynomials
+      checks.push(vec![
+        ((-W_x, (srs.X2P[1] - srs.X2A[0] * zeta).into())),
+        ((f_sum - srs.X1A[0] * fz_sum).into(), srs.X2A[0]),
+        (-C3, srs.Y2A),
+      ]);
+      checks
     } else {
-      f_xs[1] * diffs[0] + f_xs[0] * diffs.iter().fold(Fr::zero(), |acc, x| acc + x.clone())
-    };
-    let v_poly = domain_n.vanishing_polynomial();
-    let v_z = v_poly.evaluate(&zeta);
-    let D_x: G1Affine = (B_x * fz_prod - diff_x - B_Q_x * v_z).into();
-
-    // Check A(x) (A_i = m_i/(t_i+beta))
-    let mut v_N = vec![Fr::zero(); N + 1];
-    v_N[*N] = Fr::one();
-    v_N[0] = -Fr::one();
-    let z_poly = DensePolynomial::from_coefficients_vec(v_N).divide_by_vanishing_poly(domain_n).unwrap().0;
-    let z_x = util::msm::<G2Projective>(&srs.X2A, &z_poly.coeffs);
-    checks.push(vec![
-      (A_x, T_x_2),
-      ((A_x * (*beta + mu) - m_x + S_x * mu * mu).into(), srs.X2A[0]),
-      (
-        (-B_x * mu * Fr::from(*n as u32) * Fr::from(*N as u32).inverse().unwrap()).into(),
-        z_x.into(),
-      ),
-      ((-Q_x, (srs.X2A[*N] - srs.X2A[0]).into())),
-      ((-R_C_x * mu).into(), srs.X2A[1]),
-      (-C1, srs.Y2A),
-    ]);
-
-    // Check T_x_2 is the G2 equivalent of the model
-    checks.push(vec![(*model_g1, srs.X2A[0]), (srs.X1A[0], -T_x_2)]);
-
-    // Check D(x) (D(x) = B(x) * F(x) - diff(x) - B_Q(x) * v(x))
-    let zeta_x: G2Affine = (srs.X2A[0] * zeta).into();
-    if f_xs.len() == 1 {
-      checks.push(vec![((D_x, srs.X2A[0])), (-P_x, (srs.X2A[1] - zeta_x).into())]);
-    } else {
-      checks.push(vec![((D_x, srs.X2A[0])), (-P_x, (srs.X2A[1] - zeta_x).into()), (-C2, srs.Y2A)]);
-    };
-
-    // Check W(x) (W(x) = (F(x) - F(zeta)) / (x - zeta))
-    // where F(x) is RLC'd input polynomials
-    checks.push(vec![
-      ((-W_x, (srs.X2P[1] - srs.X2A[0] * zeta).into())),
-      ((f_sum - srs.X1A[0] * fz_sum).into(), srs.X2A[0]),
-      (-C3, srs.Y2A),
-    ]);
-
-    checks
+      panic!("Invalid batch verify state value type")
+    }
   }
 }

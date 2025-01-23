@@ -108,6 +108,7 @@ pub enum BatchProveStateValues {
   ),
   CQ2(
     usize,
+    usize,
     RefCell<HashMap<usize, usize>>,
     Vec<G2Projective>,
     RefCell<Vec<DensePolynomial<Fr>>>,
@@ -120,6 +121,7 @@ pub enum BatchProveStateValues {
 
 pub enum BatchVerifyStateValues {
   CQ(usize, usize, G1Affine, Vec<G1Affine>, Fr),
+  CQ2(usize, usize, G1Affine, Vec<G1Affine>, Fr, Fr),
 }
 
 // The cache is wrapped in Arc<Mutex<>> to allow multiple threads within the same role (either prover or verifier) to access it.
