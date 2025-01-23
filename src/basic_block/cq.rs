@@ -411,12 +411,12 @@ impl BasicBlock for CQBasicBlock {
         panic!("Wrong proof format")
       };
       let p_ref = proof_2.borrow();
-      let R_C_x = A_zero_div - B_zero_div * (Fr::from(*n as u32) * Fr::from(*N as u32).inverse().unwrap()) + srs.X1P[0] * (mu * p_ref[3]);
-      let Q_x = A_Q_x + Q_C_x * mu + srs.X1P[0] * mu * mu * p_ref[4];
+      let R_C_x = A_zero_div - B_zero_div * (Fr::from(*n as u32) * Fr::from(*N as u32).inverse().unwrap()) + srs.X1P[0] * (mu * p_ref[4]);
+      let Q_x = A_Q_x + Q_C_x * mu + srs.X1P[0] * mu * mu * p_ref[5];
       let poly_ref = polys.borrow();
       let B_poly = &poly_ref[0];
       let fs: Vec<_> = poly_ref[1..].iter().map(|x| x + &DensePolynomial::from_coefficients_vec(vec![beta])).collect();
-      let f_zs = &p_ref[5..];
+      let f_zs = &p_ref[6..];
       let q1_poly = &op_polys[0];
       let q1_z = q1_poly.evaluate(&zeta);
       let q1_z_poly = DensePolynomial { coeffs: vec![q1_z] };
