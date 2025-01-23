@@ -111,7 +111,7 @@ impl BasicBlock for CustomResizeBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 1);
     let input = inputs[0].to_owned();
-    let C = self.input_shape[3];
+    let C = self.input_shape[2];
     let D = (self.input_shape[1] as f64).sqrt() as usize;
     let D_o = (self.output_shape[1] as f64).sqrt() as usize;
     let scale = (D_o as f64 / D as f64) as usize;
@@ -132,7 +132,7 @@ impl BasicBlock for CustomResizeBasicBlock {
 
   fn encodeOutputs(&self, _srs: &SRS, _model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, _outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
     let input = inputs[0];
-    let C = self.input_shape[3];
+    let C = self.input_shape[2];
     let D = (self.input_shape[1] as f64).sqrt() as usize;
     let D_o = (self.output_shape[1] as f64).sqrt() as usize;
     let scale = (D_o as f64 / D as f64) as usize;

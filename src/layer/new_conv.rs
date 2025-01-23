@@ -12,7 +12,7 @@ use ndarray::indices;
 use ndarray::Dim;
 use ndarray::Dimension;
 use ndarray::IxDyn;
-use ndarray::{concatenate, s, Array1, Array4, ArrayD, Axis};
+use ndarray::{concatenate, s, Array1, Array4, ArrayD, Axis, SliceInfo};
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,14 +20,36 @@ use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
 use tract_onnx::prelude::Outlet; // Import Rayon traits
 
-fn repeat_and_concat(arr: &ArrayD<Fr>, k: usize) -> ArrayD<Fr> {
-  // Collect all repeated views of the original array
-  let repeated = (0..k)
-    .map(|_| arr.view()) // Take a view of the original array
-    .collect::<Vec<_>>();
+pub fn slice_nd_array_data(arr: ArrayD<Data>, indices: &[usize]) -> ArrayD<Data> {
+  // Create slices from the indices
+  let slices: Vec<_> = indices.iter().map(|&i| (0..i).into()).collect();
 
-  // Concatenate along Axis(0)
-  concatenate(Axis(0), &repeated).expect("Concatenation failed")
+  // Convert slices into a SliceInfo instance
+  let slice_info = unsafe { SliceInfo::<_, IxDyn, IxDyn>::new(slices).unwrap() };
+
+  // Slice the array
+  arr.slice_move(slice_info)
+}
+
+fn update_kernel(arr: &ArrayD<Fr>, group: usize) -> ArrayD<Fr> {
+  let c_in = arr.shape()[0] * group;
+  let c_out = arr.shape()[1];
+  // arr is [C_in / group, C_out]
+  if group == 1 {
+    return arr.clone();
+  }
+  // new_arr is [C_in, C_out]
+  let mut new_arr = ArrayD::<Fr>::zeros(IxDyn(&[c_in, c_out]));
+  for g in 0..group {
+    for i in 0..(c_in / group) {
+      for j in 0..(c_out / group) {
+        let row = g * (c_in / group) + i;
+        let col = g * (c_out / group) + j;
+        new_arr[[row, col]] = arr[[i, col]];
+      }
+    }
+  }
+  new_arr
 }
 
 pub struct Conv2dLayer;
@@ -108,7 +130,7 @@ impl Layer for Conv2dLayer {
     for k_h in 0..weight_shape[2] {
       for k_w in 0..weight_shape[3] {
         let k = constants[1].unwrap().0.slice(s![.., .., k_h, k_w]);
-        let k = repeat_and_concat(&k.t().to_owned().into_dyn(), group);
+        let k = update_kernel(&k.t().to_owned().into_dyn(), group);
         let cqlin = graph.addBB(Box::new(RepeaterBasicBlock {
           basic_block: Box::new(CQLinBasicBlock {
             setup: k, // [C_in, C_out]
@@ -150,7 +172,8 @@ impl BasicBlock for MultiHeadConv2dAggBasicBlock {
 
     let mut result = ArrayD::<Fr>::zeros(IxDyn(&final_output_shape));
     for head in 0..9 {
-      result.slice_axis_mut(Axis(1), (head * self.output_shape[1]..(head + 1) * self.output_shape[1]).into()).assign(&inputs[head]);
+      let input_slice = util::slice_nd_array(inputs[head].clone(), &self.output_shape);
+      result.slice_axis_mut(Axis(1), (head * self.output_shape[1]..(head + 1) * self.output_shape[1]).into()).assign(&input_slice);
     }
     result = util::pad_to_pow_of_two(&result, &Fr::zero());
 
@@ -168,7 +191,8 @@ impl BasicBlock for MultiHeadConv2dAggBasicBlock {
     };
     let mut result = ArrayD::from_shape_fn(IxDyn(&final_output_shape), |_| data_zero.clone());
     for head in 0..9 {
-      result.slice_axis_mut(Axis(1), (head * self.output_shape[1]..(head + 1) * self.output_shape[1]).into()).assign(&inputs[head]);
+      let input_slice = slice_nd_array_data(inputs[head].clone(), &[self.output_shape[0], self.output_shape[1]]);
+      result.slice_axis_mut(Axis(1), (head * self.output_shape[1]..(head + 1) * self.output_shape[1]).into()).assign(&input_slice);
     }
     result = util::pad_to_pow_of_two(&result, &data_zero);
     vec![result]
