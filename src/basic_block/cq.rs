@@ -488,8 +488,10 @@ impl BasicBlock for CQBasicBlock {
       println!("D_x {:?}", D_x);
       let b_q_x: G1Affine = B_Q_x.into();
       println!("b_q_x {:?}", b_q_x);
+      let r_sum = p_ref[2];
+      let C3 = srs.X1P[0] * r_sum;
 
-      let proof = vec![m_x, A_x, B_x, B_Q_x, S_x, P_x, R_C_x, Q_x, W_x, C1, C2];
+      let proof = vec![m_x, A_x, B_x, B_Q_x, S_x, P_x, R_C_x, Q_x, W_x, C1, C2, C3];
       let b_x: G1Affine = B_x.into();
       println!("B_x {:?}", b_x);
       let proof_1 = g2s.clone();
@@ -543,7 +545,7 @@ impl BasicBlock for CQBasicBlock {
     rng: &mut StdRng,
   ) -> Vec<PairingCheck> {
     let mut checks = Vec::new();
-    let [m_x, A_x, B_x, B_Q_x, S_x, P_x, R_C_x, Q_x, W_x, C1, C2] = proof.0[..] else {
+    let [m_x, A_x, B_x, B_Q_x, S_x, P_x, R_C_x, Q_x, W_x, C1, C2, C3] = proof.0[..] else {
       panic!("Wrong proof format")
     };
     let [T_x_2] = proof.1[..] else { panic!("Wrong proof format") };
@@ -611,8 +613,7 @@ impl BasicBlock for CQBasicBlock {
     // Check T_x_2 is the G2 equivalent of the model
     checks.push(vec![(*model_g1, srs.X2A[0]), (srs.X1A[0], -T_x_2)]);
 
-    // Check W(x) (W(x) = (F(x) - F(zeta)) / (x - zeta))
-    // where F(x) is RLC'd input polynomials
+    // Check D(x) (D(x) = B(x) * F(x) - diff(x) - B_Q(x) * v(x))
     let zeta_x: G2Affine = (srs.X2A[0] * zeta).into();
     if f_xs.len() == 1 {
       checks.push(vec![((D_x, srs.X2A[0])), (-P_x, (srs.X2A[1] - zeta_x).into())]);
@@ -620,12 +621,13 @@ impl BasicBlock for CQBasicBlock {
       checks.push(vec![((D_x, srs.X2A[0])), (-P_x, (srs.X2A[1] - zeta_x).into()), (-C2, srs.Y2A)]);
     };
 
-    // let fz_prod_x: G2Affine = (srs.X2A[0] * fz_prod).into();
-    // checks.push(vec![
-    //   (((srs.X1P[1] - srs.X1A[0] * zeta).into(), -W_x_2)),
-    //   (srs.X1A[0], (prod_x_2 - fz_prod_x).into()),
-    //   (-C7, srs.Y2A),
-    // ]);
+    // Check W(x) (W(x) = (F(x) - F(zeta)) / (x - zeta))
+    // where F(x) is RLC'd input polynomials
+    checks.push(vec![
+      ((-W_x, (srs.X2P[1] - srs.X2A[0] * zeta).into())),
+      ((f_sum - srs.X1A[0] * fz_sum).into(), srs.X2A[0]),
+      (-C3, srs.Y2A),
+    ]);
 
     checks
   }
