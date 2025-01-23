@@ -293,9 +293,7 @@ impl BasicBlock for CQBasicBlock {
             let diff = diffs.iter().fold(DensePolynomial::zero(), |acc, x| acc + x.clone());
 
             let mut rng2 = StdRng::from_entropy();
-            // B_0, B_1, r_m, R_S, r_S, r_A
             let r: Vec<_> = (0..11).map(|_| Fr::rand(&mut rng2)).collect();
-            // let r: Vec<_> = (0..11).map(|_| Fr::zero()).collect();
 
             let mut v_N = vec![Fr::zero(); *N + 1];
             v_N[*N] = Fr::one();
@@ -314,35 +312,28 @@ impl BasicBlock for CQBasicBlock {
             let B_Q_poly = B_poly.mul(&f_prod).sub(&diff).divide_by_vanishing_poly(domain_n).unwrap().0;
             let B_Q_x = util::msm::<G1Projective>(&srs.X1A, &B_Q_poly.coeffs);
             poly_ref[0] = B_poly;
-            // let B_DC = util::msm::<G1Projective>(&srs.X1A[N - *n..], &B_poly.coeffs);
-
-            // let f_prod_x_2 = util::msm::<G2Projective>(&srs.X2A, &f_prod.coeffs);
-            // let f_prod_x = util::msm::<G1Projective>(&srs.X1A, &f_prod.coeffs);
-            // let diff_x = util::msm::<G1Projective>(&srs.X1A, &diff.coeffs);
 
             let m_ref = m_i.borrow();
             let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = m_ref.iter().map(|(i, y)| (L_i_x_1[*i], Fr::from(*y as u32))).unzip();
             let mut m_x = util::msm::<G1Projective>(&temp, &temp2);
-            m_x = m_x + (srs.X1P[*N] - srs.X1P[0]) * r[2];
+            m_x = m_x + (srs.X1P[*N] - srs.X1P[0]) * r[1];
 
-            let S_x = srs.X1P[1] * r[3] + (srs.X1P[*N] - srs.X1P[0]) * r[4];
+            let S_x = srs.X1P[1] * r[2] + (srs.X1P[*N] - srs.X1P[0]) * r[3];
 
             // Calculate A
             // element to m/(t + beta)
-
             let A_i: HashMap<usize, Fr> = m_ref.iter().map(|(i, y)| (*i, Fr::from(*y as u32) * (model.raw[*i] + beta).inverse().unwrap())).collect();
             // lagrange basis of value
             let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = A_i.iter().map(|(i, y)| (L_i_x_1[*i], *y)).unzip();
             // msm basis with A(x)
             let mut A_x = util::msm::<G1Projective>(&temp, &temp2);
-            A_x = A_x + (srs.X1P[*N] - srs.X1P[0]) * r[5];
+            A_x = A_x + (srs.X1P[*N] - srs.X1P[0]) * r[4];
             let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = A_i.iter().map(|(i, y)| (Q_i_x_1[*i], *y)).unzip();
             let mut A_Q_x = util::msm::<G1Projective>(&temp, &temp2);
-            A_Q_x = A_Q_x + (model.g1 + srs.X1P[0] * beta) * r[5] - srs.X1P[0] * r[2];
-            // let A_zero = srs.X1P[0] * (Fr::from(N as u32).inverse().unwrap() * A_i.iter().map(|(_, y)| *y).sum::<Fr>());
+            A_Q_x = A_Q_x + (model.g1 + srs.X1P[0] * beta) * r[4] - srs.X1P[0] * r[1];
             let (temp, temp2): (Vec<G1Affine>, Vec<Fr>) = A_i.iter().map(|(i, y)| (L_i_0_x_1[*i], *y)).unzip();
             let A_zero_div = util::msm::<G1Projective>(&temp, &temp2);
-            let Q_C_x = srs.X1P[0] * r[5] - (srs.X1P[0] * r[0]) * (Fr::from(*n as u32) * Fr::from(*N as u32).inverse().unwrap());
+            let Q_C_x = srs.X1P[0] * r[4] - (srs.X1P[0] * r[0]) * (Fr::from(*n as u32) * Fr::from(*N as u32).inverse().unwrap());
 
             let C1 = A_x * model.r;
 
@@ -350,7 +341,7 @@ impl BasicBlock for CQBasicBlock {
             if proof_2.borrow().len() < 2 {
               proof_2.borrow_mut().push(Fr::zero());
             }
-            proof_2.borrow_mut().append(&mut vec![Fr::zero(), r[0], r[3], r[4]]);
+            proof_2.borrow_mut().append(&mut vec![Fr::zero(), r[0], r[2], r[3]]);
             (commits, proof_2, f_prod, B_Q_poly, diff)
           } else {
             (
@@ -420,13 +411,12 @@ impl BasicBlock for CQBasicBlock {
         panic!("Wrong proof format")
       };
       let p_ref = proof_2.borrow();
-      let R_C_x = A_zero_div - B_zero_div * (Fr::from(*n as u32) * Fr::from(*N as u32).inverse().unwrap()) + srs.X1P[0] * (mu * p_ref[4]);
-      let Q_x = A_Q_x + Q_C_x * mu + srs.X1P[0] * mu * mu * p_ref[5];
+      let R_C_x = A_zero_div - B_zero_div * (Fr::from(*n as u32) * Fr::from(*N as u32).inverse().unwrap()) + srs.X1P[0] * (mu * p_ref[3]);
+      let Q_x = A_Q_x + Q_C_x * mu + srs.X1P[0] * mu * mu * p_ref[4];
       let poly_ref = polys.borrow();
       let B_poly = &poly_ref[0];
-      println!("polys {:?}", &poly_ref[1..]);
       let fs: Vec<_> = poly_ref[1..].iter().map(|x| x + &DensePolynomial::from_coefficients_vec(vec![beta])).collect();
-      let f_zs = &p_ref[6..];
+      let f_zs = &p_ref[5..];
       let q1_poly = &op_polys[0];
       let q1_z = q1_poly.evaluate(&zeta);
       let q1_z_poly = DensePolynomial { coeffs: vec![q1_z] };
@@ -456,44 +446,23 @@ impl BasicBlock for CQBasicBlock {
       } else {
         p_ref[1] * diffs[0] + p_ref[0] * diffs.iter().fold(Fr::zero(), |acc, x| acc + x.clone())
       };
-      let f0_x = util::msm::<G1Projective>(&srs.X1A, &fs[0].coeffs);
-      let inp_f0x = util::msm::<G1Projective>(&srs.X1A, &poly_ref[1].coeffs) + srs.X1A[0] * beta;
-      println!("inp_f0x: {:?}", inp_f0x);
-      let f0_x: G1Affine = (inp_f0x + srs.Y1P * p_ref[0]).into();
-      println!("f0_x: {:?}", f0_x);
-      let f0_x: G1Affine = (f0_x + srs.Y1P * p_ref[0]).into();
-      println!("f0_x: {:?}", f0_x);
-      let diff_x = util::msm::<G1Projective>(&srs.X1A, &diff_poly.coeffs);
-      let diff_x: G1Affine = (diff_x + srs.Y1P * diff_r).into();
-      println!("diff_x: {:?}", diff_x);
+
       let f_prod = &op_polys[1];
       let B_Q_poly = &op_polys[2];
       let v_poly = domain_n.vanishing_polynomial();
       let v_z = v_poly.evaluate(&zeta);
       let f_prod_z = f_prod.evaluate(&zeta);
-      // let C2 = (srs.X1A[*n] - srs.X1A[0]) * f_prod_z * p_ref[3] - srs.X1A[0] * diff_r;
+
       let C2 = -srs.X1A[0] * diff_r;
-      println!("fz {:?}, f_z {:?}", fz_prod * f_zs[0], f_prod_z);
       let D_poly = &(&B_poly.mul(&DensePolynomial::from_coefficients_vec(vec![f_prod_z])) - &diff_poly)
         - &B_Q_poly.mul(&DensePolynomial::from_coefficients_vec(vec![v_z]));
       let P_poly = D_poly;
-      println!("P_poly {:?}", P_poly);
       let P_poly = &P_poly / &DensePolynomial::from_coefficients_vec(vec![-zeta, Fr::one()]);
-      println!("P_poly {:?}", P_poly);
-      println!("prod {:?}", &P_poly * &DensePolynomial::from_coefficients_vec(vec![-zeta, Fr::one()]));
       let P_x = util::msm::<G1Projective>(&srs.X1A, &P_poly.coeffs);
-      let D_x: G1Affine = (B_x * f_prod_z - diff_x - B_Q_x * v_z).into();
-      println!("f_prod_z: {:?}", f_prod_z);
-      println!("v_x {:?}", v_z);
-      println!("D_x {:?}", D_x);
-      let b_q_x: G1Affine = B_Q_x.into();
-      println!("b_q_x {:?}", b_q_x);
       let r_sum = p_ref[2];
       let C3 = srs.X1P[0] * r_sum;
 
       let proof = vec![m_x, A_x, B_x, B_Q_x, S_x, P_x, R_C_x, Q_x, W_x, C1, C2, C3];
-      let b_x: G1Affine = B_x.into();
-      println!("B_x {:?}", b_x);
       let proof_1 = g2s.clone();
       (proof, proof_1, f_zs.to_vec())
     } else {
@@ -559,7 +528,6 @@ impl BasicBlock for CQBasicBlock {
     println!("mu {:?}", mu);
 
     let domain_n = GeneralEvaluationDomain::<Fr>::new(*n).unwrap();
-    let domain_N = GeneralEvaluationDomain::<Fr>::new(*N).unwrap();
     let m = f_zs.len();
     let mus = util::calc_pow(mu, m);
     let fz_sum: Fr = f_zs.iter().enumerate().map(|(i, x)| *x * mus[i]).sum();
@@ -576,21 +544,9 @@ impl BasicBlock for CQBasicBlock {
     } else {
       f_xs[1] * diffs[0] + f_xs[0] * diffs.iter().fold(Fr::zero(), |acc, x| acc + x.clone())
     };
-    let f0_x: G1Affine = f_xs[0].into();
-    println!("f0_x: {:?}", f0_x);
-    let diff_g1: G1Affine = diff_x.into();
-    println!("diff_x: {:?}", diff_g1);
-    // let diff = diffs.iter().fold(Fr::zero(), |acc, x| acc + x.clone());
     let v_poly = domain_n.vanishing_polynomial();
     let v_z = v_poly.evaluate(&zeta);
-    let b_x: G1Affine = B_x.into();
-    println!("B_x {:?}", b_x);
     let D_x: G1Affine = (B_x * fz_prod - diff_x - B_Q_x * v_z).into();
-    println!("fz_prod: {:?}", fz_prod);
-    println!("D_x {:?}", D_x);
-    println!("v_x {:?}", v_z);
-    let b_q_x: G1Affine = B_Q_x.into();
-    println!("b_q_x {:?}", b_q_x);
 
     // Check A(x) (A_i = m_i/(t_i+beta))
     let mut v_N = vec![Fr::zero(); N + 1];
