@@ -223,6 +223,7 @@ impl Layer for MaxPool2dLayer {
     // CQ to check if x >= 0
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: C_in.next_power_of_two(),
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,

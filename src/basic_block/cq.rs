@@ -10,7 +10,7 @@ use ark_ec::{
   pairing::{Pairing, PairingOutput},
   CurveGroup,
 };
-use ark_ff::Field;
+use ark_ff::{Field, PrimeField};
 use ark_poly::{
   evaluations::univariate::Evaluations, univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain, Polynomial,
 };
@@ -30,6 +30,7 @@ use std::{
 
 #[derive(Debug, Clone)]
 pub struct CQBasicBlock {
+  pub n: usize,
   pub setup: util::CQArrayType,
 }
 
@@ -43,6 +44,8 @@ impl BasicBlock for CQBasicBlock {
       return Ok(vec![]);
     }
     assert!(inputs.len() == 1);
+    let n = inputs[0].dim()[inputs[0].ndim() - 1];
+    assert!(n <= self.n);
     for x in inputs[0].view().as_slice().unwrap() {
       let x_int = util::fr_to_int(*x);
       if !util::check_cq_array(self.setup.clone(), x_int) {
@@ -59,6 +62,7 @@ impl BasicBlock for CQBasicBlock {
     let N = model.raw.len();
     let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
     let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
+    let domain_n = GeneralEvaluationDomain::<Fr>::new(self.n).unwrap();
     let T_x_2 = util::msm::<G2Projective>(&srs.X2A, &model.poly.coeffs) + srs.Y2P * model.r;
     let mut temp = model.poly.coeffs[1..].to_vec();
     temp.resize(N * 2 - 1, Fr::zero());
@@ -79,9 +83,29 @@ impl BasicBlock for CQBasicBlock {
     let temp = srs.X1P[N - 1] * Fr::from(N as u64).inverse().unwrap();
     L_i_0_x_1.par_iter_mut().for_each(|x| *x -= temp);
 
+    let mut rH_i_0_x_1 = vec![G1Projective::zero(); self.n];
+
+    // Compute z(X) = (X^N - 1)/(X^n - 1)
+    let mut v_N = vec![Fr::zero(); N + 1];
+    v_N[N] = Fr::one();
+    v_N[0] = -Fr::one();
+    let z_poly = DensePolynomial::from_coefficients_vec(v_N).divide_by_vanishing_poly(domain_n).unwrap().0;
+
+    for i in 0..self.n {
+      let mut evals = vec![Fr::zero(); self.n];
+      evals[i] = Fr::one();
+      domain_n.ifft_in_place(&mut evals);
+
+      let Li_z = DensePolynomial::from_coefficients_vec(evals).mul(&z_poly);
+
+      rH_i_0_x_1[i] = util::msm::<G1Projective>(&srs.X1A[..N], &Li_z.coeffs[1..]);
+    }
+
+    // Subtract final term
     let mut setup = Q_i_x_1;
     setup.extend(L_i_x_1);
     setup.extend(L_i_0_x_1);
+    setup.extend(rH_i_0_x_1);
     return (setup, vec![T_x_2], Vec::new());
   }
 
@@ -266,8 +290,8 @@ impl BasicBlock for CQBasicBlock {
     // gen(N, t):
     let Q_i_x_1 = &setup.0[..N];
     let L_i_x_1 = &setup.0[N..2 * N];
-    let L_i_0_x_1 = &setup.0[2 * N..];
-
+    let L_i_0_x_1 = &setup.0[2 * N..3 * N];
+    let rH_i_0_x_1 = &setup.0[3 * N..];
     assert!(n <= N);
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let tag = format!("{:?}_{}", self, input.raw.len());
@@ -288,15 +312,16 @@ impl BasicBlock for CQBasicBlock {
             let mut rng2 = StdRng::from_entropy();
             let r: Vec<_> = (0..5).map(|_| Fr::rand(&mut rng2)).collect();
 
-            let mut v_N = vec![Fr::zero(); *N + 1];
-            v_N[*N] = Fr::one();
-            v_N[0] = -Fr::one();
-            let z_poly = DensePolynomial::from_coefficients_vec(v_N).divide_by_vanishing_poly(domain_n).unwrap().0;
+            // let mut v_N = vec![Fr::zero(); *N + 1];
+            // v_N[*N] = Fr::one();
+            // v_N[0] = -Fr::one();
+            // let z_poly = DensePolynomial::from_coefficients_vec(v_N).divide_by_vanishing_poly(domain_n).unwrap().0;
             let B_zero_div = if B_poly.is_zero() {
               G1Projective::zero()
             } else {
-              let prod = &B_poly.mul(&z_poly);
-              util::msm::<G1Projective>(&srs.X1A, &prod.coeffs[1..])
+              // let prod = &B_poly.mul(&z_poly);
+              // util::msm::<G1Projective>(&srs.X1A, &prod.coeffs[1..])
+              util::msm::<G1Projective>(&rH_i_0_x_1, &B_poly.coeffs)
             };
 
             let B_blind = DensePolynomial::from_coefficients_vec(vec![r[0]]).mul_by_vanishing_poly(domain_n);
@@ -565,8 +590,8 @@ impl BasicBlock for CQBasicBlock {
         checks.push(vec![((D_x, srs.X2A[0])), (-P_x, (srs.X2A[1] - zeta_x).into()), (-C2, srs.Y2A)]);
       };
 
-      // Check W(x) (W(x) = (F(x) - F(zeta)) / (x - zeta))
-      // where F(x) is RLC'd input polynomials
+      // // Check W(x) (W(x) = (F(x) - F(zeta)) / (x - zeta))
+      // // where F(x) is RLC'd input polynomials
       checks.push(vec![
         ((-W_x, (srs.X2P[1] - srs.X2A[0] * zeta).into())),
         ((f_sum - srs.X1A[0] * fz_sum).into(), srs.X2A[0]),

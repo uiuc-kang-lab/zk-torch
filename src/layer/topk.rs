@@ -69,7 +69,10 @@ impl Layer for TopKLayer {
       util::CQArrayType::NonPositive
     };
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(CQBasicBlock { setup: cq_type }),
+      basic_block: Box::new(CQBasicBlock {
+        n: k.next_power_of_two(),
+        setup: cq_type,
+      }),
       N: 1,
     }));
 
@@ -156,6 +159,7 @@ impl Layer for ArgMaxLayer {
     }));
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,
