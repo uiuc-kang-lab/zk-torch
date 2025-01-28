@@ -101,7 +101,6 @@ impl BasicBlock for CQBasicBlock {
       rH_i_0_x_1[i] = util::msm::<G1Projective>(&srs.X1A[..N], &Li_z.coeffs[1..]);
     }
 
-    // Subtract final term
     let mut setup = Q_i_x_1;
     setup.extend(L_i_x_1);
     setup.extend(L_i_0_x_1);
@@ -312,15 +311,9 @@ impl BasicBlock for CQBasicBlock {
             let mut rng2 = StdRng::from_entropy();
             let r: Vec<_> = (0..5).map(|_| Fr::rand(&mut rng2)).collect();
 
-            // let mut v_N = vec![Fr::zero(); *N + 1];
-            // v_N[*N] = Fr::one();
-            // v_N[0] = -Fr::one();
-            // let z_poly = DensePolynomial::from_coefficients_vec(v_N).divide_by_vanishing_poly(domain_n).unwrap().0;
             let B_zero_div = if B_poly.is_zero() {
               G1Projective::zero()
             } else {
-              // let prod = &B_poly.mul(&z_poly);
-              // util::msm::<G1Projective>(&srs.X1A, &prod.coeffs[1..])
               util::msm::<G1Projective>(&rH_i_0_x_1, &B_poly.coeffs)
             };
 
