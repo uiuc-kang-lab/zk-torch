@@ -116,10 +116,12 @@ impl BasicBlock for CQBasicBlock {
     let L_i_x_1 = srs.X1P[..N].to_vec();
     let L_i_0_x_1 = L_i_x_1.clone();
     let Q_i_x_1 = L_i_x_1.clone();
+    let rH_i_0_x_1 = srs.X1P[..self.n].to_vec();
 
     let mut setup = Q_i_x_1;
     setup.extend(L_i_x_1);
     setup.extend(L_i_0_x_1);
+    setup.extend(rH_i_0_x_1);
     return (setup, vec![srs.X2P[0]], Vec::new());
   }
 

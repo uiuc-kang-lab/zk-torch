@@ -206,11 +206,13 @@ impl BasicBlock for CQ2BasicBlock {
     let Q_i_x_1_B = srs.X1P[..N].to_vec();
     let L_i_x_1 = srs.X1P[..N].to_vec();
     let L_i_0_x_1 = srs.X1P[..N].to_vec();
+    let rH_i_0_x_1 = srs.X1P[..self.n].to_vec();
 
     setup.extend(Q_i_x_1_A);
     setup.extend(Q_i_x_1_B);
     setup.extend(L_i_x_1);
     setup.extend(L_i_0_x_1);
+    setup.extend(rH_i_0_x_1);
     return (setup, setup2, Vec::new());
   }
 
@@ -409,10 +411,6 @@ impl BasicBlock for CQ2BasicBlock {
 
             let agg_model_g1 = model[0].g1 + model[1].g1 * alpha;
             let agg_model_r = model[0].r + model[1].r * alpha;
-            let mut v_N = vec![Fr::zero(); *N + 1];
-            v_N[*N] = Fr::one();
-            v_N[0] = -Fr::one();
-            let z_poly = DensePolynomial::from_coefficients_vec(v_N).divide_by_vanishing_poly(domain_n).unwrap().0;
 
             let B_blind = DensePolynomial::from_coefficients_vec(vec![r[0]]).mul_by_vanishing_poly(domain_n);
             let B_poly = poly_ref[0].clone() + B_blind;
