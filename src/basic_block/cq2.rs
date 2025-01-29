@@ -107,6 +107,7 @@ pub struct CQ2BasicBlock {
   pub op: CQ2BasicBlockOps,
   pub offset: i128,
   pub size: usize,
+  pub n: usize,
 }
 
 impl BasicBlock for CQ2BasicBlock {
@@ -140,6 +141,7 @@ impl BasicBlock for CQ2BasicBlock {
     let N = model[0].raw.len();
     let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
     let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
+    let domain_n = GeneralEvaluationDomain::<Fr>::new(self.n).unwrap();
     let mut setup = vec![];
     let mut setup2 = vec![];
     for i in 0..2 {
@@ -168,6 +170,25 @@ impl BasicBlock for CQ2BasicBlock {
 
     setup.extend(L_i_x_1);
     setup.extend(L_i_0_x_1);
+
+    let mut rH_i_0_x_1 = vec![G1Projective::zero(); self.n];
+
+    // Compute z(X) = (X^N - 1)/(X^n - 1)
+    let mut v_N = vec![Fr::zero(); N + 1];
+    v_N[N] = Fr::one();
+    v_N[0] = -Fr::one();
+    let z_poly = DensePolynomial::from_coefficients_vec(v_N).divide_by_vanishing_poly(domain_n).unwrap().0;
+
+    for i in 0..self.n {
+      let mut evals = vec![Fr::zero(); self.n];
+      evals[i] = Fr::one();
+      domain_n.ifft_in_place(&mut evals);
+
+      let Li_z = DensePolynomial::from_coefficients_vec(evals).mul(&z_poly);
+      rH_i_0_x_1[i] = util::msm::<G1Projective>(&srs.X1A[..N], &Li_z.coeffs[1..]);
+    }
+    setup.extend(rH_i_0_x_1);
+
     return (setup, setup2, Vec::new());
   }
 
@@ -363,7 +384,8 @@ impl BasicBlock for CQ2BasicBlock {
     let Q_i_x_1_A = &setup.0[..N];
     let Q_i_x_1_B = &setup.0[N..2 * N];
     let L_i_x_1 = &setup.0[2 * N..3 * N];
-    let L_i_0_x_1 = &setup.0[3 * N..];
+    let L_i_0_x_1 = &setup.0[3 * N..4 * N];
+    let rH_i_0_x_1 = &setup.0[4 * N..];
 
     assert!(n <= N);
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
@@ -400,8 +422,8 @@ impl BasicBlock for CQ2BasicBlock {
             let B_zero_div = if B_poly.is_zero() {
               G1Projective::zero()
             } else {
-              let prod = &B_poly.mul(&z_poly);
-              util::msm::<G1Projective>(&srs.X1A, &prod.coeffs[1..])
+              let B_evals: Vec<_> = (0..self.n).map(|i| B_poly.evaluate(&domain_n.element(i))).collect();
+              util::msm::<G1Projective>(&rH_i_0_x_1, &B_evals)
             };
             poly_ref[0] = B_poly;
 

@@ -94,6 +94,7 @@ impl Layer for BatchNormLayer {
         op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: scale_shape_padded.next_power_of_two(),
       }),
       N: 1,
     }));
@@ -367,6 +368,7 @@ impl Layer for InstanceNormLayer {
         op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: X_shape[X_shape.len() - 1].next_power_of_two(),
       }),
       N: 1,
     }));
@@ -380,6 +382,7 @@ impl Layer for InstanceNormLayer {
         ),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: X_shape[X_shape.len() - 1].next_power_of_two(),
       }),
       N: 1,
     }));
@@ -688,6 +691,7 @@ impl Layer for CustomInstanceNormLayer {
         op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: X_shape[X_shape.len() - 1].next_power_of_two(),
       }),
       N: 1,
     }));
@@ -701,6 +705,7 @@ impl Layer for CustomInstanceNormLayer {
         ),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: X_shape[X_shape.len() - 1].next_power_of_two(),
       }),
       N: 1,
     }));

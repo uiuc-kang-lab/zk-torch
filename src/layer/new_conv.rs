@@ -122,6 +122,7 @@ impl Layer for Conv2dLayer {
         op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: input_shape[1].next_power_of_two(),
       }),
       N: 1,
     }));
@@ -270,6 +271,7 @@ impl Layer for MultiHeadConv2dLayer {
         op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: input_shape[1].next_power_of_two(),
       }),
       N: 1,
     }));
@@ -387,6 +389,7 @@ impl Layer for Conv3dLayer {
         op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: input_shape[1].next_power_of_two(),
       }),
       N: 1,
     }));
@@ -493,6 +496,7 @@ impl Layer for ConcatConv3dLayer {
         op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: input_shape[1].next_power_of_two(),
       }),
       N: 1,
     }));
@@ -599,6 +603,7 @@ impl Layer for Conv3dTransposeLayer {
         op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: input_shape[1].next_power_of_two(),
       }),
       N: 1,
     }));

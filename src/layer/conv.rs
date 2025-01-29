@@ -200,6 +200,7 @@ macro_rules! create_conv_layer {
             op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
             offset: *onnx::CQ_RANGE_LOWER,
             size: *onnx::CQ_RANGE,
+            n: weights_splatted[0].len().next_power_of_two(),
           }),
           N: 1,
         }));

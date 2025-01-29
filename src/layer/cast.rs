@@ -34,6 +34,7 @@ impl Layer for CastLayer {
         op: cq2::CQ2BasicBlockOps::ChangeSF(input_SF, output_SF),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
       }))
     } else {
       graph.addBB(Box::new(RepeaterBasicBlock {
@@ -41,6 +42,7 @@ impl Layer for CastLayer {
           op: cq2::CQ2BasicBlockOps::ChangeSF(input_SF, output_SF),
           offset: *onnx::CQ_RANGE_LOWER,
           size: *onnx::CQ_RANGE,
+          n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
         }),
         N: 1,
       }))
