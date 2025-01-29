@@ -97,7 +97,6 @@ impl BasicBlock for CQBasicBlock {
       domain_n.ifft_in_place(&mut evals);
 
       let Li_z = DensePolynomial::from_coefficients_vec(evals).mul(&z_poly);
-
       rH_i_0_x_1[i] = util::msm::<G1Projective>(&srs.X1A[..N], &Li_z.coeffs[1..]);
     }
 
@@ -314,7 +313,8 @@ impl BasicBlock for CQBasicBlock {
             let B_zero_div = if B_poly.is_zero() {
               G1Projective::zero()
             } else {
-              util::msm::<G1Projective>(&rH_i_0_x_1, &B_poly.coeffs)
+              let B_evals: Vec<_> = (0..self.n).map(|i| B_poly.evaluate(&domain_n.element(i))).collect();
+              util::msm::<G1Projective>(&rH_i_0_x_1, &B_evals)
             };
 
             let B_blind = DensePolynomial::from_coefficients_vec(vec![r[0]]).mul_by_vanishing_poly(domain_n);
