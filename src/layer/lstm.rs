@@ -129,7 +129,7 @@ impl Layer for LSTMLayer {
           op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
           offset: *onnx::CQ_RANGE_LOWER,
           size: *onnx::CQ_RANGE,
-          n: hidden_size.next_power_of_two(),
+          n: (hidden_size * 4).next_power_of_two(),
         }),
         N: 1,
       }));

@@ -75,7 +75,7 @@ fn vector_outer_product(graph: &mut Graph, input_shapes: &Vec<&Vec<usize>>) -> V
       op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
       offset: *onnx::CQ_RANGE_LOWER,
       size: *onnx::CQ_RANGE,
-      n: input_shapes[1][input_shapes[1].len() - 1].next_power_of_two(),
+      n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
     }),
     N: 1,
   }));
