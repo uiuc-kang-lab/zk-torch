@@ -120,6 +120,8 @@ impl BasicBlock for CQ2BasicBlock {
       return Ok(vec![]);
     }
     assert!(inputs.len() == 2);
+    let n = inputs[0].dim()[inputs[0].ndim() - 1];
+    assert!(n <= self.n);
     for x in inputs[0].iter().zip(inputs[1].iter()) {
       let temp = (*x.0, *x.1);
       let x_0_int = util::fr_to_int(temp.0);
