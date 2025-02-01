@@ -500,6 +500,7 @@ impl Graph {
             "{} | skipping verifying for {i} {:?} because this layer is precomputable given the constant inputs",
             self.layer_names[i], self.basic_blocks[n.basic_block]
           );
+          return;
         }
         let verify_id = format!(
           "{} | verifying first round {i} {:?}",
