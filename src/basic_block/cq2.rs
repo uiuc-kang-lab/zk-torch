@@ -120,7 +120,11 @@ impl BasicBlock for CQ2BasicBlock {
       return Ok(vec![]);
     }
     assert!(inputs.len() == 2);
-    let n = inputs[0].dim()[inputs[0].ndim() - 1];
+    let n = if inputs[0].ndim() == 0 {
+      1
+    } else {
+      inputs[0].dim()[inputs[0].ndim() - 1]
+    };
     assert!(n <= self.n);
     for x in inputs[0].iter().zip(inputs[1].iter()) {
       let temp = (*x.0, *x.1);
@@ -422,7 +426,7 @@ impl BasicBlock for CQ2BasicBlock {
             let B_zero_div = if B_poly.is_zero() {
               G1Projective::zero()
             } else {
-              let B_evals: Vec<_> = (0..self.n).map(|i| B_poly.evaluate(&domain_n.element(i))).collect();
+              let B_evals = domain_n.fft(&B_poly.coeffs);
               util::msm::<G1Projective>(&rH_i_0_x_1, &B_evals)
             };
             poly_ref[0] = B_poly;
