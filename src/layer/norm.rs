@@ -57,7 +57,8 @@ impl Layer for BatchNormLayer {
       // epsilon is not provided, use the default value
       1e-5
     };
-    epsilon *= onnx::SF_FLOAT.read().unwrap().to_owned();
+    // epsilon *= onnx::SF_FLOAT.read().unwrap().to_owned();
+    epsilon = 1.0;
 
     let epsilon = graph.addBB(Box::new(Const2BasicBlock {
       c: arr1(&vec![Fr::from(epsilon.round() as i32)]).into_dyn(),
@@ -93,6 +94,7 @@ impl Layer for BatchNormLayer {
         op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: scale_shape_padded.next_power_of_two(),
       }),
       N: 1,
     }));
@@ -105,6 +107,7 @@ impl Layer for BatchNormLayer {
     }));
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: scale_shape_padded,
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,
@@ -152,12 +155,14 @@ impl Layer for BatchNormLayer {
     }));
     let non_negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: scale_shape_padded,
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,
     }));
     let negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: scale_shape_padded,
         setup: util::CQArrayType::Negative,
       }),
       N: 1,
@@ -296,7 +301,7 @@ impl Layer for InstanceNormLayer {
       X_shape[1],
       X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y),
     ];
-    let permutation = get_reshape_indices(X_shape.to_vec(), x_shape_for_mean);
+    let permutation = get_reshape_indices(X_shape.to_vec(), x_shape_for_mean.clone());
     let padded_input_shape: Vec<_> = X_shape.iter().map(|x| util::next_pow(*x as u32) as usize).collect();
     let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
       permutation,
@@ -313,6 +318,7 @@ impl Layer for InstanceNormLayer {
     }));
     let div_const_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: x_shape_for_mean[2],
         setup: CQArrayType::NonNegative,
       }),
       N: 1,
@@ -362,6 +368,7 @@ impl Layer for InstanceNormLayer {
         op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: X_shape[X_shape.len() - 1].next_power_of_two(),
       }),
       N: 1,
     }));
@@ -375,6 +382,7 @@ impl Layer for InstanceNormLayer {
         ),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: X_shape[X_shape.len() - 1].next_power_of_two(),
       }),
       N: 1,
     }));
@@ -386,6 +394,7 @@ impl Layer for InstanceNormLayer {
     }));
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: X_shape[X_shape.len() - 1].next_power_of_two(),
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,
@@ -420,12 +429,14 @@ impl Layer for InstanceNormLayer {
     }));
     let non_negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: 1,
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,
     }));
     let negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: 1,
         setup: util::CQArrayType::Negative,
       }),
       N: 1,
@@ -627,6 +638,7 @@ impl Layer for CustomInstanceNormLayer {
     let div_const = graph.addBB(Box::new(DivConstProofBasicBlock { c: X_shape[1] as u32 }));
     let div_const_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: a,
         setup: CQArrayType::NonNegative,
       }),
       N: 1,
@@ -679,6 +691,7 @@ impl Layer for CustomInstanceNormLayer {
         op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: X_shape[X_shape.len() - 1].next_power_of_two(),
       }),
       N: 1,
     }));
@@ -692,6 +705,7 @@ impl Layer for CustomInstanceNormLayer {
         ),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: X_shape[X_shape.len() - 1].next_power_of_two(),
       }),
       N: 1,
     }));
@@ -703,6 +717,7 @@ impl Layer for CustomInstanceNormLayer {
     }));
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: X_shape[1].next_power_of_two(),
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,
@@ -737,12 +752,14 @@ impl Layer for CustomInstanceNormLayer {
     }));
     let non_negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: a,
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,
     }));
     let non_positive_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: a,
         setup: util::CQArrayType::NonPositive,
       }),
       N: 1,

@@ -40,6 +40,7 @@ impl Layer for MulLayer {
         op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: 1,
       }))
     } else {
       graph.addBB(Box::new(RepeaterBasicBlock {
@@ -47,6 +48,14 @@ impl Layer for MulLayer {
           op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
           offset: *onnx::CQ_RANGE_LOWER,
           size: *onnx::CQ_RANGE,
+          n: if input_shapes[1].len() == 0 {
+            input_shapes[0][input_shapes[0].len() - 1].next_power_of_two()
+          } else {
+            std::cmp::max(
+              input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
+              input_shapes[1][input_shapes[1].len() - 1].next_power_of_two(),
+            )
+          },
         }),
         N: 1,
       }))

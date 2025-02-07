@@ -34,6 +34,7 @@ impl Layer for MatMulLayer {
         op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: input_shapes[1][input_shapes[1].len() - 1].next_power_of_two(),
       }),
       N: 1,
     }));
@@ -106,6 +107,7 @@ impl Layer for MultiHeadMatMulLayer {
         op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: output_shape[output_shape.len() - 1].next_power_of_two(),
       }),
       N: 1,
     }));

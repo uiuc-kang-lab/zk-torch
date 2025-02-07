@@ -468,7 +468,7 @@ impl Graph {
       util::combine_pairing_checks(&pairings.iter().flatten().collect())
     );
     let pairing_check = timed!(timing, "pairings", Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()));
-    // assert_eq!(pairing_check, PairingOutput::zero());
+    assert_eq!(pairing_check, PairingOutput::zero());
   }
 
   pub fn batch_verify(
@@ -500,6 +500,7 @@ impl Graph {
             "{} | skipping verifying for {i} {:?} because this layer is precomputable given the constant inputs",
             self.layer_names[i], self.basic_blocks[n.basic_block]
           );
+          return;
         }
         let verify_id = format!(
           "{} | verifying first round {i} {:?}",
@@ -554,7 +555,7 @@ impl Graph {
       util::combine_pairing_checks(&pairings.iter().flatten().collect())
     );
     let pairing_check = timed!(timing, "pairings", Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()));
-    // assert_eq!(pairing_check, PairingOutput::zero());
+    assert_eq!(pairing_check, PairingOutput::zero());
   }
 
   // This function should be only used for debugging purposes (it is very slow).

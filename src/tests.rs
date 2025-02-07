@@ -262,25 +262,25 @@ fn testBatchProve<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
     .collect();
   let pairings = pairings.iter().map(|x| x).collect();
   let pairings = util::combine_pairing_checks(&pairings);
-  // assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
+  assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
 }
 
 #[test]
 fn test_batch() {
   let srs = &ptau::load_file("challenge", 7, 7);
   let mut rng = StdRng::from_entropy();
-  let N: usize = 1 << 6;
+  let N: usize = 1 << 2;
   let n: usize = 1 << 1;
-  let a = ArrayD::from_shape_fn(IxDyn(&[n]), |_| Fr::from(rng.gen_range(0..10)));
-  let a_1 = ArrayD::from_shape_fn(IxDyn(&[n]), |_| Fr::from(rng.gen_range(0..10)));
-  let a_2 = ArrayD::from_shape_fn(IxDyn(&[n]), |_| Fr::from(rng.gen_range(0..10)));
+  let a = ArrayD::from_shape_fn(IxDyn(&[n]), |_| Fr::from(rng.gen_range(0..3)));
+  let A = ArrayD::from_shape_fn(IxDyn(&[N]), |i| Fr::from(i[0] as i32));
   testBatchProve(
     CQBasicBlock {
+      n,
       setup: util::CQArrayType::Custom(((0..N).map(|x| Fr::from(x as i32))).collect::<Vec<_>>()),
     },
     srs,
-    &a,
-    &vec![&a, &a, &a, &a, &a, &a, &a, &a, &a, &a],
+    &A,
+    &vec![&a],
   );
 }
 

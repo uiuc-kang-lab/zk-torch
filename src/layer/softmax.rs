@@ -31,6 +31,7 @@ impl Layer for SoftmaxLayer {
         op: cq2::CQ2BasicBlockOps::Exp(sf_log, sf_log),
         offset: (-(*onnx::CQ_RANGE as i32) + 1) as i128,
         size: *onnx::CQ_RANGE,
+        n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
       }),
       N: 1,
     }));
@@ -47,6 +48,7 @@ impl Layer for SoftmaxLayer {
         op: cq2::CQ2BasicBlockOps::Reciprocal(sf_log, sf_log),
         offset: 0,
         size: *onnx::CQ_RANGE,
+        n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
       }),
       N: 1,
     }));
@@ -63,6 +65,7 @@ impl Layer for SoftmaxLayer {
         op: cq2::CQ2BasicBlockOps::ChangeSF(sf_log * 2, sf_log),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
       }),
       N: 1,
     }));

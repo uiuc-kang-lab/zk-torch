@@ -53,6 +53,7 @@ impl Layer for ReduceMeanLayer {
             op: cq2::CQ2BasicBlockOps::DivConst(input_shapes[0][axes[0]] as f32),
             offset: *onnx::CQ_RANGE_LOWER,
             size: *onnx::CQ_RANGE,
+            n: 1,
           }),
           N: 1,
         }));
@@ -87,6 +88,7 @@ impl Layer for ReduceMeanLayer {
         op: cq2::CQ2BasicBlockOps::DivConst(input_shapes[0][input_shapes[0].len() - 1] as f32),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: 1,
       }),
       N: 1,
     }));

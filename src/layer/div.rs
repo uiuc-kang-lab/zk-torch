@@ -51,6 +51,7 @@ macro_rules! create_division_layer {
               op: cq2::CQ2BasicBlockOps::$const_enum(c_value as _),
               offset: *onnx::CQ_RANGE_LOWER,
               size: *onnx::CQ_RANGE,
+              n: 1,
             }))
           } else {
             graph.addBB(Box::new(RepeaterBasicBlock {
@@ -58,6 +59,7 @@ macro_rules! create_division_layer {
                 op: cq2::CQ2BasicBlockOps::$const_enum(c_value as _),
                 offset: *onnx::CQ_RANGE_LOWER,
                 size: *onnx::CQ_RANGE,
+                n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
               }),
               N: 1,
             }))
@@ -90,6 +92,7 @@ macro_rules! create_division_layer {
         // Add a range check basic block for ensuring the remainder is non-negative
         let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
           basic_block: Box::new(CQBasicBlock {
+            n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
             setup: util::CQArrayType::NonNegative,
           }),
           N: 1,

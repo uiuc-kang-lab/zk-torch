@@ -27,6 +27,7 @@ impl Layer for ClipLayer {
         op: cq2::CQ2BasicBlockOps::Clip(min, max),
         offset: *onnx::CQ_RANGE_LOWER,
         size: *onnx::CQ_RANGE,
+        n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
       }),
       N: 1,
     }));
