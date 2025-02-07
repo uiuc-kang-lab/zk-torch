@@ -14,12 +14,22 @@ impl BasicBlock for ReshapeBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
     assert!(inputs.len() == 1);
     assert!(inputs[0].shape().last() == self.shape.last());
-    Ok(vec![inputs[0].view().into_shape(&self.shape[..]).unwrap().to_owned()])
+    let result = match inputs[0].view().into_shape(&self.shape[..]) {
+      Ok(view) => view.to_owned(),
+      Err(_) => inputs[0].to_shape(&self.shape[..]).unwrap().into_owned(),
+    };
+
+    Ok(vec![result])
   }
 
   fn encodeOutputs(&self, _srs: &SRS, _model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, _outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
     let n = self.shape.len();
-    vec![inputs[0].view().into_shape(&self.shape[..n - 1]).unwrap().to_owned()]
+    let result = match inputs[0].view().into_shape(&self.shape[..n - 1]) {
+      Ok(view) => view.to_owned(),
+      Err(_) => inputs[0].to_shape(&self.shape[..n - 1]).unwrap().into_owned(),
+    };
+
+    vec![result]
   }
 
   fn verify(
@@ -33,8 +43,11 @@ impl BasicBlock for ReshapeBasicBlock {
     _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
     let n = self.shape.len();
-    let view = inputs[0].view().into_shape(&self.shape[..n - 1]).unwrap();
-    assert!(outputs[0] == view);
+    let reshaped = match inputs[0].view().into_shape(&self.shape[..n - 1]) {
+      Ok(view) => view.to_owned(),
+      Err(_) => inputs[0].to_shape(&self.shape[..n - 1]).unwrap().into_owned(),
+    };
+    assert!(outputs[0] == &reshaped);
 
     vec![]
   }

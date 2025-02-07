@@ -717,7 +717,7 @@ impl Layer for CustomInstanceNormLayer {
     }));
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
-        n: b,
+        n: X_shape[1].next_power_of_two(),
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,
