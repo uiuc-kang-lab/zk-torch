@@ -57,7 +57,7 @@ pub fn generate_fake_tensor(dtype: DataType, shape: Vec<usize>) -> ArrayD<Fr> {
   let mut rng = StdRng::from_entropy();
   let val_num = shape.iter().fold(1, |acc, x| acc * x);
   let input = match dtype {
-    DataType::Float | DataType::Float16 | DataType::Double => (0..val_num).map(|_| Fr::from(rng.gen_range(-2..2))).collect(),
+    DataType::Float | DataType::Float16 | DataType::Double => (0..val_num).map(|_| Fr::from(rng.gen_range(-1..2))).collect(),
     DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => (0..val_num).map(|_| Fr::from(1)).collect(),
     DataType::Uint8 | DataType::Uint16 | DataType::Uint32 | DataType::Uint64 => (0..val_num).map(|_| Fr::from(1)).collect(),
     DataType::Bool => (0..val_num).map(|_| Fr::from(rng.gen_range(0..2))).collect(),

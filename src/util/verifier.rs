@@ -36,6 +36,9 @@ pub fn combine_pairing_checks(checks: &Vec<&PairingCheck>) -> (Vec<G1Affine>, Ve
   let mut curr = gamma;
   for check in checks.iter() {
     for pairing in check.iter() {
+      if &pairing.0.infinity | &pairing.1.infinity {
+        continue;
+      }
       A.entry(pairing.0).or_insert_with(|| HashSet::new()).insert((pairing.1, curr));
       B.entry(pairing.1).or_insert_with(|| HashSet::new()).insert((pairing.0, curr));
     }
