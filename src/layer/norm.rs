@@ -318,7 +318,7 @@ impl Layer for InstanceNormLayer {
     }));
     let div_const_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
-        n: x_shape_for_mean[2],
+        n: 1,
         setup: CQArrayType::NonNegative,
       }),
       N: 1,
