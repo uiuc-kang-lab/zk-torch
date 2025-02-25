@@ -122,7 +122,12 @@ impl Graph {
     return outputsEnc;
   }
 
-  pub fn setup(&self, srs: &SRS, models: &Vec<&ArrayD<Data>>) -> Vec<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)> {
+  pub fn setup(
+    &self,
+    srs: &SRS,
+    models: &Vec<&ArrayD<Data>>,
+    setup_cache: &mut SetupCache,
+  ) -> Vec<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)> {
     assert!(self.basic_blocks.len() == self.precomputable.setup.len());
     self
       .basic_blocks
@@ -155,7 +160,7 @@ impl Graph {
             return setups.first().unwrap().clone();
           }
         }
-        let setup = b.setup(srs, *m);
+        let setup = b.setup(srs, *m, setup_cache);
         let setups = vec![setup];
         #[cfg(not(feature = "mock_prove"))]
         if save_cq_layer_setup {
@@ -177,6 +182,7 @@ impl Graph {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&Vec<&ArrayD<Data>>>,
     rng: &mut StdRng,
+    setup_cache: &SetupCache,
     timing: &mut TimingTree,
   ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> {
     assert!(self.nodes.len() == self.precomputable.prove_and_verify.len());
@@ -220,6 +226,7 @@ impl Graph {
             &myInputs,
             outputs[i],
             rng,
+            setup_cache,
             cache.clone(),
           )
         );
@@ -245,6 +252,7 @@ impl Graph {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&Vec<&ArrayD<Data>>>,
     rng: &mut StdRng,
+    setup_cache: &SetupCache,
     timing: &mut TimingTree,
   ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> {
     assert!(self.nodes.len() == self.precomputable.prove_and_verify.len());
@@ -291,6 +299,7 @@ impl Graph {
           &myInputs,
           outputs[i],
           rng,
+          setup_cache,
           cache.clone(),
         )
       );

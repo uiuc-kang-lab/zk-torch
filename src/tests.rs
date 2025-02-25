@@ -18,7 +18,8 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
   let outputs = if outputs.is_ok() { outputs.unwrap() } else { panic!("Error in run") };
   let outputs: Vec<&ArrayD<Fr>> = outputs.iter().map(|x| x).collect();
   let model = convert_to_data(srs, model);
-  let setup = basic_block.setup(srs, &model);
+  let mut setup_cache = Arc::new(Mutex::new(HashMap::new()));
+  let setup = basic_block.setup(srs, &model, &mut setup_cache);
   let setup: (Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>) = (
     setup.0.iter().map(|y| (*y).into()).collect(),
     setup.1.iter().map(|y| (*y).into()).collect(),
@@ -31,7 +32,7 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
   let outputs: Vec<&ArrayD<Data>> = outputs.iter().map(|output| output).collect();
   let mut rng2 = rng.clone();
   let cache = Arc::new(Mutex::new(HashMap::new()));
-  let proof = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng, cache.clone());
+  let proof = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng, &setup_cache, cache.clone());
   let proof: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (
     proof.0.iter().map(|y| (*y).into()).collect(),
     proof.1.iter().map(|y| (*y).into()).collect(),
@@ -59,7 +60,8 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
   let outputs = if outputs.is_ok() { outputs.unwrap() } else { panic!("Error in run") };
   let outputs: Vec<&ArrayD<Fr>> = outputs.iter().map(|x| x).collect();
   let model = convert_to_data(srs, model);
-  let setup = basic_block.setup(srs, &model);
+  let mut setup_cache = Arc::new(Mutex::new(HashMap::new()));
+  let setup = basic_block.setup(srs, &model, &mut setup_cache);
   let setup: (Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>) = (
     setup.0.iter().map(|y| (*y).into()).collect(),
     setup.1.iter().map(|y| (*y).into()).collect(),
@@ -76,7 +78,7 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
   let mut proofs = vec![];
   let mut acc_proofs = vec![];
 
-  let proof_1 = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng, cache.clone());
+  let proof_1 = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng, &setup_cache, cache.clone());
   let acc_proof_1 = basic_block.acc_init(
     srs,
     &model,
@@ -93,7 +95,7 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
   );
   proofs.push(proof_1);
   acc_proofs.push(acc_proof_1_v);
-  let proof_2 = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng, cache.clone());
+  let proof_2 = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng, &setup_cache, cache.clone());
   let acc_proof_2 = basic_block.acc_prove(
     srs,
     &model,

@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SetupCache, SRS};
 use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
@@ -51,44 +51,60 @@ impl BasicBlock for CQ2BasicBlock {
   }
 
   #[cfg(not(feature = "mock_prove"))]
-  fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+  fn setup(&self, srs: &SRS, model: &ArrayD<Data>, setup_cache: &mut SetupCache) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     assert!(model.ndim() == 1 && model.len() == 2);
     let N = model[0].raw.len();
     let domain_2N = GeneralEvaluationDomain::<Fr>::new(2 * N).unwrap();
     let domain_N = GeneralEvaluationDomain::<Fr>::new(N).unwrap();
-    let mut setup = vec![];
     let mut setup2 = vec![];
     for i in 0..2 {
       setup2.push(util::msm::<G2Projective>(&srs.X2A, &model[i].poly.coeffs) + srs.Y2P * model[i].r);
-      let mut temp = model[i].poly.coeffs[1..].to_vec();
-      temp.resize(N * 2 - 1, Fr::zero());
-      let mut temp2 = srs.X1P[..N].to_vec();
-      temp2.reverse();
-      let mut Q_i_x_1 = util::toeplitz_mul(domain_2N, &temp, &temp2);
-      util::fft_in_place(domain_N, &mut Q_i_x_1);
-      let temp = Fr::from(N as u32).inverse().unwrap();
-      let temp2 = domain_N.group_gen_inv().pow(&[(N - 1) as u64]);
-      let scalars = (0..N).into_par_iter().map(|i| temp * temp2.pow(&[i as u64])).collect();
-      util::ssm_g1_in_place(&mut Q_i_x_1, &scalars);
-
-      setup.extend(Q_i_x_1);
+    }
+    let mut cache = setup_cache.lock().unwrap();
+    if cache.get(&format!("cq_Q_i_x_1_{:p}_{}", self, N)).is_none() {
+      for i in 0..2 {
+        let mut temp = model[i].poly.coeffs[1..].to_vec();
+        temp.resize(N * 2 - 1, Fr::zero());
+        let mut temp2 = srs.X1P[..N].to_vec();
+        temp2.reverse();
+        let mut Q_i_x_1 = util::toeplitz_mul(domain_2N, &temp, &temp2);
+        util::fft_in_place(domain_N, &mut Q_i_x_1);
+        let temp = Fr::from(N as u32).inverse().unwrap();
+        let temp2 = domain_N.group_gen_inv().pow(&[(N - 1) as u64]);
+        let scalars = (0..N).into_par_iter().map(|i| temp * temp2.pow(&[i as u64])).collect();
+        util::ssm_g1_in_place(&mut Q_i_x_1, &scalars);
+        let tag = if i == 0 { "A" } else { "B" };
+        let Q_i_x_1 = Q_i_x_1.into_iter().map(|x| x.into()).collect();
+        cache.insert(format!("cq_Q_i_x_1_{}_{:p}_{}", tag, self, N), CacheValues::G1Vec(Q_i_x_1));
+      }
     }
 
-    let mut L_i_x_1 = srs.X1P[..N].to_vec();
-    util::ifft_in_place(domain_N, &mut L_i_x_1);
-    let mut L_i_0_x_1 = L_i_x_1.clone();
-    let scalars = (0..N).into_par_iter().map(|i| domain_N.group_gen_inv().pow(&[i as u64])).collect();
-    util::ssm_g1_in_place(&mut L_i_0_x_1, &scalars);
-    let temp = srs.X1P[N - 1] * Fr::from(N as u64).inverse().unwrap();
-    L_i_0_x_1.par_iter_mut().for_each(|x| *x -= temp);
+    let CacheValues::G1Vec(L_i_x_1) = cache.entry(format!("L_i_x_1_{}", N)).or_insert_with(|| {
+      let mut L_i_x_1 = srs.X1P[..N].to_vec();
+      util::ifft_in_place(domain_N, &mut L_i_x_1);
+      let L_i_x_1 = L_i_x_1.into_iter().map(|x| x.into()).collect();
+      CacheValues::G1Vec(L_i_x_1)
+    }) else {
+      panic!("Cache type error")
+    };
 
-    setup.extend(L_i_x_1);
-    setup.extend(L_i_0_x_1);
-    return (setup, setup2, Vec::new());
+    let mut L_i_0_x_1 = L_i_x_1.iter().map(|x| G1Projective::from(*x)).collect();
+
+    let _ = cache.entry(format!("cq_L_i_0_x_1_{}", N)).or_insert_with(|| {
+      let scalars = (0..N).into_par_iter().map(|i| domain_N.group_gen_inv().pow(&[i as u64])).collect();
+      util::ssm_g1_in_place(&mut L_i_0_x_1, &scalars);
+
+      let temp = srs.X1P[N - 1] * Fr::from(N as u64).inverse().unwrap();
+      L_i_0_x_1.par_iter_mut().for_each(|x| *x -= temp);
+      let L_i_0_x_1 = L_i_0_x_1.into_iter().map(|x| x.into()).collect();
+      CacheValues::G1Vec(L_i_0_x_1)
+    });
+
+    return (vec![], setup2, Vec::new());
   }
 
   #[cfg(feature = "mock_prove")]
-  fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+  fn setup(&self, srs: &SRS, model: &ArrayD<Data>, setup_cache: &mut SetupCache) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     eprintln!("\x1b[93mWARNING\x1b[0m: MockSetup is enabled. This is only for testing purposes.");
     assert!(model.ndim() == 1 && model.len() == 2);
     let N = model[0].raw.len();
@@ -97,16 +113,21 @@ impl BasicBlock for CQ2BasicBlock {
     for i in 0..2 {
       setup2.push(srs.X2P[i]);
     }
-    let Q_i_x_1_A = srs.X1P[..N].to_vec();
-    let Q_i_x_1_B = srs.X1P[..N].to_vec();
-    let L_i_x_1 = srs.X1P[..N].to_vec();
-    let L_i_0_x_1 = srs.X1P[..N].to_vec();
 
-    setup.extend(Q_i_x_1_A);
-    setup.extend(Q_i_x_1_B);
-    setup.extend(L_i_x_1);
-    setup.extend(L_i_0_x_1);
-    return (setup, setup2, Vec::new());
+    let mut cache = setup_cache.lock().unwrap();
+    let _ = cache.entry(format!("cq_L_i_x_1_{}", N)).or_insert_with(|| CacheValues::G1Vec(srs.X1A[..N].to_vec())) else {
+      panic!("Cache type error")
+    };
+    let _ = cache.entry(format!("cq_L_i_0_x_1_{}", N)).or_insert_with(|| CacheValues::G1Vec(srs.X1A[..N].to_vec())) else {
+      panic!("Cache type error")
+    };
+    let _ = cache.entry(format!("cq_Q_i_x_1_A_{:p}_{}", self, N)).or_insert_with(|| CacheValues::G1Vec(srs.X1A[..N].to_vec())) else {
+      panic!("Cache type error")
+    };
+    let _ = cache.entry(format!("cq_Q_i_x_1_B_{:p}_{}", self, N)).or_insert_with(|| CacheValues::G1Vec(srs.X1A[..N].to_vec())) else {
+      panic!("Cache type error")
+    };
+    return (vec![], setup2, Vec::new());
   }
 
   fn prove(
@@ -117,6 +138,7 @@ impl BasicBlock for CQ2BasicBlock {
     inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
+    setup_cache: &SetupCache,
     cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     assert!(inputs.len() == 2 && inputs[0].len() == 1 && inputs[1].len() == 1);
@@ -133,10 +155,27 @@ impl BasicBlock for CQ2BasicBlock {
     let agg_model_r = model[0].r + model[1].r * alpha;
 
     // gen(N, t):
-    let Q_i_x_1_A = &setup.0[..N];
-    let Q_i_x_1_B = &setup.0[N..2 * N];
-    let L_i_x_1 = &setup.0[2 * N..3 * N];
-    let L_i_0_x_1 = &setup.0[3 * N..];
+    let setup_cache = setup_cache.lock().unwrap();
+    let L_i_x_1 = if let Some(CacheValues::G1Vec(vec)) = { setup_cache.get(&format!("L_i_x_1_{}", N)) } {
+      vec
+    } else {
+      panic!("Cache miss for L_i_x_1")
+    };
+    let L_i_0_x_1 = if let Some(CacheValues::G1Vec(vec)) = { setup_cache.get(&format!("cq_L_i_0_x_1_{}", N)) } {
+      vec
+    } else {
+      panic!("Cache miss for L_i_0_x_1")
+    };
+    let Q_i_x_1_A = if let Some(CacheValues::G1Vec(vec)) = { setup_cache.get(&format!("cq_Q_i_x_1_A_{:p}_{}", self, N)) } {
+      vec
+    } else {
+      panic!("Cache miss for Q_i_x_1_A")
+    };
+    let Q_i_x_1_B = if let Some(CacheValues::G1Vec(vec)) = { setup_cache.get(&format!("cq_Q_i_x_1_B_{:p}_{}", self, N)) } {
+      vec
+    } else {
+      panic!("Cache miss for Q_i_x_1_B")
+    };
 
     let m_i = {
       let mut cache = cache.lock().unwrap();

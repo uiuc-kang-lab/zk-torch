@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SetupCache, SRS};
 use crate::{
   onnx,
   util::{self, calc_pow},
@@ -50,7 +50,12 @@ impl BasicBlock for RangeConstBasicBlock {
   }
 
   #[cfg(not(feature = "mock_prove"))]
-  fn setup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+  fn setup(
+    &self,
+    srs: &SRS,
+    _model: &ArrayD<Data>,
+    _setup_cache: &mut SetupCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     let element_num = max(0, ((self.limit - self.start) + self.delta - 1) / self.delta);
     let element_num_pad = util::next_pow(element_num as u32) as usize;
     let domain = GeneralEvaluationDomain::<Fr>::new(element_num_pad.clone() as usize).unwrap();
@@ -70,7 +75,12 @@ impl BasicBlock for RangeConstBasicBlock {
   }
 
   #[cfg(feature = "mock_prove")]
-  fn setup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+  fn setup(
+    &self,
+    srs: &SRS,
+    _model: &ArrayD<Data>,
+    _setup_cache: &mut SetupCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     eprintln!("\x1b[93mWARNING\x1b[0m: MockSetup is enabled. This is only for testing purposes.");
     (vec![srs.X1P[0].clone()], vec![], vec![])
   }
@@ -83,6 +93,7 @@ impl BasicBlock for RangeConstBasicBlock {
     _inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
+    _setup_cache: &SetupCache,
     _cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let C = srs.Y1P * outputs[0].first().unwrap().r;

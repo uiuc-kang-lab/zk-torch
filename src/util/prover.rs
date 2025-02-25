@@ -3,7 +3,7 @@
  * The functions are used for proving-related operations, such as
  * generating CQ tables and converting them to Data (generating commitment).
  */
-use crate::basic_block::{BasicBlock, Data, DataEnc, SRS};
+use crate::basic_block::{BasicBlock, Data, DataEnc, SetupCache, SRS};
 use crate::graph::Graph;
 use crate::util::{measure_file_size, verify};
 use crate::{onnx, ptau, util, CONFIG, LAYER_SETUP_DIR};
@@ -17,8 +17,10 @@ use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 use rayon::range;
 use sha3::{Digest, Keccak256};
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::Read;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CQArrayType {
@@ -131,6 +133,7 @@ pub fn prove(
   models: Vec<&ArrayD<Data>>,
   graph: &mut Graph,
   timing: &mut TimingTree,
+  setup_cache: &mut SetupCache,
 ) {
   // Encode Data:
   let modelsEnc: Vec<ArrayD<DataEnc>> = util::vec_iter(&models).map(|model| (**model).map(|x| DataEnc::new(srs, x))).collect();
@@ -167,12 +170,16 @@ pub fn prove(
   let mut rng = StdRng::from_seed(buf);
 
   // Prove:
-  let proofs = timed!(timing, "prove", graph.prove(srs, &setups, &models, &inputs, &outputs, &mut rng, timing));
+  let proofs = timed!(
+    timing,
+    "prove",
+    graph.prove(srs, &setups, &models, &inputs, &outputs, &mut rng, &setup_cache, timing)
+  );
   proofs.serialize_uncompressed(File::create(&CONFIG.prover.proof_path).unwrap()).unwrap();
 }
 
 #[cfg(not(feature = "mock_prove"))]
-pub fn setup(srs: &SRS, graph: &Graph, models: &Vec<&ArrayD<Fr>>, timing: &mut TimingTree) {
+pub fn setup(srs: &SRS, graph: &Graph, models: &Vec<&ArrayD<Fr>>, setup_cache: &mut SetupCache, timing: &mut TimingTree) {
   // Setup:
   let models: Vec<ArrayD<Data>> = models
     .par_iter()
@@ -200,7 +207,7 @@ pub fn setup(srs: &SRS, graph: &Graph, models: &Vec<&ArrayD<Fr>>, timing: &mut T
     .collect();
 
   let models_ref: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
-  let setups = timed!(timing, "setup and encode models", graph.setup(srs, &models_ref));
+  let setups = timed!(timing, "setup and encode models", graph.setup(srs, &models_ref, setup_cache));
   // Save files:
   setups.serialize_uncompressed(File::create(&CONFIG.prover.setup_path).unwrap()).unwrap();
   let modelsBytes = bincode::serialize(&models).unwrap();
@@ -212,6 +219,7 @@ pub fn setup(
   srs: &SRS,
   graph: &Graph,
   models: &Vec<&ArrayD<Fr>>,
+  setup_cache: &mut SetupCache,
   timing: &mut TimingTree,
 ) -> (Vec<(Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>)>, Vec<ArrayD<Data>>) {
   // Setup:
@@ -224,7 +232,7 @@ pub fn setup(
     .collect();
 
   let models_ref: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
-  let setups = timed!(timing, "setup and encode models", graph.setup(srs, &models_ref));
+  let setups = timed!(timing, "setup and encode models", graph.setup(srs, &models_ref, setup_cache));
   (setups, models)
 }
 
@@ -257,10 +265,12 @@ pub fn zktorch_kernel() {
     return;
   }
 
+  let mut setup_cache = Arc::new(Mutex::new(HashMap::new()));
+
   #[cfg(not(feature = "mock_prove"))]
-  setup(&srs, &graph, &models, &mut timing);
+  setup(&srs, &graph, &models, &mut setup_cache, &mut timing);
   #[cfg(feature = "mock_prove")]
-  let (setups, models) = setup(&srs, &graph, &models, &mut timing);
+  let (setups, models) = setup(&srs, &graph, &models, &mut setup_cache, &mut timing);
 
   // Load model and setup:
   #[cfg(not(feature = "mock_prove"))]
@@ -277,13 +287,12 @@ pub fn zktorch_kernel() {
     })
     .collect();
   let setups = setups.iter().map(|x| (&x.0, &x.1, &x.2)).collect();
-
   #[cfg(not(feature = "mock_prove"))]
   let models = load_model();
   let models: Vec<&ArrayD<Data>> = models.iter().map(|model| model).collect();
 
   // Prove
-  prove(&srs, &inputs, outputs.unwrap(), setups, models, &mut graph, &mut timing);
+  prove(&srs, &inputs, outputs.unwrap(), setups, models, &mut graph, &mut timing, &mut setup_cache);
 
   // Verify
   #[cfg(not(feature = "mock_prove"))]

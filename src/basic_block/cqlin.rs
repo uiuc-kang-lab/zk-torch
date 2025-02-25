@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SetupCache, SRS};
 use crate::util::{self, acc_to_acc_proof, calc_pow, AccHolder};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
@@ -105,7 +105,7 @@ impl BasicBlock for CQLinBasicBlock {
   }
 
   #[cfg(not(feature = "mock_prove"))]
-  fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+  fn setup(&self, srs: &SRS, model: &ArrayD<Data>, setup_cache: &mut SetupCache) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     let m = model.len();
     let n = model[0].raw.len();
     let N = srs.X2P.len() - 1;
@@ -114,101 +114,125 @@ impl BasicBlock for CQLinBasicBlock {
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let domain_2m = GeneralEvaluationDomain::<Fr>::new(2 * m).unwrap();
 
-    let mut L_H_i_x = srs.X1P[..n].to_vec();
-    util::ifft_in_place(domain_n, &mut L_H_i_x);
-    let mut L_V_i_x_n: Vec<_> = (0..m).into_par_iter().map(|i| srs.X1P[n * i]).collect();
-    util::ifft_in_place(domain_m, &mut L_V_i_x_n);
-    let mut L_V_i_x: Vec<G1Projective> = srs.X1P[..m].into_par_iter().map(|x| (*x).into()).collect();
-    util::ifft_in_place::<G1Projective>(domain_m, &mut L_V_i_x);
+    let mut cache = setup_cache.lock().unwrap();
+    if cache.get(&format!("cqlin_L_V_i_x_n_{}_{}", m, n)).is_none() {
+      let mut L_V_i_x_n: Vec<_> = (0..m).into_par_iter().map(|i| srs.X1P[n * i]).collect();
+      util::ifft_in_place(domain_m, &mut L_V_i_x_n);
+      let L_V_i_x_n = L_V_i_x_n.into_iter().map(|x| x.into()).collect();
+      cache.insert(format!("cqlin_L_V_i_x_n_{}_{}", m, n), CacheValues::G1Vec(L_V_i_x_n));
+    }
+
+    if cache.get(&format!("L_i_x_1_{}", m)).is_none() {
+      let mut L_V_i_x: Vec<G1Projective> = srs.X1P[..m].into_par_iter().map(|x| (*x).into()).collect();
+      util::ifft_in_place::<G1Projective>(domain_m, &mut L_V_i_x);
+      let L_V_i_x = L_V_i_x.into_iter().map(|x| x.into()).collect();
+      cache.insert(format!("L_i_x_1_{}", m), CacheValues::G1Vec(L_V_i_x));
+    }
 
     // Calculate G1 U for R and S
-    let mut temp: Vec<Vec<_>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| srs.X1P[i + n * j]).collect()).collect();
-    temp.par_iter_mut().for_each(|x| util::ifft_in_place(domain_m, x));
-    let mut U: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| temp[j][i]).collect()).collect();
-    U.par_iter_mut().for_each(|x| util::ifft_in_place(domain_n, x));
+    let M_x = if cache.get(&format!("cqlin_R_{:p}_{}", self, n)).is_none() {
+      let mut temp: Vec<Vec<_>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| srs.X1P[i + n * j]).collect()).collect();
+      temp.par_iter_mut().for_each(|x| util::ifft_in_place(domain_m, x));
+      let mut U: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| temp[j][i]).collect()).collect();
+      U.par_iter_mut().for_each(|x| util::ifft_in_place(domain_n, x));
 
-    // Calculate U for mn-degree check
-    let mut temp: Vec<Vec<_>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| srs.X1P[N - m * n + i + n * j]).collect()).collect();
-    temp.par_iter_mut().for_each(|x| util::ifft_in_place(domain_m, x));
-    let mut U_P_R: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| temp[j][i]).collect()).collect();
-    U_P_R.par_iter_mut().for_each(|x| util::ifft_in_place(domain_n, x));
+      // Calculate U for mn-degree check
+      let mut temp: Vec<Vec<_>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| srs.X1P[N - m * n + i + n * j]).collect()).collect();
+      temp.par_iter_mut().for_each(|x| util::ifft_in_place(domain_m, x));
+      let mut U_P_R: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| temp[j][i]).collect()).collect();
+      U_P_R.par_iter_mut().for_each(|x| util::ifft_in_place(domain_n, x));
 
-    // Calculate G2 U for M
-    let mut temp: Vec<Vec<G2Projective>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| srs.X2P[i + n * j]).collect()).collect();
-    temp.par_iter_mut().for_each(|x| util::ifft_in_place(domain_m, x));
-    let mut U2: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| temp[j][i]).collect()).collect();
-    U2.par_iter_mut().for_each(|x| util::ifft_in_place(domain_n, x));
-    let mut V = srs.X1P[m * n - n..m * n].to_vec();
-    util::ifft_in_place(domain_n, &mut V);
-    V.par_iter_mut().for_each(|x| *x *= m_inv);
+      // Calculate G2 U for M
+      let mut temp: Vec<Vec<G2Projective>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| srs.X2P[i + n * j]).collect()).collect();
+      temp.par_iter_mut().for_each(|x| util::ifft_in_place(domain_m, x));
+      let mut U2: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| temp[j][i]).collect()).collect();
+      U2.par_iter_mut().for_each(|x| util::ifft_in_place(domain_n, x));
+      let mut V = srs.X1P[m * n - n..m * n].to_vec();
+      util::ifft_in_place(domain_n, &mut V);
+      V.par_iter_mut().for_each(|x| *x *= m_inv);
 
-    let mut srs_star: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| srs.X1P[n * i..n * i + n].to_vec()).collect();
-    srs_star.par_iter_mut().for_each(|x| util::ifft_in_place(domain_n, x));
-    srs_star = (0..n).into_par_iter().map(|i| (0..m).map(|j| srs_star[m - 1 - j][i]).collect()).collect();
-    srs_star.par_iter_mut().for_each(|x| x.append(&mut vec![G1Projective::zero(); m]));
-    srs_star.par_iter_mut().for_each(|x| util::fft_in_place(domain_2m, x));
+      let mut srs_star: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| srs.X1P[n * i..n * i + n].to_vec()).collect();
+      srs_star.par_iter_mut().for_each(|x| util::ifft_in_place(domain_n, x));
+      srs_star = (0..n).into_par_iter().map(|i| (0..m).map(|j| srs_star[m - 1 - j][i]).collect()).collect();
+      srs_star.par_iter_mut().for_each(|x| x.append(&mut vec![G1Projective::zero(); m]));
+      srs_star.par_iter_mut().for_each(|x| util::fft_in_place(domain_2m, x));
 
-    let S: Vec<Vec<_>> = (0..m)
-      .into_par_iter()
-      .map(|i| (0..n).map(|j| (U[i][j] * domain_m.element(i).inverse().unwrap() - V[j]) * model[i].raw[j]).collect())
-      .collect();
-    let mut S: Vec<_> = S.par_iter().map(|x| x.iter().sum::<G1Projective>()).collect();
+      let S: Vec<Vec<_>> = (0..m)
+        .into_par_iter()
+        .map(|i| (0..n).map(|j| (U[i][j] * domain_m.element(i).inverse().unwrap() - V[j]) * model[i].raw[j]).collect())
+        .collect();
+      let S: Vec<_> = S.par_iter().map(|x| x.iter().sum::<G1Projective>()).collect();
 
-    let R: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| U[i][j] * model[i].raw[j]).collect()).collect();
-    let R: Vec<_> = R.par_iter().map(|x| x.iter().sum::<G1Projective>()).collect();
+      let R: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| U[i][j] * model[i].raw[j]).collect()).collect();
+      let R: Vec<_> = R.par_iter().map(|x| x.iter().sum::<G1Projective>()).collect();
 
-    let P_R: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| U_P_R[i][j] * model[i].raw[j]).collect()).collect();
-    let mut P_R: Vec<_> = P_R.par_iter().map(|x| x.iter().sum::<G1Projective>()).collect();
+      let P_R: Vec<Vec<_>> = (0..m).into_par_iter().map(|i| (0..n).map(|j| U_P_R[i][j] * model[i].raw[j]).collect()).collect();
+      let P_R: Vec<_> = P_R.par_iter().map(|x| x.iter().sum::<G1Projective>()).collect();
 
-    // Calculate C for Q
-    let mut C: Vec<Vec<_>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| model[j].raw[i]).collect()).collect();
-    C.par_iter_mut().for_each(|x| domain_m.ifft_in_place(x));
+      // Calculate C for Q
+      let mut C: Vec<Vec<_>> = (0..n).into_par_iter().map(|i| (0..m).map(|j| model[j].raw[i]).collect()).collect();
+      C.par_iter_mut().for_each(|x| domain_m.ifft_in_place(x));
 
-    // Calculate Q. The C above corresponds to the C in the cqlin paper
-    C.par_iter_mut().for_each(|x| x.append(&mut vec![Fr::zero(); m]));
-    C.par_iter_mut().for_each(|x| domain_2m.fft_in_place(x));
-    let temp: Vec<Vec<_>> = (0..2 * m).into_par_iter().map(|i| (0..n).map(|j| srs_star[j][i] * C[j][i]).collect()).collect();
-    let mut temp: Vec<_> = temp.par_iter().map(|x| x.iter().sum::<G1Projective>()).collect();
-    util::ifft_in_place(domain_2m, &mut temp);
-    let mut temp = temp[m..].to_vec();
-    util::fft_in_place(domain_m, &mut temp);
-    let mut Q: Vec<_> = (0..m).into_par_iter().map(|i| temp[i] * domain_m.element(i) * m_inv).collect();
-    let M_x = (0..m).into_par_iter().map(|i| (0..n).map(|j| U2[i][j] * model[i].raw[j]).sum::<G2Projective>()).sum::<G2Projective>(); // TODO: Change to msm
+      // Calculate Q. The C above corresponds to the C in the cqlin paper
+      C.par_iter_mut().for_each(|x| x.append(&mut vec![Fr::zero(); m]));
+      C.par_iter_mut().for_each(|x| domain_2m.fft_in_place(x));
+      let temp: Vec<Vec<_>> = (0..2 * m).into_par_iter().map(|i| (0..n).map(|j| srs_star[j][i] * C[j][i]).collect()).collect();
+      let mut temp: Vec<_> = temp.par_iter().map(|x| x.iter().sum::<G1Projective>()).collect();
+      util::ifft_in_place(domain_2m, &mut temp);
+      let mut temp = temp[m..].to_vec();
+      util::fft_in_place(domain_m, &mut temp);
+      let Q: Vec<_> = (0..m).into_par_iter().map(|i| temp[i] * domain_m.element(i) * m_inv).collect();
+      let M_x = (0..m).into_par_iter().map(|i| (0..n).map(|j| U2[i][j] * model[i].raw[j]).sum::<G2Projective>()).sum::<G2Projective>();
 
-    let mut setup = R;
-    setup.append(&mut Q);
-    setup.append(&mut S);
-    setup.append(&mut P_R);
-    setup.append(&mut L_V_i_x_n);
-    setup.append(&mut L_V_i_x);
-    setup.append(&mut L_H_i_x);
-    (setup, vec![M_x.into()], Vec::new())
+      let R = R.into_iter().map(|x| x.into()).collect();
+      let Q = Q.into_iter().map(|x| x.into()).collect();
+      let S = S.into_iter().map(|x| x.into()).collect();
+      let P_R = P_R.into_iter().map(|x| x.into()).collect();
+      cache.insert(format!("cqlin_R_{:p}_{}", self, n), CacheValues::G1Vec(R));
+      cache.insert(format!("cqlin_Q_{:p}_{}", self, n), CacheValues::G1Vec(Q));
+      cache.insert(format!("cqlin_S_{:p}_{}", self, n), CacheValues::G1Vec(S));
+      cache.insert(format!("cqlin_P_R_{:p}_{}", self, n), CacheValues::G1Vec(P_R));
+      cache.insert(format!("cqlin_M_x_{:p}", self), CacheValues::G2(M_x.into()));
+      M_x
+    } else {
+      let CacheValues::G2(M_x) = cache.get(&format!("cqlin_M_x_{:p}", self)).unwrap() else {
+        panic!("Cache type error")
+      };
+      G2Projective::from(*M_x)
+    };
+
+    (vec![], vec![M_x.into()], Vec::new())
   }
 
   #[cfg(feature = "mock_prove")]
-  fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+  fn setup(&self, srs: &SRS, model: &ArrayD<Data>, setup_cache: &mut SetupCache) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     eprintln!("\x1b[93mWARNING\x1b[0m: MockSetup is enabled. This is only for testing purposes.");
     let m = model.len();
     let n = model[0].raw.len();
 
-    let mut L_H_i_x = srs.X1P[..n].to_vec();
-    let mut L_V_i_x_n: Vec<_> = srs.X1P[..m].into_par_iter().map(|x| (*x).into()).collect();
-    let mut L_V_i_x: Vec<G1Projective> = srs.X1P[..m].into_par_iter().map(|x| (*x).into()).collect();
-    let R: Vec<_> = L_V_i_x.iter().map(|x| *x).collect();
-    let mut Q: Vec<_> = L_V_i_x.iter().map(|x| *x).collect();
-    let mut S: Vec<_> = L_V_i_x.iter().map(|x| *x).collect();
-    let mut P_R: Vec<_> = L_V_i_x.iter().map(|x| *x).collect();
-
     let M_x = srs.X2P[0].clone();
 
-    let mut setup = R;
-    setup.append(&mut Q);
-    setup.append(&mut S);
-    setup.append(&mut P_R);
-    setup.append(&mut L_V_i_x_n);
-    setup.append(&mut L_V_i_x);
-    setup.append(&mut L_H_i_x);
-    (setup, vec![M_x.into()], Vec::new())
+    let mut setup_cache = setup_cache.lock().unwrap();
+    let _ = setup_cache.entry(format!("cqlin_R_{:p}_{}", self, n)).or_insert_with(|| CacheValues::G1Vec(srs.X1A[..m].to_vec())) else {
+      panic!("Cache type error")
+    };
+    let _ = setup_cache.entry(format!("cqlin_Q_{:p}_{}", self, n)).or_insert_with(|| CacheValues::G1Vec(srs.X1A[..m].to_vec())) else {
+      panic!("Cache type error")
+    };
+    let _ = setup_cache.entry(format!("cqlin_S_{:p}_{}", self, n)).or_insert_with(|| CacheValues::G1Vec(srs.X1A[..m].to_vec())) else {
+      panic!("Cache type error")
+    };
+    let _ = setup_cache.entry(format!("cqlin_P_R_{:p}_{}", self, n)).or_insert_with(|| CacheValues::G1Vec(srs.X1A[..m].to_vec())) else {
+      panic!("Cache type error")
+    };
+    let _ = setup_cache.entry(format!("cqlin_L_V_i_x_n_{}_{}", m, n)).or_insert_with(|| CacheValues::G1Vec(srs.X1A[..m].to_vec())) else {
+      panic!("Cache type error")
+    };
+    let _ = setup_cache.entry(format!("cqlin_L_V_i_x_{}", m)).or_insert_with(|| CacheValues::G1Vec(srs.X1A[..m].to_vec())) else {
+      panic!("Cache type error")
+    };
+
+    (vec![], vec![M_x.into()], Vec::new())
   }
 
   fn prove(
@@ -219,6 +243,7 @@ impl BasicBlock for CQLinBasicBlock {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
+    setup_cache: &SetupCache,
     cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let l = inputs[0].len();
@@ -276,12 +301,37 @@ impl BasicBlock for CQLinBasicBlock {
     let mut flat_C = Data::new(srs, &flat_C);
     flat_C.r = flat_C_r;
 
-    let R = &setup.0[..m];
-    let Q = &setup.0[m..2 * m];
-    let S = &setup.0[2 * m..3 * m];
-    let P_R = &setup.0[3 * m..4 * m];
-    let L_V_i_x_n = &setup.0[4 * m..5 * m];
-    let L_V_i_x = &setup.0[5 * m..6 * m];
+    let setup_cache = setup_cache.lock().unwrap();
+    let R = if let Some(CacheValues::G1Vec(vec)) = { setup_cache.get(&format!("cqlin_R_{:p}_{}", self, n)) } {
+      vec
+    } else {
+      panic!("Cache miss for R")
+    };
+    let Q = if let Some(CacheValues::G1Vec(vec)) = { setup_cache.get(&format!("cqlin_Q_{:p}_{}", self, n)) } {
+      vec
+    } else {
+      panic!("Cache miss for Q")
+    };
+    let S = if let Some(CacheValues::G1Vec(vec)) = { setup_cache.get(&format!("cqlin_S_{:p}_{}", self, n)) } {
+      vec
+    } else {
+      panic!("Cache miss for S")
+    };
+    let P_R = if let Some(CacheValues::G1Vec(vec)) = { setup_cache.get(&format!("cqlin_P_R_{:p}_{}", self, n)) } {
+      vec
+    } else {
+      panic!("Cache miss for P_R")
+    };
+    let L_V_i_x_n = if let Some(CacheValues::G1Vec(vec)) = { setup_cache.get(&format!("cqlin_L_V_i_x_n_{}_{}", m, n)) } {
+      vec
+    } else {
+      panic!("Cache miss for L_V_i_x_n")
+    };
+    let L_V_i_x = if let Some(CacheValues::G1Vec(vec)) = { setup_cache.get(&format!("L_i_x_1_{}", m)) } {
+      vec
+    } else {
+      panic!("Cache miss for L_V_i_x")
+    };
 
     let R_x = util::msm::<G1Projective>(R, &flat_A.raw).into();
     let Q_x = util::msm::<G1Projective>(Q, &flat_A.raw).into();

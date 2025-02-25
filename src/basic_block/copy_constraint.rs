@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{BasicBlock, Data, DataEnc, SRS};
+use super::{BasicBlock, Data, DataEnc, SetupCache, SRS};
 use crate::{
   basic_block::{PairingCheck, ProveVerifyCache},
   util::{self, calc_pow},
@@ -175,7 +175,12 @@ impl BasicBlock for CopyConstraintBasicBlock {
   }
 
   #[cfg(not(feature = "mock_prove"))]
-  fn setup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+  fn setup(
+    &self,
+    srs: &SRS,
+    _model: &ArrayD<Data>,
+    _setup_cache: &mut SetupCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     let output_dim = self.permutation.dim();
     let last_inp_dim = self.input_dim[self.input_dim.ndim() - 1];
     let last_outp_dim = output_dim[output_dim.ndim() - 1];
@@ -279,7 +284,12 @@ impl BasicBlock for CopyConstraintBasicBlock {
   }
 
   #[cfg(feature = "mock_prove")]
-  fn setup(&self, srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+  fn setup(
+    &self,
+    srs: &SRS,
+    _model: &ArrayD<Data>,
+    _setup_cache: &mut SetupCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     eprintln!("\x1b[93mWARNING\x1b[0m: MockSetup is enabled. This is only for testing purposes.");
     let output_dim = self.permutation.dim().as_array_view().to_vec();
     let input_dim = self.input_dim.as_array_view().to_vec();
@@ -310,6 +320,7 @@ impl BasicBlock for CopyConstraintBasicBlock {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
+    _setup_cache: &SetupCache,
     _cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let input = inputs[0];

@@ -90,12 +90,15 @@ pub enum CacheValues {
   RLCRandom(Fr),
   Data(Data),
   G2(G2Affine),
+  G1Vec(Vec<G1Affine>),
 }
 
 // The cache is wrapped in Arc<Mutex<>> to allow multiple threads within the same role (either prover or verifier) to access it.
 // Arc (Atomic Reference Counting) enables safe sharing of the cache between threads,
 // while Mutex ensures that only one thread can write to the cache at a time, preventing race conditions.
 // Note: Each prover and verifier maintains its own separate cache. There is no cache sharing between the prover and verifier.
+pub type SetupCache = Arc<Mutex<HashMap<String, CacheValues>>>;
+
 pub type ProveVerifyCache = Arc<Mutex<HashMap<String, CacheValues>>>;
 
 pub type PairingCheck = Vec<(G1Affine, G2Affine)>;
@@ -166,7 +169,12 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
 
   // The subsequent setup/prove/verify functions run on encoded Data objects (vector commitments).
   // This reduces computation because the Data objects can be encoded once at the beginning and then reused for these functions.
-  fn setup(&self, _srs: &SRS, _model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+  fn setup(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<Data>,
+    _setup_cache: &mut SetupCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
     #[cfg(feature = "mock_prove")]
     eprintln!("\x1b[93mWARNING\x1b[0m: MockSetup is enabled. This is only for testing purposes.");
     (Vec::new(), Vec::new(), Vec::new())
@@ -180,6 +188,7 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     _rng: &mut StdRng,
+    _setup_cache: &SetupCache,
     _cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     (Vec::new(), Vec::new(), Vec::new())

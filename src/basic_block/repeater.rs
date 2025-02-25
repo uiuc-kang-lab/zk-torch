@@ -1,4 +1,4 @@
-use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SetupCache, SRS};
 use crate::{ndarr_azip, util};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::univariate::DensePolynomial;
@@ -131,8 +131,8 @@ impl BasicBlock for RepeaterBasicBlock {
     combineArr(&temp)
   }
 
-  fn setup(&self, srs: &SRS, model: &ArrayD<Data>) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
-    self.basic_block.setup(srs, model)
+  fn setup(&self, srs: &SRS, model: &ArrayD<Data>, setup_cache: &mut SetupCache) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<DensePolynomial<Fr>>) {
+    self.basic_block.setup(srs, model, setup_cache)
   }
 
   fn prove(
@@ -143,6 +143,7 @@ impl BasicBlock for RepeaterBasicBlock {
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
     rng: &mut StdRng,
+    setup_cache: &SetupCache,
     cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
@@ -151,7 +152,7 @@ impl BasicBlock for RepeaterBasicBlock {
       let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
       let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
       let mut rng = rng.clone();
-      let tmp = self.basic_block.prove(srs, setup, model, &localInputs, &localOutputs, &mut rng, cache.clone());
+      let tmp = self.basic_block.prove(srs, setup, model, &localInputs, &localOutputs, &mut rng, setup_cache, cache.clone());
       *x = tmp;
     });
     let proof: (Vec<_>, Vec<_>, Vec<_>) = multiunzip(empty.into_iter());
