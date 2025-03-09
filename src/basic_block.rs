@@ -196,4 +196,57 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
   ) -> Vec<PairingCheck> {
     vec![]
   }
+
+  // This function is the special case of acc_prove for the first block in the computation
+  fn acc_init(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<Data>,
+    _inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    _proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    (Vec::new(), Vec::new(), Vec::new())
+  }
+
+  // This function performs folding for the rest of the blocks in the computation
+  fn acc_prove(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<Data>,
+    _inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    _acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    _proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    (Vec::new(), Vec::new(), Vec::new())
+  }
+
+  // This function cleans the blinding terms in accumulators for the verifier to do acc_verify
+  fn acc_clean(&self, _acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) {
+    (Vec::new(), Vec::new(), Vec::new())
+  }
+
+  fn acc_verify(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<DataEnc>,
+    _inputs: &Vec<&ArrayD<DataEnc>>,
+    _outputs: &Vec<&ArrayD<DataEnc>>,
+    _prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    _acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> Option<bool> {
+    None
+  }
+
+  fn acc_decide(&self, _srs: &SRS, _acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {
+    vec![]
+  }
 }
