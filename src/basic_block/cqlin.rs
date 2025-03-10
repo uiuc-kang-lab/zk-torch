@@ -788,7 +788,6 @@ impl BasicBlock for CQLinBasicBlock {
     let err_5: PairingCheck = vec![(-err_5.0[0], srs.X2A[0]), (err_5.0[1], srs.X2A[1]), (err_5.0[2], srs.Y2A)];
     let err_6: PairingCheck = vec![(-err_6.0[0], srs.X2A[0]), (err_6.0[1], srs.X2A[n]), (err_6.0[2], srs.Y2A)];
 
-    // M_x_1 * r[2] + srs.Y1P * r[2] * r[8] + A_x * r[8],
     let mut acc_1: PairingCheck = vec![
       (acc_A, acc_M),
       ((-acc_Q * acc_mu).into(), (srs.X2A[m * n] - srs.X2A[0]).into()),
