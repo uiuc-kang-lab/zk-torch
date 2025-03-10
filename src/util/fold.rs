@@ -1,16 +1,15 @@
+use crate::basic_block::{BasicBlock, CQ2BasicBlock, CQLinBasicBlock};
 use ark_bn254::Fr;
 use ark_std::Zero;
 
-// TODO
-pub fn get_foldable_bb_info(bb_info: String) -> String {
-  if bb_info.contains("CQLinBasicBlock") {
-    return "foldable".to_string();
-  } else if bb_info.contains("CQBasicBlock") {
-    return "foldable".to_string();
-  } else if bb_info.contains("CQ2BasicBlock") {
-    return "foldable".to_string();
+pub fn get_foldable_bb_info(bb: &Box<dyn BasicBlock>) -> String {
+  if bb.is::<CQLinBasicBlock>() {
+    let bb = bb.downcast_ref::<CQLinBasicBlock>().unwrap();
+    return format!("CQLin-{:?}", bb.setup.shape());
+  } else if bb.is::<CQ2BasicBlock>() {
+    return "CQ2".to_string();
   } else {
-    return bb_info;
+    return format!("{:?}", bb);
   }
 }
 

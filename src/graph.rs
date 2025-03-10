@@ -281,7 +281,7 @@ impl Graph {
           }
         })
         .collect();
-      let mut proof = timed!(
+      let proof = timed!(
         timing,
         &prove_id,
         self.basic_blocks[n.basic_block].prove(
@@ -296,7 +296,8 @@ impl Graph {
       );
 
       // check if basicblock is in prev_acc_map
-      let new_acc_proof = if let Some(prev_acc) = prev_acc_map.get(&n.basic_block) {
+      let bb_index_for_folding = self.foldable_bb_map.get(&n.basic_block).unwrap();
+      let new_acc_proof = if let Some(prev_acc) = prev_acc_map.get(bb_index_for_folding) {
         let prev_acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>) =
           (&acc_proofs[*prev_acc].0, &acc_proofs[*prev_acc].1, &acc_proofs[*prev_acc].2);
         self.basic_blocks[n.basic_block].acc_prove(
@@ -330,7 +331,7 @@ impl Graph {
       proofs.push(proof);
       acc_proofs.push(new_acc_proof);
       acc_proofs_for_verifier.push(new_acc_proof_v);
-      prev_acc_map.insert(n.basic_block, acc_proofs.len() - 1);
+      prev_acc_map.insert(*bb_index_for_folding, acc_proofs.len() - 1);
 
       let mut bytes = Vec::new();
       proofs[proofs.len() - 1].serialize_uncompressed(&mut bytes).unwrap();
@@ -450,11 +451,12 @@ impl Graph {
           })
           .collect();
 
+        let bb_index_for_folding = self.foldable_bb_map.get(&n.basic_block).unwrap();
         let mut prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>) = (&vec![], &vec![], &vec![]);
-        if let Some(prev_acc) = prev_acc_map.get(&n.basic_block) {
+        if let Some(prev_acc) = prev_acc_map.get(bb_index_for_folding) {
           prev_acc_proof = (&acc_proofs[*prev_acc].0, &acc_proofs[*prev_acc].1, &acc_proofs[*prev_acc].2);
         }
-        prev_acc_map.insert(n.basic_block, i);
+        prev_acc_map.insert(*bb_index_for_folding, i);
 
         let acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>) = (&acc_proofs[i].0, &acc_proofs[i].1, &acc_proofs[i].2);
         let acc_verification = self.basic_blocks[n.basic_block].acc_verify(

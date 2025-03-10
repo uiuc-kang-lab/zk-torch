@@ -1,7 +1,7 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::*;
-use crate::util;
+use crate::util::{self, get_foldable_bb_info};
 use crate::CONFIG;
 use ark_bn254::Fr;
 use ark_std::Zero;
@@ -423,10 +423,13 @@ pub fn load_file(filename: &str) -> (Graph, Vec<(ArrayD<Fr>, DatumType)>) {
 
   #[cfg(feature = "fold")]
   {
+    let mut bb_to_index = HashMap::new();
     let mut foldable_bb_map = HashMap::new();
-    //for (i, node) in graph.basic_blocks.iter().enumerate() {
-    //  todo!();
-    //}
+    for (i, b) in graph.basic_blocks.iter().enumerate() {
+      let bb_info_for_folding = get_foldable_bb_info(&b);
+      bb_to_index.entry(bb_info_for_folding.clone()).or_insert(i);
+      foldable_bb_map.insert(i, bb_to_index[&bb_info_for_folding]);
+    }
     graph.foldable_bb_map = foldable_bb_map;
   }
 

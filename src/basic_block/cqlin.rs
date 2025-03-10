@@ -419,11 +419,11 @@ impl BasicBlock for CQLinBasicBlock {
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    println!("acc fold !!!!!!!!!!!!!!!");
     let n = model[0].raw.len();
-    let N = srs.X2P.len() - 1;
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
 
-    let [R_x, Q_x, A_x, S_x, P_x, P_R_x, pi, pi_1, z, C1, C2, C3, C4, C5, C6, flat_A, flat_C, part_C1, M_x_1, A_x_1] = proof.0[..] else {
+    let [R_x, Q_x, A_x, _S_x, _P_x, _P_R_x, pi, pi_1, z, _C1, _C2, _C3, _C4, C5, C6, flat_A, _flat_C, part_C1, M_x_1, A_x_1] = proof.0[..] else {
       panic!("Wrong proof format")
     };
 
@@ -440,7 +440,7 @@ impl BasicBlock for CQLinBasicBlock {
       acc_errs: Vec::new(),
     };
 
-    let [acc_R, acc_Q, acc_A, acc_S, acc_P, acc_P_R, acc_pi, acc_pi_1, acc_z, acc_C1, acc_C2, acc_C3, acc_C4, acc_C5, acc_C6, acc_flat_A, acc_flat_C, acc_part_C1, acc_M_1, acc_A_1] =
+    let [acc_R, acc_Q, acc_A, _acc_S, _acc_P, _acc_P_R, acc_pi, acc_pi_1, acc_z, _acc_C1, _acc_C2, _acc_C3, _acc_C4, acc_C5, acc_C6, acc_flat_A, _acc_flat_C, acc_part_C1, acc_M_1, acc_A_1] =
       acc_holder.acc_g1[..]
     else {
       panic!("Wrong proof format")
@@ -462,7 +462,7 @@ impl BasicBlock for CQLinBasicBlock {
         acc_Q + Q_x * acc_mu,
         acc_R + R_x * acc_mu,
         acc_part_C1
-          + C1 * acc_mu
+          + part_C1 * acc_mu
           + acc_M_1 * cqlin_mask_A
           + M_x_1 * acc_mask_A
           + acc_A_1 * cqlin_mask_M
@@ -512,6 +512,10 @@ impl BasicBlock for CQLinBasicBlock {
 
     // Fiat-Shamir
     let mut bytes = Vec::new();
+    acc_holder.acc_g1[..acc_holder.acc_g1.len() - 11].serialize_uncompressed(&mut bytes).unwrap();
+    acc_holder.acc_g1[acc_holder.acc_g1.len() - 5..acc_holder.acc_g1.len() - 3].serialize_uncompressed(&mut bytes).unwrap();
+    acc_holder.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
+    acc_holder.acc_fr[..acc_holder.acc_fr.len() - 2].serialize_uncompressed(&mut bytes).unwrap();
     proof.0[..proof.0.len() - 5].serialize_uncompressed(&mut bytes).unwrap();
     proof.1.serialize_uncompressed(&mut bytes).unwrap();
     proof.2[..proof.2.len() - 2].serialize_uncompressed(&mut bytes).unwrap();
@@ -525,7 +529,6 @@ impl BasicBlock for CQLinBasicBlock {
 
     // Random linear combination for folding (i.e., acc + cqlin * acc_gamma)
     new_acc_holder.acc_g1 = proof.0.iter().enumerate().map(|(i, x)| (*x * acc_gamma) + acc_proof.0[i]).collect();
-    new_acc_holder.acc_g1[9] = acc_C1 * acc_mu + acc_M_1 * acc_mask_A + srs.Y1P * acc_mask_A * acc_mask_M + acc_A_1 * acc_mask_M;
     new_acc_holder.acc_g2 = vec![acc_M + M_x_2 * acc_gamma];
     new_acc_holder.acc_fr = proof.2.iter().enumerate().map(|(i, x)| *x * acc_gamma + acc_proof.2[i]).collect();
     new_acc_holder.mu = acc_mu + acc_gamma;
@@ -580,10 +583,17 @@ impl BasicBlock for CQLinBasicBlock {
     let n = self.setup.shape()[1];
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
     let mut acc_holder = acc_proof_to_cqlin_acc(acc_proof, log_n, true);
+    // correct the blinding factor C1
+    acc_holder.acc_g1[9] = acc_holder.acc_g1[acc_holder.acc_g1.len() - 3] * acc_holder.mu
+      + acc_holder.acc_g1[acc_holder.acc_g1.len() - 2] * acc_holder.acc_fr[log_n + 1]
+      + srs.Y1P * acc_holder.acc_fr[log_n + 1] * acc_holder.acc_fr[log_n + 2]
+      + acc_holder.acc_g1[acc_holder.acc_g1.len() - 1] * acc_holder.acc_fr[log_n + 2];
+    // remove blinding terms from acc proof for the verifier
     acc_holder.acc_g1 = acc_holder.acc_g1[..acc_holder.acc_g1.len() - 3].to_vec();
     acc_holder.acc_fr = acc_holder.acc_fr[..acc_holder.acc_fr.len() - 2].to_vec();
     let acc_proof = acc_to_acc_proof(acc_holder);
 
+    // remove blinding terms from bb proof for the verifier
     let cqlin_proof = (
       proof.0[..proof.0.len() - 5].to_vec(),
       proof.1.to_vec(),
@@ -606,7 +616,7 @@ impl BasicBlock for CQLinBasicBlock {
 
   fn acc_verify(
     &self,
-    srs: &SRS,
+    _srs: &SRS,
     model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
@@ -617,10 +627,8 @@ impl BasicBlock for CQLinBasicBlock {
     cache: ProveVerifyCache,
   ) -> Option<bool> {
     let l = inputs[0].len();
-    let m = model.len();
     let n = model[0].len;
-    let N = srs.X2P.len() - 1;
-    let log_n = n.next_power_of_two().trailing_zeros() as usize;    
+    let log_n = n.next_power_of_two().trailing_zeros() as usize;
 
     let [R_x, Q_x, A_x, S_x, P_x, P_R_x, pi, pi_1, z, C1, C2, C3, C4, C5, C6] = proof.0[..] else {
       panic!("Wrong proof format")
@@ -645,7 +653,8 @@ impl BasicBlock for CQLinBasicBlock {
       result &= proof.2[i].pow(&[2]) == proof.2[i + 1];
     }
 
-    if prev_acc_holder.mu.is_zero() && acc_holder.mu.is_one() { // skip verifying RLC because no RLC was done in acc_init.
+    if prev_acc_holder.mu.is_zero() && acc_holder.mu.is_one() {
+      // skip verifying RLC because no RLC was done in acc_init.
       // Fiat-shamir
       let mut bytes = Vec::new();
       proof.0.serialize_uncompressed(&mut bytes).unwrap();
@@ -678,6 +687,10 @@ impl BasicBlock for CQLinBasicBlock {
 
     // Fiat-Shamir
     let mut bytes = Vec::new();
+    prev_acc_holder.acc_g1[..prev_acc_holder.acc_g1.len() - 8].serialize_uncompressed(&mut bytes).unwrap();
+    prev_acc_holder.acc_g1[prev_acc_holder.acc_g1.len() - 2..].serialize_uncompressed(&mut bytes).unwrap();
+    prev_acc_holder.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
+    prev_acc_holder.acc_fr.serialize_uncompressed(&mut bytes).unwrap();
     proof.0.serialize_uncompressed(&mut bytes).unwrap();
     proof.1.serialize_uncompressed(&mut bytes).unwrap();
     proof.2.serialize_uncompressed(&mut bytes).unwrap();
@@ -689,27 +702,58 @@ impl BasicBlock for CQLinBasicBlock {
     util::add_randomness(rng, bytes);
     let acc_gamma = Fr::rand(rng);
 
-    let cqlin_proof_g1 = [R_x, Q_x, A_x, S_x, P_x, P_R_x, pi, pi_1, z, C1, C2, C3, C4, C5, C6, flat_A_g1.into(), flat_C_g1.into()];
+    let cqlin_proof_g1 = [
+      R_x,
+      Q_x,
+      A_x,
+      S_x,
+      P_x,
+      P_R_x,
+      pi,
+      pi_1,
+      z,
+      C1,
+      C2,
+      C3,
+      C4,
+      C5,
+      C6,
+      flat_A_g1.into(),
+      flat_C_g1.into(),
+    ];
     cqlin_proof_g1.iter().zip(prev_acc_holder.acc_g1.iter()).enumerate().for_each(|(i, (x, y))| {
       if i >= 9 && i < 15 {
         return; // No need to verify RLC for blinding factors
       }
       let z = *y + *x * acc_gamma;
       let z: G1Affine = z.into();
-      let result = z == acc_holder.acc_g1[i];
-      assert!(result);
+      result &= z == acc_holder.acc_g1[i];
     });
     assert_eq!(prev_acc_holder.acc_g2[0] + M_x * acc_gamma, acc_holder.acc_g2[0]);
     proof.2.iter().zip(prev_acc_holder.acc_fr.iter()).enumerate().for_each(|(i, (x, y))| {
       let z = *y + *x * acc_gamma;
-      let result = z == acc_holder.acc_fr[i];
-      assert!(result);
+      result &= z == acc_holder.acc_fr[i];
     });
     assert_eq!(prev_acc_holder.mu + acc_gamma, acc_holder.mu);
 
     // TODO: Check RLC for errors
+    for i in 0..log_n + 3 {
+      if i < 3 {
+        acc_holder.errs[i].0[acc_holder.errs[i].0.len() - 3..]
+      .iter()
+      .zip(prev_acc_holder.acc_errs[i].0[prev_acc_holder.acc_errs[i].0.len() - 3..].iter())
+      .enumerate()
+      .for_each(|(j, (x, y))| {
+        let z = *y + *x * acc_gamma;
+        result &= z == acc_holder.acc_errs[i].0[acc_holder.acc_errs[i].0.len() - 3 + j];
+      });
+      } else {
+        let z = prev_acc_holder.acc_errs[i].2[0] + acc_holder.errs[i].2[0] * acc_gamma;
+        result &= z == acc_holder.acc_errs[i].2[0];
+      }
+    }
 
-    Some(true)
+    Some(result)
   }
 
   fn acc_decide(&self, srs: &SRS, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {

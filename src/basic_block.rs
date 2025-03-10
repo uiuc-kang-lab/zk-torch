@@ -14,6 +14,7 @@ pub use cq::CQBasicBlock;
 pub use cq2::CQ2BasicBlock;
 pub use cqlin::CQLinBasicBlock;
 pub use div::{DivConstBasicBlock, DivConstProofBasicBlock, DivScalarBasicBlock, ModConstBasicBlock};
+use downcast_rs::impl_downcast;
 pub use eq::{ElementwiseEqBasicBlock, EqBasicBlock};
 pub use id::IdBasicBlock;
 pub use less::LessBasicBlock;
@@ -147,7 +148,7 @@ impl DataEnc {
   }
 }
 
-pub trait BasicBlock: std::fmt::Debug + Send + Sync {
+pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
   fn genModel(&self) -> ArrayD<Fr> {
     ArrayD::zeros(IxDyn(&[0]))
   }
@@ -262,3 +263,5 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
     vec![]
   }
 }
+
+impl_downcast!(BasicBlock);
