@@ -1,4 +1,18 @@
 use ark_bn254::Fr;
+use ark_std::Zero;
+
+// TODO
+pub fn get_foldable_bb_info(bb_info: String) -> String {
+  if bb_info.contains("CQLinBasicBlock") {
+    return "foldable".to_string();
+  } else if bb_info.contains("CQBasicBlock") {
+    return "foldable".to_string();
+  } else if bb_info.contains("CQ2BasicBlock") {
+    return "foldable".to_string();
+  } else {
+    return bb_info;
+  }
+}
 
 pub struct AccHolder<P: Clone, Q: Clone> {
   pub acc_g1: Vec<P>,
@@ -27,27 +41,25 @@ pub fn acc_to_acc_proof<P: Clone, Q: Clone>(acc: AccHolder<P, Q>) -> (Vec<P>, Ve
   (g1, g2, fr)
 }
 
-// TODO: check the number of errs and acc_errs
 pub fn acc_proof_to_cqlin_acc<P: Clone, Q: Clone>(acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>), log_n: usize, is_prover: bool) -> AccHolder<P, Q> {
+  if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
+    return AccHolder {
+      acc_g1: vec![],
+      acc_g2: vec![],
+      acc_fr: vec![],
+      mu: Fr::zero(),
+      errs: vec![],
+      acc_errs: vec![],
+    };
+  }
+
   let acc_g1_num = if is_prover { 20 } else { 17 };
   let acc_fr_num = if is_prover { log_n + 3 } else { log_n + 1 };
-  let acc_err_g2_num = (acc_proof.1.len() - 1) / 2;
+  let acc_err_g2_num = acc_proof.1.len() - 3;
 
-  let err1: (Vec<P>, Vec<Q>, Vec<Fr>) = (
-    acc_proof.0[acc_g1_num..(acc_g1_num + acc_err_g2_num)].to_vec(),
-    acc_proof.1[1..(acc_err_g2_num + 1)].to_vec(),
-    vec![],
-  );
-  let err5: (Vec<P>, Vec<Q>, Vec<Fr>) = (
-    acc_proof.0[(acc_g1_num + acc_err_g2_num)..(acc_g1_num + acc_err_g2_num + 3)].to_vec(),
-    vec![],
-    vec![],
-  );
-  let err6: (Vec<P>, Vec<Q>, Vec<Fr>) = (
-    acc_proof.0[(acc_g1_num + acc_err_g2_num + 3)..(acc_g1_num + acc_err_g2_num + 6)].to_vec(),
-    vec![],
-    vec![],
-  );
+  let err1: (Vec<P>, Vec<Q>, Vec<Fr>) = (acc_proof.0[acc_g1_num..(acc_g1_num + 5)].to_vec(), acc_proof.1[1..3].to_vec(), vec![]);
+  let err5: (Vec<P>, Vec<Q>, Vec<Fr>) = (acc_proof.0[(acc_g1_num + 5)..(acc_g1_num + 8)].to_vec(), vec![], vec![]);
+  let err6: (Vec<P>, Vec<Q>, Vec<Fr>) = (acc_proof.0[(acc_g1_num + 8)..(acc_g1_num + 11)].to_vec(), vec![], vec![]);
 
   let mut errs = vec![err1, err5, err6];
   for i in 0..log_n {
@@ -56,17 +68,17 @@ pub fn acc_proof_to_cqlin_acc<P: Clone, Q: Clone>(acc_proof: (&Vec<P>, &Vec<Q>, 
   }
 
   let acc_err1: (Vec<P>, Vec<Q>, Vec<Fr>) = (
-    acc_proof.0[(acc_g1_num + acc_err_g2_num + 6)..(acc_g1_num + acc_err_g2_num * 2 + 6)].to_vec(),
-    acc_proof.1[(acc_err_g2_num + 1)..(acc_err_g2_num * 2 + 1)].to_vec(),
+    acc_proof.0[(acc_g1_num + 11)..(acc_g1_num + 14 + acc_err_g2_num)].to_vec(),
+    acc_proof.1[3..(3 + acc_err_g2_num)].to_vec(),
     vec![],
   );
   let acc_err5: (Vec<P>, Vec<Q>, Vec<Fr>) = (
-    acc_proof.0[(acc_g1_num + acc_err_g2_num * 2 + 6)..(acc_g1_num + acc_err_g2_num * 2 + 9)].to_vec(),
+    acc_proof.0[(acc_g1_num + 14 + acc_err_g2_num)..(acc_g1_num + 17 + acc_err_g2_num)].to_vec(),
     vec![],
     vec![],
   );
   let acc_err6: (Vec<P>, Vec<Q>, Vec<Fr>) = (
-    acc_proof.0[(acc_g1_num + acc_err_g2_num * 2 + 9)..(acc_g1_num + acc_err_g2_num * 2 + 12)].to_vec(),
+    acc_proof.0[(acc_g1_num + 17 + acc_err_g2_num)..(acc_g1_num + 20 + acc_err_g2_num)].to_vec(),
     vec![],
     vec![],
   );

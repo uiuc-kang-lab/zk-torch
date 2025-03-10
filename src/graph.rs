@@ -45,6 +45,8 @@ pub struct Graph {
   pub layer_names: Vec<String>,
   pub nodes: Vec<Node>,
   pub outputs: Vec<(i32, usize)>,
+  #[cfg(feature = "fold")]
+  pub foldable_bb_map: HashMap<usize, usize>,
 }
 
 impl Graph {
@@ -279,7 +281,7 @@ impl Graph {
           }
         })
         .collect();
-      let proof = timed!(
+      let mut proof = timed!(
         timing,
         &prove_id,
         self.basic_blocks[n.basic_block].prove(
@@ -294,10 +296,10 @@ impl Graph {
       );
 
       // check if basicblock is in prev_acc_map
-      if let Some(prev_acc) = prev_acc_map.get(&n.basic_block) {
+      let new_acc_proof = if let Some(prev_acc) = prev_acc_map.get(&n.basic_block) {
         let prev_acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>) =
           (&acc_proofs[*prev_acc].0, &acc_proofs[*prev_acc].1, &acc_proofs[*prev_acc].2);
-        let new_acc_proof = self.basic_blocks[n.basic_block].acc_prove(
+        self.basic_blocks[n.basic_block].acc_prove(
           srs,
           models[n.basic_block],
           &myInputs,
@@ -306,12 +308,9 @@ impl Graph {
           (&proof.0, &proof.1, &proof.2),
           rng,
           cache.clone(),
-        );
-        let new_acc_proof_v = self.basic_blocks[self.nodes[i].basic_block].acc_clean((&new_acc_proof.0, &new_acc_proof.1, &new_acc_proof.2));
-        acc_proofs.push(new_acc_proof);
-        acc_proofs_for_verifier.push(new_acc_proof_v);
+        )
       } else {
-        let new_acc_proof = self.basic_blocks[n.basic_block].acc_init(
+        self.basic_blocks[n.basic_block].acc_init(
           srs,
           models[n.basic_block],
           &myInputs,
@@ -319,22 +318,23 @@ impl Graph {
           (&proof.0, &proof.1, &proof.2),
           rng,
           cache.clone(),
-        );
-        let new_acc_proof_v = self.basic_blocks[self.nodes[i].basic_block].acc_clean((&new_acc_proof.0, &new_acc_proof.1, &new_acc_proof.2));
-        acc_proofs.push(new_acc_proof);
-        acc_proofs_for_verifier.push(new_acc_proof_v);
-      }
+        )
+      };
+
+      let (proof, new_acc_proof_v) = self.basic_blocks[self.nodes[i].basic_block].acc_clean(
+        srs,
+        (&proof.0, &proof.1, &proof.2),
+        (&new_acc_proof.0, &new_acc_proof.1, &new_acc_proof.2),
+      );
+
+      proofs.push(proof);
+      acc_proofs.push(new_acc_proof);
+      acc_proofs_for_verifier.push(new_acc_proof_v);
       prev_acc_map.insert(n.basic_block, acc_proofs.len() - 1);
 
-      let proof: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (
-        proof.0.iter().map(|x| (*x).into()).collect(),
-        proof.1.iter().map(|x| (*x).into()).collect(),
-        proof.2.iter().map(|x| (*x).into()).collect(),
-      );
       let mut bytes = Vec::new();
-      proof.serialize_uncompressed(&mut bytes).unwrap();
+      proofs[proofs.len() - 1].serialize_uncompressed(&mut bytes).unwrap();
       util::add_randomness(rng, bytes);
-      proofs.push(proof);
     });
 
     proofs.append(&mut acc_proofs_for_verifier);
@@ -566,6 +566,8 @@ impl Graph {
       layer_names: vec![],
       nodes: vec![],
       outputs: vec![],
+      #[cfg(feature = "fold")]
+      foldable_bb_map: HashMap::new(),
     }
   }
 

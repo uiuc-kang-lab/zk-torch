@@ -396,6 +396,8 @@ pub fn load_file(filename: &str) -> (Graph, Vec<(ArrayD<Fr>, DatumType)>) {
     layer_names: vec![],
     nodes: vec![],
     outputs: vec![],
+    #[cfg(feature = "fold")]
+    foldable_bb_map: HashMap::new(),
   };
   let mut outputs_idx = create_output_indices(constants, &mut graph);
 
@@ -418,6 +420,15 @@ pub fn load_file(filename: &str) -> (Graph, Vec<(ArrayD<Fr>, DatumType)>) {
   }
 
   propagate_precomputable(&mut graph);
+
+  #[cfg(feature = "fold")]
+  {
+    let mut foldable_bb_map = HashMap::new();
+    //for (i, node) in graph.basic_blocks.iter().enumerate() {
+    //  todo!();
+    //}
+    graph.foldable_bb_map = foldable_bb_map;
+  }
 
   (graph, models)
 }

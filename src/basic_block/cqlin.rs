@@ -274,7 +274,7 @@ impl BasicBlock for CQLinBasicBlock {
 
     #[cfg(feature = "fold")]
     {
-      let mut additional_g1_for_acc = vec![flat_A.g1, flat_C.g1, part_C1, M_x_1, A_x.into()];
+      let mut additional_g1_for_acc = vec![flat_A.g1 + srs.Y1P * flat_A.r, flat_C.g1 + srs.Y1P * flat_C.r, part_C1, M_x_1, A_x.into()];
 
       proof.append(&mut additional_g1_for_acc);
       gammas.push(r[2]);
@@ -392,7 +392,7 @@ impl BasicBlock for CQLinBasicBlock {
     let _acc_gamma = Fr::rand(rng);
 
     acc_proof.0.extend(vec![g1_zero; 11 * 2]);
-    acc_proof.1.extend(vec![g2_zero; 4]);
+    acc_proof.1.extend(vec![g2_zero; 2 * 2]);
     acc_proof.2.extend(vec![fr_zero; log_n * 2]);
 
     // mu
@@ -506,6 +506,9 @@ impl BasicBlock for CQLinBasicBlock {
 
     // Fiat-Shamir TODO: fix this
     let mut bytes = Vec::new();
+    proof.0[..proof.0.len() - 5].serialize_uncompressed(&mut bytes).unwrap();
+    proof.1.serialize_uncompressed(&mut bytes).unwrap();
+    proof.2[..proof.0.len() - 2].serialize_uncompressed(&mut bytes).unwrap();
     errs.iter().for_each(|(g1, g2, f)| {
       g1.serialize_uncompressed(&mut bytes).unwrap();
       g2.serialize_uncompressed(&mut bytes).unwrap();
@@ -562,40 +565,98 @@ impl BasicBlock for CQLinBasicBlock {
   }
 
   // This function cleans the blinding terms in accumulators for the verifier to do acc_verify without knowing them
-  fn acc_clean(&self, acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) {
+  fn acc_clean(
+    &self,
+    srs: &SRS,
+    proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)) {
     let n = self.setup.shape()[1];
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
     let mut acc_holder = acc_proof_to_cqlin_acc(acc_proof, log_n, true);
     acc_holder.acc_g1 = acc_holder.acc_g1[..acc_holder.acc_g1.len() - 3].to_vec();
     acc_holder.acc_fr = acc_holder.acc_fr[..acc_holder.acc_fr.len() - 2].to_vec();
     let acc_proof = acc_to_acc_proof(acc_holder);
+
+    let cqlin_proof = (
+      proof.0[..proof.0.len() - 5].to_vec(),
+      proof.1.to_vec(),
+      proof.2[..proof.2.len() - 2].to_vec(),
+    );
+
     (
-      acc_proof.0.iter().map(|x| (*x).into()).collect(),
-      acc_proof.1.iter().map(|x| (*x).into()).collect(),
-      acc_proof.2,
+      (
+        cqlin_proof.0.iter().map(|x| (*x).into()).collect(),
+        cqlin_proof.1.iter().map(|x| (*x).into()).collect(),
+        cqlin_proof.2,
+      ),
+      (
+        acc_proof.0.iter().map(|x| (*x).into()).collect(),
+        acc_proof.1.iter().map(|x| (*x).into()).collect(),
+        acc_proof.2,
+      ),
     )
   }
 
   fn acc_verify(
     &self,
-    _srs: &SRS,
-    _model: &ArrayD<DataEnc>,
-    _inputs: &Vec<&ArrayD<DataEnc>>,
-    _outputs: &Vec<&ArrayD<DataEnc>>,
-    _prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
-    _acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
-    _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    srs: &SRS,
+    model: &ArrayD<DataEnc>,
+    inputs: &Vec<&ArrayD<DataEnc>>,
+    outputs: &Vec<&ArrayD<DataEnc>>,
+    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     cache: ProveVerifyCache,
   ) -> Option<bool> {
-    // TODO: do fiat-shamir and check the RLC
-    let _alpha = {
+    let l = inputs[0].len();
+    let m = model.len();
+    let n = model[0].len;
+    let N = srs.X2P.len() - 1;
+    let log_n = n.next_power_of_two().trailing_zeros() as usize;
+
+    let prev_acc_holder = acc_proof_to_cqlin_acc(prev_acc_proof, log_n, false);
+    // if prev_acc_holder.mu.is_zero() { // acc_init TODO
+    //   return Some(false);
+    // }
+    let acc_holder = acc_proof_to_cqlin_acc(acc_proof, log_n, false);
+
+    let [R_x, Q_x, A_x, S_x, P_x, P_R_x, pi, pi_1, z, C1, C2, C3, C4, C5, C6] = proof.0[..] else {
+      panic!("Wrong proof format")
+    };
+
+    let [M_x] = proof.1[..] else { panic!("Wrong proof format") };
+
+    let alpha = {
       let mut cache = cache.lock().unwrap();
       let CacheValues::RLCRandom(alpha) = cache.entry("cqlin_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
         panic!("Cache type error")
       };
       alpha.clone()
     };
+    let alpha_pow = calc_pow(alpha, l);
+
+    let input = if inputs[0].ndim() == 0 {
+      &inputs[0].clone().into_shape(IxDyn(&[1])).unwrap()
+    } else {
+      &inputs[0]
+    };
+    let output = if outputs[0].ndim() == 0 {
+      &outputs[0].clone().into_shape(IxDyn(&[1])).unwrap()
+    } else {
+      &outputs[0]
+    };
+    // Calculate flat_A
+    let temp: Vec<_> = (0..l).map(|i| input[i].g1).collect();
+    let flat_A_g1: G1Projective = util::msm::<G1Projective>(&temp, &alpha_pow);
+
+    // Calculate flat_C
+    let temp: Vec<_> = (0..l).map(|i| output[i].g1).collect();
+    let flat_C_g1: G1Projective = util::msm::<G1Projective>(&temp, &alpha_pow);
+
+    // TODO: do fiat-shamir and check the RLC
+
     let _gamma = Fr::rand(rng);
 
     // Fiat-shamir
@@ -663,7 +724,6 @@ impl BasicBlock for CQLinBasicBlock {
     ];
     acc_6.extend(err_6);
 
-    // assert_eq!(err_7s[0].2.is_zero(), true); TODO: Check this
     for i in 0..log_n {
       let acc_beta_i = acc_holder.acc_fr[i];
       let acc_beta_i_1 = acc_holder.acc_fr[i + 1];
