@@ -419,7 +419,6 @@ impl BasicBlock for CQLinBasicBlock {
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
-    println!("acc fold !!!!!!!!!!!!!!!");
     let n = model[0].raw.len();
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
 
@@ -736,17 +735,17 @@ impl BasicBlock for CQLinBasicBlock {
     });
     assert_eq!(prev_acc_holder.mu + acc_gamma, acc_holder.mu);
 
-    // TODO: Check RLC for errors
+    // Check RLC for errors
     for i in 0..log_n + 3 {
       if i < 3 {
         acc_holder.errs[i].0[acc_holder.errs[i].0.len() - 3..]
-      .iter()
-      .zip(prev_acc_holder.acc_errs[i].0[prev_acc_holder.acc_errs[i].0.len() - 3..].iter())
-      .enumerate()
-      .for_each(|(j, (x, y))| {
-        let z = *y + *x * acc_gamma;
-        result &= z == acc_holder.acc_errs[i].0[acc_holder.acc_errs[i].0.len() - 3 + j];
-      });
+          .iter()
+          .zip(prev_acc_holder.acc_errs[i].0[prev_acc_holder.acc_errs[i].0.len() - 3..].iter())
+          .enumerate()
+          .for_each(|(j, (x, y))| {
+            let z = *y + *x * acc_gamma;
+            result &= z == acc_holder.acc_errs[i].0[acc_holder.acc_errs[i].0.len() - 3 + j];
+          });
       } else {
         let z = prev_acc_holder.acc_errs[i].2[0] + acc_holder.errs[i].2[0] * acc_gamma;
         result &= z == acc_holder.acc_errs[i].2[0];

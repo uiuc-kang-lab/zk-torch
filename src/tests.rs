@@ -11,6 +11,7 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+#[cfg(not(feature = "fold"))]
 fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) {
   let mut rng = StdRng::from_entropy();
   let outputs = basic_block.run(model, inputs);
@@ -46,6 +47,112 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
   let pairings = basic_block.verify(srs, &model, &inputs, &outputs, proof, &mut rng2, cache.clone());
   let pairings = pairings.iter().map(|x| x).collect();
   let pairings = util::combine_pairing_checks(&pairings);
+  assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
+  // Check that prove and verify end with the same rng state
+  assert_eq!(Fr::rand(&mut rng), Fr::rand(&mut rng2));
+}
+
+#[cfg(feature = "fold")]
+fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) {
+  let mut rng = StdRng::from_entropy();
+  let outputs = basic_block.run(model, inputs);
+  let outputs = if outputs.is_ok() { outputs.unwrap() } else { panic!("Error in run") };
+  let outputs: Vec<&ArrayD<Fr>> = outputs.iter().map(|x| x).collect();
+  let model = convert_to_data(srs, model);
+  let setup = basic_block.setup(srs, &model);
+  let setup: (Vec<G1Affine>, Vec<G2Affine>, Vec<DensePolynomial<Fr>>) = (
+    setup.0.iter().map(|y| (*y).into()).collect(),
+    setup.1.iter().map(|y| (*y).into()).collect(),
+    setup.2.iter().map(|y| (y.clone())).collect(),
+  );
+  let setup = (&setup.0, &setup.1, &setup.2);
+  let inputs: Vec<ArrayD<Data>> = inputs.iter().map(|input| convert_to_data(srs, input)).collect();
+  let inputs: Vec<&ArrayD<Data>> = inputs.iter().map(|input| input).collect();
+  let outputs: Vec<ArrayD<Data>> = basic_block.encodeOutputs(srs, &model, &inputs, &outputs);
+  let outputs: Vec<&ArrayD<Data>> = outputs.iter().map(|output| output).collect();
+  let mut rng2 = rng.clone();
+  let cache = Arc::new(Mutex::new(HashMap::new()));
+
+  let mut proofs = vec![];
+  let mut acc_proofs = vec![];
+
+  let proof_1 = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng, cache.clone());
+  let acc_proof_1 = basic_block.acc_init(
+    srs,
+    &model,
+    &inputs,
+    &outputs,
+    (&proof_1.0, &proof_1.1, &proof_1.2),
+    &mut rng,
+    cache.clone(),
+  );
+  let (proof_1, acc_proof_1_v) = basic_block.acc_clean(
+    srs,
+    (&proof_1.0, &proof_1.1, &proof_1.2),
+    (&acc_proof_1.0, &acc_proof_1.1, &acc_proof_1.2),
+  );
+  proofs.push(proof_1);
+  acc_proofs.push(acc_proof_1_v);
+  let proof_2 = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng, cache.clone());
+  let acc_proof_2 = basic_block.acc_prove(
+    srs,
+    &model,
+    &inputs,
+    &outputs,
+    (&acc_proof_1.0, &acc_proof_1.1, &acc_proof_1.2),
+    (&proof_2.0, &proof_2.1, &proof_2.2),
+    &mut rng,
+    cache.clone(),
+  );
+  let (proof_2, acc_proof_2_v) = basic_block.acc_clean(
+    srs,
+    (&proof_2.0, &proof_2.1, &proof_2.2),
+    (&acc_proof_2.0, &acc_proof_2.1, &acc_proof_2.2),
+  );
+  proofs.push(proof_2);
+  acc_proofs.push(acc_proof_2_v);
+
+  let model = model.map(|x| DataEnc::new(srs, x));
+  let inputs: Vec<ArrayD<DataEnc>> = inputs.iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect();
+  let inputs: Vec<&ArrayD<DataEnc>> = inputs.iter().map(|input| input).collect();
+  let outputs: Vec<ArrayD<DataEnc>> = outputs.iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect();
+  let outputs: Vec<&ArrayD<DataEnc>> = outputs.iter().map(|output| output).collect();
+  let cache = Arc::new(Mutex::new(HashMap::new()));
+
+  let mut all_pairings = vec![];
+  let mut acc_proof_prev: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (vec![], vec![], vec![]);
+  for i in 0..2 {
+    let proof = (&proofs[i].0, &proofs[i].1, &proofs[i].2);
+    let acc_proof = (&acc_proofs[i].0, &acc_proofs[i].1, &acc_proofs[i].2);
+    let acc_verification = basic_block.acc_verify(
+      srs,
+      &model,
+      &inputs,
+      &outputs,
+      (&acc_proof_prev.0, &acc_proof_prev.1, &acc_proof_prev.2),
+      acc_proof,
+      proof,
+      &mut rng2,
+      cache.clone(),
+    );
+    acc_proof_prev = (acc_proof.0.clone(), acc_proof.1.clone(), acc_proof.2.clone());
+
+    let pairings = if acc_verification.is_none() {
+      basic_block.verify(srs, &model, &inputs, &outputs, proof, &mut rng2, cache.clone())
+    } else {
+      if acc_verification.unwrap() {
+        vec![]
+      } else {
+        panic!("Accumulator verification failed: {:?}", basic_block);
+      }
+    };
+    all_pairings.push(pairings);
+  }
+
+  let decider_pairings: Vec<PairingCheck> = basic_block.acc_decide(srs, (&acc_proofs[1].0, &acc_proofs[1].1, &acc_proofs[1].2));
+  all_pairings.push(decider_pairings);
+
+  let pairings = util::combine_pairing_checks(&all_pairings.iter().flatten().collect());
   assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
   // Check that prove and verify end with the same rng state
   assert_eq!(Fr::rand(&mut rng), Fr::rand(&mut rng2));
