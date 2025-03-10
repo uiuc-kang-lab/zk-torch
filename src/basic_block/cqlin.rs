@@ -389,6 +389,12 @@ impl BasicBlock for CQLinBasicBlock {
     let g1_zero = G1Projective::zero();
     let g2_zero = G2Projective::zero();
     let fr_zero = Fr::zero();
+
+    let mut bytes = Vec::new();
+    proof.0[..proof.0.len() - 5].serialize_uncompressed(&mut bytes).unwrap();
+    proof.1.serialize_uncompressed(&mut bytes).unwrap();
+    proof.2[..proof.2.len() - 2].serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
     let _acc_gamma = Fr::rand(rng);
 
     acc_proof.0.extend(vec![g1_zero; 11 * 2]);
@@ -504,11 +510,11 @@ impl BasicBlock for CQLinBasicBlock {
     let mut errs = vec![err1.clone(), err5.clone(), err6.clone()];
     errs.extend(err8s.clone());
 
-    // Fiat-Shamir TODO: fix this
+    // Fiat-Shamir
     let mut bytes = Vec::new();
     proof.0[..proof.0.len() - 5].serialize_uncompressed(&mut bytes).unwrap();
     proof.1.serialize_uncompressed(&mut bytes).unwrap();
-    proof.2[..proof.0.len() - 2].serialize_uncompressed(&mut bytes).unwrap();
+    proof.2[..proof.2.len() - 2].serialize_uncompressed(&mut bytes).unwrap();
     errs.iter().for_each(|(g1, g2, f)| {
       g1.serialize_uncompressed(&mut bytes).unwrap();
       g2.serialize_uncompressed(&mut bytes).unwrap();
@@ -614,13 +620,7 @@ impl BasicBlock for CQLinBasicBlock {
     let m = model.len();
     let n = model[0].len;
     let N = srs.X2P.len() - 1;
-    let log_n = n.next_power_of_two().trailing_zeros() as usize;
-
-    let prev_acc_holder = acc_proof_to_cqlin_acc(prev_acc_proof, log_n, false);
-    // if prev_acc_holder.mu.is_zero() { // acc_init TODO
-    //   return Some(false);
-    // }
-    let acc_holder = acc_proof_to_cqlin_acc(acc_proof, log_n, false);
+    let log_n = n.next_power_of_two().trailing_zeros() as usize;    
 
     let [R_x, Q_x, A_x, S_x, P_x, P_R_x, pi, pi_1, z, C1, C2, C3, C4, C5, C6] = proof.0[..] else {
       panic!("Wrong proof format")
@@ -635,6 +635,27 @@ impl BasicBlock for CQLinBasicBlock {
       };
       alpha.clone()
     };
+
+    let prev_acc_holder = acc_proof_to_cqlin_acc(prev_acc_proof, log_n, false);
+    let acc_holder = acc_proof_to_cqlin_acc(acc_proof, log_n, false);
+
+    let gamma = Fr::rand(rng);
+    let mut result = gamma == proof.2[0];
+    for i in 0..log_n {
+      result &= proof.2[i].pow(&[2]) == proof.2[i + 1];
+    }
+
+    if prev_acc_holder.mu.is_zero() && acc_holder.mu.is_one() { // skip verifying RLC because no RLC was done in acc_init.
+      // Fiat-shamir
+      let mut bytes = Vec::new();
+      proof.0.serialize_uncompressed(&mut bytes).unwrap();
+      proof.1.serialize_uncompressed(&mut bytes).unwrap();
+      proof.2.serialize_uncompressed(&mut bytes).unwrap();
+      util::add_randomness(rng, bytes);
+      let _acc_gamma = Fr::rand(rng);
+      return Some(result);
+    }
+
     let alpha_pow = calc_pow(alpha, l);
 
     let input = if inputs[0].ndim() == 0 {
@@ -655,12 +676,39 @@ impl BasicBlock for CQLinBasicBlock {
     let temp: Vec<_> = (0..l).map(|i| output[i].g1).collect();
     let flat_C_g1: G1Projective = util::msm::<G1Projective>(&temp, &alpha_pow);
 
-    // TODO: do fiat-shamir and check the RLC
+    // Fiat-Shamir
+    let mut bytes = Vec::new();
+    proof.0.serialize_uncompressed(&mut bytes).unwrap();
+    proof.1.serialize_uncompressed(&mut bytes).unwrap();
+    proof.2.serialize_uncompressed(&mut bytes).unwrap();
+    acc_holder.errs.iter().for_each(|(g1, g2, f)| {
+      g1.serialize_uncompressed(&mut bytes).unwrap();
+      g2.serialize_uncompressed(&mut bytes).unwrap();
+      f.serialize_uncompressed(&mut bytes).unwrap();
+    });
+    util::add_randomness(rng, bytes);
+    let acc_gamma = Fr::rand(rng);
 
-    let _gamma = Fr::rand(rng);
+    let cqlin_proof_g1 = [R_x, Q_x, A_x, S_x, P_x, P_R_x, pi, pi_1, z, C1, C2, C3, C4, C5, C6, flat_A_g1.into(), flat_C_g1.into()];
+    cqlin_proof_g1.iter().zip(prev_acc_holder.acc_g1.iter()).enumerate().for_each(|(i, (x, y))| {
+      if i >= 9 && i < 15 {
+        return; // No need to verify RLC for blinding factors
+      }
+      let z = *y + *x * acc_gamma;
+      let z: G1Affine = z.into();
+      let result = z == acc_holder.acc_g1[i];
+      assert!(result);
+    });
+    assert_eq!(prev_acc_holder.acc_g2[0] + M_x * acc_gamma, acc_holder.acc_g2[0]);
+    proof.2.iter().zip(prev_acc_holder.acc_fr.iter()).enumerate().for_each(|(i, (x, y))| {
+      let z = *y + *x * acc_gamma;
+      let result = z == acc_holder.acc_fr[i];
+      assert!(result);
+    });
+    assert_eq!(prev_acc_holder.mu + acc_gamma, acc_holder.mu);
 
-    // Fiat-shamir
-    let _acc_gamma = Fr::rand(rng);
+    // TODO: Check RLC for errors
+
     Some(true)
   }
 
