@@ -232,7 +232,7 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     &self,
     _srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    _acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
   ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)) {
     (
       (
@@ -240,7 +240,11 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
         proof.1.iter().map(|x| (*x).into()).collect(),
         proof.2.iter().map(|x| *x).collect(),
       ),
-      (Vec::new(), Vec::new(), Vec::new()),
+      (
+        acc_proof.0.iter().map(|x| (*x).into()).collect(),
+        acc_proof.1.iter().map(|x| (*x).into()).collect(),
+        acc_proof.2.iter().map(|x| *x).collect(),
+      ),
     )
   }
 
