@@ -728,12 +728,12 @@ impl BasicBlock for CQLinBasicBlock {
       let z: G1Affine = z.into();
       result &= z == acc_holder.acc_g1[i];
     });
-    assert_eq!(prev_acc_holder.acc_g2[0] + M_x * acc_gamma, acc_holder.acc_g2[0]);
+    result &= prev_acc_holder.acc_g2[0] + M_x * acc_gamma == acc_holder.acc_g2[0];
     proof.2.iter().zip(prev_acc_holder.acc_fr.iter()).enumerate().for_each(|(i, (x, y))| {
       let z = *y + *x * acc_gamma;
       result &= z == acc_holder.acc_fr[i];
     });
-    assert_eq!(prev_acc_holder.mu + acc_gamma, acc_holder.mu);
+    result &= prev_acc_holder.mu + acc_gamma == acc_holder.mu;
 
     // Check RLC for errors
     for i in 0..log_n + 3 {
