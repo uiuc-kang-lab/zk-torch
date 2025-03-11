@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
-use crate::util::{self, acc_proof_to_cqlin_acc, acc_to_acc_proof, calc_pow, AccHolder};
+use crate::util::{self, acc_to_acc_proof, calc_pow, AccHolder};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain, Polynomial};
@@ -10,6 +10,64 @@ use ark_std::{One, UniformRand, Zero};
 use ndarray::{ArrayD, Ix2, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
+
+fn acc_proof_to_cqlin_acc<P: Clone, Q: Clone>(acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>), log_n: usize, is_prover: bool) -> AccHolder<P, Q> {
+  if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
+    return AccHolder {
+      acc_g1: vec![],
+      acc_g2: vec![],
+      acc_fr: vec![],
+      mu: Fr::zero(),
+      errs: vec![],
+      acc_errs: vec![],
+    };
+  }
+
+  let acc_g1_num = if is_prover { 20 } else { 17 };
+  let acc_fr_num = if is_prover { log_n + 3 } else { log_n + 1 };
+  let acc_err_g2_num = acc_proof.1.len() - 3;
+
+  let err1: (Vec<P>, Vec<Q>, Vec<Fr>) = (acc_proof.0[acc_g1_num..(acc_g1_num + 5)].to_vec(), acc_proof.1[1..3].to_vec(), vec![]);
+  let err5: (Vec<P>, Vec<Q>, Vec<Fr>) = (acc_proof.0[(acc_g1_num + 5)..(acc_g1_num + 8)].to_vec(), vec![], vec![]);
+  let err6: (Vec<P>, Vec<Q>, Vec<Fr>) = (acc_proof.0[(acc_g1_num + 8)..(acc_g1_num + 11)].to_vec(), vec![], vec![]);
+
+  let mut errs = vec![err1, err5, err6];
+  for i in 0..log_n {
+    let err8i = (vec![], vec![], vec![acc_proof.2[acc_fr_num + i]]);
+    errs.push(err8i);
+  }
+
+  let acc_err1: (Vec<P>, Vec<Q>, Vec<Fr>) = (
+    acc_proof.0[(acc_g1_num + 11)..(acc_g1_num + 14 + acc_err_g2_num)].to_vec(),
+    acc_proof.1[3..(3 + acc_err_g2_num)].to_vec(),
+    vec![],
+  );
+  let acc_err5: (Vec<P>, Vec<Q>, Vec<Fr>) = (
+    acc_proof.0[(acc_g1_num + 14 + acc_err_g2_num)..(acc_g1_num + 17 + acc_err_g2_num)].to_vec(),
+    vec![],
+    vec![],
+  );
+  let acc_err6: (Vec<P>, Vec<Q>, Vec<Fr>) = (
+    acc_proof.0[(acc_g1_num + 17 + acc_err_g2_num)..(acc_g1_num + 20 + acc_err_g2_num)].to_vec(),
+    vec![],
+    vec![],
+  );
+
+  let mut acc_errs = vec![acc_err1, acc_err5, acc_err6];
+  for i in 0..log_n {
+    let acc_err8i = (vec![], vec![], vec![acc_proof.2[acc_fr_num + log_n + i]]);
+    acc_errs.push(acc_err8i);
+  }
+
+  AccHolder {
+    acc_g1: acc_proof.0[..acc_g1_num].to_vec(),
+    acc_g2: acc_proof.1[..1].to_vec(),
+    acc_fr: acc_proof.2[..acc_fr_num].to_vec(),
+    mu: acc_proof.2[acc_proof.2.len() - 1],
+    errs,
+    acc_errs,
+  }
+}
 
 #[derive(Debug)]
 pub struct CQLinBasicBlock {
@@ -824,5 +882,13 @@ impl BasicBlock for CQLinBasicBlock {
 
     let checks = vec![acc_1, acc_2, acc_3, acc_4, acc_5, acc_6];
     checks
+  }
+
+  fn acc_clean_errs(&self, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) {
+    let n = self.setup.shape()[1];
+    let log_n = n.next_power_of_two().trailing_zeros() as usize;
+    let mut acc_holder = acc_proof_to_cqlin_acc(acc_proof, log_n, false);
+    acc_holder.errs = vec![];
+    acc_to_acc_proof(acc_holder)
   }
 }

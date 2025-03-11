@@ -263,6 +263,15 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     None
   }
 
+  // This function is used to clean the errs in the final accumulator proof to calculate the proof size correctly.
+  fn acc_clean_errs(&self, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) {
+    (
+      acc_proof.0.iter().map(|x| *x).collect(),
+      acc_proof.1.iter().map(|x| *x).collect(),
+      acc_proof.2.iter().map(|x| *x).collect(),
+    )
+  }
+
   fn acc_decide(&self, _srs: &SRS, _acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {
     vec![]
   }

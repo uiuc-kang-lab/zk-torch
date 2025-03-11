@@ -424,13 +424,16 @@ pub fn load_file(filename: &str) -> (Graph, Vec<(ArrayD<Fr>, DatumType)>) {
   #[cfg(feature = "fold")]
   {
     let mut bb_to_index = HashMap::new();
-    let mut foldable_bb_map = HashMap::new();
-    for (i, b) in graph.basic_blocks.iter().enumerate() {
-      let bb_info_for_folding = get_foldable_bb_info(&b);
-      bb_to_index.entry(bb_info_for_folding.clone()).or_insert(i);
-      foldable_bb_map.insert(i, bb_to_index[&bb_info_for_folding]);
-    }
-    graph.foldable_bb_map = foldable_bb_map;
+    graph.foldable_bb_map = graph
+      .basic_blocks
+      .iter()
+      .enumerate()
+      .map(|(i, b)| {
+        let bb_info = get_foldable_bb_info(b);
+        let index = *bb_to_index.entry(bb_info.clone()).or_insert(i);
+        (i, index)
+      })
+      .collect();
   }
 
   (graph, models)

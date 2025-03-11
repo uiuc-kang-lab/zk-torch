@@ -416,11 +416,12 @@ impl Graph {
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)>,
     rng: &mut StdRng,
     timing: &mut TimingTree,
-  ) {
+  ) -> (Vec<usize>, Vec<usize>) {
     assert!(self.nodes.len() == self.precomputable.prove_and_verify.len());
     let cache = Arc::new(Mutex::new(HashMap::new()));
     let mut prev_acc_map: HashMap<usize, usize> = HashMap::new();
     let (proofs, acc_proofs) = (&proofs[..self.nodes.len()], &proofs[self.nodes.len()..]);
+    let (mut final_proofs_idx, mut final_acc_proofs_idx) = (vec![], vec![]);
 
     let mut pairings: Vec<Vec<PairingCheck>> = self
       .nodes
@@ -472,6 +473,7 @@ impl Graph {
         );
 
         let pairings = if acc_verification.is_none() {
+          final_proofs_idx.push(i);
           timed!(
             timing,
             &verify_id,
@@ -495,6 +497,9 @@ impl Graph {
     let mut decider_pairings: Vec<Vec<PairingCheck>> = prev_acc_map
       .iter()
       .map(|(k, v)| {
+        if !final_proofs_idx.contains(v) {
+          final_acc_proofs_idx.push(*v);
+        }
         let acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>) = (&acc_proofs[*v].0, &acc_proofs[*v].1, &acc_proofs[*v].2);
         self.basic_blocks[*k].acc_decide(srs, acc_proof)
       })
@@ -508,6 +513,28 @@ impl Graph {
     );
     let pairing_check = timed!(timing, "pairings", Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()));
     assert_eq!(pairing_check, PairingOutput::zero());
+    (final_proofs_idx, final_acc_proofs_idx)
+  }
+
+  #[cfg(feature = "fold")]
+  pub fn fold_proofs(
+    &self,
+    final_proofs_idx: Vec<usize>,
+    final_acc_proofs_idx: Vec<usize>,
+    proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)>,
+  ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> {
+    let (proofs, acc_proofs) = (&proofs[..self.nodes.len()], &proofs[self.nodes.len()..]);
+    let mut final_proofs: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> =
+      final_proofs_idx.iter().map(|i| (proofs[*i].0.clone(), proofs[*i].1.clone(), proofs[*i].2.clone())).collect();
+    let mut final_acc_proofs = final_acc_proofs_idx
+      .iter()
+      .map(|i| {
+        let n = &self.nodes[*i];
+        self.basic_blocks[n.basic_block].acc_clean_errs((&acc_proofs[*i].0, &acc_proofs[*i].1, &acc_proofs[*i].2))
+      })
+      .collect();
+    final_proofs.append(&mut final_acc_proofs);
+    final_proofs
   }
 
   // This function should be only used for debugging purposes (it is very slow).
