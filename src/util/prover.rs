@@ -289,7 +289,7 @@ pub fn zktorch_kernel() {
   #[cfg(not(feature = "mock_prove"))]
   verify(&srs, &graph, &mut timing);
 
-  // Measure proof size; TODO: in folding mode, the proof size is not accurate
+  // Measure proof size;
   measure_file_size(&CONFIG.prover.enc_model_path);
   measure_file_size(&CONFIG.prover.enc_input_path);
   measure_file_size(&CONFIG.prover.enc_output_path);
