@@ -2,7 +2,8 @@ use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
-use ark_std::{ops::Mul, ops::Sub, UniformRand};
+use ark_serialize::CanonicalSerialize;
+use ark_std::{ops::Mul, ops::Sub, One, UniformRand};
 use ndarray::{azip, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
 
@@ -28,7 +29,17 @@ impl BasicBlock for MulConstBasicBlock {
     _cache: ProveVerifyCache,
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let C = srs.X1P[0] * (Fr::from(self.c as u32) * inputs[0].first().unwrap().r - outputs[0].first().unwrap().r);
-    return (vec![C], vec![], Vec::new());
+
+    let mut proof = vec![C];
+    #[cfg(feature = "fold")]
+    {
+      let inp = inputs[0].first().unwrap();
+      let out = outputs[0].first().unwrap();
+      let mut additional_g1_for_acc = vec![inp.g1 + srs.Y1P * inp.r, out.g1 + srs.Y1P * out.r];
+      proof.append(&mut additional_g1_for_acc);
+    }
+
+    return (proof, vec![], Vec::new());
   }
 
   fn verify(
@@ -45,6 +56,98 @@ impl BasicBlock for MulConstBasicBlock {
       (inputs[0].first().unwrap().g1, (srs.X2P[0] * Fr::from(self.c as u32)).into()),
       (-outputs[0].first().unwrap().g1, srs.X2A[0]),
       (-proof.0[0], srs.Y2A),
+    ]]
+  }
+
+  fn acc_init(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<Data>,
+    _inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    let mut acc_proof = (proof.0.clone(), proof.1.clone(), proof.2.clone());
+
+    // Fiat-Shamir
+    let mut bytes = Vec::new();
+    proof.0.serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+    let _acc_gamma = Fr::rand(rng);
+    // mu
+    acc_proof.2.push(Fr::one());
+    acc_proof
+  }
+
+  fn acc_prove(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<Data>,
+    _inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    // Fiat-Shamir
+    let mut bytes = Vec::new();
+    acc_proof.0.serialize_uncompressed(&mut bytes).unwrap();
+    proof.0.serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+    let acc_gamma = Fr::rand(rng);
+
+    let new_acc_proof_g1 = proof.0.iter().zip(acc_proof.0.iter()).map(|(x, y)| *x * acc_gamma + y).collect();
+    let new_acc_proof_mu = acc_proof.2[0] + acc_gamma;
+    (new_acc_proof_g1, Vec::new(), vec![new_acc_proof_mu])
+  }
+
+  fn acc_verify(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<DataEnc>,
+    inputs: &Vec<&ArrayD<DataEnc>>,
+    outputs: &Vec<&ArrayD<DataEnc>>,
+    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> Option<bool> {
+    let mut result = inputs[0].first().unwrap().g1 == proof.0[1] && outputs[0].first().unwrap().g1 == proof.0[2];
+    if prev_acc_proof.2.len() == 0 && acc_proof.2[0].is_one() {
+      // skip verifying RLC because no RLC was done in acc_init.
+      // Fiat-shamir
+      let mut bytes = Vec::new();
+      proof.0.serialize_uncompressed(&mut bytes).unwrap();
+      util::add_randomness(rng, bytes);
+      let _acc_gamma = Fr::rand(rng);
+      return Some(result);
+    }
+
+    // Fiat-Shamir
+    let mut bytes = Vec::new();
+    prev_acc_proof.0.serialize_uncompressed(&mut bytes).unwrap();
+    proof.0.serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+    let acc_gamma = Fr::rand(rng);
+
+    proof.0.iter().zip(prev_acc_proof.0.iter()).enumerate().for_each(|(i, (x, y))| {
+      let z = *x * acc_gamma + *y;
+      result &= acc_proof.0[i] == z;
+    });
+    result &= acc_proof.2[0] == prev_acc_proof.2[0] + acc_gamma;
+
+    Some(result)
+  }
+
+  fn acc_decide(&self, srs: &SRS, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {
+    vec![vec![
+      (acc_proof.0[1], (srs.X2P[0] * Fr::from(self.c as u32)).into()),
+      (-acc_proof.0[2], srs.X2A[0]),
+      (-acc_proof.0[0], srs.Y2A),
     ]]
   }
 }
