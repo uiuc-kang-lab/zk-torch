@@ -96,8 +96,9 @@ impl Layer for PowLayer {
       return (graph, vec![input_shapes[0].clone()], vec![input_types[0]]);
     }
 
+    let len = util::next_pow(input_shapes[0][input_shapes[0].len() - 1] as u32) as usize;
     let mul = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MulBasicBlock {}),
+      basic_block: Box::new(MulBasicBlock { len }),
       N: 1,
     }));
     let change_SF = graph.addBB(Box::new(ChangeSFBasicBlock {

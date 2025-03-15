@@ -248,7 +248,9 @@ impl Layer for LSTMLayer {
 
       // sublayer 15: input_gate * candidate_memory
       let mul = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(MulBasicBlock {}),
+        basic_block: Box::new(MulBasicBlock {
+          len: util::next_pow(hidden_size as u32) as usize,
+        }),
         N: 1,
       }));
       let mul_output = graph.addNode(mul, vec![(input_gate_output, 0), (candidate_memory_output, 0)]);

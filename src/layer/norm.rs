@@ -146,8 +146,9 @@ impl Layer for BatchNormLayer {
     let two_const = graph.addBB(Box::new(Const2BasicBlock {
       c: arr1(&vec![Fr::from(2)]).into_dyn(),
     }));
+    let len = util::next_pow(input_shapes[0][input_shapes[0].len() - 1] as u32) as usize;
     let mul = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MulBasicBlock {}),
+      basic_block: Box::new(MulBasicBlock { len }),
       N: 1,
     }));
     let mul_scalar = graph.addBB(Box::new(RepeaterBasicBlock {
@@ -344,8 +345,9 @@ impl Layer for InstanceNormLayer {
     let reshape_2 = graph.addBB(Box::new(ReshapeBasicBlock {
       shape: vec![scale_shape_padded].into_iter().chain(vec![1; num_one]).collect(),
     }));
+    let len = util::next_pow(input_shapes[0][input_shapes[0].len() - 1] as u32) as usize;
     let mul = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MulBasicBlock {}),
+      basic_block: Box::new(MulBasicBlock { len }),
       N: 1,
     }));
     let sub = graph.addBB(Box::new(RepeaterBasicBlock {

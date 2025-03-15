@@ -110,9 +110,10 @@ fn vector_outer_product(graph: &mut Graph, input_shapes: &Vec<&Vec<usize>>) -> V
   output_shape
 }
 
-fn vector_inner_product(graph: &mut Graph, _input_shapes: &Vec<&Vec<usize>>) -> Vec<usize> {
+fn vector_inner_product(graph: &mut Graph, input_shapes: &Vec<&Vec<usize>>) -> Vec<usize> {
+  let len = util::next_pow(input_shapes[0][input_shapes[0].len() - 1] as u32) as usize;
   let mul = graph.addBB(Box::new(RepeaterBasicBlock {
-    basic_block: Box::new(MulBasicBlock {}),
+    basic_block: Box::new(MulBasicBlock { len }),
     N: 1,
   }));
   let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
