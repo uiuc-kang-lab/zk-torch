@@ -135,7 +135,7 @@ fn vector_inner_product(graph: &mut Graph, input_shapes: &Vec<&Vec<usize>>) -> V
     N: 1,
   }));
   let sum = graph.addBB(Box::new(RepeaterBasicBlock {
-    basic_block: Box::new(SumBasicBlock {}),
+    basic_block: Box::new(SumBasicBlock { len }),
     N: 1,
   }));
   let mul_output = graph.addNode(mul, vec![(-1, 0), (-2, 0)]);

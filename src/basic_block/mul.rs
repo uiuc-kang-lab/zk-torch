@@ -141,7 +141,7 @@ impl BasicBlock for MulConstBasicBlock {
     &self,
     _srs: &SRS,
     _model: &ArrayD<Data>,
-    inputs: &Vec<&ArrayD<Data>>,
+    _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     rng: &mut StdRng,
