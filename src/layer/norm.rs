@@ -109,6 +109,7 @@ impl Layer for BatchNormLayer {
     }));
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: scale_shape_padded,
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,
@@ -156,12 +157,14 @@ impl Layer for BatchNormLayer {
     }));
     let non_negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: scale_shape_padded,
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,
     }));
     let negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: scale_shape_padded,
         setup: util::CQArrayType::Negative,
       }),
       N: 1,
@@ -317,6 +320,7 @@ impl Layer for InstanceNormLayer {
     }));
     let div_const_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: 1,
         setup: CQArrayType::NonNegative,
       }),
       N: 1,
@@ -397,6 +401,7 @@ impl Layer for InstanceNormLayer {
     }));
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: X_shape[X_shape.len() - 1].next_power_of_two(),
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,
@@ -431,12 +436,14 @@ impl Layer for InstanceNormLayer {
     }));
     let non_negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: 1,
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,
     }));
     let negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: 1,
         setup: util::CQArrayType::Negative,
       }),
       N: 1,
