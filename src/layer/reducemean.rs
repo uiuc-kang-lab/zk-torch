@@ -48,7 +48,11 @@ impl Layer for ReduceMeanLayer {
     // PermuteBasicBlock is used for permute the last two dimensions for the case of reducing along two axes
     // (we need it because our mean computation is done along the last dimension)
     let permute = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
+      basic_block: Box::new(PermuteBasicBlock {
+        permutation: permutation,
+        n: a,
+        m: 1,
+      }),
       N: 2,
     }));
 

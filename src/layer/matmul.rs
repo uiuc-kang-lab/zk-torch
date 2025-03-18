@@ -57,11 +57,15 @@ impl Layer for MatMulLayer {
       graph.addNode(cqlin, vec![(-1, 0)])
     } else {
       let transpose = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(PermuteBasicBlock { permutation }),
+        basic_block: Box::new(PermuteBasicBlock {
+          permutation: permutation,
+          n: a,
+          m: b,
+        }),
         N: 2,
       }));
       let matmul = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(MatMulBasicBlock {}),
+        basic_block: Box::new(MatMulBasicBlock { m: a, n: b }),
         N: 2,
       }));
       let transpose_output = graph.addNode(transpose, vec![(-2, 0)]);

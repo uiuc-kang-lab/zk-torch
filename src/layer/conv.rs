@@ -234,12 +234,20 @@ macro_rules! create_conv_layer {
         let b = input_shapes[0][n - 1].next_power_of_two();
         let transpose1 = ((0..b).map(|x| x * a).collect(), (0..a).collect());
         let permute1 = graph.addBB(Box::new(RepeaterBasicBlock {
-          basic_block: Box::new(PermuteBasicBlock { permutation: transpose1 }),
+          basic_block: Box::new(PermuteBasicBlock {
+            permutation: transpose1,
+            n: a,
+            m: b,
+          }),
           N: 2,
         }));
         let transpose2 = ((0..a).map(|x| x * b).collect(), (0..b).collect());
         let permute2 = graph.addBB(Box::new(RepeaterBasicBlock {
-          basic_block: Box::new(PermuteBasicBlock { permutation: transpose2 }),
+          basic_block: Box::new(PermuteBasicBlock {
+            permutation: transpose2,
+            n: b,
+            m: a,
+          }),
           N: 2,
         }));
 

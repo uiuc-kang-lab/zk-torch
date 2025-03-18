@@ -88,7 +88,11 @@ fn vector_outer_product(graph: &mut Graph, input_shapes: &Vec<&Vec<usize>>) -> V
   b = util::next_pow(b as u32) as usize;
   let permutation = ((0..b).map(|x| x).collect(), vec![0]);
   let permute = graph.addBB(Box::new(RepeaterBasicBlock {
-    basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
+    basic_block: Box::new(PermuteBasicBlock {
+      permutation: permutation,
+      n: 1,
+      m: b,
+    }),
     N: 2,
   }));
   // to split the input vector into scalars, we first unsqueeze and permute it
