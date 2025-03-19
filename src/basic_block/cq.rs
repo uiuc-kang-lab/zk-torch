@@ -94,7 +94,7 @@ pub fn acc_proof_to_cq_acc<P: Clone, Q: Clone>(acc_proof: (&Vec<P>, &Vec<Q>, &Ve
   AccHolder {
     acc_g1: acc_proof.0[..acc_g1_num].to_vec(),
     acc_g2: acc_proof.1[..acc_g2_num].to_vec(),
-    acc_fr: acc_proof.2[..acc_fr_num].to_vec(), // mu
+    acc_fr: acc_proof.2[..acc_fr_num].to_vec(),
     mu: acc_proof.2[acc_proof.2.len() - 1],
     errs,
     acc_errs,
@@ -430,7 +430,7 @@ impl BasicBlock for CQBasicBlock {
           + acc_model_g1 * A_r
           + model_g1 * acc_A_r
           + srs.X1P[0] * (beta * acc_A_r + acc_beta * A_r)
-          + srs.Y1P * (acc_model_r * acc_input_r),
+          + srs.Y1P * (acc_model_r * A_r + acc_A_r * model_r),
       ],
       vec![acc_T_x_2, T_x_2],
       vec![],
@@ -498,8 +498,9 @@ impl BasicBlock for CQBasicBlock {
     new_acc_holder.errs = errs.clone();
     new_acc_holder.acc_errs = acc_holder.acc_errs;
 
-    for err in errs.iter_mut() {
-      err.0 = err.0.iter().map(|x| (*x * acc_gamma).into()).collect();
+    for i in 0..errs.len() {
+      errs[i].0 = errs[i].0.iter().map(|x| (*x * acc_gamma).into()).collect();
+      errs[i].2 = errs[i].2.iter().map(|x| (*x * acc_gamma).into()).collect();
     }
 
     let err1_g1_len = new_acc_holder.acc_errs[0].0.len();
@@ -555,14 +556,13 @@ impl BasicBlock for CQBasicBlock {
     else {
       panic!("Wrong proof format")
     };
-    println!("acc_holder: {:?}", acc_holder.acc_fr.len());
     let [acc_beta, acc_A_r, acc_model_r, acc_input_r, acc_B_r] = acc_holder.acc_fr[..] else {
       panic!("Wrong proof format")
     };
     acc_holder.acc_g1[9] = acc_part_C1 * acc_holder.mu
       + acc_model_g1 * acc_A_r
-      + srs.Y1P * acc_A_r * acc_model_r
       + acc_A_x_1 * acc_model_r
+      + srs.Y1P * acc_A_r * acc_model_r
       + srs.X1P[0] * (acc_beta * acc_A_r);
     acc_holder.acc_g1[10] = acc_part_C3 * acc_holder.mu
       + acc_input_g1 * acc_B_r
@@ -694,7 +694,7 @@ impl BasicBlock for CQBasicBlock {
 
     let acc_holder = acc_proof_to_cq_acc(acc_proof, false);
 
-    let [acc_m_x, acc_A_x, acc_A_Q_x, _acc_A_zero, _acc_A_zero_div, acc_B_x, acc_B_Q_x, _acc_B_zero_div, _acc_B_DC, acc_C1, _acc_C2, acc_C3, _acc_C4, _acc_C5] =
+    let [acc_m_x, acc_A_x, acc_A_Q_x, acc_A_zero, acc_A_zero_div, acc_B_x, acc_B_Q_x, acc_B_zero_div, acc_B_DC, acc_C1, acc_C2, acc_C3, acc_C4, acc_C5] =
       acc_holder.acc_g1[..]
     else {
       panic!("Wrong proof format")
@@ -711,18 +711,34 @@ impl BasicBlock for CQBasicBlock {
     for i in 0..err_1.1.len() {
       err1.push((-err_1.0[i], err_1.1[i]));
     }
-    err1.push((err_1.0[err_1.1.len()], srs.X2A[0]));
-    err1.push((err_1.0[err_1.1.len() + 1], srs.X2A[0]));
+    err1.push((-err_1.0[err_1.1.len()], srs.X2A[0]));
+    err1.push((-err_1.0[err_1.1.len() + 1], srs.X2A[0]));
     err1.push((err_1.0[err_1.1.len() + 2], (srs.X2A[N] - srs.X2A[0]).into()));
-    err1.push((-err_1.0[err_1.1.len() + 3], srs.X2A[0]));
+    err1.push((err_1.0[err_1.1.len() + 3], srs.X2A[0]));
     err1.push((err_1.0[err_1.1.len() + 4], srs.Y2A));
     let mut acc_1: PairingCheck = vec![
       (acc_A_x, acc_holder.acc_g2[0]),
-      ((acc_m_x * acc_mu - acc_A_x * acc_beta).into(), srs.X2A[0]),
+      ((-acc_m_x * acc_mu + acc_A_x * acc_beta).into(), srs.X2A[0]),
       ((-acc_A_Q_x * acc_mu).into(), (srs.X2A[N] - srs.X2A[0]).into()),
       (-acc_C1, srs.Y2A),
     ];
     acc_1.extend(err1);
+
+    let acc_2: PairingCheck = vec![
+      ((acc_A_x - acc_A_zero).into(), srs.X2A[0]),
+      (-acc_A_zero_div, srs.X2A[1]),
+      (-acc_C2, srs.Y2A),
+    ];
+
+    // // Assume B(0) = A(0)*N/n (which assumes ∑A=∑B)
+    let acc_B_0: G1Affine = (acc_A_zero * (Fr::from(N as u32) * Fr::from(n as u32).inverse().unwrap())).into();
+
+    // Check B(x) - B(0) is divisible by x
+    let acc_3 = vec![
+      ((acc_B_x - acc_B_0).into(), srs.X2A[0]),
+      (-acc_B_zero_div, srs.X2A[1]),
+      (-acc_C4, srs.Y2A),
+    ];
 
     let mut err4: PairingCheck = vec![];
     for i in 0..err_4.1.len() {
@@ -733,14 +749,17 @@ impl BasicBlock for CQBasicBlock {
     err4.push(((srs.X1A[0] * err_4.2[0]).into(), srs.X2A[0]));
     let mut acc_4: PairingCheck = vec![
       (acc_B_x, acc_holder.acc_g2[1]),
-      ((acc_B_x * acc_mu - srs.X1A[0]).into(), srs.X2A[0]),
+      ((acc_B_x * acc_mu - srs.X1P[0] * acc_mu * acc_mu).into(), srs.X2A[0]),
       (-acc_B_Q_x, (srs.X2A[n] - srs.X2A[0]).into()),
       (-acc_C3, srs.Y2A),
     ];
     acc_4.extend(err4);
 
+    // Degree check B
+    let acc_5 = vec![(acc_B_x, srs.X2A[N - n]), (-acc_B_DC, srs.X2A[0]), (-acc_C5, srs.Y2A)];
+
     // let checks = vec![acc_1, acc_4];
-    let checks = vec![acc_1];
+    let checks = vec![acc_2];
 
     checks
   }
