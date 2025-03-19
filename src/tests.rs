@@ -152,8 +152,16 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
   let decider_pairings: Vec<PairingCheck> = basic_block.acc_decide(srs, (&acc_proofs[1].0, &acc_proofs[1].1, &acc_proofs[1].2));
   all_pairings.push(decider_pairings);
 
-  let pairings = util::combine_pairing_checks(&all_pairings.iter().flatten().collect());
-  assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
+  //let pairings = util::combine_pairing_checks(&);
+  //assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
+  for pairings in all_pairings {
+    for i in 0..pairings.len() {
+      let pairing: Vec<_> = pairings[i].iter().map(|x| x).collect();
+      let pairing: (Vec<_>, Vec<_>) = (pairing.iter().map(|x| x.0).collect(), pairing.iter().map(|x| x.1).collect());
+      assert_eq!(Bn254::multi_pairing(pairing.0.iter(), pairing.1.iter()), PairingOutput::zero());
+    }
+  }
+
   // Check that prove and verify end with the same rng state
   assert_eq!(Fr::rand(&mut rng), Fr::rand(&mut rng2));
 }
