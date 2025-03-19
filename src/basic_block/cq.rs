@@ -87,8 +87,6 @@ pub fn acc_proof_to_cq_acc<P: Clone, Q: Clone>(acc_proof: (&Vec<P>, &Vec<Q>, &Ve
   );
 
   let acc_errs = vec![acc_err1, acc_err4];
-  println!("acc_proof.2: {:?}", acc_proof.2);
-  println!("acc_fr: {:?}", acc_proof.2[..acc_fr_num].to_vec());
 
   // Return structured AccHolder
   AccHolder {
@@ -279,8 +277,6 @@ impl BasicBlock for CQBasicBlock {
       proof.append(&mut additional_g1_for_acc);
       betas.append(&mut vec![r[1], model.r, input.r, r[5]]);
     }
-    println!("prover proof: {:?}", proof.len());
-    println!("prover betas: {:?}", betas.len());
 
     return (proof, vec![setup.1[0].into(), f_x_2], betas);
   }
@@ -304,6 +300,10 @@ impl BasicBlock for CQBasicBlock {
     let [T_x_2, f_x_2] = proof.1[..] else { panic!("Wrong proof format") };
 
     let beta = Fr::rand(rng);
+    println!("verify A_x: {:?}", A_x);
+    println!("verify A_zero: {:?}", A_zero);
+    println!("verify A_zero_div: {:?}", A_zero_div);
+    println!("verify C2: {:?}", C2);
 
     // Check A(x) (A_i = m_i/(t_i+beta))
     checks.push(vec![
@@ -360,11 +360,20 @@ impl BasicBlock for CQBasicBlock {
     let mut bytes = Vec::new();
     proof.0[..proof.0.len() - 6].serialize_uncompressed(&mut bytes).unwrap();
     proof.1.serialize_uncompressed(&mut bytes).unwrap();
-    println!("prover proof.2: {:?}", proof.2);
     proof.2[..1].serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
     let _acc_gamma = Fr::rand(rng);
 
+    let [m_x, A_x, A_Q_x, _A_zero, _A_zero_div, B_x, B_Q_x, _B_zero_div, _B_DC, C1, _C2, C3, _C4, _C5, part_C1, part_C3, model_g1, A_x_1, input_g1, B_x_1] =
+      proof.0[..]
+    else {
+      panic!("Wrong proof format")
+    };
+
+    println!("acc init A_x: {:?}", A_x);
+    println!("acc init A_zero: {:?}", _A_zero);
+    println!("acc init A_zero_div: {:?}", _A_zero_div);
+    println!("acc init C2: {:?}", _C2);
     // Initialize accumulators with zero values
     acc_proof.0.extend(vec![g1_zero; 12 * 2]); // For error terms
     acc_proof.1.extend(vec![g2_zero; 4 * 2]); // For G2 elements
@@ -405,6 +414,21 @@ impl BasicBlock for CQBasicBlock {
       panic!("Wrong proof format")
     };
 
+    let A_x_affine = A_x.into_affine();
+    let acc_A_x_affine = acc_A_x.into_affine();
+    let A_zero_affine = _A_zero.into_affine();
+    let acc_A_zero_affine = _acc_A_zero.into_affine();
+    let A_zero_div_affine = _A_zero_div.into_affine();
+    let acc_A_zero_div_affine = _acc_A_zero_div.into_affine();
+    let C2_affine = _C2.into_affine();
+    let acc_C2_affine = _acc_C2.into_affine();
+    println!("acc prove A_x: {:?}, acc_A_x: {:?}", A_x_affine, acc_A_x_affine);
+    println!("acc prove A_zero: {:?}, acc_A_zero: {:?}", A_zero_affine, acc_A_zero_affine);
+    println!(
+      "acc prove A_zero_div: {:?}, acc_A_zero_div: {:?}",
+      A_zero_div_affine, acc_A_zero_div_affine
+    );
+    println!("acc prove C2: {:?}, acc_C2: {:?}", C2_affine, acc_C2_affine);
     let [acc_T_x_2, acc_f_x_2] = acc_holder.acc_g2[..] else {
       panic!("Wrong proof format")
     };
@@ -436,7 +460,7 @@ impl BasicBlock for CQBasicBlock {
       vec![],
     );
 
-    let err_4 = (
+    let err_3 = (
       vec![
         B_x,
         acc_B_x,
@@ -456,31 +480,23 @@ impl BasicBlock for CQBasicBlock {
     );
 
     // Combine error terms
-    let mut errs = vec![err_1, err_4];
+    let mut errs = vec![err_1, err_3];
 
     // Generate Fiat-Shamir challenge
     let mut bytes = Vec::new();
-    println!("prover acc_holder.acc_g1: {:?}", acc_holder.acc_g1.len() - 11);
     acc_holder.acc_g1[..acc_holder.acc_g1.len() - 11].serialize_uncompressed(&mut bytes).unwrap();
-    println!("prover acc_holder.acc_g2: {:?}", acc_holder.acc_g2.len());
     acc_holder.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     acc_holder.acc_fr[..1].serialize_uncompressed(&mut bytes).unwrap();
-    println!("prover proof.0: {:?}", proof.0.len() - 6);
     proof.0[..proof.0.len() - 6].serialize_uncompressed(&mut bytes).unwrap();
-    println!("prover proof.1: {:?}", proof.1.len());
     proof.1.serialize_uncompressed(&mut bytes).unwrap();
     proof.2[..1].serialize_uncompressed(&mut bytes).unwrap();
     errs.iter().for_each(|(g1, g2, f)| {
-      // println!("g1: {:?}", g1.iter().map(|x| x.into_affine()).collect::<Vec<G1Affine>>().len());
-      // println!("g2: {:?}", g2);
-      println!("f: {:?}", f);
       g1.serialize_uncompressed(&mut bytes).unwrap();
       g2.serialize_uncompressed(&mut bytes).unwrap();
       f.serialize_uncompressed(&mut bytes).unwrap();
     });
     util::add_randomness(rng, bytes);
     let acc_gamma = Fr::rand(rng);
-    println!("acc_gamma: {:?}", acc_gamma);
 
     // Create new accumulator
     let mut new_acc_holder = AccHolder {
@@ -516,16 +532,15 @@ impl BasicBlock for CQBasicBlock {
     new_acc_holder.acc_errs[0].0.push(m_term_g1);
     new_acc_holder.acc_errs[0].0.push(c1_term_g1);
     new_acc_holder.acc_errs[0].1.append(&mut errs_0_g2);
-    println!("new_acc_holder.acc_errs[0].0: {:?}", new_acc_holder.acc_errs[0].0.len());
 
-    let err4_g1_len = new_acc_holder.acc_errs[1].0.len();
-    let B_Q_term_g1 = new_acc_holder.acc_errs[1].0[err4_g1_len - 3].clone() + errs[1].0[2];
-    let B_term_g1 = new_acc_holder.acc_errs[1].0[err4_g1_len - 2].clone() + errs[1].0[3];
-    let c3_term_g1 = new_acc_holder.acc_errs[1].0[err4_g1_len - 1].clone() + errs[1].0[4];
+    let err3_g1_len = new_acc_holder.acc_errs[1].0.len();
+    let B_Q_term_g1 = new_acc_holder.acc_errs[1].0[err3_g1_len - 3].clone() + errs[1].0[2];
+    let B_term_g1 = new_acc_holder.acc_errs[1].0[err3_g1_len - 2].clone() + errs[1].0[3];
+    let c3_term_g1 = new_acc_holder.acc_errs[1].0[err3_g1_len - 1].clone() + errs[1].0[4];
     let mut errs_1_g1 = errs[1].0[..2].to_vec();
     let mut errs_1_g2 = errs[1].1[..2].to_vec();
 
-    new_acc_holder.acc_errs[1].0 = new_acc_holder.acc_errs[1].0[..err4_g1_len - 3].to_vec();
+    new_acc_holder.acc_errs[1].0 = new_acc_holder.acc_errs[1].0[..err3_g1_len - 3].to_vec();
     new_acc_holder.acc_errs[1].0.append(&mut errs_1_g1);
     new_acc_holder.acc_errs[1].0.push(B_Q_term_g1);
     new_acc_holder.acc_errs[1].0.push(B_term_g1);
@@ -550,8 +565,7 @@ impl BasicBlock for CQBasicBlock {
     //       + A_x_1 * acc_mask_M
     //       + srs.Y1P * (cqlin_mask_A * acc_mask_M + cqlin_mask_M * acc_mask_A),
     let mut acc_holder = acc_proof_to_cq_acc(acc_proof, true);
-    println!("acc_holder: {:?}", acc_holder.acc_g1.len());
-    let [_acc_m_x, _acc_A_x, _acc_A_Q_x, _acc_A_zero, _acc_A_zero_div, _acc_B_x, _acc_B_Q_x, _acc_B_zero_div, _acc_B_DC, _acc_C1, _acc_C2, _acc_C3, _acc_C4, _acc_C5, acc_part_C1, acc_part_C3, acc_model_g1, acc_A_x_1, acc_input_g1, acc_B_x_1] =
+    let [_acc_m_x, acc_A_x, _acc_A_Q_x, _acc_A_zero, _acc_A_zero_div, _acc_B_x, _acc_B_Q_x, _acc_B_zero_div, _acc_B_DC, _acc_C1, _acc_C2, _acc_C3, _acc_C4, _acc_C5, acc_part_C1, acc_part_C3, acc_model_g1, acc_A_x_1, acc_input_g1, acc_B_x_1] =
       acc_holder.acc_g1[..]
     else {
       panic!("Wrong proof format")
@@ -559,12 +573,20 @@ impl BasicBlock for CQBasicBlock {
     let [acc_beta, acc_A_r, acc_model_r, acc_input_r, acc_B_r] = acc_holder.acc_fr[..] else {
       panic!("Wrong proof format")
     };
+    let acc_A_x_affine = acc_A_x.into_affine();
+    let acc_A_zero_affine = _acc_A_zero.into_affine();
+    let acc_A_zero_div_affine = _acc_A_zero_div.into_affine();
+    let acc_C2_affine = _acc_C2.into_affine();
+    println!("clean acc_A_x: {:?}", acc_A_x_affine);
+    println!("clean acc_A_zero: {:?}", acc_A_zero_affine);
+    println!("clean acc_A_zero_div: {:?}", acc_A_zero_div_affine);
+    println!("clean acc_C2: {:?}", acc_C2_affine);
     acc_holder.acc_g1[9] = acc_part_C1 * acc_holder.mu
       + acc_model_g1 * acc_A_r
       + acc_A_x_1 * acc_model_r
       + srs.Y1P * acc_A_r * acc_model_r
       + srs.X1P[0] * (acc_beta * acc_A_r);
-    acc_holder.acc_g1[10] = acc_part_C3 * acc_holder.mu
+    acc_holder.acc_g1[11] = acc_part_C3 * acc_holder.mu
       + acc_input_g1 * acc_B_r
       + srs.Y1P * acc_B_r * acc_input_r
       + acc_B_x_1 * acc_input_r
@@ -612,6 +634,11 @@ impl BasicBlock for CQBasicBlock {
     };
     let [T_x_2, f_x_2] = proof.1[..] else { panic!("Wrong proof format") };
 
+    println!("acc verify A_x: {:?}", A_x);
+    println!("acc verify A_zero: {:?}", A_zero);
+    println!("acc verify A_zero_div: {:?}", A_zero_div);
+    println!("acc verify C2: {:?}", C2);
+
     // Verify that acc_proof is a valid accumulation of prev_acc_proof and proof
     let prev_acc_holder = acc_proof_to_cq_acc(prev_acc_proof, false);
     let acc_holder = acc_proof_to_cq_acc(acc_proof, false);
@@ -621,46 +648,30 @@ impl BasicBlock for CQBasicBlock {
     println!("result: {:?}", result);
 
     if prev_acc_holder.mu.is_zero() && acc_holder.mu.is_one() {
-      println!("1");
       let mut bytes = Vec::new();
-      println!("proof.0: {:?}", proof.0.len());
       proof.0.serialize_uncompressed(&mut bytes).unwrap();
-      println!("proof.1: {:?}", proof.1.len());
       proof.1.serialize_uncompressed(&mut bytes).unwrap();
-      println!("proof.2: {:?}", proof.2);
       proof.2.serialize_uncompressed(&mut bytes).unwrap();
       util::add_randomness(rng, bytes);
       let _acc_gamma = Fr::rand(rng);
-      println!("acc_gamma: {:?}", _acc_gamma);
       return Some(result);
     }
 
     // Fiat-Shamir
-    println!("2");
     let mut bytes = Vec::new();
-    println!("prev_acc_holder.acc_g1: {:?}", prev_acc_holder.acc_g1.len() - 5);
     prev_acc_holder.acc_g1[..prev_acc_holder.acc_g1.len() - 5].serialize_uncompressed(&mut bytes).unwrap();
-    println!("prev_acc_holder.acc_g2: {:?}", prev_acc_holder.acc_g2.len());
     prev_acc_holder.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
-    println!("prev_acc_holder.acc_fr: {:?}", prev_acc_holder.acc_fr.len());
     prev_acc_holder.acc_fr.serialize_uncompressed(&mut bytes).unwrap();
-    println!("proof.0: {:?}", proof.0.len());
     proof.0.serialize_uncompressed(&mut bytes).unwrap();
-    println!("proof.1: {:?}", proof.1.len());
     proof.1.serialize_uncompressed(&mut bytes).unwrap();
-    println!("proof.2: {:?}", proof.2.len());
     proof.2.serialize_uncompressed(&mut bytes).unwrap();
     acc_holder.errs.iter().for_each(|(g1, g2, f)| {
-      // println!("g1: {:?}", g1);
-      // println!("g2: {:?}", g2);
-      println!("f: {:?}", f);
       g1.serialize_uncompressed(&mut bytes).unwrap();
       g2.serialize_uncompressed(&mut bytes).unwrap();
       f.serialize_uncompressed(&mut bytes).unwrap();
     });
     util::add_randomness(rng, bytes);
     let acc_gamma = Fr::rand(rng);
-    println!("acc_gamma: {:?}", acc_gamma);
 
     let cq_proof_g1 = [m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC, C1, C2, C3, C4, C5];
     let cq_proof_g2 = [T_x_2, f_x_2];
@@ -700,14 +711,17 @@ impl BasicBlock for CQBasicBlock {
       panic!("Wrong proof format")
     };
 
+    println!("decide acc_A_x: {:?}", acc_A_x);
+    println!("decide acc_A_zero: {:?}", acc_A_zero);
+    println!("decide acc_A_zero_div: {:?}", acc_A_zero_div);
+    println!("decide acc_C2: {:?}", acc_C2);
+
     let acc_mu = acc_holder.mu;
     let acc_beta = acc_holder.acc_fr[0];
     let err_1 = &acc_holder.acc_errs[0];
-    let err_4 = &acc_holder.acc_errs[1];
+    let err_3 = &acc_holder.acc_errs[1];
 
     let mut err1: PairingCheck = vec![];
-    println!("err_1.0.len(): {:?}", err_1.0.len());
-    println!("err_1.1.len(): {:?}", err_1.1.len());
     for i in 0..err_1.1.len() {
       err1.push((-err_1.0[i], err_1.1[i]));
     }
@@ -730,36 +744,36 @@ impl BasicBlock for CQBasicBlock {
       (-acc_C2, srs.Y2A),
     ];
 
-    // // Assume B(0) = A(0)*N/n (which assumes ∑A=∑B)
+    //  Assume B(0) = A(0)*N/n (which assumes ∑A=∑B)
     let acc_B_0: G1Affine = (acc_A_zero * (Fr::from(N as u32) * Fr::from(n as u32).inverse().unwrap())).into();
 
-    // Check B(x) - B(0) is divisible by x
-    let acc_3 = vec![
-      ((acc_B_x - acc_B_0).into(), srs.X2A[0]),
-      (-acc_B_zero_div, srs.X2A[1]),
-      (-acc_C4, srs.Y2A),
-    ];
-
-    let mut err4: PairingCheck = vec![];
-    for i in 0..err_4.1.len() {
-      err4.push((-err_4.0[i], err_4.1[i]));
+    let mut err3: PairingCheck = vec![];
+    for i in 0..err_3.1.len() {
+      err3.push((-err_3.0[i], err_3.1[i]));
     }
-    err4.push((err_4.0[err_4.1.len()], (srs.X2A[n] - srs.X2A[0]).into()));
-    err4.push((-err_4.0[err_4.1.len() + 1], srs.X2A[0]));
-    err4.push(((srs.X1A[0] * err_4.2[0]).into(), srs.X2A[0]));
-    let mut acc_4: PairingCheck = vec![
+    err3.push((err_3.0[err_3.1.len()], (srs.X2A[n] - srs.X2A[0]).into()));
+    err3.push((-err_3.0[err_3.1.len() + 1], srs.X2A[0]));
+    err3.push(((srs.X1A[0] * err_3.2[0]).into(), srs.X2A[0]));
+    let mut acc_3: PairingCheck = vec![
       (acc_B_x, acc_holder.acc_g2[1]),
       ((acc_B_x * acc_mu - srs.X1P[0] * acc_mu * acc_mu).into(), srs.X2A[0]),
       (-acc_B_Q_x, (srs.X2A[n] - srs.X2A[0]).into()),
       (-acc_C3, srs.Y2A),
     ];
-    acc_4.extend(err4);
+    acc_3.extend(err3);
+
+    // Check B(x) - B(0) is divisible by x
+    let acc_4 = vec![
+      ((acc_B_x - acc_B_0).into(), srs.X2A[0]),
+      (-acc_B_zero_div, srs.X2A[1]),
+      (-acc_C4, srs.Y2A),
+    ];
 
     // Degree check B
     let acc_5 = vec![(acc_B_x, srs.X2A[N - n]), (-acc_B_DC, srs.X2A[0]), (-acc_C5, srs.Y2A)];
 
     // let checks = vec![acc_1, acc_4];
-    let checks = vec![acc_2];
+    let checks = vec![acc_4];
 
     checks
   }
