@@ -1,4 +1,5 @@
 use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use crate::basic_block::*;
 use crate::{ndarr_azip, util};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::univariate::DensePolynomial;
@@ -6,6 +7,106 @@ use itertools::multiunzip;
 use ndarray::{arr1, azip, par_azip, s, ArrayD, Axis, Dimension, IxDyn, SliceInfo, SliceInfoElem};
 use rand::rngs::StdRng;
 use rayon::prelude::*;
+
+// This function returns the actual bb numbers in the repeater block from the info of acc proof length
+fn get_local_bb_num(bb: &Box<dyn BasicBlock>, acc_fr_len: usize, is_prover: bool) -> usize {
+  let fr_num_per_acc = if bb.is::<MulBasicBlock>() || bb.is::<MulScalarBasicBlock>() || bb.is::<MatMulBasicBlock>() {
+    if is_prover {
+      3
+    } else {
+      1
+    }
+  } else if bb.is::<MulConstBasicBlock>() || bb.is::<SumBasicBlock>() || bb.is::<PermuteBasicBlock>() {
+    1
+  } else if bb.is::<CQLinBasicBlock>() {
+    let b = bb.downcast_ref::<CQLinBasicBlock>().unwrap();
+    let n = b.setup.shape()[1];
+    let log_n = n.next_power_of_two().trailing_zeros() as usize;
+    (if is_prover { 4 } else { 2 }) + 3 * log_n
+  } else {
+    // a bb that does not have acc proof
+    panic!("bb does not have acc proof");
+  };
+  acc_fr_len / fr_num_per_acc
+}
+
+fn get_i_start(total_g1: usize, local_bb_num: usize, base_g1: usize) -> usize {
+  (total_g1 / local_bb_num - base_g1 + 1 - local_bb_num) / 2
+}
+
+fn get_local_acc_proof_indices(
+  bb: &Box<dyn BasicBlock>,
+  acc_g1_len: usize,
+  acc_fr_len: usize,
+  is_prover: bool,
+) -> (Vec<usize>, Vec<usize>, Vec<usize>) {
+  if acc_fr_len == 0 {
+    return (vec![0, 0], vec![0, 0], vec![0, 0]);
+  }
+  let local_bb_num = get_local_bb_num(bb, acc_fr_len, is_prover);
+  let mut acc_g1_indices = vec![0];
+  let mut acc_g2_indices = vec![0];
+  let mut acc_fr_indices = vec![0];
+
+  for i in 0..local_bb_num {
+    let (g1, g2, fr) = if bb.is::<MulBasicBlock>() {
+      if is_prover {
+        let i_start = get_i_start(acc_g1_len, local_bb_num, 18);
+        let j = i + i_start;
+        (18 + 2 * j, 5 + 2 * j, 3)
+      } else {
+        let i_start = get_i_start(acc_g1_len, local_bb_num, 15);
+        let j = i + i_start;
+        (15 + 2 * j, 5 + 2 * j, 1)
+      }
+    } else if bb.is::<MulConstBasicBlock>() {
+      (3, 0, 1)
+    } else if bb.is::<MulScalarBasicBlock>() {
+      if is_prover {
+        let i_start = get_i_start(acc_g1_len, local_bb_num, 15);
+        let j = i + i_start;
+        (15 + 2 * j, 5 + 2 * j, 3)
+      } else {
+        let i_start = get_i_start(acc_g1_len, local_bb_num, 12);
+        let j = i + i_start;
+        (12 + 2 * j, 5 + 2 * j, 3)
+      }
+    } else if bb.is::<SumBasicBlock>() {
+      (4, 0, 1)
+    } else if bb.is::<CQLinBasicBlock>() {
+      let b = bb.downcast_ref::<CQLinBasicBlock>().unwrap();
+      let n = b.setup.shape()[1];
+      let log_n = n.next_power_of_two().trailing_zeros() as usize;
+      if is_prover {
+        let i_start = get_i_start(acc_g1_len, local_bb_num, 42);
+        let j = i + i_start;
+        (42 + 2 * j, 5 + 2 * j, 3 * log_n + 4)
+      } else {
+        let i_start = get_i_start(acc_g1_len, local_bb_num, 39);
+        let j = i + i_start;
+        (39 + 2 * j, 5 + 2 * j, 3 * log_n + 2)
+      }
+    } else if bb.is::<MatMulBasicBlock>() {
+      if is_prover {
+        let i_start = get_i_start(acc_g1_len, local_bb_num, 27);
+        let j = i + i_start;
+        (27 + 2 * j, 6 + 2 * j, 3)
+      } else {
+        let i_start = get_i_start(acc_g1_len, local_bb_num, 24);
+        let j = i + i_start;
+        (24 + 2 * j, 6 + 2 * j, 1)
+      }
+    } else if bb.is::<PermuteBasicBlock>() {
+      (13, 2, 1)
+    } else {
+      panic!("bb does not have acc proof");
+    };
+    acc_g1_indices.push(acc_g1_indices.last().unwrap() + g1);
+    acc_g2_indices.push(acc_g2_indices.last().unwrap() + g2);
+    acc_fr_indices.push(acc_fr_indices.last().unwrap() + fr);
+  }
+  (acc_g1_indices, acc_g2_indices, acc_fr_indices)
+}
 
 #[derive(Debug)]
 pub struct RepeaterBasicBlock {
@@ -202,5 +303,290 @@ impl BasicBlock for RepeaterBasicBlock {
     let pairings = empty.into_iter().flatten().collect();
 
     pairings
+  }
+
+  // This function is the special case of acc_prove for the first block in the computation
+  fn acc_init(
+    &self,
+    srs: &SRS,
+    model: &ArrayD<Data>,
+    inputs: &Vec<&ArrayD<Data>>,
+    outputs: &Vec<&ArrayD<Data>>,
+    proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    rng: &mut StdRng,
+    cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
+    let l = temp.len();
+    let divA = proof.0.len() / l;
+    let divB = proof.1.len() / l;
+    let divC = proof.2.len() / l;
+    let combined: Vec<_> = (0..l)
+      .map(|i| {
+        (
+          &proof.0[i * divA..i * divA + divA],
+          &proof.1[i * divB..i * divB + divB],
+          &proof.2[i * divC..i * divC + divC],
+        )
+      })
+      .collect();
+    let mut proofArr = ArrayD::from_shape_vec(temp.shape(), combined).unwrap();
+
+    let mut empty = ArrayD::from_elem(temp.shape(), (vec![], vec![], vec![]));
+
+    let mut init_idicator = true;
+    let mut acc_proof = (vec![], vec![], vec![]);
+    azip!(((localInputs, localOutputs) in &mut temp, localProof in &mut proofArr, x in &mut empty) {
+      let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
+      let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
+      let localProof = (&localProof.0.to_vec(), &localProof.1.to_vec(), &localProof.2.to_vec());
+      let localAccProof = (&acc_proof.0, &acc_proof.1, &acc_proof.2);
+      let mut rng = rng.clone();
+      let tmp = if init_idicator {
+        init_idicator = false;
+        self.basic_block.acc_init(srs, model, &localInputs, &localOutputs, localProof, &mut rng, cache.clone())
+      } else {
+        self.basic_block.acc_prove(srs, model, &localInputs, &localOutputs, localAccProof, localProof, &mut rng, cache.clone())
+      };
+      acc_proof = (tmp.0.clone(), tmp.1.clone(), tmp.2.clone());
+      *x = tmp;
+    });
+
+    let acc_proof: (Vec<_>, Vec<_>, Vec<_>) = multiunzip(empty.into_iter());
+    let acc_proof = (
+      acc_proof.0.into_iter().flatten().collect(),
+      acc_proof.1.into_iter().flatten().collect(),
+      acc_proof.2.into_iter().flatten().collect(),
+    );
+    acc_proof
+  }
+
+  fn acc_prove(
+    &self,
+    srs: &SRS,
+    model: &ArrayD<Data>,
+    inputs: &Vec<&ArrayD<Data>>,
+    outputs: &Vec<&ArrayD<Data>>,
+    acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    rng: &mut StdRng,
+    cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
+    let l = temp.len();
+
+    let divA = proof.0.len() / l;
+    let divB = proof.1.len() / l;
+    let divC = proof.2.len() / l;
+    let combined: Vec<_> = (0..l)
+      .map(|i| {
+        (
+          &proof.0[i * divA..i * divA + divA],
+          &proof.1[i * divB..i * divB + divB],
+          &proof.2[i * divC..i * divC + divC],
+        )
+      })
+      .collect();
+    let mut proofArr = ArrayD::from_shape_vec(temp.shape(), combined).unwrap();
+
+    let (acc_divA, acc_divB, acc_divC) = get_local_acc_proof_indices(&self.basic_block, acc_proof.0.len(), acc_proof.2.len(), true);
+    let len_acc_div = acc_divA.len() - 1;
+
+    let mut empty = ArrayD::from_elem(temp.shape(), (vec![], vec![], vec![]));
+
+    let mut acc_proof = (
+      acc_proof.0[acc_divA[len_acc_div - 1]..acc_divA[len_acc_div]].to_vec(),
+      acc_proof.1[acc_divB[len_acc_div - 1]..acc_divB[len_acc_div]].to_vec(),
+      acc_proof.2[acc_divC[len_acc_div - 1]..acc_divC[len_acc_div]].to_vec(),
+    );
+    azip!(((localInputs, localOutputs) in &mut temp, localProof in &mut proofArr, x in &mut empty) {
+      let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
+      let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
+      let localProof = (&localProof.0.to_vec(), &localProof.1.to_vec(), &localProof.2.to_vec());
+      let localAccProof = (&acc_proof.0, &acc_proof.1, &acc_proof.2);
+      let mut rng = rng.clone();
+      let tmp = self.basic_block.acc_prove(srs, model, &localInputs, &localOutputs, localAccProof, localProof, &mut rng, cache.clone());
+      acc_proof = (tmp.0.clone(), tmp.1.clone(), tmp.2.clone());
+      *x = tmp;
+    });
+
+    let acc_proof: (Vec<_>, Vec<_>, Vec<_>) = multiunzip(empty.into_iter());
+    let acc_proof = (
+      acc_proof.0.into_iter().flatten().collect(),
+      acc_proof.1.into_iter().flatten().collect(),
+      acc_proof.2.into_iter().flatten().collect(),
+    );
+    acc_proof
+  }
+
+  // This function cleans the blinding terms in accumulators for the verifier to do acc_verify
+  fn acc_clean(
+    &self,
+    srs: &SRS,
+    proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)) {
+    if acc_proof.2.len() == 0 {
+      return (
+        (
+          proof.0.iter().map(|x| (*x).into()).collect(),
+          proof.1.iter().map(|x| (*x).into()).collect(),
+          proof.2.iter().map(|x| *x).collect(),
+        ),
+        (
+          acc_proof.0.iter().map(|x| (*x).into()).collect(),
+          acc_proof.1.iter().map(|x| (*x).into()).collect(),
+          acc_proof.2.iter().map(|x| *x).collect(),
+        ),
+      );
+    }
+
+    let (acc_divA, acc_divB, acc_divC) = get_local_acc_proof_indices(&self.basic_block, acc_proof.0.len(), acc_proof.2.len(), true);
+    let l = acc_divA.len() - 1;
+
+    let divA = proof.0.len() / l;
+    let divB = proof.1.len() / l;
+    let divC = proof.2.len() / l;
+    let mut combined = vec![];
+    let mut acc_combined = vec![];
+    (0..l).for_each(|i| {
+      let localProof = (
+        proof.0[i * divA..i * divA + divA].to_vec(),
+        proof.1[i * divB..i * divB + divB].to_vec(),
+        proof.2[i * divC..i * divC + divC].to_vec(),
+      );
+      let localAccProof = (
+        acc_proof.0[acc_divA[i]..acc_divA[i + 1]].to_vec(),
+        acc_proof.1[acc_divB[i]..acc_divB[i + 1]].to_vec(),
+        acc_proof.2[acc_divC[i]..acc_divC[i + 1]].to_vec(),
+      );
+      let (p, acc_p) = self.basic_block.acc_clean(
+        srs,
+        (&localProof.0, &localProof.1, &localProof.2),
+        (&localAccProof.0, &localAccProof.1, &localAccProof.2),
+      );
+      combined.push(p);
+      acc_combined.push(acc_p);
+    });
+    let combined: (Vec<_>, Vec<_>, Vec<_>) = multiunzip(combined.into_iter());
+    let acc_combined: (Vec<_>, Vec<_>, Vec<_>) = multiunzip(acc_combined.into_iter());
+    let proof: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (
+      combined.0.into_iter().flatten().collect(),
+      combined.1.into_iter().flatten().collect(),
+      combined.2.into_iter().flatten().collect(),
+    );
+    let acc_proof: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (
+      acc_combined.0.into_iter().flatten().collect(),
+      acc_combined.1.into_iter().flatten().collect(),
+      acc_combined.2.into_iter().flatten().collect(),
+    );
+    (proof, acc_proof)
+  }
+
+  fn acc_verify(
+    &self,
+    srs: &SRS,
+    model: &ArrayD<DataEnc>,
+    inputs: &Vec<&ArrayD<DataEnc>>,
+    outputs: &Vec<&ArrayD<DataEnc>>,
+    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    rng: &mut StdRng,
+    cache: ProveVerifyCache,
+  ) -> Option<bool> {
+    let mut result = true;
+    if acc_proof.2.len() == 0 && prev_acc_proof.2.len() == 0 {
+      return None;
+    }
+
+    let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
+    let (acc_divA, acc_divB, acc_divC) = get_local_acc_proof_indices(&self.basic_block, acc_proof.0.len(), acc_proof.2.len(), false);
+    let l = temp.len();
+
+    let divA = proof.0.len() / l;
+    let divB = proof.1.len() / l;
+    let divC = proof.2.len() / l;
+
+    let combined: Vec<_> = (0..l)
+      .map(|i| {
+        (
+          &proof.0[i * divA..i * divA + divA],
+          &proof.1[i * divB..i * divB + divB],
+          &proof.2[i * divC..i * divC + divC],
+        )
+      })
+      .collect();
+    let mut proofArr = ArrayD::from_shape_vec(temp.shape(), combined).unwrap();
+
+    let (prev_acc_divA, prev_acc_divB, prev_acc_divC) =
+      get_local_acc_proof_indices(&self.basic_block, prev_acc_proof.0.len(), prev_acc_proof.2.len(), false);
+    let prev_l = prev_acc_divA.len() - 1;
+    let mut localPrevAccProof = (
+      prev_acc_proof.0[prev_acc_divA[prev_l - 1]..prev_acc_divA[prev_l]].to_vec(),
+      prev_acc_proof.1[prev_acc_divB[prev_l - 1]..prev_acc_divB[prev_l]].to_vec(),
+      prev_acc_proof.2[prev_acc_divC[prev_l - 1]..prev_acc_divC[prev_l]].to_vec(),
+    );
+
+    let combined: Vec<_> = (0..l)
+      .map(|i| {
+        (
+          &acc_proof.0[acc_divA[i]..acc_divA[i + 1]],
+          &acc_proof.1[acc_divB[i]..acc_divB[i + 1]],
+          &acc_proof.2[acc_divC[i]..acc_divC[i + 1]],
+        )
+      })
+      .collect();
+    let mut accProofArr = ArrayD::from_shape_vec(temp.shape(), combined).unwrap();
+
+    azip!(((localInputs, localOutputs) in &mut temp, localProof in &mut proofArr, localAccProof in &mut accProofArr) {
+      let localInputs: Vec<_> = localInputs.iter().map(|y| y).collect();
+      let localOutputs: Vec<_> = localOutputs.as_ref().unwrap().iter().map(|y| y).collect();
+      let localProof = (&localProof.0.to_vec(), &localProof.1.to_vec(), &localProof.2.to_vec());
+      let localAccProof = (localAccProof.0.to_vec(), localAccProof.1.to_vec(), localAccProof.2.to_vec());
+      let mut rng = rng.clone();
+      let v = self.basic_block.acc_verify(srs, model, &localInputs, &localOutputs,
+        (&localPrevAccProof.0, &localPrevAccProof.1, &localPrevAccProof.2),
+        (&localAccProof.0, &localAccProof.1, &localAccProof.2),
+        localProof, &mut rng, cache.clone());
+      localPrevAccProof = localAccProof;
+      result &= v.unwrap();
+    });
+
+    Some(result)
+  }
+
+  // This function is used to clean the errs in the final accumulator proof to calculate the proof size correctly.
+  fn acc_clean_errs(&self, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) {
+    let (acc_divA, acc_divB, acc_divC) = get_local_acc_proof_indices(&self.basic_block, acc_proof.0.len(), acc_proof.2.len(), false);
+    let l = acc_divA.len() - 1;
+    let combined: Vec<_> = (0..l)
+      .map(|i| {
+        let localAccProof = (
+          acc_proof.0[acc_divA[i]..acc_divA[i + 1]].to_vec(),
+          acc_proof.1[acc_divB[i]..acc_divB[i + 1]].to_vec(),
+          acc_proof.2[acc_divC[i]..acc_divC[i + 1]].to_vec(),
+        );
+        self.basic_block.acc_clean_errs((&localAccProof.0, &localAccProof.1, &localAccProof.2))
+      })
+      .collect();
+    let combined: (Vec<_>, Vec<_>, Vec<_>) = multiunzip(combined.into_iter());
+    let acc_proof = (
+      combined.0.into_iter().flatten().collect(),
+      combined.1.into_iter().flatten().collect(),
+      combined.2.into_iter().flatten().collect(),
+    );
+    acc_proof
+  }
+
+  fn acc_decide(&self, srs: &SRS, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {
+    let (acc_divA, acc_divB, acc_divC) = get_local_acc_proof_indices(&self.basic_block, acc_proof.0.len(), acc_proof.2.len(), false);
+    let len_acc_div = acc_divA.len() - 1;
+    let acc_proof = (
+      acc_proof.0[acc_divA[len_acc_div - 1]..acc_divA[len_acc_div]].to_vec(),
+      acc_proof.1[acc_divB[len_acc_div - 1]..acc_divB[len_acc_div]].to_vec(),
+      acc_proof.2[acc_divC[len_acc_div - 1]..acc_divC[len_acc_div]].to_vec(),
+    );
+    self.basic_block.acc_decide(srs, (&acc_proof.0, &acc_proof.1, &acc_proof.2))
   }
 }

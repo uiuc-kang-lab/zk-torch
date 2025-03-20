@@ -1,4 +1,4 @@
-use crate::basic_block::{BasicBlock, CQ2BasicBlock, CQLinBasicBlock};
+use crate::basic_block::*;
 use ark_bn254::Fr;
 
 pub fn get_foldable_bb_info(bb: &Box<dyn BasicBlock>) -> String {
@@ -7,6 +7,10 @@ pub fn get_foldable_bb_info(bb: &Box<dyn BasicBlock>) -> String {
     return format!("CQLin-{:?}", bb.setup.shape());
   } else if bb.is::<CQ2BasicBlock>() {
     return "CQ2".to_string();
+  } else if bb.is::<RepeaterBasicBlock>() {
+    let bb = bb.downcast_ref::<RepeaterBasicBlock>().unwrap();
+    let b = &bb.basic_block;
+    return format!("Repeater-{}", get_foldable_bb_info(b));
   } else {
     return format!("{:?}", bb);
   }
