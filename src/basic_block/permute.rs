@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
-use crate::util::{self, acc_to_acc_proof, calc_pow, AccHolder};
+use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, calc_pow, AccHolder, AccProofLayout};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
@@ -10,27 +10,15 @@ use ark_std::{ops::Mul, ops::Sub, One, UniformRand, Zero};
 use ndarray::{Array, ArrayD, Axis};
 use rand::{rngs::StdRng, SeedableRng};
 
-fn acc_proof_to_permute_acc<P: Clone, Q: Clone>(acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>)) -> AccHolder<P, Q> {
-  if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
-    return AccHolder {
-      acc_g1: vec![],
-      acc_g2: vec![],
-      acc_fr: vec![],
-      mu: Fr::zero(),
-      errs: vec![],
-      acc_errs: vec![],
-    };
+impl AccProofLayout for PermuteBasicBlock {
+  fn acc_g1_num(&self, _is_prover: bool) -> usize {
+    13
   }
-
-  let acc_g1_num = 13;
-
-  AccHolder {
-    acc_g1: acc_proof.0[..acc_g1_num].to_vec(),
-    acc_g2: acc_proof.1[..2].to_vec(),
-    acc_fr: vec![],
-    mu: acc_proof.2[0],
-    errs: vec![],
-    acc_errs: vec![],
+  fn acc_g2_num(&self, _is_prover: bool) -> usize {
+    2
+  }
+  fn acc_fr_num(&self, _is_prover: bool) -> usize {
+    0
   }
 }
 
@@ -352,7 +340,7 @@ impl BasicBlock for PermuteBasicBlock {
   ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
     let [b_g2, d_g2] = proof.1[..] else { panic!("Wrong proof format") };
 
-    let acc_holder = acc_proof_to_permute_acc(acc_proof);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, true);
     let mut new_acc_holder = AccHolder {
       acc_g1: Vec::new(),
       acc_g2: Vec::new(),
@@ -473,8 +461,8 @@ impl BasicBlock for PermuteBasicBlock {
 
     let proof0_11_13 = vec![flat_L, flat_R];
 
-    let prev_acc_holder = acc_proof_to_permute_acc(prev_acc_proof);
-    let acc_holder = acc_proof_to_permute_acc(acc_proof);
+    let prev_acc_holder = acc_proof_to_acc(self, prev_acc_proof, true);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, true);
 
     if prev_acc_holder.mu.is_zero() && acc_holder.mu.is_one() {
       // skip verifying RLC because no RLC was done in acc_init.
@@ -515,7 +503,7 @@ impl BasicBlock for PermuteBasicBlock {
 
   fn acc_decide(&self, srs: &SRS, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {
     let m2 = self.permutation.1.len();
-    let acc_holder = acc_proof_to_permute_acc(acc_proof);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
     let [acc_left_x, acc_left_Q_x, acc_left_zero, acc_left_zero_div, acc_right_x, acc_right_Q_x, acc_right_zero_div, acc_corr1, acc_corr2, acc_corr3, acc_corr4, acc_flat_L, acc_flat_R] =
       acc_holder.acc_g1[..]
     else {

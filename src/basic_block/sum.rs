@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
-use crate::util;
+use crate::util::{self, AccProofLayout};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
@@ -9,6 +9,18 @@ use ark_serialize::CanonicalSerialize;
 use ark_std::{One, UniformRand, Zero};
 use ndarray::{arr1, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
+
+impl AccProofLayout for SumBasicBlock {
+  fn acc_g1_num(&self, _is_prover: bool) -> usize {
+    4
+  }
+  fn acc_g2_num(&self, _is_prover: bool) -> usize {
+    0
+  }
+  fn acc_fr_num(&self, _is_prover: bool) -> usize {
+    0
+  }
+}
 
 #[derive(Debug)]
 pub struct SumBasicBlock {

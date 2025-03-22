@@ -1,5 +1,5 @@
 use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
-use crate::util::{self, acc_to_acc_proof, AccHolder};
+use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, AccHolder, AccProofLayout};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::CanonicalSerialize;
@@ -7,87 +7,21 @@ use ark_std::{ops::Mul, ops::Sub, One, UniformRand, Zero};
 use ndarray::{azip, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
 
-fn acc_proof_to_mul_scalar_acc<P: Clone, Q: Clone>(acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>), is_prover: bool) -> AccHolder<P, Q> {
-  if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
-    return AccHolder {
-      acc_g1: vec![],
-      acc_g2: vec![],
-      acc_fr: vec![],
-      mu: Fr::zero(),
-      errs: vec![],
-      acc_errs: vec![],
-    };
-  }
-
-  // [acc_C, acc_inp0, acc_inp1, acc_out, acc_part_C, acc_inp0_no_blind, acc_inp1_no_blind]
-  let acc_g1_num = if is_prover { 7 } else { 4 };
-  let acc_fr_num = if is_prover { 2 } else { 0 };
-  let acc_err_g2_num = acc_proof.1.len() - 3;
-
-  let err1: (Vec<P>, Vec<Q>, Vec<Fr>) = (acc_proof.0[acc_g1_num..(acc_g1_num + 4)].to_vec(), acc_proof.1[1..3].to_vec(), vec![]);
-
-  let errs = vec![err1];
-
-  let acc_err1: (Vec<P>, Vec<Q>, Vec<Fr>) = (
-    acc_proof.0[(acc_g1_num + 4)..(acc_g1_num + 6 + acc_err_g2_num)].to_vec(),
-    acc_proof.1[3..(3 + acc_err_g2_num)].to_vec(),
-    vec![],
-  );
-
-  let acc_errs = vec![acc_err1];
-
-  AccHolder {
-    acc_g1: acc_proof.0[..acc_g1_num].to_vec(),
-    acc_g2: acc_proof.1[..1].to_vec(),
-    acc_fr: acc_proof.2[..acc_fr_num].to_vec(),
-    mu: acc_proof.2[acc_proof.2.len() - 1],
-    errs,
-    acc_errs,
-  }
-}
-
-fn acc_proof_to_mul_acc<P: Clone, Q: Clone>(acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>), is_prover: bool) -> AccHolder<P, Q> {
-  if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
-    return AccHolder {
-      acc_g1: vec![],
-      acc_g2: vec![],
-      acc_fr: vec![],
-      mu: Fr::zero(),
-      errs: vec![],
-      acc_errs: vec![],
-    };
-  }
-
-  // [acc_t, acc_C, acc_inp0, acc_inp1, acc_out, acc_part_C, acc_inp0_no_blind, acc_inp1_no_blind]
-  let acc_g1_num = if is_prover { 8 } else { 5 };
-  let acc_fr_num = if is_prover { 2 } else { 0 };
-  let acc_err_g2_num = acc_proof.1.len() - 3;
-
-  let err1: (Vec<P>, Vec<Q>, Vec<Fr>) = (acc_proof.0[acc_g1_num..(acc_g1_num + 5)].to_vec(), acc_proof.1[1..3].to_vec(), vec![]);
-
-  let errs = vec![err1];
-
-  let acc_err1: (Vec<P>, Vec<Q>, Vec<Fr>) = (
-    acc_proof.0[(acc_g1_num + 5)..(acc_g1_num + 8 + acc_err_g2_num)].to_vec(),
-    acc_proof.1[3..(3 + acc_err_g2_num)].to_vec(),
-    vec![],
-  );
-
-  let acc_errs = vec![acc_err1];
-
-  AccHolder {
-    acc_g1: acc_proof.0[..acc_g1_num].to_vec(),
-    acc_g2: acc_proof.1[..1].to_vec(),
-    acc_fr: acc_proof.2[..acc_fr_num].to_vec(),
-    mu: acc_proof.2[acc_proof.2.len() - 1],
-    errs,
-    acc_errs,
-  }
-}
-
 #[derive(Debug)]
 pub struct MulConstBasicBlock {
   pub c: usize,
+}
+
+impl AccProofLayout for MulConstBasicBlock {
+  fn acc_g1_num(&self, _is_prover: bool) -> usize {
+    3
+  }
+  fn acc_g2_num(&self, _is_prover: bool) -> usize {
+    0
+  }
+  fn acc_fr_num(&self, _is_prover: bool) -> usize {
+    0
+  }
 }
 
 impl BasicBlock for MulConstBasicBlock {
@@ -230,6 +164,41 @@ impl BasicBlock for MulConstBasicBlock {
   }
 }
 
+impl AccProofLayout for MulScalarBasicBlock {
+  fn acc_g1_num(&self, is_prover: bool) -> usize {
+    if is_prover {
+      7
+    } else {
+      4
+    }
+  }
+  fn acc_g2_num(&self, _is_prover: bool) -> usize {
+    1
+  }
+  fn acc_fr_num(&self, is_prover: bool) -> usize {
+    if is_prover {
+      2
+    } else {
+      0
+    }
+  }
+  fn err_g1_nums_summable(&self) -> Vec<usize> {
+    vec![2]
+  }
+  fn err_g1_nums_non_summable(&self) -> Vec<usize> {
+    vec![2]
+  }
+  fn err_g2_nums_summable(&self) -> Vec<usize> {
+    vec![0]
+  }
+  fn err_g2_nums_non_summable(&self) -> Vec<usize> {
+    vec![2]
+  }
+  fn err_fr_nums(&self) -> Vec<usize> {
+    vec![0]
+  }
+}
+
 #[derive(Debug)]
 pub struct MulScalarBasicBlock;
 impl BasicBlock for MulScalarBasicBlock {
@@ -343,7 +312,7 @@ impl BasicBlock for MulScalarBasicBlock {
     let [inp1_2] = proof.1[..] else { panic!("Wrong proof format") };
     let [inp0_r, inp1_r] = proof.2[..] else { panic!("Wrong proof format") };
 
-    let acc_holder = acc_proof_to_mul_scalar_acc(acc_proof, true);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, true);
     let mut new_acc_holder = AccHolder {
       acc_g1: Vec::new(),
       acc_g2: Vec::new(),
@@ -429,7 +398,7 @@ impl BasicBlock for MulScalarBasicBlock {
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
   ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)) {
-    let mut acc_holder = acc_proof_to_mul_scalar_acc(acc_proof, true);
+    let mut acc_holder = acc_proof_to_acc(self, acc_proof, true);
     acc_holder.acc_g1[0] = acc_holder.acc_g1[4] * acc_holder.mu
       + acc_holder.acc_g1[5] * acc_holder.acc_fr[1]
       + acc_holder.acc_g1[6] * acc_holder.acc_fr[0]
@@ -473,8 +442,8 @@ impl BasicBlock for MulScalarBasicBlock {
     let out = outputs[0].first().unwrap().g1;
     let mut result = true;
 
-    let prev_acc_holder = acc_proof_to_mul_scalar_acc(prev_acc_proof, false);
-    let acc_holder = acc_proof_to_mul_scalar_acc(acc_proof, false);
+    let prev_acc_holder = acc_proof_to_acc(self, prev_acc_proof, false);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
 
     if prev_acc_holder.mu.is_zero() && acc_holder.mu.is_one() {
       // skip verifying RLC because no RLC was done in acc_init.
@@ -520,7 +489,7 @@ impl BasicBlock for MulScalarBasicBlock {
   }
 
   fn acc_decide(&self, srs: &SRS, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {
-    let acc_holder = acc_proof_to_mul_scalar_acc(acc_proof, false);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
     let [acc_C, acc_inp0, acc_inp1, acc_out] = acc_holder.acc_g1[..] else {
       panic!("Wrong acc proof format")
     };
@@ -547,9 +516,44 @@ impl BasicBlock for MulScalarBasicBlock {
   }
 
   fn acc_clean_errs(&self, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) {
-    let mut acc_holder = acc_proof_to_mul_scalar_acc(acc_proof, false);
+    let mut acc_holder = acc_proof_to_acc(self, acc_proof, false);
     acc_holder.errs = vec![];
     acc_to_acc_proof(acc_holder)
+  }
+}
+
+impl AccProofLayout for MulBasicBlock {
+  fn acc_g1_num(&self, is_prover: bool) -> usize {
+    if is_prover {
+      8
+    } else {
+      5
+    }
+  }
+  fn acc_g2_num(&self, _is_prover: bool) -> usize {
+    1
+  }
+  fn acc_fr_num(&self, is_prover: bool) -> usize {
+    if is_prover {
+      2
+    } else {
+      0
+    }
+  }
+  fn err_g1_nums_summable(&self) -> Vec<usize> {
+    vec![3]
+  }
+  fn err_g1_nums_non_summable(&self) -> Vec<usize> {
+    vec![2]
+  }
+  fn err_g2_nums_summable(&self) -> Vec<usize> {
+    vec![0]
+  }
+  fn err_g2_nums_non_summable(&self) -> Vec<usize> {
+    vec![2]
+  }
+  fn err_fr_nums(&self) -> Vec<usize> {
+    vec![0]
   }
 }
 
@@ -679,7 +683,7 @@ impl BasicBlock for MulBasicBlock {
 
     let [inp1_2] = proof.1[..] else { panic!("Wrong proof format") };
 
-    let acc_holder = acc_proof_to_mul_acc(acc_proof, true);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, true);
     let mut new_acc_holder = AccHolder {
       acc_g1: Vec::new(),
       acc_g2: Vec::new(),
@@ -769,7 +773,7 @@ impl BasicBlock for MulBasicBlock {
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
   ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)) {
-    let mut acc_holder = acc_proof_to_mul_acc(acc_proof, true);
+    let mut acc_holder = acc_proof_to_acc(self, acc_proof, true);
     //vec![tx, C, inp0, inp1, out, part_C, *inp0_no_blind, *inp1_no_blind]
     acc_holder.acc_g1[1] = acc_holder.acc_g1[5] * acc_holder.mu
       + acc_holder.acc_g1[6] * acc_holder.acc_fr[1]
@@ -814,8 +818,8 @@ impl BasicBlock for MulBasicBlock {
     let out = outputs[0].first().unwrap().g1;
     let mut result = true;
 
-    let prev_acc_holder = acc_proof_to_mul_acc(prev_acc_proof, false);
-    let acc_holder = acc_proof_to_mul_acc(acc_proof, false);
+    let prev_acc_holder = acc_proof_to_acc(self, prev_acc_proof, false);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
 
     if prev_acc_holder.mu.is_zero() && acc_holder.mu.is_one() {
       // skip verifying RLC because no RLC was done in acc_init.
@@ -865,7 +869,7 @@ impl BasicBlock for MulBasicBlock {
   }
 
   fn acc_decide(&self, srs: &SRS, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {
-    let acc_holder = acc_proof_to_mul_acc(acc_proof, false);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
     let [acc_tx, acc_C, acc_inp0, acc_inp1, acc_out] = acc_holder.acc_g1[..] else {
       panic!("Wrong acc proof format")
     };
@@ -898,7 +902,7 @@ impl BasicBlock for MulBasicBlock {
   }
 
   fn acc_clean_errs(&self, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) {
-    let mut acc_holder = acc_proof_to_mul_acc(acc_proof, false);
+    let mut acc_holder = acc_proof_to_acc(self, acc_proof, false);
     acc_holder.errs = vec![];
     acc_to_acc_proof(acc_holder)
   }

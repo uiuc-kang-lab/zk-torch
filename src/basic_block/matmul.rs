@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
-use crate::util::{self, acc_to_acc_proof, calc_pow, AccHolder};
+use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, calc_pow, AccHolder, AccProofLayout};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
@@ -11,45 +11,38 @@ use ndarray::{arr1, arr2, ArrayD, Ix1, Ix2, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::iter::ParallelIterator;
 
-fn acc_proof_to_matmul_acc<P: Clone, Q: Clone>(acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>), is_prover: bool) -> AccHolder<P, Q> {
-  if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
-    return AccHolder {
-      acc_g1: vec![],
-      acc_g2: vec![],
-      acc_fr: vec![],
-      mu: Fr::zero(),
-      errs: vec![],
-      acc_errs: vec![],
-    };
+impl AccProofLayout for MatMulBasicBlock {
+  fn acc_g1_num(&self, is_prover: bool) -> usize {
+    if is_prover {
+      17
+    } else {
+      14
+    }
   }
-
-  // [acc_left_x, acc_left_Q_x, acc_left_zero, acc_left_zero_div, acc_right_x,
-  // acc_right_Q_x, acc_right_zero_div, acc_corr1, acc_corr2, acc_corr3,
-  // acc_corr4, acc_flat_A, acc_flat_B, acc_flat_C, acc_part_corr1,
-  // acc_flat_A_no_blind, acc_flat_B_no_blind]
-  let acc_g1_num = if is_prover { 17 } else { 14 };
-  let acc_fr_num = if is_prover { 2 } else { 0 };
-  let acc_err_g2_num = acc_proof.1.len() - 4;
-
-  let err1: (Vec<P>, Vec<Q>, Vec<Fr>) = (acc_proof.0[acc_g1_num..(acc_g1_num + 5)].to_vec(), acc_proof.1[2..4].to_vec(), vec![]);
-
-  let errs = vec![err1];
-
-  let acc_err1: (Vec<P>, Vec<Q>, Vec<Fr>) = (
-    acc_proof.0[(acc_g1_num + 5)..(acc_g1_num + 8 + acc_err_g2_num)].to_vec(),
-    acc_proof.1[4..(4 + acc_err_g2_num)].to_vec(),
-    vec![],
-  );
-
-  let acc_errs = vec![acc_err1];
-
-  AccHolder {
-    acc_g1: acc_proof.0[..acc_g1_num].to_vec(),
-    acc_g2: acc_proof.1[..2].to_vec(),
-    acc_fr: acc_proof.2[..acc_fr_num].to_vec(),
-    mu: acc_proof.2[acc_proof.2.len() - 1],
-    errs,
-    acc_errs,
+  fn acc_g2_num(&self, _is_prover: bool) -> usize {
+    2
+  }
+  fn acc_fr_num(&self, is_prover: bool) -> usize {
+    if is_prover {
+      2
+    } else {
+      0
+    }
+  }
+  fn err_g1_nums_summable(&self) -> Vec<usize> {
+    vec![3]
+  }
+  fn err_g1_nums_non_summable(&self) -> Vec<usize> {
+    vec![2]
+  }
+  fn err_g2_nums_summable(&self) -> Vec<usize> {
+    vec![0]
+  }
+  fn err_g2_nums_non_summable(&self) -> Vec<usize> {
+    vec![2]
+  }
+  fn err_fr_nums(&self) -> Vec<usize> {
+    vec![0]
   }
 }
 
@@ -395,7 +388,7 @@ impl BasicBlock for MatMulBasicBlock {
       panic!("Wrong proof format")
     };
 
-    let acc_holder = acc_proof_to_matmul_acc(acc_proof, true);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, true);
     let mut new_acc_holder = AccHolder {
       acc_g1: Vec::new(),
       acc_g2: Vec::new(),
@@ -487,7 +480,7 @@ impl BasicBlock for MatMulBasicBlock {
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
   ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)) {
-    let mut acc_holder = acc_proof_to_matmul_acc(acc_proof, true);
+    let mut acc_holder = acc_proof_to_acc(self, acc_proof, true);
     // acc_corr1 = acc_part_corr1 * mu + acc_flat_A_no_blind * acc_flat_B_r + acc_flat_B_no_blind * acc_flat_A_r + srs.Y1P * acc_flat_A_r * acc_flat_B_r
     acc_holder.acc_g1[7] = acc_holder.acc_g1[14] * acc_holder.mu
       + acc_holder.acc_g1[15] * acc_holder.acc_fr[1]
@@ -574,8 +567,8 @@ impl BasicBlock for MatMulBasicBlock {
 
     let proof0_11_14 = vec![flat_A, flat_B, flat_C];
 
-    let prev_acc_holder = acc_proof_to_matmul_acc(prev_acc_proof, false);
-    let acc_holder = acc_proof_to_matmul_acc(acc_proof, false);
+    let prev_acc_holder = acc_proof_to_acc(self, prev_acc_proof, false);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
 
     if prev_acc_holder.mu.is_zero() && acc_holder.mu.is_one() {
       // skip verifying RLC because no RLC was done in acc_init.
@@ -631,7 +624,7 @@ impl BasicBlock for MatMulBasicBlock {
   }
 
   fn acc_decide(&self, srs: &SRS, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {
-    let acc_holder = acc_proof_to_matmul_acc(acc_proof, false);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
     let [acc_left_x, acc_left_Q_x, acc_left_zero, acc_left_zero_div, acc_right_x, acc_right_Q_x, acc_right_zero_div, acc_corr1, acc_corr2, acc_corr3, acc_corr4, acc_flat_A, acc_flat_B, acc_flat_C] =
       acc_holder.acc_g1[..]
     else {
@@ -686,7 +679,7 @@ impl BasicBlock for MatMulBasicBlock {
   }
 
   fn acc_clean_errs(&self, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) {
-    let mut acc_holder = acc_proof_to_matmul_acc(acc_proof, false);
+    let mut acc_holder = acc_proof_to_acc(self, acc_proof, false);
     acc_holder.errs = vec![];
     acc_to_acc_proof(acc_holder)
   }
