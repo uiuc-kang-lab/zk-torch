@@ -11,7 +11,7 @@ pub fn get_foldable_bb_info(bb: &Box<dyn BasicBlock>) -> String {
     return format!("CQ2-{}-{}", bb.n, bb.setup.as_ref().unwrap().2);
   } else if bb.is::<CQBasicBlock>() {
     let bb = bb.downcast_ref::<CQBasicBlock>().unwrap();
-    return format!("CQ-{:?}", get_cq_N(&bb.setup));
+    return format!("CQ-{}-{}", bb.n, get_cq_N(&bb.setup));
   } else {
     return format!("{:?}", bb);
   }
