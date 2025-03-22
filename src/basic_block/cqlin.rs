@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
-use crate::util::{self, acc_to_acc_proof, calc_pow, AccHolder};
+use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, calc_pow, AccHolder, AccProofLayout};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain, Polynomial};
@@ -11,67 +11,61 @@ use ndarray::{ArrayD, Ix2, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 
-fn acc_proof_to_cqlin_acc<P: Clone, Q: Clone>(acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>), log_n: usize, is_prover: bool) -> AccHolder<P, Q> {
-  if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
-    return AccHolder {
-      acc_g1: vec![],
-      acc_g2: vec![],
-      acc_fr: vec![],
-      mu: Fr::zero(),
-      errs: vec![],
-      acc_errs: vec![],
-    };
-  }
-
-  let acc_g1_num = if is_prover { 20 } else { 17 };
-  let acc_fr_num = if is_prover { log_n + 3 } else { log_n + 1 };
-  let acc_err_g2_num = acc_proof.1.len() - 3;
-
-  let err1: (Vec<P>, Vec<Q>, Vec<Fr>) = (acc_proof.0[acc_g1_num..(acc_g1_num + 5)].to_vec(), acc_proof.1[1..3].to_vec(), vec![]);
-  let err5: (Vec<P>, Vec<Q>, Vec<Fr>) = (acc_proof.0[(acc_g1_num + 5)..(acc_g1_num + 8)].to_vec(), vec![], vec![]);
-  let err6: (Vec<P>, Vec<Q>, Vec<Fr>) = (acc_proof.0[(acc_g1_num + 8)..(acc_g1_num + 11)].to_vec(), vec![], vec![]);
-
-  let mut errs = vec![err1, err5, err6];
-  for i in 0..log_n {
-    let err8i = (vec![], vec![], vec![acc_proof.2[acc_fr_num + i]]);
-    errs.push(err8i);
-  }
-
-  let acc_err1: (Vec<P>, Vec<Q>, Vec<Fr>) = (
-    acc_proof.0[(acc_g1_num + 11)..(acc_g1_num + 14 + acc_err_g2_num)].to_vec(),
-    acc_proof.1[3..(3 + acc_err_g2_num)].to_vec(),
-    vec![],
-  );
-  let acc_err5: (Vec<P>, Vec<Q>, Vec<Fr>) = (
-    acc_proof.0[(acc_g1_num + 14 + acc_err_g2_num)..(acc_g1_num + 17 + acc_err_g2_num)].to_vec(),
-    vec![],
-    vec![],
-  );
-  let acc_err6: (Vec<P>, Vec<Q>, Vec<Fr>) = (
-    acc_proof.0[(acc_g1_num + 17 + acc_err_g2_num)..(acc_g1_num + 20 + acc_err_g2_num)].to_vec(),
-    vec![],
-    vec![],
-  );
-
-  let mut acc_errs = vec![acc_err1, acc_err5, acc_err6];
-  for i in 0..log_n {
-    let acc_err8i = (vec![], vec![], vec![acc_proof.2[acc_fr_num + log_n + i]]);
-    acc_errs.push(acc_err8i);
-  }
-
-  AccHolder {
-    acc_g1: acc_proof.0[..acc_g1_num].to_vec(),
-    acc_g2: acc_proof.1[..1].to_vec(),
-    acc_fr: acc_proof.2[..acc_fr_num].to_vec(),
-    mu: acc_proof.2[acc_proof.2.len() - 1],
-    errs,
-    acc_errs,
-  }
-}
-
 #[derive(Debug)]
 pub struct CQLinBasicBlock {
   pub setup: ArrayD<Fr>,
+}
+
+impl AccProofLayout for CQLinBasicBlock {
+  fn acc_g1_num(&self, is_prover: bool) -> usize {
+    if is_prover {
+      20
+    } else {
+      17
+    }
+  }
+  fn acc_g2_num(&self, _is_prover: bool) -> usize {
+    1
+  }
+  fn acc_fr_num(&self, is_prover: bool) -> usize {
+    let n = self.setup.shape()[1];
+    let log_n = n.next_power_of_two().trailing_zeros() as usize;
+    if is_prover {
+      log_n + 3
+    } else {
+      log_n + 1
+    }
+  }
+  fn err_g1_nums_summable(&self) -> Vec<usize> {
+    let n = self.setup.shape()[1];
+    let log_n = n.next_power_of_two().trailing_zeros() as usize;
+    let zeros = vec![0; log_n];
+    vec![3, 3, 3].into_iter().chain(zeros.into_iter()).collect()
+  }
+  fn err_g1_nums_non_summable(&self) -> Vec<usize> {
+    let n = self.setup.shape()[1];
+    let log_n = n.next_power_of_two().trailing_zeros() as usize;
+    let zeros = vec![0; log_n];
+    vec![2, 0, 0].into_iter().chain(zeros.into_iter()).collect()
+  }
+  fn err_g2_nums_summable(&self) -> Vec<usize> {
+    let n = self.setup.shape()[1];
+    let log_n = n.next_power_of_two().trailing_zeros() as usize;
+    let zeros = vec![0; log_n];
+    vec![0, 0, 0].into_iter().chain(zeros.into_iter()).collect()
+  }
+  fn err_g2_nums_non_summable(&self) -> Vec<usize> {
+    let n = self.setup.shape()[1];
+    let log_n = n.next_power_of_two().trailing_zeros() as usize;
+    let zeros = vec![0; log_n];
+    vec![2, 0, 0].into_iter().chain(zeros.into_iter()).collect()
+  }
+  fn err_fr_nums(&self) -> Vec<usize> {
+    let n = self.setup.shape()[1];
+    let log_n = n.next_power_of_two().trailing_zeros() as usize;
+    let ones = vec![1; log_n];
+    vec![0, 0, 0].into_iter().chain(ones.into_iter()).collect()
+  }
 }
 
 // input is rows of A, model is rows of B, outputs are rows of C
@@ -487,7 +481,7 @@ impl BasicBlock for CQLinBasicBlock {
     let [M_x_2] = proof.1[..] else { panic!("Wrong proof format") };
     let beta_k = proof.2[log_n];
 
-    let acc_holder = acc_proof_to_cqlin_acc(acc_proof, log_n, true);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, true);
     let mut new_acc_holder = AccHolder {
       acc_g1: Vec::new(),
       acc_g2: Vec::new(),
@@ -639,7 +633,7 @@ impl BasicBlock for CQLinBasicBlock {
   ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)) {
     let n = self.setup.shape()[1];
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
-    let mut acc_holder = acc_proof_to_cqlin_acc(acc_proof, log_n, true);
+    let mut acc_holder = acc_proof_to_acc(self, acc_proof, true);
     // correct the blinding factor C1
     acc_holder.acc_g1[9] = acc_holder.acc_g1[acc_holder.acc_g1.len() - 3] * acc_holder.mu
       + acc_holder.acc_g1[acc_holder.acc_g1.len() - 2] * acc_holder.acc_fr[log_n + 1]
@@ -701,8 +695,8 @@ impl BasicBlock for CQLinBasicBlock {
       alpha.clone()
     };
 
-    let prev_acc_holder = acc_proof_to_cqlin_acc(prev_acc_proof, log_n, false);
-    let acc_holder = acc_proof_to_cqlin_acc(acc_proof, log_n, false);
+    let prev_acc_holder = acc_proof_to_acc(self, prev_acc_proof, false);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
 
     let gamma = Fr::rand(rng);
     let mut result = gamma == proof.2[0];
@@ -819,7 +813,7 @@ impl BasicBlock for CQLinBasicBlock {
     let N = srs.X2P.len() - 1;
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
 
-    let acc_holder = acc_proof_to_cqlin_acc(acc_proof, log_n, false);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
 
     let [acc_R, acc_Q, acc_A, acc_S, acc_P, acc_P_R, acc_pi, acc_pi_1, acc_z, acc_C1, acc_C2, acc_C3, acc_C4, acc_C5, acc_C6, acc_flat_A, acc_flat_C] =
       acc_holder.acc_g1[..]
@@ -885,9 +879,7 @@ impl BasicBlock for CQLinBasicBlock {
   }
 
   fn acc_clean_errs(&self, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) {
-    let n = self.setup.shape()[1];
-    let log_n = n.next_power_of_two().trailing_zeros() as usize;
-    let mut acc_holder = acc_proof_to_cqlin_acc(acc_proof, log_n, false);
+    let mut acc_holder = acc_proof_to_acc(self, acc_proof, false);
     acc_holder.errs = vec![];
     acc_to_acc_proof(acc_holder)
   }

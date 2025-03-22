@@ -1,17 +1,32 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
-use crate::util::{self, calc_pow};
+use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, calc_pow, AccHolder, AccProofLayout};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
-use ark_std::{ops::Mul, ops::Sub, UniformRand, Zero};
+use ark_serialize::CanonicalSerialize;
+use ark_std::{ops::Mul, ops::Sub, One, UniformRand, Zero};
 use ndarray::{Array, ArrayD, Axis};
 use rand::{rngs::StdRng, SeedableRng};
+
+impl AccProofLayout for PermuteBasicBlock {
+  fn acc_g1_num(&self, _is_prover: bool) -> usize {
+    13
+  }
+  fn acc_g2_num(&self, _is_prover: bool) -> usize {
+    2
+  }
+  fn acc_fr_num(&self, _is_prover: bool) -> usize {
+    0
+  }
+}
 
 #[derive(Debug)]
 pub struct PermuteBasicBlock {
   pub permutation: (Vec<usize>, Vec<usize>),
+  pub n: usize,
+  pub m: usize,
 }
 
 // Permute elements of a 2d matrix into another 2d matrix
@@ -151,8 +166,37 @@ impl BasicBlock for PermuteBasicBlock {
       -srs.X1P[1] * r[6] + srs.X1P[0] * (r[4] - r[2] * Fr::from(m as u32) * Fr::from(m2 as u32).inverse().unwrap()),
     ];
     proof.append(&mut corr);
+    let mut proof2 = vec![];
+    #[cfg(feature = "fold")]
+    {
+      let b_g2 = {
+        let mut cache = cache.lock().unwrap();
+        let CacheValues::G2(b_g2) = cache
+          .entry(format!("permute_b_msm_g2_{m}_{n}"))
+          .or_insert_with(|| CacheValues::G2(util::msm::<G2Projective>(&srs.X2A, &b.poly.coeffs).into()))
+        else {
+          panic!("Cache type error")
+        };
+        b_g2.clone()
+      };
 
-    return (proof, vec![], Vec::new());
+      let d_g2 = {
+        let mut cache = cache.lock().unwrap();
+        let CacheValues::G2(d_g2) = cache
+          .entry(format!("permute_d_msm_g2_{self:p}"))
+          .or_insert_with(|| CacheValues::G2(util::msm::<G2Projective>(&srs.X2A, &d.poly.coeffs).into()))
+        else {
+          panic!("Cache type error")
+        };
+        d_g2.clone()
+      };
+      let mut additional_g2_for_acc: Vec<G2Projective> = vec![b_g2.into(), d_g2.into()];
+      let mut additional_g1_for_acc = vec![flat_L.g1 + srs.Y1P * flat_L.r, flat_R.g1 + srs.Y1P * flat_R.r];
+      proof.append(&mut additional_g1_for_acc);
+      proof2.append(&mut additional_g2_for_acc);
+    }
+
+    return (proof, proof2, Vec::new());
   }
 
   fn verify(
@@ -257,5 +301,245 @@ impl BasicBlock for PermuteBasicBlock {
     ]);
 
     checks
+  }
+
+  fn acc_init(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<Data>,
+    _inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    let mut acc_proof = (proof.0.clone(), proof.1.clone(), proof.2.clone());
+
+    // Fiat-Shamir
+    let mut bytes = Vec::new();
+    proof.0[..7].serialize_uncompressed(&mut bytes).unwrap();
+    proof.0[11..13].serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+    let _acc_gamma = Fr::rand(rng);
+
+    // mu
+    acc_proof.2.push(Fr::one());
+    acc_proof
+  }
+
+  fn acc_prove(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<Data>,
+    _inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    let [b_g2, d_g2] = proof.1[..] else { panic!("Wrong proof format") };
+
+    let acc_holder = acc_proof_to_acc(self, acc_proof, true);
+    let mut new_acc_holder = AccHolder {
+      acc_g1: Vec::new(),
+      acc_g2: Vec::new(),
+      acc_fr: Vec::new(),
+      mu: Fr::zero(),
+      errs: Vec::new(),
+      acc_errs: Vec::new(),
+    };
+
+    let [acc_b_g2, acc_d_g2] = acc_holder.acc_g2[..] else {
+      panic!("Wrong acc proof format")
+    };
+    assert!(b_g2 == acc_b_g2 && d_g2 == acc_d_g2);
+    let acc_mu = acc_holder.mu;
+
+    // Compute the error (but we skip it because permuteBB has no error)
+
+    // Fiat-Shamir
+    let mut bytes = Vec::new();
+    acc_holder.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
+    acc_holder.acc_g1[11..13].serialize_uncompressed(&mut bytes).unwrap();
+    proof.0[..7].serialize_uncompressed(&mut bytes).unwrap();
+    proof.0[11..13].serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+    let acc_gamma = Fr::rand(rng);
+
+    new_acc_holder.acc_g1 = proof.0.iter().zip(acc_holder.acc_g1.iter()).map(|(x, y)| *x * acc_gamma + y).collect();
+    new_acc_holder.acc_g2 = acc_holder.acc_g2.clone();
+    new_acc_holder.mu = acc_mu + acc_gamma;
+    acc_to_acc_proof(new_acc_holder)
+  }
+
+  fn acc_clean(
+    &self,
+    _srs: &SRS,
+    proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)) {
+    // remove unnecessary terms from bb proof for the verifier
+    let cqlin_proof_g1 = proof.0[..11].to_vec();
+
+    (
+      (cqlin_proof_g1.iter().map(|x| (*x).into()).collect(), vec![], vec![]),
+      (
+        acc_proof.0.iter().map(|x| (*x).into()).collect(),
+        acc_proof.1.iter().map(|x| (*x).into()).collect(),
+        acc_proof.2.to_vec(),
+      ),
+    )
+  }
+
+  fn acc_verify(
+    &self,
+    srs: &SRS,
+    _model: &ArrayD<DataEnc>,
+    inputs: &Vec<&ArrayD<DataEnc>>,
+    outputs: &Vec<&ArrayD<DataEnc>>,
+    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    rng: &mut StdRng,
+    cache: ProveVerifyCache,
+  ) -> Option<bool> {
+    let mut result = true;
+
+    let alpha = {
+      let mut cache = cache.lock().unwrap();
+      let CacheValues::RLCRandom(alpha) = cache.entry("permute_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
+        panic!("Cache type error")
+      };
+      alpha.clone()
+    };
+    let (input, output) = (inputs[0], outputs[0]);
+
+    // n rows, m columns in input
+    let n = input.len();
+    let m = input[0].len;
+    let domain_m = GeneralEvaluationDomain::<Fr>::new(m).unwrap();
+    // n2 rows, m2 columns in output
+    let n2 = self.permutation.0.len();
+    let m2 = self.permutation.1.len();
+    let domain_m2 = GeneralEvaluationDomain::<Fr>::new(m2).unwrap();
+
+    let alpha_pow = calc_pow(alpha, n * m);
+    let b: Vec<_> = (0..m).map(|i| alpha_pow[i * n]).collect();
+    let c: Vec<_> = (0..n2).map(|i| alpha_pow[self.permutation.0[i]]).collect();
+    let d: Vec<_> = (0..m2).map(|i| alpha_pow[self.permutation.1[i]]).collect();
+
+    let b_g2 = {
+      let mut cache = cache.lock().unwrap();
+      let CacheValues::G2(b_g2) = cache
+        .entry(format!("permute_b_msm_g2_{m}_{n}"))
+        .or_insert_with(|| CacheValues::G2(util::msm::<G2Projective>(&srs.X2A, &domain_m.ifft(&b)).into()))
+      else {
+        panic!("Cache type error")
+      };
+      b_g2.clone()
+    };
+
+    let d_g2 = {
+      let mut cache = cache.lock().unwrap();
+      let CacheValues::G2(d_g2) = cache
+        .entry(format!("permute_d_msm_g2_{self:p}"))
+        .or_insert_with(|| CacheValues::G2(util::msm::<G2Projective>(&srs.X2A, &domain_m2.ifft(&d)).into()))
+      else {
+        panic!("Cache type error")
+      };
+      d_g2.clone()
+    };
+
+    // Calculate flat_L
+    let temp: Vec<_> = (0..n).map(|i| input[i].g1).collect();
+    let flat_L: G1Affine = util::msm::<G1Projective>(&temp, &alpha_pow[..n]).into();
+
+    // Calculate flat_R
+    let temp: Vec<_> = (0..n2).map(|i| output[i].g1).collect();
+    let flat_R: G1Affine = util::msm::<G1Projective>(&temp, &c).into();
+
+    let proof0_11_13 = vec![flat_L, flat_R];
+
+    let prev_acc_holder = acc_proof_to_acc(self, prev_acc_proof, true);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, true);
+
+    if prev_acc_holder.mu.is_zero() && acc_holder.mu.is_one() {
+      // skip verifying RLC because no RLC was done in acc_init.
+      // Fiat-shamir
+      let mut bytes = Vec::new();
+      proof.0[..7].serialize_uncompressed(&mut bytes).unwrap();
+      proof0_11_13.serialize_uncompressed(&mut bytes).unwrap();
+      util::add_randomness(rng, bytes);
+      let _acc_gamma = Fr::rand(rng);
+      return Some(result);
+    }
+
+    // Fiat-Shamir
+    let mut bytes = Vec::new();
+    prev_acc_holder.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
+    prev_acc_holder.acc_g1[11..13].serialize_uncompressed(&mut bytes).unwrap();
+    proof.0[..7].serialize_uncompressed(&mut bytes).unwrap();
+    proof0_11_13.serialize_uncompressed(&mut bytes).unwrap();
+    util::add_randomness(rng, bytes);
+    let acc_gamma = Fr::rand(rng);
+
+    proof.0.iter().enumerate().for_each(|(i, x)| {
+      if i < 7 {
+        // i==7 is corr1
+        let z = *x * acc_gamma + prev_acc_holder.acc_g1[i];
+        result &= acc_holder.acc_g1[i] == z;
+      }
+    });
+    proof0_11_13.iter().enumerate().for_each(|(i, x)| {
+      let z = *x * acc_gamma + prev_acc_holder.acc_g1[i + 11];
+      result &= acc_holder.acc_g1[i + 11] == z;
+    });
+    result &= acc_holder.acc_g2[0] == prev_acc_holder.acc_g2[0] && b_g2 == acc_holder.acc_g2[0];
+    result &= acc_holder.acc_g2[1] == prev_acc_holder.acc_g2[1] && d_g2 == acc_holder.acc_g2[1];
+    result &= acc_holder.mu == prev_acc_holder.mu + acc_gamma;
+    Some(result)
+  }
+
+  fn acc_decide(&self, srs: &SRS, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {
+    let m2 = self.permutation.1.len();
+    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
+    let [acc_left_x, acc_left_Q_x, acc_left_zero, acc_left_zero_div, acc_right_x, acc_right_Q_x, acc_right_zero_div, acc_corr1, acc_corr2, acc_corr3, acc_corr4, acc_flat_L, acc_flat_R] =
+      acc_holder.acc_g1[..]
+    else {
+      panic!("Wrong acc proof format")
+    };
+    let [acc_b_g2, acc_d_g2] = acc_holder.acc_g2[..] else {
+      panic!("Wrong acc proof format")
+    };
+
+    let acc_1: PairingCheck = vec![
+      (acc_flat_L, acc_b_g2),
+      (-acc_left_x, srs.X2A[0]),
+      (-acc_left_Q_x, (srs.X2A[self.m] - srs.X2A[0]).into()),
+      (-acc_corr1, srs.Y2A),
+    ];
+
+    let acc_2: PairingCheck = vec![
+      ((acc_left_x - acc_left_zero).into(), srs.X2A[0]),
+      (-acc_left_zero_div, srs.X2A[1]),
+      (-acc_corr2, srs.Y2A),
+    ];
+
+    let acc_3: PairingCheck = vec![
+      (acc_flat_R, acc_d_g2),
+      (-acc_right_x, srs.X2A[0]),
+      (-acc_right_Q_x, (srs.X2A[m2] - srs.X2A[0]).into()),
+      (-acc_corr3, srs.Y2A),
+    ];
+
+    let acc_right_zero: G1Projective = acc_left_zero * (Fr::from(self.m as u32) * Fr::from(m2 as u32).inverse().unwrap());
+    let acc_4 = vec![
+      ((-acc_right_zero + acc_right_x).into(), srs.X2A[0]),
+      (-acc_right_zero_div, srs.X2A[1]),
+      (-acc_corr4, srs.Y2A),
+    ];
+
+    vec![acc_1, acc_2, acc_3, acc_4]
   }
 }

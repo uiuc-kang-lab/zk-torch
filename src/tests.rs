@@ -181,10 +181,12 @@ fn testBasicBlocks() {
   let N: usize = 1 << 6;
   let n: usize = 1 << 3;
   let a = ArrayD::from_shape_fn(IxDyn(&[N]), |_| Fr::rand(&mut rng));
+  let A = ArrayD::from_shape_fn(IxDyn(&[4, N]), |_| Fr::rand(&mut rng));
   let a_d = ArrayD::from_shape_fn(IxDyn(&[N]), |_| Fr::from(rng.gen_range(0..1_000_000_001)));
   let a_n = a.slice(s![..n]).to_owned().into_dyn();
   let a_0 = arr0(a[0]).into_dyn();
   let b = ArrayD::from_shape_fn(IxDyn(&[N]), |_| Fr::rand(&mut rng));
+  let B = ArrayD::from_shape_fn(IxDyn(&[4, N]), |_| Fr::rand(&mut rng));
   let b_n = b.slice(s![..n]).to_owned().into_dyn();
   let temp1 = a.view().into_shape(IxDyn(&[1, N])).unwrap();
   let temp2 = b.view().into_shape(IxDyn(&[1, N])).unwrap();
@@ -193,7 +195,16 @@ fn testBasicBlocks() {
   testBasicBlock(EqBasicBlock {}, srs, &empty, &vec![&a, &a]);
   testBasicBlock(AddBasicBlock {}, srs, &empty, &vec![&a, &b]);
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a, &b]);
-  testBasicBlock(MulBasicBlock {}, srs, &empty, &vec![&a, &b]);
+  testBasicBlock(MulBasicBlock { len: N }, srs, &empty, &vec![&a, &b]);
+  testBasicBlock(
+    RepeaterBasicBlock {
+      basic_block: Box::new(MulBasicBlock { len: N }),
+      N: 1,
+    },
+    srs,
+    &empty,
+    &vec![&A, &B],
+  );
   testBasicBlock(MulConstBasicBlock { c: 12345 }, srs, &empty, &vec![&a]);
   testBasicBlock(MulScalarBasicBlock {}, srs, &empty, &vec![&a, &a_0]);
   testBasicBlock(DivConstProofBasicBlock { c: 16 }, srs, &empty, &vec![&a_d]);
@@ -222,7 +233,7 @@ fn testBasicBlocks() {
     &ab,
     &vec![&a_n, &b_n],
   );
-  testBasicBlock(SumBasicBlock {}, srs, &empty, &vec![&a]);
+  testBasicBlock(SumBasicBlock { len: N }, srs, &empty, &vec![&a]);
 
   let data_to_split = ArrayD::from_shape_fn(IxDyn(&[4, 2]), |_| Fr::rand(&mut rng));
   testBasicBlock(
@@ -245,14 +256,14 @@ fn testBasicBlocks() {
   let c = ArrayD::from_shape_fn(IxDyn(&[m, n]), |_| Fr::rand(&mut rng));
   testBasicBlock(CQLinBasicBlock { setup: c.clone() }, srs, &c, &vec![&a]);
   let a = ArrayD::from_shape_fn(IxDyn(&[l, m]), |_| Fr::rand(&mut rng));
-  testBasicBlock(MatMulBasicBlock {}, srs, &empty, &vec![&a, &b]);
+  testBasicBlock(MatMulBasicBlock { m, n }, srs, &empty, &vec![&a, &b]);
   testBasicBlock(CQLinBasicBlock { setup: c.clone() }, srs, &c, &vec![&a]);
   let p1 = (vec![0], (0..l * m).collect::<Vec<_>>()); // Concatenate columns
   let p2 = (vec![0], (0..l * m).map(|i| (i % m) * l + (i / m)).collect::<Vec<_>>()); // Concatenate rows
   let p3 = ((0..m).map(|i| i * l).collect::<Vec<_>>(), (0..l).collect::<Vec<_>>()); // Transpose
-  testBasicBlock(PermuteBasicBlock { permutation: p1 }, srs, &empty, &vec![&a]);
-  testBasicBlock(PermuteBasicBlock { permutation: p2 }, srs, &empty, &vec![&a]);
-  testBasicBlock(PermuteBasicBlock { permutation: p3 }, srs, &empty, &vec![&a]);
+  testBasicBlock(PermuteBasicBlock { permutation: p1, n: l, m: m }, srs, &empty, &vec![&a]);
+  testBasicBlock(PermuteBasicBlock { permutation: p2, n: l, m: m }, srs, &empty, &vec![&a]);
+  testBasicBlock(PermuteBasicBlock { permutation: p3, n: l, m: m }, srs, &empty, &vec![&a]);
   let min = 1.;
   let max = 8.;
   testBasicBlock(ClipBasicBlock { min, max }, srs, &empty, &vec![&a]);

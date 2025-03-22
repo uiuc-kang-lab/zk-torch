@@ -17,10 +17,6 @@ impl Layer for AndLayer {
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let bool_check = graph.addBB(Box::new(BooleanCheckBasicBlock {}));
-    let mul = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MulBasicBlock {}),
-      N: 1,
-    }));
     let mul_scalar = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(MulScalarBasicBlock {}),
       N: 1,
@@ -33,7 +29,15 @@ impl Layer for AndLayer {
       mul_scalar
     // else use the normal version of the mul basic block.
     } else {
-      mul
+      let len = if input_shapes[0].len() > input_shapes[1].len() {
+        util::next_pow(input_shapes[0][input_shapes[0].len() - 1] as u32) as usize
+      } else {
+        util::next_pow(input_shapes[1][input_shapes[1].len() - 1] as u32) as usize
+      };
+      graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(MulBasicBlock { len }),
+        N: 1,
+      }))
     };
     // If the first input is a scalar, swap the inputs, because the mul scalar basic block expects the scalar to be the second input.
     let and_output = if input_shapes[0].len() == 0 {

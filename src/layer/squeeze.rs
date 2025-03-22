@@ -125,7 +125,11 @@ impl Layer for UnsqueezeLayer {
       a = util::next_pow(a as u32) as usize;
       let permutation = ((0..a).map(|x| x).collect(), vec![0]);
       let permute = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
+        basic_block: Box::new(PermuteBasicBlock {
+          permutation: permutation,
+          n: 1,
+          m: a,
+        }),
         N: 2,
       }));
       let intermediate = graph.addNode(reshape, vec![(-1, 0)]);
