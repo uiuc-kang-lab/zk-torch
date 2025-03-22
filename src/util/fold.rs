@@ -1,4 +1,5 @@
-use crate::basic_block::{BasicBlock, CQ2BasicBlock, CQLinBasicBlock};
+use crate::basic_block::{BasicBlock, CQ2BasicBlock, CQBasicBlock, CQLinBasicBlock};
+use crate::util::get_cq_N;
 use ark_bn254::Fr;
 
 pub fn get_foldable_bb_info(bb: &Box<dyn BasicBlock>) -> String {
@@ -6,7 +7,11 @@ pub fn get_foldable_bb_info(bb: &Box<dyn BasicBlock>) -> String {
     let bb = bb.downcast_ref::<CQLinBasicBlock>().unwrap();
     return format!("CQLin-{:?}", bb.setup.shape());
   } else if bb.is::<CQ2BasicBlock>() {
-    return "CQ2".to_string();
+    let bb = bb.downcast_ref::<CQ2BasicBlock>().unwrap();
+    return format!("CQ2-{}-{}", bb.n, bb.setup.as_ref().unwrap().2);
+  } else if bb.is::<CQBasicBlock>() {
+    let bb = bb.downcast_ref::<CQBasicBlock>().unwrap();
+    return format!("CQ-{:?}", get_cq_N(&bb.setup));
   } else {
     return format!("{:?}", bb);
   }
@@ -26,21 +31,15 @@ pub fn acc_to_acc_proof<P: Clone, Q: Clone>(acc: AccHolder<P, Q>) -> (Vec<P>, Ve
   let mut g2 = acc.acc_g2.clone();
   let mut fr = acc.acc_fr.clone();
   acc.errs.iter().for_each(|x| {
-    println!("g1: {:?}, g2: {:?}, fr: {:?}", g1.len(), g2.len(), fr.len());
     g1.extend(x.0.clone());
     g2.extend(x.1.clone());
     fr.extend(x.2.clone());
-    println!("g1: {:?}, g2: {:?}, fr: {:?}", g1.len(), g2.len(), fr.len());
   });
   acc.acc_errs.iter().for_each(|x| {
-    println!("g1: {:?}, g2: {:?}, fr: {:?}", g1.len(), g2.len(), fr.len());
     g1.extend(x.0.clone());
     g2.extend(x.1.clone());
     fr.extend(x.2.clone());
-    println!("g1: {:?}, g2: {:?}, fr: {:?}", g1.len(), g2.len(), fr.len());
-    // println!("fr: {:?}", fr.len());
   });
   fr.push(acc.mu);
-  // println!("fr: {:?}", fr.len());
   (g1, g2, fr)
 }

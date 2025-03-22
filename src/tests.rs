@@ -1,6 +1,6 @@
 use crate::basic_block::*;
 use crate::{ptau, util, util::convert_to_data};
-use ark_bn254::{Bn254, Fr, G1Affine, G2Affine};
+use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_poly::univariate::DensePolynomial;
 use ark_std::UniformRand;
@@ -54,6 +54,8 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
 
 #[cfg(feature = "fold")]
 fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) {
+  let num_folds: usize = 2; // Parameter to specify number of folds
+  println!("Testing basic block {:?} by folding it {:?} times", basic_block, num_folds);
   let mut rng = StdRng::from_entropy();
   let outputs = basic_block.run(model, inputs);
   let outputs = if outputs.is_ok() { outputs.unwrap() } else { panic!("Error in run") };
@@ -74,43 +76,37 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
   let cache = Arc::new(Mutex::new(HashMap::new()));
 
   let mut proofs = vec![];
-  let mut acc_proofs = vec![];
+  let mut acc_proofs: Vec<(Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>)> = vec![];
+  let mut acc_proofs_v = vec![];
 
-  let proof_1 = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng, cache.clone());
-  let acc_proof_1 = basic_block.acc_init(
-    srs,
-    &model,
-    &inputs,
-    &outputs,
-    (&proof_1.0, &proof_1.1, &proof_1.2),
-    &mut rng,
-    cache.clone(),
-  );
-  let (proof_1, acc_proof_1_v) = basic_block.acc_clean(
-    srs,
-    (&proof_1.0, &proof_1.1, &proof_1.2),
-    (&acc_proof_1.0, &acc_proof_1.1, &acc_proof_1.2),
-  );
-  proofs.push(proof_1);
-  acc_proofs.push(acc_proof_1_v);
-  let proof_2 = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng, cache.clone());
-  let acc_proof_2 = basic_block.acc_prove(
-    srs,
-    &model,
-    &inputs,
-    &outputs,
-    (&acc_proof_1.0, &acc_proof_1.1, &acc_proof_1.2),
-    (&proof_2.0, &proof_2.1, &proof_2.2),
-    &mut rng,
-    cache.clone(),
-  );
-  let (proof_2, acc_proof_2_v) = basic_block.acc_clean(
-    srs,
-    (&proof_2.0, &proof_2.1, &proof_2.2),
-    (&acc_proof_2.0, &acc_proof_2.1, &acc_proof_2.2),
-  );
-  proofs.push(proof_2);
-  acc_proofs.push(acc_proof_2_v);
+  for i in 0..num_folds {
+    let proof = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng, cache.clone());
+    let acc_proof = if proofs.is_empty() {
+      basic_block.acc_init(srs, &model, &inputs, &outputs, (&proof.0, &proof.1, &proof.2), &mut rng, cache.clone())
+    } else {
+      let acc_proof = (&acc_proofs[i - 1].0, &acc_proofs[i - 1].1, &acc_proofs[i - 1].2);
+      basic_block.acc_prove(
+        srs,
+        &model,
+        &inputs,
+        &outputs,
+        acc_proof,
+        (&proof.0, &proof.1, &proof.2),
+        &mut rng,
+        cache.clone(),
+      )
+    };
+    let (proof, acc_proof_v) = basic_block.acc_clean(srs, (&proof.0, &proof.1, &proof.2), (&acc_proof.0, &acc_proof.1, &acc_proof.2));
+    println!("acc_proof 0 len: {:?}", acc_proof.0.len());
+    println!("acc_proof 1 len: {:?}", acc_proof.1.len());
+    println!("acc_proof 2 len: {:?}", acc_proof.2.len());
+    println!("acc_proof_v 0 len: {:?}", acc_proof_v.0.len());
+    println!("acc_proof_v 1 len: {:?}", acc_proof_v.1.len());
+    println!("acc_proof_v 2 len: {:?}", acc_proof_v.2.len());
+    proofs.push(proof);
+    acc_proofs.push(acc_proof);
+    acc_proofs_v.push(acc_proof_v);
+  }
 
   let model = model.map(|x| DataEnc::new(srs, x));
   let inputs: Vec<ArrayD<DataEnc>> = inputs.iter().map(|x| (*x).map(|y| DataEnc::new(srs, y))).collect();
@@ -120,10 +116,19 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
   let cache = Arc::new(Mutex::new(HashMap::new()));
 
   let mut all_pairings = vec![];
-  let mut acc_proof_prev: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (vec![], vec![], vec![]);
-  for i in 0..2 {
+  for i in 0..num_folds {
     let proof = (&proofs[i].0, &proofs[i].1, &proofs[i].2);
-    let acc_proof = (&acc_proofs[i].0, &acc_proofs[i].1, &acc_proofs[i].2);
+    let acc_proof = (&acc_proofs_v[i].0, &acc_proofs_v[i].1, &acc_proofs_v[i].2);
+    let acc_proof_prev = if i == 0 {
+      (vec![], vec![], vec![])
+    } else {
+      (
+        acc_proofs_v[i - 1].0.clone(),
+        acc_proofs_v[i - 1].1.clone(),
+        acc_proofs_v[i - 1].2.clone(),
+      )
+    };
+
     let acc_verification = basic_block.acc_verify(
       srs,
       &model,
@@ -135,7 +140,6 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
       &mut rng2,
       cache.clone(),
     );
-    acc_proof_prev = (acc_proof.0.clone(), acc_proof.1.clone(), acc_proof.2.clone());
 
     let pairings = if acc_verification.is_none() {
       basic_block.verify(srs, &model, &inputs, &outputs, proof, &mut rng2, cache.clone())
@@ -149,11 +153,16 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
     all_pairings.push(pairings);
   }
 
-  let decider_pairings: Vec<PairingCheck> = basic_block.acc_decide(srs, (&acc_proofs[1].0, &acc_proofs[1].1, &acc_proofs[1].2));
+  let decider_pairings = basic_block.acc_decide(
+    srs,
+    (
+      &acc_proofs_v[num_folds - 1].0,
+      &acc_proofs_v[num_folds - 1].1,
+      &acc_proofs_v[num_folds - 1].2,
+    ),
+  );
   all_pairings.push(decider_pairings);
 
-  //let pairings = util::combine_pairing_checks(&);
-  //assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
   for pairings in all_pairings {
     for i in 0..pairings.len() {
       let pairing: Vec<_> = pairings[i].iter().map(|x| x).collect();
@@ -162,7 +171,6 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
     }
   }
 
-  // Check that prove and verify end with the same rng state
   assert_eq!(Fr::rand(&mut rng), Fr::rand(&mut rng2));
 }
 
@@ -205,7 +213,15 @@ fn testBasicBlocks() {
     &a,
     &vec![&a_n],
   );
-  testBasicBlock(CQ2BasicBlock { setup: None }, srs, &ab, &vec![&a_n, &b_n]);
+  testBasicBlock(
+    CQ2BasicBlock {
+      n,
+      setup: Some((Box::new(BasicBlockForTest {}), 0, N)),
+    },
+    srs,
+    &ab,
+    &vec![&a_n, &b_n],
+  );
   testBasicBlock(SumBasicBlock {}, srs, &empty, &vec![&a]);
 
   let data_to_split = ArrayD::from_shape_fn(IxDyn(&[4, 2]), |_| Fr::rand(&mut rng));

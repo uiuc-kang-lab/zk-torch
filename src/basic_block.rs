@@ -277,4 +277,8 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
   }
 }
 
+#[derive(Debug)]
+pub struct BasicBlockForTest;
+impl BasicBlock for BasicBlockForTest {}
+
 impl_downcast!(BasicBlock);

@@ -126,6 +126,7 @@ impl Layer for LSTMLayer {
       }));
       let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
+          n: (hidden_size * 4).next_power_of_two(),
           setup: Some((
             Box::new(ChangeSFBasicBlock {
               input_SF: sf_log * 2,
@@ -203,6 +204,7 @@ impl Layer for LSTMLayer {
       }));
       let sigmoid_check = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
+          n: hidden_size.next_power_of_two(),
           setup: Some((
             Box::new(SigmoidBasicBlock {
               input_SF: sf_log * 2,
@@ -232,6 +234,7 @@ impl Layer for LSTMLayer {
       }));
       let tanh_check = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
+          n: hidden_size.next_power_of_two(),
           setup: Some((
             Box::new(TanhBasicBlock {
               input_SF: sf_log * 2,

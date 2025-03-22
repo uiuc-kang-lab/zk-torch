@@ -61,6 +61,7 @@ impl Layer for ReduceMeanLayer {
     }));
     let div_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
+        n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
         setup: Some((
           Box::new(DivConstBasicBlock {
             c: input_shapes[0][input_shapes[0].len() - 1] as f32,

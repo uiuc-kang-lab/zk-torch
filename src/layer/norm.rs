@@ -89,6 +89,7 @@ impl Layer for BatchNormLayer {
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
+        n: scale_shape_padded.next_power_of_two(),
         setup: Some((
           Box::new(ChangeSFBasicBlock {
             input_SF: sf_log * 2,
@@ -367,6 +368,7 @@ impl Layer for InstanceNormLayer {
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
+        n: X_shape[X_shape.len() - 1].next_power_of_two(),
         setup: Some((
           Box::new(ChangeSFBasicBlock {
             input_SF: sf_log * 2,
@@ -383,6 +385,7 @@ impl Layer for InstanceNormLayer {
     }));
     let div_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
+        n: X_shape[X_shape.len() - 1].next_power_of_two(),
         setup: Some((
           Box::new(DivConstBasicBlock {
             c: (X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y) as f32).sqrt() * ((1 << sf_log) as f32),

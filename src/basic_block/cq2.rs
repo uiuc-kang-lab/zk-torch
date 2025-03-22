@@ -1,10 +1,12 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
-use crate::util;
+use super::{BasicBlock, BasicBlockForTest, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use crate::basic_block::cq::{cq_acc_clean, cq_acc_clean_errs, cq_acc_decide, cq_acc_init, cq_acc_prove, cq_acc_verify};
+use crate::util::{self, acc_to_acc_proof, get_cq_N, AccHolder};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::Field;
 use ark_poly::{evaluations::univariate::Evaluations, univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
+use ark_serialize::CanonicalSerialize;
 use ark_std::{
   ops::{Mul, Sub},
   One, UniformRand, Zero,
@@ -16,6 +18,7 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct CQ2BasicBlock {
+  pub n: usize,
   pub setup: Option<(Box<dyn BasicBlock>, i128, usize)>,
 }
 
@@ -24,7 +27,7 @@ impl BasicBlock for CQ2BasicBlock {
     util::gen_cq_table(
       &(self.setup.as_ref().unwrap().0),
       self.setup.as_ref().unwrap().1,
-      self.setup.as_ref().unwrap().2,
+      self.setup.as_ref().unwrap().2, // N
     )
   }
 
@@ -33,7 +36,7 @@ impl BasicBlock for CQ2BasicBlock {
       return Ok(vec![]);
     }
     assert!(inputs.len() == 2);
-    if self.setup.is_some() {
+    if self.setup.is_some() && !self.setup.as_ref().unwrap().0.is::<BasicBlockForTest>() {
       for x in inputs[0].iter().zip(inputs[1].iter()) {
         let temp = (*x.0, *x.1);
         let x_0_int = util::fr_to_int(temp.0);
@@ -211,20 +214,36 @@ impl BasicBlock for CQ2BasicBlock {
     let r: Vec<_> = (0..9).map(|_| Fr::rand(&mut rng2)).collect();
     let proof: Vec<G1Projective> = vec![m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC];
     let mut proof: Vec<G1Projective> = proof.iter().enumerate().map(|(i, x)| (*x) + srs.Y1P * r[i]).collect();
+    let part_C1 = -(srs.X1P[N] - srs.X1P[0]) * r[2] - srs.X1P[0] * r[0];
+    let part_C3 = -(srs.X1P[n] - srs.X1P[0]) * r[6];
     let mut C = vec![
-      -(srs.X1P[N] - srs.X1P[0]) * r[2]
-        + agg_model_g1 * r[1]
-        + A_x * agg_model_r
-        + (srs.Y1P * agg_model_r * r[1])
-        + srs.X1P[0] * (r[1] * beta - r[0]),
+      part_C1 + agg_model_g1 * r[1] + A_x * agg_model_r + (srs.Y1P * agg_model_r * r[1]) + srs.X1P[0] * r[1] * beta,
       -srs.X1P[1] * r[4] + srs.X1P[0] * (r[1] - r[3]),
-      -(srs.X1P[n] - srs.X1P[0]) * r[6] + agg_input.g1 * r[5] + B_x * agg_input.r + (srs.Y1P * agg_input.r * r[5]) + srs.X1P[0] * (r[5] * beta),
+      part_C3 + agg_input.g1 * r[5] + B_x * agg_input.r + (srs.Y1P * agg_input.r * r[5]) + srs.X1P[0] * (r[5] * beta),
       -srs.X1P[1] * r[7] + srs.X1P[0] * (r[5] - r[3] * Fr::from(N as u32) * Fr::from(n as u32).inverse().unwrap()),
       -srs.X1P[0] * r[8] + srs.X1P[N - n] * r[5],
     ];
     proof.append(&mut C);
+    let mut fr: Vec<Fr> = vec![beta];
 
-    return (proof, vec![(setup.1[0] + setup.1[1] * alpha).into(), f_x_2], Vec::new());
+    #[cfg(feature = "fold")]
+    {
+      let mut additional_g1_for_acc = vec![
+        agg_model_g1 + srs.Y1P * agg_model_r,
+        agg_input.g1 + srs.Y1P * agg_input.r,
+        part_C1,
+        part_C3,
+        agg_model_g1,
+        agg_input.g1,
+        A_x,
+        B_x,
+      ];
+
+      proof.append(&mut additional_g1_for_acc);
+      fr.append(&mut vec![agg_model_r, agg_input.r, r[1], r[5]]);
+    }
+
+    return (proof, vec![(setup.1[0] + setup.1[1] * alpha).into(), f_x_2], fr);
   }
 
   fn verify(
@@ -242,7 +261,7 @@ impl BasicBlock for CQ2BasicBlock {
     let N = model[0].len;
     let n = inputs[0].len;
     let alpha = Fr::rand(rng);
-    let [m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC, C1, C2, C3, C4, C5] = proof.0[..] else {
+    let [m_x, A_x, A_Q_x, A_zero, A_zero_div, B_x, B_Q_x, B_zero_div, B_DC, C1, C2, C3, C4, C5] = proof.0[..14] else {
       panic!("Wrong proof format")
     };
     let [T_x_2, f_x_2] = proof.1[..] else { panic!("Wrong proof format") };
@@ -286,5 +305,70 @@ impl BasicBlock for CQ2BasicBlock {
     checks.push(vec![(B_x, srs.X2A[N - n]), (-B_DC, srs.X2A[0]), (-C5, srs.Y2A)]);
 
     checks
+  }
+
+  fn acc_init(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<Data>,
+    _inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    cq_acc_init(proof, rng)
+  }
+
+  fn acc_prove(
+    &self,
+    srs: &SRS,
+    _model: &ArrayD<Data>,
+    _inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    cq_acc_prove(srs, acc_proof, proof, rng)
+  }
+
+  fn acc_clean(
+    &self,
+    srs: &SRS,
+    proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)) {
+    cq_acc_clean(srs, proof, acc_proof)
+  }
+
+  fn acc_verify(
+    &self,
+    _srs: &SRS,
+    model: &ArrayD<DataEnc>,
+    inputs: &Vec<&ArrayD<DataEnc>>,
+    _outputs: &Vec<&ArrayD<DataEnc>>,
+    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> Option<bool> {
+    let alpha = Fr::rand(rng);
+    let inputs = vec![inputs[0].first().unwrap(), inputs[1].first().unwrap()];
+    let agg_input: G1Affine = (inputs[0].g1 + (inputs[1].g1 * alpha)).into();
+    let agg_model: G1Affine = (model[0].g1 + (model[1].g1 * alpha)).into();
+    cq_acc_verify(agg_model, agg_input, prev_acc_proof, acc_proof, proof, rng)
+  }
+
+  fn acc_decide(&self, srs: &SRS, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {
+    let N = self.setup.as_ref().unwrap().2;
+    let n = self.n;
+    cq_acc_decide(srs, acc_proof, N, n)
+  }
+
+  fn acc_clean_errs(&self, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) {
+    cq_acc_clean_errs(acc_proof)
   }
 }

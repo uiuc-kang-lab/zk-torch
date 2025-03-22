@@ -197,6 +197,7 @@ macro_rules! create_conv_layer {
         }));
         let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
           basic_block: Box::new(CQ2BasicBlock {
+            n: weights_splatted[0].len().next_power_of_two(),
             setup: Some((
               Box::new(ChangeSFBasicBlock {
                 input_SF: sf_log * 2,
