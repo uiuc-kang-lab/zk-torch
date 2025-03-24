@@ -1,5 +1,5 @@
-use crate::util::get_cq_N;
 use crate::basic_block::*;
+use crate::util::get_cq_N;
 use ark_bn254::Fr;
 use ark_std::Zero;
 

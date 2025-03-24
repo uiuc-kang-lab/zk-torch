@@ -97,12 +97,12 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
       )
     };
     let (proof, acc_proof_v) = basic_block.acc_clean(srs, (&proof.0, &proof.1, &proof.2), (&acc_proof.0, &acc_proof.1, &acc_proof.2));
-    println!("acc_proof 0 len: {:?}", acc_proof.0.len());
-    println!("acc_proof 1 len: {:?}", acc_proof.1.len());
-    println!("acc_proof 2 len: {:?}", acc_proof.2.len());
-    println!("acc_proof_v 0 len: {:?}", acc_proof_v.0.len());
-    println!("acc_proof_v 1 len: {:?}", acc_proof_v.1.len());
-    println!("acc_proof_v 2 len: {:?}", acc_proof_v.2.len());
+    // println!("acc_proof 0 len: {:?}", acc_proof.0.len());
+    // println!("acc_proof 1 len: {:?}", acc_proof.1.len());
+    // println!("acc_proof 2 len: {:?}", acc_proof.2.len());
+    // println!("acc_proof_v 0 len: {:?}", acc_proof_v.0.len());
+    // println!("acc_proof_v 1 len: {:?}", acc_proof_v.1.len());
+    // println!("acc_proof_v 2 len: {:?}", acc_proof_v.2.len());
     proofs.push(proof);
     acc_proofs.push(acc_proof);
     acc_proofs_v.push(acc_proof_v);
@@ -128,7 +128,7 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
         acc_proofs_v[i - 1].2.clone(),
       )
     };
-
+    let pairings = basic_block.verify(srs, &model, &inputs, &outputs, proof, &mut rng2, cache.clone());
     let acc_verification = basic_block.acc_verify(
       srs,
       &model,
@@ -141,15 +141,9 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
       cache.clone(),
     );
 
-    let pairings = if acc_verification.is_none() {
-      basic_block.verify(srs, &model, &inputs, &outputs, proof, &mut rng2, cache.clone())
-    } else {
-      if acc_verification.unwrap() {
-        vec![]
-      } else {
-        panic!("Accumulator verification failed: {:?}", basic_block);
-      }
-    };
+    if acc_verification.is_some() {
+      assert!(acc_verification.unwrap(), "Accumulator verification failed: {:?}", basic_block);
+    }
     all_pairings.push(pairings);
   }
 
@@ -205,6 +199,30 @@ fn testBasicBlocks() {
     &empty,
     &vec![&A, &B],
   );
+  testBasicBlock(
+    RepeaterBasicBlock {
+      basic_block: Box::new(CQ2BasicBlock {
+        n,
+        setup: Some((Box::new(BasicBlockForTest {}), 0, N)),
+      }),
+      N: 1,
+    },
+    srs,
+    &ab,
+    &vec![&a_n, &b_n],
+  );
+  testBasicBlock(
+    RepeaterBasicBlock {
+      basic_block: Box::new(CQBasicBlock {
+        n,
+        setup: util::CQArrayType::Custom(a.iter().map(|x| *x).collect::<Vec<_>>()),
+      }),
+      N: 1,
+    },
+    srs,
+    &a,
+    &vec![&a_n],
+  );
   testBasicBlock(MulConstBasicBlock { c: 12345 }, srs, &empty, &vec![&a]);
   testBasicBlock(MulScalarBasicBlock {}, srs, &empty, &vec![&a, &a_0]);
   testBasicBlock(DivConstProofBasicBlock { c: 16 }, srs, &empty, &vec![&a_d]);
@@ -257,6 +275,15 @@ fn testBasicBlocks() {
   testBasicBlock(CQLinBasicBlock { setup: c.clone() }, srs, &c, &vec![&a]);
   let a = ArrayD::from_shape_fn(IxDyn(&[l, m]), |_| Fr::rand(&mut rng));
   testBasicBlock(MatMulBasicBlock { m, n }, srs, &empty, &vec![&a, &b]);
+  testBasicBlock(
+    RepeaterBasicBlock {
+      basic_block: Box::new(MatMulBasicBlock { m, n }),
+      N: 2,
+    },
+    srs,
+    &empty,
+    &vec![&a, &b],
+  );
   testBasicBlock(CQLinBasicBlock { setup: c.clone() }, srs, &c, &vec![&a]);
   let p1 = (vec![0], (0..l * m).collect::<Vec<_>>()); // Concatenate columns
   let p2 = (vec![0], (0..l * m).map(|i| (i % m) * l + (i / m)).collect::<Vec<_>>()); // Concatenate rows

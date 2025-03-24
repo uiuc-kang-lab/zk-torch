@@ -5,6 +5,8 @@ use crate::{
   util::{self, AccProofLayout},
 };
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_ec::bn::Bn;
+use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_poly::univariate::DensePolynomial;
 use itertools::multiunzip;
 use ndarray::{arr1, azip, par_azip, s, ArrayD, Axis, Dimension, IxDyn, SliceInfo, SliceInfoElem};
@@ -15,7 +17,12 @@ fn get_i_start(bb: &dyn AccProofLayout, total_g1: usize, local_bb_num: usize, is
   let base_g1 =
     bb.acc_g1_num(is_prover) + 2 * (bb.err_g1_nums_summable().iter().sum::<usize>() + bb.err_g1_nums_non_summable().iter().sum::<usize>());
   let step = bb.err_g1_nums_non_summable().iter().sum::<usize>();
-  (2 * total_g1 / local_bb_num - 2 * base_g1 + step * (1 - local_bb_num)) / (2 * step)
+  let i_start = if step == 0 {
+    0
+  } else {
+    (2 * total_g1 / local_bb_num - 2 * base_g1 + step * (1 - local_bb_num)) / (2 * step)
+  };
+  i_start
 }
 
 macro_rules! downcast_to_layout {
@@ -47,7 +54,9 @@ fn get_local_acc_proof_indices(bb: &dyn BasicBlock, acc_g1_len: usize, acc_fr_le
     SumBasicBlock,
     CQLinBasicBlock,
     MatMulBasicBlock,
-    PermuteBasicBlock
+    PermuteBasicBlock,
+    CQBasicBlock,
+    CQ2BasicBlock
   );
   let local_bb_num = acc_fr_len / (bb.acc_fr_num(is_prover) + 1);
   let mut acc_g1_indices = vec![0];
@@ -520,7 +529,11 @@ impl BasicBlock for RepeaterBasicBlock {
   }
 
   // This function is used to clean the errs in the final accumulator proof to calculate the proof size correctly.
-  fn acc_clean_errs(&self, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) {
+  fn acc_finalize(
+    &self,
+    srs: &SRS,
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+  ) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
     let (acc_divA, acc_divB, acc_divC) = get_local_acc_proof_indices(self.basic_block.as_ref(), acc_proof.0.len(), acc_proof.2.len(), false);
     let l = acc_divA.len() - 1;
     let localAccProof = (
@@ -528,7 +541,7 @@ impl BasicBlock for RepeaterBasicBlock {
       acc_proof.1[acc_divB[l - 1]..acc_divB[l]].to_vec(),
       acc_proof.2[acc_divC[l - 1]..acc_divC[l]].to_vec(),
     );
-    self.basic_block.acc_clean_errs((&localAccProof.0, &localAccProof.1, &localAccProof.2))
+    self.basic_block.acc_finalize(srs, (&localAccProof.0, &localAccProof.1, &localAccProof.2))
   }
 
   fn acc_decide(&self, srs: &SRS, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {

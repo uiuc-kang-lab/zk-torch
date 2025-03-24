@@ -439,6 +439,7 @@ impl Graph {
           return vec![];
         }
         let verify_id = format!("{} | verifying {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
+        let acc_verify_id = format!("{} | acc verifying {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
         println!("{}", verify_id);
         let myInputs = n
           .inputs
@@ -460,31 +461,32 @@ impl Graph {
         prev_acc_map.insert(*bb_index_for_folding, i);
 
         let acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>) = (&acc_proofs[i].0, &acc_proofs[i].1, &acc_proofs[i].2);
-        let acc_verification = self.basic_blocks[n.basic_block].acc_verify(
-          srs,
-          models[n.basic_block],
-          &myInputs,
-          outputs[i],
-          prev_acc_proof,
-          acc_proof,
-          (&proofs[i].0, &proofs[i].1, &proofs[i].2),
-          rng,
-          cache.clone(),
+        let pairings = timed!(
+          timing,
+          &verify_id,
+          self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, cache.clone())
         );
 
-        let pairings = if acc_verification.is_none() {
-          final_proofs_idx.push(i);
-          timed!(
-            timing,
-            &verify_id,
-            self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, cache.clone())
+        let acc_verification = timed!(
+          timing,
+          &acc_verify_id,
+          self.basic_blocks[n.basic_block].acc_verify(
+            srs,
+            models[n.basic_block],
+            &myInputs,
+            outputs[i],
+            prev_acc_proof,
+            acc_proof,
+            (&proofs[i].0, &proofs[i].1, &proofs[i].2),
+            rng,
+            cache.clone()
           )
+        );
+
+        if acc_verification.is_none() {
+          final_proofs_idx.push(i);
         } else {
-          if acc_verification.unwrap() {
-            vec![]
-          } else {
-            panic!("Accumulator verification failed");
-          }
+          assert!(acc_verification.unwrap(), "Accumulator verification failed");
         };
         let mut bytes = Vec::new();
         let temp: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (proofs[i].0.clone(), proofs[i].1.clone(), proofs[i].2.clone());
@@ -519,18 +521,19 @@ impl Graph {
   #[cfg(feature = "fold")]
   pub fn fold_proofs(
     &self,
+    srs: &SRS,
     final_proofs_idx: Vec<usize>,
     final_acc_proofs_idx: Vec<usize>,
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)>,
-  ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> {
+  ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)> {
     let (proofs, acc_proofs) = (&proofs[..self.nodes.len()], &proofs[self.nodes.len()..]);
-    let mut final_proofs: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> =
-      final_proofs_idx.iter().map(|i| (proofs[*i].0.clone(), proofs[*i].1.clone(), proofs[*i].2.clone())).collect();
-    let mut final_acc_proofs = final_acc_proofs_idx
+    let mut final_proofs: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)> =
+      final_proofs_idx.iter().map(|i| (proofs[*i].0.clone(), proofs[*i].1.clone(), proofs[*i].2.clone(), vec![])).collect();
+    let mut final_acc_proofs: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)> = final_acc_proofs_idx
       .iter()
       .map(|i| {
         let n = &self.nodes[*i];
-        self.basic_blocks[n.basic_block].acc_clean_errs((&acc_proofs[*i].0, &acc_proofs[*i].1, &acc_proofs[*i].2))
+        self.basic_blocks[n.basic_block].acc_finalize(srs, (&acc_proofs[*i].0, &acc_proofs[*i].1, &acc_proofs[*i].2))
       })
       .collect();
     final_proofs.append(&mut final_acc_proofs);

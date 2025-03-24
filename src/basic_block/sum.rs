@@ -67,6 +67,7 @@ impl BasicBlock for SumBasicBlock {
     return (proof, vec![], Vec::new());
   }
 
+  #[cfg(not(feature = "fold"))]
   fn verify(
     &self,
     srs: &SRS,

@@ -146,7 +146,7 @@ pub fn verify(srs: &SRS, graph: &Graph, timing: &mut TimingTree) {
       "verify",
       graph.verify(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng, timing)
     );
-    let final_proof = graph.fold_proofs(final_proofs_idx, final_acc_proofs_idx, &proofs);
+    let final_proof = graph.fold_proofs(srs, final_proofs_idx, final_acc_proofs_idx, &proofs);
     final_proof.serialize_uncompressed(File::create(&CONFIG.prover.proof_path).unwrap()).unwrap();
   }
 }

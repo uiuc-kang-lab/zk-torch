@@ -2,7 +2,9 @@
 #![allow(non_upper_case_globals)]
 use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, calc_pow, AccHolder, AccProofLayout};
-use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_ec::bn::Bn;
+use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, EvaluationDomain, GeneralEvaluationDomain, Polynomial};
 use ark_serialize::CanonicalSerialize;
@@ -336,6 +338,7 @@ impl BasicBlock for CQLinBasicBlock {
     return (proof, vec![M_x_2], gammas);
   }
 
+  #[cfg(not(feature = "fold"))]
   fn verify(
     &self,
     srs: &SRS,
@@ -423,6 +426,37 @@ impl BasicBlock for CQLinBasicBlock {
     checks.push(vec![((A_x - z + pi_1 * gamma_n).into(), srs.X2A[0]), (-pi_1, srs.X2A[n]), (-C6, srs.Y2A)]);
 
     checks
+  }
+
+  #[cfg(feature = "fold")]
+  fn verify(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<DataEnc>,
+    _inputs: &Vec<&ArrayD<DataEnc>>,
+    _outputs: &Vec<&ArrayD<DataEnc>>,
+    proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    rng: &mut StdRng,
+    cache: ProveVerifyCache,
+  ) -> Vec<PairingCheck> {
+    let n = self.setup.shape()[1];
+    let log_n = n.next_power_of_two().trailing_zeros() as usize;
+
+    let _alpha = {
+      let mut cache = cache.lock().unwrap();
+      let CacheValues::RLCRandom(alpha) = cache.entry("cqlin_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
+        panic!("Cache type error")
+      };
+      alpha.clone()
+    };
+
+    let gamma = Fr::rand(rng);
+    let mut result = gamma == proof.2[0];
+    for i in 0..log_n {
+      result &= proof.2[i].pow(&[2]) == proof.2[i + 1];
+    }
+    assert!(result, "acc_proof for cqlin is not valid");
+    vec![]
   }
 
   fn acc_init(
@@ -698,12 +732,7 @@ impl BasicBlock for CQLinBasicBlock {
     let prev_acc_holder = acc_proof_to_acc(self, prev_acc_proof, false);
     let acc_holder = acc_proof_to_acc(self, acc_proof, false);
 
-    let gamma = Fr::rand(rng);
-    let mut result = gamma == proof.2[0];
-    for i in 0..log_n {
-      result &= proof.2[i].pow(&[2]) == proof.2[i + 1];
-    }
-
+    let mut result = true;
     if prev_acc_holder.mu.is_zero() && acc_holder.mu.is_one() {
       // skip verifying RLC because no RLC was done in acc_init.
       // Fiat-shamir
@@ -878,9 +907,43 @@ impl BasicBlock for CQLinBasicBlock {
     checks
   }
 
-  fn acc_clean_errs(&self, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) {
+  fn acc_finalize(
+    &self,
+    srs: &SRS,
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+  ) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
+    let m = self.setup.shape()[0];
+    let n = self.setup.shape()[1];
     let mut acc_holder = acc_proof_to_acc(self, acc_proof, false);
+    let mut temp: PairingCheck = vec![];
+
+    let err_1 = &acc_holder.acc_errs[0];
+    let err_5 = &acc_holder.acc_errs[1];
+    let err_6 = &acc_holder.acc_errs[2];
+
+    for i in 0..err_1.1.len() {
+      temp.push((-err_1.0[i], err_1.1[i]));
+    }
+    temp.push((err_1.0[err_1.1.len()], (srs.X2A[m * n] - srs.X2A[0]).into()));
+    temp.push((err_1.0[err_1.1.len() + 1], srs.X2A[0]));
+    temp.push((err_1.0[err_1.1.len() + 2], srs.Y2A));
+    let err_1 = temp;
+    let err_5: PairingCheck = vec![(-err_5.0[0], srs.X2A[0]), (err_5.0[1], srs.X2A[1]), (err_5.0[2], srs.Y2A)];
+    let err_6: PairingCheck = vec![(-err_6.0[0], srs.X2A[0]), (err_6.0[1], srs.X2A[n]), (err_6.0[2], srs.Y2A)];
+    let acc_errs = vec![err_1, err_5, err_6];
+
+    let acc_pairing = acc_errs
+      .iter()
+      .map(|p| {
+        let pairing: Vec<_> = p.iter().map(|x| x).collect();
+        let pairing: (Vec<_>, Vec<_>) = (pairing.iter().map(|x| x.0).collect(), pairing.iter().map(|x| x.1).collect());
+        Bn254::multi_pairing(pairing.0.iter(), pairing.1.iter())
+      })
+      .collect();
+
+    acc_holder.acc_errs = acc_holder.acc_errs[3..].to_vec();
     acc_holder.errs = vec![];
-    acc_to_acc_proof(acc_holder)
+    let acc_proof = acc_to_acc_proof(acc_holder);
+    (acc_proof.0, acc_proof.1, acc_proof.2, acc_pairing)
   }
 }

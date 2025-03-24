@@ -199,6 +199,7 @@ impl BasicBlock for PermuteBasicBlock {
     return (proof, proof2, Vec::new());
   }
 
+  #[cfg(not(feature = "fold"))]
   fn verify(
     &self,
     srs: &SRS,
@@ -301,6 +302,27 @@ impl BasicBlock for PermuteBasicBlock {
     ]);
 
     checks
+  }
+
+  #[cfg(feature = "fold")]
+  fn verify(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<DataEnc>,
+    _inputs: &Vec<&ArrayD<DataEnc>>,
+    _outputs: &Vec<&ArrayD<DataEnc>>,
+    _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    rng: &mut StdRng,
+    cache: ProveVerifyCache,
+  ) -> Vec<PairingCheck> {
+    let _alpha = {
+      let mut cache = cache.lock().unwrap();
+      let CacheValues::RLCRandom(alpha) = cache.entry("permute_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
+        panic!("Cache type error")
+      };
+      alpha.clone()
+    };
+    vec![]
   }
 
   fn acc_init(

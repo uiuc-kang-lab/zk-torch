@@ -2,7 +2,9 @@
 #![allow(non_upper_case_globals)]
 use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, calc_pow, AccHolder, AccProofLayout};
-use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_ec::bn::Bn;
+use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::CanonicalSerialize;
@@ -237,6 +239,7 @@ impl BasicBlock for MatMulBasicBlock {
     return (proof, proof2, fr);
   }
 
+  #[cfg(not(feature = "fold"))]
   fn verify(
     &self,
     srs: &SRS,
@@ -331,6 +334,31 @@ impl BasicBlock for MatMulBasicBlock {
     ]);
 
     checks
+  }
+
+  #[cfg(feature = "fold")]
+  fn verify(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<DataEnc>,
+    _inputs: &Vec<&ArrayD<DataEnc>>,
+    _outputs: &Vec<&ArrayD<DataEnc>>,
+    _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    rng: &mut StdRng,
+    cache: ProveVerifyCache,
+  ) -> Vec<PairingCheck> {
+    let (_alpha, _beta) = {
+      let mut cache = cache.lock().unwrap();
+      let CacheValues::RLCRandom(alpha) = cache.entry("matmul_alpha".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
+        panic!("Cache type error")
+      };
+      let alpha = alpha.clone();
+      let CacheValues::RLCRandom(beta) = cache.entry("matmul_beta".to_owned()).or_insert_with(|| CacheValues::RLCRandom(Fr::rand(rng))) else {
+        panic!("Cache type error")
+      };
+      (alpha, beta.clone())
+    };
+    vec![]
   }
 
   fn acc_init(
@@ -678,9 +706,28 @@ impl BasicBlock for MatMulBasicBlock {
     vec![acc_1, acc_2, acc_3, acc_4, acc_5]
   }
 
-  fn acc_clean_errs(&self, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) {
+  fn acc_finalize(
+    &self,
+    srs: &SRS,
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+  ) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
     let mut acc_holder = acc_proof_to_acc(self, acc_proof, false);
+    let err_1 = &acc_holder.acc_errs[0];
+
+    let mut temp: PairingCheck = vec![];
+    for i in 0..err_1.1.len() {
+      temp.push((-err_1.0[i], err_1.1[i]));
+    }
+    temp.push((err_1.0[err_1.1.len()], (srs.X2A[self.m] - srs.X2A[0]).into()));
+    temp.push((err_1.0[err_1.1.len() + 1], srs.X2A[0]));
+    temp.push((err_1.0[err_1.1.len() + 2], srs.Y2A));
+    let pairing: Vec<_> = temp.iter().map(|x| x).collect();
+    let pairing: (Vec<_>, Vec<_>) = (pairing.iter().map(|x| x.0).collect(), pairing.iter().map(|x| x.1).collect());
+    let acc_err1 = Bn254::multi_pairing(pairing.0.iter(), pairing.1.iter());
+
     acc_holder.errs = vec![];
-    acc_to_acc_proof(acc_holder)
+    acc_holder.acc_errs = vec![];
+    let acc_proof = acc_to_acc_proof(acc_holder);
+    (acc_proof.0, acc_proof.1, acc_proof.2, vec![acc_err1])
   }
 }

@@ -2,6 +2,8 @@
 use crate::util::{self, ark_de, ark_se};
 pub use add::AddBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_ec::bn::Bn;
+use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{UniformRand, Zero};
@@ -264,11 +266,16 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
   }
 
   // This function is used to clean the errs in the final accumulator proof to calculate the proof size correctly.
-  fn acc_clean_errs(&self, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) {
+  fn acc_finalize(
+    &self,
+    _srs: &SRS,
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+  ) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
     (
       acc_proof.0.iter().map(|x| *x).collect(),
       acc_proof.1.iter().map(|x| *x).collect(),
       acc_proof.2.iter().map(|x| *x).collect(),
+      vec![],
     )
   }
 
