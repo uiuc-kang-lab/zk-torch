@@ -1,5 +1,6 @@
 use crate::basic_block::*;
 use crate::graph::*;
+use crate::layer::squeeze::UnsqueezeBasicBlock;
 use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
@@ -9,7 +10,6 @@ use ndarray::{arr1, Array1, ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
 use util::copy_constraint::get_reshape_indices;
-use crate::layer::squeeze::UnsqueezeBasicBlock;
 
 // BatchNormLayer is a struct that represents a batch normalization layer, which computes
 // Y = (X - input_mean) * scale / sqrt(input_var + epsilon) + bias
@@ -640,24 +640,27 @@ impl Layer for CustomInstanceNormLayer {
     b = util::next_pow(b as u32) as usize;
     let permutation = ((0..b).map(|x| x * a).collect(), (0..a).collect());
     let cc = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(PermuteBasicBlock { permutation }),
+      basic_block: Box::new(PermuteBasicBlock { n: a, m: b, permutation }),
       N: 2,
     }));
     let permutation_back = ((0..a).map(|x| x * b).collect(), (0..b).collect());
     let cc_back = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(PermuteBasicBlock { permutation: permutation_back }),
+      basic_block: Box::new(PermuteBasicBlock {
+        permutation: permutation_back,
+        n: b,
+        m: a,
+      }),
       N: 2,
     }));
 
     let sum = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(SumBasicBlock {}),
+      basic_block: Box::new(SumBasicBlock { len: b }),
       N: 1,
     }));
-    let div_const = graph.addBB(Box::new(DivConstProofBasicBlock {
-      c: X_shape[1] as u32,
-    }));
+    let div_const = graph.addBB(Box::new(DivConstProofBasicBlock { c: X_shape[1] as u32 }));
     let div_const_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: 1,
         setup: CQArrayType::NonNegative,
       }),
       N: 1,
@@ -674,12 +677,16 @@ impl Layer for CustomInstanceNormLayer {
     b = util::next_pow(b as u32) as usize;
     let permutation = ((0..b).map(|x| x * a).collect(), (0..a).collect());
     let cc2 = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(PermuteBasicBlock { permutation }),
+      basic_block: Box::new(PermuteBasicBlock { n: a, m: b, permutation }),
       N: 2,
     })); // to [1, C]
     let permutation_back = ((0..a).map(|x| x * b).collect(), (0..b).collect());
     let cc2_back = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(PermuteBasicBlock { permutation: permutation_back }),
+      basic_block: Box::new(PermuteBasicBlock {
+        permutation: permutation_back,
+        n: b,
+        m: a,
+      }),
       N: 2,
     })); // to [C, 1]
 
@@ -687,7 +694,9 @@ impl Layer for CustomInstanceNormLayer {
       c: arr1(&vec![Fr::from(epsilon.round() as i32)]).into_dyn(),
     }));
     let mul = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MulBasicBlock {}),
+      basic_block: Box::new(MulBasicBlock {
+        len: util::next_pow(X_shape[1] as u32) as usize,
+      }),
       N: 1,
     }));
     let sub = graph.addBB(Box::new(RepeaterBasicBlock {
@@ -705,6 +714,7 @@ impl Layer for CustomInstanceNormLayer {
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
+        n: X_shape[X_shape.len() - 1].next_power_of_two(),
         setup: Some((
           Box::new(ChangeSFBasicBlock {
             input_SF: sf_log * 2,
@@ -721,6 +731,7 @@ impl Layer for CustomInstanceNormLayer {
     }));
     let div_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
+        n: X_shape[X_shape.len() - 1].next_power_of_two(),
         setup: Some((
           Box::new(DivConstBasicBlock {
             c: (vec![X_shape[1]].iter().fold(1, |x, &y| x * y) as f32).sqrt() * ((1 << sf_log) as f32),
@@ -739,6 +750,7 @@ impl Layer for CustomInstanceNormLayer {
     }));
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: X_shape[1].next_power_of_two(),
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,
@@ -773,12 +785,14 @@ impl Layer for CustomInstanceNormLayer {
     }));
     let non_negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: util::next_pow(X_shape[1] as u32) as usize,
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,
     }));
     let non_positive_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: util::next_pow(X_shape[1] as u32) as usize,
         setup: util::CQArrayType::NonPositive,
       }),
       N: 1,
@@ -807,13 +821,13 @@ impl Layer for CustomInstanceNormLayer {
     // s = size(X)
     // X - m
     let sub_output = graph.addNode(sub, vec![(-1, 0), (mean_output, 0)]); // [1, D1*D2*D3, C]
-    // (X - m) * SF / (sqrt(s) * SF)
+                                                                          // (X - m) * SF / (sqrt(s) * SF)
     let div_SF_output = graph.addNode(div_SF, vec![(sub_output, 0)]);
     let _ = graph.addNode(div_SF_check, vec![(sub_output, 0), (div_SF_output, 0)]);
     // (X - m)^2 / s
     let mul_output = graph.addNode(mul, vec![(sub_output, 0), (sub_output, 0)]);
     let cc_output = graph.addNode(cc, vec![(mul_output, 0)]); // [1, C, D1*D2*D3]
-    // SUM((X - m)^2) / s
+                                                              // SUM((X - m)^2) / s
     let var_output = graph.addNode(sum, vec![(cc_output, 0)]); // [1, C, 1]
     let var_output = graph.addNode(cc2, vec![(var_output, 0)]);
     let var_output = graph.addNode(reshape_0, vec![(var_output, 0)]); // [1, C]
@@ -828,8 +842,8 @@ impl Layer for CustomInstanceNormLayer {
     // x = var + epsilon
     // SqrtBB(x) = sqrt(x/SF)*SF + eps (where -1 < eps < 1)
     let sqrt_output = graph.addNode(sqrt, vec![(var_plus_eps_output, 0)]); // [1, C]
-    // The following operations are to check if sqrt_output is correct
-    // square_sqrt = SqrtBB(x)^2 = x*SF + 2*sqrt(x/SF)*SF*eps + eps^2
+                                                                           // The following operations are to check if sqrt_output is correct
+                                                                           // square_sqrt = SqrtBB(x)^2 = x*SF + 2*sqrt(x/SF)*SF*eps + eps^2
     let square_sqrt = graph.addNode(mul, vec![(sqrt_output, 0), (sqrt_output, 0)]);
     // scale_input_by_sf = x*SF
     let sf_const_output = graph.addNode(sf_const, vec![]);

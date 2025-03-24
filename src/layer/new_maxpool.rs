@@ -198,7 +198,9 @@ impl Layer for MaxPool2dLayer {
 
     // Pointwise multiplication between the selector and the candidates
     let mul = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MulBasicBlock {}),
+      basic_block: Box::new(MulBasicBlock {
+        len: util::next_pow(C_in as u32) as usize,
+      }),
       N: 1,
     }));
 
@@ -223,6 +225,7 @@ impl Layer for MaxPool2dLayer {
     // CQ to check if x >= 0
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: util::next_pow(C_in as u32) as usize,
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,

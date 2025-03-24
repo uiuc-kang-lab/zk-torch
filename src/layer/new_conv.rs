@@ -6,13 +6,13 @@ use crate::util;
 use crate::util::pad_to_pow_of_two;
 use crate::CONFIG;
 use ark_bn254::Fr;
-use ark_std::{One, Zero};
 use ark_bn254::G1Projective;
+use ark_std::{One, Zero};
 use ndarray::indices;
 use ndarray::Dim;
 use ndarray::Dimension;
 use ndarray::IxDyn;
-use ndarray::{s, Array1, Array4, ArrayD, Axis, concatenate, SliceInfo};
+use ndarray::{concatenate, s, Array1, Array4, ArrayD, Axis, SliceInfo};
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -117,8 +117,9 @@ impl Layer for Conv2dLayer {
       input_SF: sf_log * 2,
       output_SF: sf_log,
     }));
-    let change_SF_check = graph.addBB(Box::new(RepeaterEstBasicBlock {
+    let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
+        n: util::next_pow(weight_shape[0] as u32) as usize,
         setup: Some((
           Box::new(ChangeSFBasicBlock {
             input_SF: sf_log * 2,
@@ -270,8 +271,9 @@ impl Layer for MultiHeadConv2dLayer {
       input_SF: sf_log * 2,
       output_SF: sf_log,
     }));
-    let change_SF_check = graph.addBB(Box::new(RepeaterEstBasicBlock {
+    let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
+        n: util::next_pow(head_dim as u32) as usize,
         setup: Some((
           Box::new(ChangeSFBasicBlock {
             input_SF: sf_log * 2,
@@ -289,7 +291,7 @@ impl Layer for MultiHeadConv2dLayer {
       let mut cqlin_outputs = Vec::new();
       for k_h in 0..weight_shape[2] {
         for k_w in 0..weight_shape[3] {
-          let k = constants[1].unwrap().0.slice(s![(head*head_dim)..((head+1)*head_dim), .., k_h, k_w]);
+          let k = constants[1].unwrap().0.slice(s![(head * head_dim)..((head + 1) * head_dim), .., k_h, k_w]);
           let k = k.t().to_owned().into_dyn();
           let k = util::pad_to_pow_of_two(&k, &Fr::zero());
           let cqlin = graph.addBB(Box::new(RepeaterBasicBlock {
@@ -309,7 +311,7 @@ impl Layer for MultiHeadConv2dLayer {
       let _ = graph.addNode(change_SF_check, vec![(conv_output, 0), (output, 0)]);
 
       if input_shapes.len() > 2 {
-        let b = constants[2].unwrap().0.slice(s![(head*head_dim)..((head+1)*head_dim)]);
+        let b = constants[2].unwrap().0.slice(s![(head * head_dim)..((head + 1) * head_dim)]);
         let b = b.to_owned().into_dyn();
         let b = util::pad_to_pow_of_two(&b, &Fr::zero());
         let bias = graph.addBB(Box::new(Const2BasicBlock { c: b }));
@@ -322,7 +324,9 @@ impl Layer for MultiHeadConv2dLayer {
     let H_o = (H - weight_shape[2] + pads[0] + pads[2]) / strides[0] + 1;
     let W_o = (W - weight_shape[3] + pads[1] + pads[3]) / strides[1] + 1;
 
-    let output = graph.addBB(Box::new(MultiHeadConv2dAggBasicBlock { output_shape: vec![1, H_o * W_o, head_dim] }));
+    let output = graph.addBB(Box::new(MultiHeadConv2dAggBasicBlock {
+      output_shape: vec![1, H_o * W_o, head_dim],
+    }));
     let output = graph.addNode(output, head_outputs);
 
     let output_shape = vec![1, num_heads * H_o * W_o, head_dim];
@@ -392,6 +396,7 @@ impl Layer for Conv3dLayer {
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
+        n: util::next_pow(weight_shape[0] as u32) as usize,
         setup: Some((
           Box::new(ChangeSFBasicBlock {
             input_SF: sf_log * 2,
@@ -503,6 +508,7 @@ impl Layer for ConcatConv3dLayer {
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
+        n: util::next_pow(weight_shape[0] as u32) as usize,
         setup: Some((
           Box::new(ChangeSFBasicBlock {
             input_SF: sf_log * 2,
@@ -521,7 +527,7 @@ impl Layer for ConcatConv3dLayer {
         for k_d3 in 0..weight_shape[4] {
           let mut add_outputs = Vec::new();
           for i in 0..2 {
-            let k = constants[2].unwrap().0.slice(s![.., (in_channels*i)..(in_channels*(i+1)), k_d1, k_d2, k_d3]);
+            let k = constants[2].unwrap().0.slice(s![.., (in_channels * i)..(in_channels * (i + 1)), k_d1, k_d2, k_d3]);
             let k = util::pad_to_pow_of_two(&k.into_dyn().to_owned(), &Fr::zero());
             let cqlin = graph.addBB(Box::new(RepeaterBasicBlock {
               basic_block: Box::new(CQLinBasicBlock {
@@ -533,7 +539,7 @@ impl Layer for ConcatConv3dLayer {
             add_outputs.push((cqlin_output, 0)); // 2*[1, D_in * D_in * D_in, C_out]
           }
           let cqlin_output = graph.addNode(add, add_outputs); //  [1, D_in * D_in * D_in, C_out]
-          
+
           cqlin_outputs.push((cqlin_output, 0)); // [1, D_in * D_in * D_in, C_out]
         }
       }
@@ -614,6 +620,7 @@ impl Layer for Conv3dTransposeLayer {
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
+        n: util::next_pow(weight_shape[1] as u32) as usize,
         setup: Some((
           Box::new(ChangeSFBasicBlock {
             input_SF: sf_log * 2,

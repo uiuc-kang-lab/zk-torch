@@ -4,12 +4,12 @@ use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
 use ark_bn254::Fr;
+use ark_bn254::G1Projective;
+use ark_std::Zero;
 use ndarray::Dimension;
 use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
-use ark_std::Zero;
-use ark_bn254::G1Projective;
 
 // Assumes nearest_mode = floor
 fn resize_permutation(input_shape: &Vec<usize>, sizes: &Vec<usize>) -> ArrayD<Option<IxDyn>> {
@@ -104,7 +104,7 @@ impl Layer for ResizeLayer {
 
 #[derive(Debug)]
 pub struct CustomResizeBasicBlock {
-  pub input_shape: Vec<usize>, // [1, H_in * W_in, C]
+  pub input_shape: Vec<usize>,  // [1, H_in * W_in, C]
   pub output_shape: Vec<usize>, // [1, H_out * W_out, C]
 }
 impl BasicBlock for CustomResizeBasicBlock {
@@ -120,13 +120,12 @@ impl BasicBlock for CustomResizeBasicBlock {
     for i in 0..D_o {
       for j in 0..D_o {
         for c in 0..C {
-          result[[0, i * D_o + j, c]] = input[[0, (i/scale) * D + (j/scale), c]];
+          result[[0, i * D_o + j, c]] = input[[0, (i / scale) * D + (j / scale), c]];
         }
       }
     }
     result = util::pad_to_pow_of_two(&result, &Fr::zero());
-    
-    
+
     Ok(vec![result])
   }
 
@@ -145,7 +144,7 @@ impl BasicBlock for CustomResizeBasicBlock {
     let mut result = ArrayD::from_shape_fn(IxDyn(&[1, D_o * D_o]), |_| data_zero.clone());
     for i in 0..D_o {
       for j in 0..D_o {
-        result[[0, i * D_o + j]] = input[[0, (i/scale) * D + (j/scale)]].clone();
+        result[[0, i * D_o + j]] = input[[0, (i / scale) * D + (j / scale)]].clone();
       }
     }
     vec![result]

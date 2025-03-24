@@ -32,7 +32,7 @@ pub use permute::PermuteBasicBlock;
 use rand::{rngs::StdRng, SeedableRng};
 pub use range::RangeConstBasicBlock;
 use rayon::prelude::*;
-pub use repeater::{RepeaterBasicBlock, RepeaterEstBasicBlock};
+pub use repeater::RepeaterBasicBlock;
 pub use reshape::ReshapeBasicBlock;
 pub use rope::RoPEBasicBlock;
 use serde::{Deserialize, Serialize};
