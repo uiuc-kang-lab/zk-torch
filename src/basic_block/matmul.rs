@@ -419,7 +419,9 @@ impl BasicBlock for MatMulBasicBlock {
       panic!("Wrong acc proof format")
     };
 
-    // Compute the error
+    // Compute the error, 
+    // which is A(x) * B'(x) + B(x) * A'(x) - (Q_l(x) * mu + Q_l'(x))(x^m - 1) - (l(x) * mu + l'(x)) - C
+    // where C is the correction for the blinding term
     let err: (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) = (
       vec![
         flat_A,
