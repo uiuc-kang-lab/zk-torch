@@ -106,6 +106,7 @@ fn splat_weights(weights_shape: &Vec<usize>, weights: &ArrayD<Fr>, is_transpose:
   // Input and output channel positions are swapped between Conv and ConvTranspose
   let out_channels = if is_transpose { weights_shape[1] } else { weights_shape[0] };
   let in_channels = if is_transpose { weights_shape[0] } else { weights_shape[1] };
+
   // (inp_channels * kernel_dims product x out_channels)
   for ck in 0..in_channels {
     for ch_idx in indices(IxDyn(&weights_shape[2..])) {
@@ -253,7 +254,7 @@ macro_rules! create_conv_layer {
         let out_dims = out_hw(&dims, &strides, &ch_dims, &padding, $is_transpose);
         let mut output_shape = vec![1, cout];
         output_shape.append(&mut out_dims.clone());
-        let a = cout.next_power_of_two();
+        let a = output_shape[1].next_power_of_two();
         let b = output_shape[n - 1].next_power_of_two();
         let transpose2 = ((0..a).map(|x| x * b).collect(), (0..b).collect());
         let permute2 = graph.addBB(Box::new(RepeaterBasicBlock {
