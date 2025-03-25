@@ -1,9 +1,9 @@
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 use plonky2::{timed, util::timing::TimingTree};
+use std::env;
 use zk_torch::graph::Graph;
 use zk_torch::{onnx, util, CONFIG};
-use std::env;
 
 fn run(
   inputs: &Vec<&ArrayD<Fr>>,
@@ -25,17 +25,13 @@ fn main() {
 
   // Check if exactly two arguments were provided (excluding the program name)
   if args.len() != 4 {
-      eprintln!("Usage: cargo run -- <integer1> <integer2>");
-      return;
+    eprintln!("Usage: cargo run -- <integer1> <integer2>");
+    return;
   }
 
   // Parse the arguments into integers
-  let first_number: usize = args[2]
-      .parse()
-      .expect("Failed to parse the first argument as an integer");
-  let second_number: usize = args[3]
-      .parse()
-      .expect("Failed to parse the second argument as an integer");
+  let first_number: usize = args[2].parse().expect("Failed to parse the first argument as an integer");
+  let second_number: usize = args[3].parse().expect("Failed to parse the second argument as an integer");
 
   println!("You entered: {} and {}", first_number, second_number);
 

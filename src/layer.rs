@@ -32,7 +32,7 @@ pub use r#where::WhereLayer;
 pub use range::RangeLayer;
 pub use reducemean::ReduceMeanLayer;
 pub use reshape::{ReshapeLayer, ReshapeTransLayer};
-pub use resize::{ResizeLayer, CustomResizeLayer};
+pub use resize::{CustomResizeLayer, ResizeLayer};
 pub use rope::{RopeConstLayer, RopeRotateLayer};
 pub use scatternd::ScatterNDLayer;
 pub use shape::ShapeLayer;

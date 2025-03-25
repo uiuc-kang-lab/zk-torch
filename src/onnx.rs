@@ -210,7 +210,12 @@ fn get_local_graph(
     "Erf" => Ok(ErfLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Conv" => Ok(ConvLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Conv2D" => Ok(Conv2dLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
-    "MultiHeadConv2D" => Ok(MultiHeadConv2dLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "MultiHeadConv2D" => Ok(MultiHeadConv2dLayer::graph(
+      &input_shapes,
+      &input_types,
+      &node_constants,
+      &node_attributes,
+    )),
     "Conv3D" => Ok(Conv3dLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Conv3DTranspose" => Ok(Conv3dTransposeLayer::graph(
       &input_shapes,

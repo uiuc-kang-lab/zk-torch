@@ -97,12 +97,12 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
       )
     };
     let (proof, acc_proof_v) = basic_block.acc_clean(srs, (&proof.0, &proof.1, &proof.2), (&acc_proof.0, &acc_proof.1, &acc_proof.2));
-    // println!("acc_proof 0 len: {:?}", acc_proof.0.len());
-    // println!("acc_proof 1 len: {:?}", acc_proof.1.len());
-    // println!("acc_proof 2 len: {:?}", acc_proof.2.len());
-    // println!("acc_proof_v 0 len: {:?}", acc_proof_v.0.len());
-    // println!("acc_proof_v 1 len: {:?}", acc_proof_v.1.len());
-    // println!("acc_proof_v 2 len: {:?}", acc_proof_v.2.len());
+    println!("acc_proof 0 len: {:?}", acc_proof.0.len());
+    println!("acc_proof 1 len: {:?}", acc_proof.1.len());
+    println!("acc_proof 2 len: {:?}", acc_proof.2.len());
+    println!("acc_proof_v 0 len: {:?}", acc_proof_v.0.len());
+    println!("acc_proof_v 1 len: {:?}", acc_proof_v.1.len());
+    println!("acc_proof_v 2 len: {:?}", acc_proof_v.2.len());
     proofs.push(proof);
     acc_proofs.push(acc_proof);
     acc_proofs_v.push(acc_proof_v);
@@ -273,6 +273,15 @@ fn testBasicBlocks() {
   let b = ArrayD::from_shape_fn(IxDyn(&[n, m]), |_| Fr::rand(&mut rng));
   let c = ArrayD::from_shape_fn(IxDyn(&[m, n]), |_| Fr::rand(&mut rng));
   testBasicBlock(CQLinBasicBlock { setup: c.clone() }, srs, &c, &vec![&a]);
+  testBasicBlock(
+    RepeaterBasicBlock {
+      basic_block: Box::new(CQLinBasicBlock { setup: c.clone() }),
+      N: 1,
+    },
+    srs,
+    &c,
+    &vec![&a],
+  );
   let a = ArrayD::from_shape_fn(IxDyn(&[l, m]), |_| Fr::rand(&mut rng));
   testBasicBlock(MatMulBasicBlock { m, n }, srs, &empty, &vec![&a, &b]);
   testBasicBlock(
@@ -285,6 +294,15 @@ fn testBasicBlocks() {
     &vec![&a, &b],
   );
   testBasicBlock(CQLinBasicBlock { setup: c.clone() }, srs, &c, &vec![&a]);
+  testBasicBlock(
+    RepeaterBasicBlock {
+      basic_block: Box::new(CQLinBasicBlock { setup: c.clone() }),
+      N: 2,
+    },
+    srs,
+    &c,
+    &vec![&a],
+  );
   let p1 = (vec![0], (0..l * m).collect::<Vec<_>>()); // Concatenate columns
   let p2 = (vec![0], (0..l * m).map(|i| (i % m) * l + (i / m)).collect::<Vec<_>>()); // Concatenate rows
   let p3 = ((0..m).map(|i| i * l).collect::<Vec<_>>(), (0..l).collect::<Vec<_>>()); // Transpose
