@@ -84,7 +84,7 @@ pub fn convert_to_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
     return arr0(Data::new(srs, a.view().as_slice().unwrap())).into_dyn();
   }
   let mut a = a.map_axis(Axis(a.ndim() - 1), |r| Data {
-    raw: r.as_slice().unwrap().to_vec(),
+    raw: r.as_standard_layout().as_slice().unwrap().to_vec(),
     poly: ark_poly::polynomial::univariate::DensePolynomial::zero(),
     r: Fr::zero(),
     g1: G1Projective::zero(),
@@ -100,7 +100,7 @@ pub fn convert_to_mock_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
     return arr0(mock_data_new(srs, a.view().as_slice().unwrap())).into_dyn();
   }
   let mut a = a.map_axis(Axis(a.ndim() - 1), |r| Data {
-    raw: r.as_slice().unwrap().to_vec(),
+    raw: r.as_standard_layout().as_slice().unwrap().to_vec(),
     poly: ark_poly::polynomial::univariate::DensePolynomial::zero(),
     r: Fr::zero(),
     g1: G1Projective::zero(),
@@ -297,7 +297,6 @@ pub fn zktorch_kernel() {
   prove(&srs, &inputs, outputs.unwrap(), setups, models, &mut graph, &mut timing);
 
   // Verify
-  #[cfg(not(feature = "mock_prove"))]
   verify(&srs, &graph, &mut timing);
 
   // Measure proof size;
