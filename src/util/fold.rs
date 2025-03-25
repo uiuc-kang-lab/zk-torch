@@ -48,6 +48,12 @@ pub trait AccProofLayout: BasicBlock {
   fn acc_g1_num(&self, is_prover: bool) -> usize;
   fn acc_g2_num(&self, is_prover: bool) -> usize;
   fn acc_fr_num(&self, is_prover: bool) -> usize;
+  // when we calculate the errors for folding scheme, the actual errors are some pairing results.
+  // However, to do pairing in our prover is not efficient, so we store the errors in the form of G1, G2, Fr.
+  // We can always accumulate Fr by summing them up, but for G1 and G2, we need to know which errors are summable and which are not.
+  // Let err = e(A, B), if B is always the same during folding, then we say A is summable, otherwise non-summable.
+  // Similarly, if A is always the same, then B is summable, otherwise non-summable.
+  // In the below struct, the length of vec should be equal to the number of errors in the BB.
   fn err_g1_nums_summable(&self) -> Vec<usize> {
     vec![]
   }

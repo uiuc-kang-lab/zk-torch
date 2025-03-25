@@ -11,6 +11,11 @@ use ndarray::{arr1, azip, par_azip, s, ArrayD, Axis, Dimension, IxDyn, SliceInfo
 use rand::rngs::StdRng;
 use rayon::prelude::*;
 
+// When we do the i-th time folding in a BB which is not a repeater, the size of its acc_proof.0 is in the form of i * step + base_g1.
+// And when we do folding for the BB in repeater, the size of acc_proof.0 is the sum of N (i.e., local_bb_num) acc_proof.0 of the BB,
+// Therefore, the size of acc_proof.0 will be in the form of
+//   (i * step + base_g1) + ((i + 1) * step + base_g1) + ... + ((i + N - 1) * step + base_g1).
+// To solve what i is, the below helper function is used.
 fn get_i_start(bb: &dyn AccProofLayout, total_g1: usize, local_bb_num: usize, is_prover: bool) -> usize {
   let base_g1 =
     bb.acc_g1_num(is_prover) + 2 * (bb.err_g1_nums_summable().iter().sum::<usize>() + bb.err_g1_nums_non_summable().iter().sum::<usize>());
@@ -49,7 +54,7 @@ fn get_local_acc_proof_indices(bb: &dyn BasicBlock, acc_g1_len: usize, acc_fr_le
     MatMulBasicBlock,
     PermuteBasicBlock
   );
-  let local_bb_num = acc_fr_len / (bb.acc_fr_num(is_prover) + 1);
+  let local_bb_num = acc_fr_len / (bb.acc_fr_num(is_prover) + 2 * bb.err_fr_nums().iter().sum::<usize>() + 1);
   let mut acc_g1_indices = vec![0];
   let mut acc_g2_indices = vec![0];
   let mut acc_fr_indices = vec![0];
@@ -59,7 +64,7 @@ fn get_local_acc_proof_indices(bb: &dyn BasicBlock, acc_g1_len: usize, acc_fr_le
     bb.acc_g1_num(is_prover) + 2 * (bb.err_g1_nums_summable().iter().sum::<usize>() + bb.err_g1_nums_non_summable().iter().sum::<usize>());
   let base_g2 =
     bb.acc_g2_num(is_prover) + 2 * (bb.err_g2_nums_summable().iter().sum::<usize>() + bb.err_g2_nums_non_summable().iter().sum::<usize>());
-  let base_fr = bb.acc_fr_num(is_prover) + 1;
+  let base_fr = bb.acc_fr_num(is_prover) + 2 * bb.err_fr_nums().iter().sum::<usize>() + 1;
   let step = bb.err_g1_nums_non_summable().iter().sum::<usize>();
 
   for i in i_start..(local_bb_num + i_start) {
