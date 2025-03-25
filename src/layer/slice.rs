@@ -61,7 +61,6 @@ fn get_slice(
     if end > input_shape_pad[i] {
       real_end = input_dim[i];
     }
-    println!("start {}, real_end {}, step {}", start, real_end, step);
     while start < real_end {
       result_idx[axis].push(start);
       real_output_shape[axis] += 1;

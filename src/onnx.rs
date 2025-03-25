@@ -164,6 +164,12 @@ fn get_local_graph(
     "Less" => Ok(LessLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "LSTM" => Ok(LSTMLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "MultiHeadMatMul" => Ok(MultiHeadMatMulLayer::graph(
+      &input_shapes,
+      &input_types,
+      &node_constants,
+      &node_attributes,
+    )),
     "Mod" => Ok(ModLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Neg" => Ok(NegLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Not" => Ok(NotLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
