@@ -251,10 +251,10 @@ impl Graph {
     let cache = Arc::new(Mutex::new(HashMap::new()));
     let mut proofs = vec![];
     let mut acc_proofs_for_verifier = vec![];
-    let mut acc_proofs: Vec<(Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>)> = vec![];
-    let mut prev_acc_map: HashMap<usize, usize> = HashMap::new(); // (basicblock, acc_proofs index)
+    let mut prev_acc_map: HashMap<usize, (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>)> = HashMap::new(); // (basicblock, acc_proof)
 
     self.nodes.iter().enumerate().for_each(|(i, n)| {
+      let bb_index_for_folding = self.foldable_bb_map.get(&n.basic_block).unwrap();
       let precomputable = self.precomputable.prove_and_verify[i];
       if precomputable {
         // Skip proving for some layers if they are precomputable.
@@ -264,7 +264,7 @@ impl Graph {
           self.layer_names[i], self.basic_blocks[n.basic_block]
         );
         proofs.push((vec![], vec![], vec![]));
-        acc_proofs.push((vec![], vec![], vec![]));
+        prev_acc_map.insert(*bb_index_for_folding, (vec![], vec![], vec![]));
         acc_proofs_for_verifier.push((vec![], vec![], vec![]));
         return;
       }
@@ -296,10 +296,9 @@ impl Graph {
       );
 
       // check if basicblock is in prev_acc_map
-      let bb_index_for_folding = self.foldable_bb_map.get(&n.basic_block).unwrap();
       let new_acc_proof = if let Some(prev_acc) = prev_acc_map.get(bb_index_for_folding) {
         let prev_acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>) =
-          (&acc_proofs[*prev_acc].0, &acc_proofs[*prev_acc].1, &acc_proofs[*prev_acc].2);
+          (&prev_acc.0, &prev_acc.1, &prev_acc.2);
         self.basic_blocks[n.basic_block].acc_prove(
           srs,
           models[n.basic_block],
@@ -329,9 +328,8 @@ impl Graph {
       );
 
       proofs.push(proof);
-      acc_proofs.push(new_acc_proof);
       acc_proofs_for_verifier.push(new_acc_proof_v);
-      prev_acc_map.insert(*bb_index_for_folding, acc_proofs.len() - 1);
+      prev_acc_map.insert(*bb_index_for_folding, new_acc_proof);
 
       let mut bytes = Vec::new();
       proofs[proofs.len() - 1].serialize_uncompressed(&mut bytes).unwrap();
