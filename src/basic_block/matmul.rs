@@ -11,6 +11,291 @@ use ndarray::{arr1, arr2, ArrayD, Ix1, Ix2, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::iter::ParallelIterator;
 
+struct MatMulAccProof<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize> {
+  fiat_shamir: MatMulAccFiatShamir<P, Q>,
+  acc_corr1: P,
+  acc_corr2: P,
+  acc_corr3: P,
+  acc_corr4: P,
+  mu: Fr,
+  prover_only: Option<MatMulAccProofProverOnly<P>>,
+  errs: MatMulErrs<P, Q>,
+  acc_errs: MatMulErrs<P, Q>,
+}
+
+#[derive(CanonicalSerialize)]
+struct MatMulAccFiatShamir<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize> {
+  acc_left_x: P,
+  acc_left_Q_x: P,
+  acc_left_zero: P,
+  acc_left_zero_div: P,
+  acc_right_x: P,
+  acc_right_Q_x: P,
+  acc_right_zero_div: P,
+  acc_flat_A: P,
+  acc_flat_B: P,
+  acc_flat_C: P,
+  acc_flat_B_g2: Q,
+  acc_beta_pow_g2: Q,
+}
+
+struct MatMulAccProofProverOnly<P: Clone + CanonicalSerialize> {
+  acc_part_corr1: P,
+  acc_flat_A_no_blind: P,
+  acc_flat_B_no_blind: P,
+  acc_flat_A_r: Fr,
+  acc_flat_B_r: Fr,
+}
+
+#[derive(CanonicalSerialize, Clone)]
+struct MatMulErrs<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize> {
+  flat_A: P,
+  acc_flat_A: P,
+  acc_left_Q_x: P,
+  acc_left_x: P,
+  acc_part_corr1: P,
+  acc_flat_B_g2: Q,
+  flat_B_g2: Q,
+}
+
+fn accumulate(
+  matmul_acc: &MatMulAccProof<G1Projective, G2Projective>,
+  errs: &MatMulErrs<G1Projective, G2Projective>,
+  proof: &(&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+  acc_gamma: Fr,
+) -> MatMulAccProof<G1Projective, G2Projective> {
+  let [left_x, left_Q_x, left_zero, left_zero_div, right_x, right_Q_x, right_zero_div, corr1, corr2, corr3, corr4, flat_A, flat_B, flat_C, part_corr1, flat_A_no_blind, flat_B_no_blind] =
+    proof.0[..]
+  else {
+    panic!("Wrong proof format")
+  };
+
+  let [flat_B_g2, beta_pow_g2] = proof.1[..] else {
+    panic!("Wrong proof format")
+  };
+  let [flat_A_r, flat_B_r] = proof.2[..] else {
+    panic!("Wrong proof format")
+  };
+
+  let new_errs = MatMulErrs {
+    flat_A: errs.flat_A * acc_gamma,
+    acc_flat_A: errs.acc_flat_A * acc_gamma,
+    acc_left_Q_x: errs.acc_left_Q_x * acc_gamma,
+    acc_left_x: errs.acc_left_x * acc_gamma,
+    acc_part_corr1: errs.acc_part_corr1 * acc_gamma,
+    acc_flat_B_g2: errs.acc_flat_B_g2,
+    flat_B_g2: errs.flat_B_g2,
+  };
+
+  let acc_errs = MatMulErrs {
+    flat_A: new_errs.flat_A,
+    acc_flat_A: new_errs.acc_flat_A,
+    acc_left_Q_x: matmul_acc.acc_errs.acc_left_Q_x + new_errs.acc_left_Q_x,
+    acc_left_x: matmul_acc.acc_errs.acc_left_x + new_errs.acc_left_x,
+    acc_part_corr1: matmul_acc.acc_errs.acc_part_corr1 + new_errs.acc_part_corr1,
+    acc_flat_B_g2: new_errs.acc_flat_B_g2,
+    flat_B_g2: new_errs.flat_B_g2,
+  };
+
+  // Compute the error
+  let matmul_acc_prover_only = matmul_acc.prover_only.as_ref().unwrap();
+  let new_matmul_acc = MatMulAccProof {
+    fiat_shamir: MatMulAccFiatShamir {
+      acc_left_x: matmul_acc.fiat_shamir.acc_left_x + left_x * acc_gamma,
+      acc_left_Q_x: matmul_acc.fiat_shamir.acc_left_Q_x + left_Q_x * acc_gamma,
+      acc_left_zero: matmul_acc.fiat_shamir.acc_left_zero + left_zero * acc_gamma,
+      acc_left_zero_div: matmul_acc.fiat_shamir.acc_left_zero_div + left_zero_div * acc_gamma,
+      acc_right_x: matmul_acc.fiat_shamir.acc_right_x + right_x * acc_gamma,
+      acc_right_Q_x: matmul_acc.fiat_shamir.acc_right_Q_x + right_Q_x * acc_gamma,
+      acc_right_zero_div: matmul_acc.fiat_shamir.acc_right_zero_div + right_zero_div * acc_gamma,
+      acc_flat_A: matmul_acc.fiat_shamir.acc_flat_A + flat_A * acc_gamma,
+      acc_flat_B: matmul_acc.fiat_shamir.acc_flat_B + flat_B * acc_gamma,
+      acc_flat_C: matmul_acc.fiat_shamir.acc_flat_C + flat_C * acc_gamma,
+      acc_flat_B_g2: matmul_acc.fiat_shamir.acc_flat_B_g2 + flat_B_g2 * acc_gamma,
+      acc_beta_pow_g2: beta_pow_g2,
+    },
+    acc_corr1: matmul_acc.acc_corr1 + corr1 * acc_gamma,
+    acc_corr2: matmul_acc.acc_corr2 + corr2 * acc_gamma,
+    acc_corr3: matmul_acc.acc_corr3 + corr3 * acc_gamma,
+    acc_corr4: matmul_acc.acc_corr4 + corr4 * acc_gamma,
+    mu: matmul_acc.mu + acc_gamma,
+    prover_only: Some(MatMulAccProofProverOnly {
+      acc_part_corr1: matmul_acc_prover_only.acc_part_corr1 + part_corr1 * acc_gamma,
+      acc_flat_A_no_blind: matmul_acc_prover_only.acc_flat_A_no_blind + flat_A_no_blind * acc_gamma,
+      acc_flat_B_no_blind: matmul_acc_prover_only.acc_flat_B_no_blind + flat_B_no_blind * acc_gamma,
+      acc_flat_A_r: matmul_acc_prover_only.acc_flat_A_r + flat_A_r * acc_gamma,
+      acc_flat_B_r: matmul_acc_prover_only.acc_flat_B_r + flat_B_r * acc_gamma,
+    }),
+    errs: errs.clone(),
+    acc_errs,
+  };
+
+  new_matmul_acc
+}
+
+fn acc_proof_to_matmul_acc<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize>(
+  bb: &dyn AccProofLayout,
+  acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>),
+  is_prover: bool,
+) -> Option<MatMulAccProof<P, Q>> {
+  if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
+    return None;
+  }
+  let acc_holder = acc_proof_to_acc(bb, acc_proof, is_prover);
+  Some(matmul_acc_holder_to_acc(acc_holder, is_prover))
+}
+
+fn matmul_acc_holder_to_acc<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize>(
+  acc_holder: AccHolder<P, Q>,
+  is_prover: bool,
+) -> MatMulAccProof<P, Q> {
+  let acc_proof = MatMulAccProof {
+    fiat_shamir: MatMulAccFiatShamir {
+      acc_left_x: acc_holder.acc_g1[0].clone(),
+      acc_left_Q_x: acc_holder.acc_g1[1].clone(),
+      acc_left_zero: acc_holder.acc_g1[2].clone(),
+      acc_left_zero_div: acc_holder.acc_g1[3].clone(),
+      acc_right_x: acc_holder.acc_g1[4].clone(),
+      acc_right_Q_x: acc_holder.acc_g1[5].clone(),
+      acc_right_zero_div: acc_holder.acc_g1[6].clone(),
+      acc_flat_A: acc_holder.acc_g1[11].clone(),
+      acc_flat_B: acc_holder.acc_g1[12].clone(),
+      acc_flat_C: acc_holder.acc_g1[13].clone(),
+      acc_flat_B_g2: acc_holder.acc_g2[0].clone(),
+      acc_beta_pow_g2: acc_holder.acc_g2[1].clone(),
+    },
+    acc_corr1: acc_holder.acc_g1[7].clone(),
+    acc_corr2: acc_holder.acc_g1[8].clone(),
+    acc_corr3: acc_holder.acc_g1[9].clone(),
+    acc_corr4: acc_holder.acc_g1[10].clone(),
+    mu: acc_holder.mu,
+    prover_only: if is_prover {
+      Some(MatMulAccProofProverOnly {
+        acc_part_corr1: acc_holder.acc_g1[14].clone(),
+        acc_flat_A_no_blind: acc_holder.acc_g1[15].clone(),
+        acc_flat_B_no_blind: acc_holder.acc_g1[16].clone(),
+        acc_flat_A_r: acc_holder.acc_fr[0],
+        acc_flat_B_r: acc_holder.acc_fr[1],
+      })
+    } else {
+      None
+    },
+    errs: MatMulErrs {
+      flat_A: acc_holder.errs[0].0[0].clone(),
+      acc_flat_A: acc_holder.errs[0].0[1].clone(),
+      acc_left_Q_x: acc_holder.errs[0].0[2].clone(),
+      acc_left_x: acc_holder.errs[0].0[3].clone(),
+      acc_part_corr1: acc_holder.errs[0].0[4].clone(),
+      acc_flat_B_g2: acc_holder.errs[0].1[0].clone(),
+      flat_B_g2: acc_holder.errs[0].1[1].clone(),
+    },
+    acc_errs: MatMulErrs {
+      flat_A: acc_holder.acc_errs[0].0[0].clone(),
+      acc_flat_A: acc_holder.acc_errs[0].0[1].clone(),
+      acc_left_Q_x: acc_holder.acc_errs[0].0[2].clone(),
+      acc_left_x: acc_holder.acc_errs[0].0[3].clone(),
+      acc_part_corr1: acc_holder.acc_errs[0].0[4].clone(),
+      acc_flat_B_g2: acc_holder.acc_errs[0].1[0].clone(),
+      flat_B_g2: acc_holder.acc_errs[0].1[1].clone(),
+    },
+  };
+  acc_proof
+}
+
+fn matmul_acc_to_acc_holder<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize>(
+  acc: MatMulAccProof<P, Q>,
+  is_prover: bool,
+) -> AccHolder<P, Q> {
+  let acc_g2 = vec![acc.fiat_shamir.acc_flat_B_g2, acc.fiat_shamir.acc_beta_pow_g2];
+  let mu = acc.mu;
+  let errs = vec![(
+    vec![
+      acc.errs.flat_A,
+      acc.errs.acc_flat_A,
+      acc.errs.acc_left_Q_x,
+      acc.errs.acc_left_x,
+      acc.errs.acc_part_corr1,
+    ],
+    vec![acc.errs.acc_flat_B_g2, acc.errs.flat_B_g2],
+    vec![],
+  )];
+  let acc_errs = vec![(
+    vec![
+      acc.acc_errs.flat_A,
+      acc.acc_errs.acc_flat_A,
+      acc.acc_errs.acc_left_Q_x,
+      acc.acc_errs.acc_left_x,
+      acc.acc_errs.acc_part_corr1,
+    ],
+    vec![acc.acc_errs.acc_flat_B_g2, acc.acc_errs.flat_B_g2],
+    vec![],
+  )];
+  if is_prover {
+    let prover_only = acc.prover_only.unwrap();
+    let acc_g1 = vec![
+      acc.fiat_shamir.acc_left_x,
+      acc.fiat_shamir.acc_left_Q_x,
+      acc.fiat_shamir.acc_left_zero,
+      acc.fiat_shamir.acc_left_zero_div,
+      acc.fiat_shamir.acc_right_x,
+      acc.fiat_shamir.acc_right_Q_x,
+      acc.fiat_shamir.acc_right_zero_div,
+      acc.acc_corr1,
+      acc.acc_corr2,
+      acc.acc_corr3,
+      acc.acc_corr4,
+      acc.fiat_shamir.acc_flat_A,
+      acc.fiat_shamir.acc_flat_B,
+      acc.fiat_shamir.acc_flat_C,
+      prover_only.acc_part_corr1,
+      prover_only.acc_flat_A_no_blind,
+      prover_only.acc_flat_B_no_blind,
+    ];
+    let acc_fr = vec![prover_only.acc_flat_A_r, prover_only.acc_flat_B_r];
+    AccHolder {
+      acc_g1,
+      acc_g2,
+      acc_fr,
+      mu,
+      errs,
+      acc_errs,
+    }
+  } else {
+    let acc_g1 = vec![
+      acc.fiat_shamir.acc_left_x,
+      acc.fiat_shamir.acc_left_Q_x,
+      acc.fiat_shamir.acc_left_zero,
+      acc.fiat_shamir.acc_left_zero_div,
+      acc.fiat_shamir.acc_right_x,
+      acc.fiat_shamir.acc_right_Q_x,
+      acc.fiat_shamir.acc_right_zero_div,
+      acc.acc_corr1,
+      acc.acc_corr2,
+      acc.acc_corr3,
+      acc.acc_corr4,
+      acc.fiat_shamir.acc_flat_A,
+      acc.fiat_shamir.acc_flat_B,
+      acc.fiat_shamir.acc_flat_C,
+    ];
+    AccHolder {
+      acc_g1,
+      acc_g2,
+      acc_fr: vec![],
+      mu,
+      errs,
+      acc_errs,
+    }
+  }
+}
+
+fn matmul_acc_to_acc_proof<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize>(
+  acc: MatMulAccProof<P, Q>,
+  is_prover: bool,
+) -> (Vec<P>, Vec<Q>, Vec<Fr>) {
+  let acc_holder = matmul_acc_to_acc_holder(acc, is_prover);
+  acc_to_acc_proof(acc_holder)
+}
+
 impl AccProofLayout for MatMulBasicBlock {
   fn acc_g1_num(&self, is_prover: bool) -> usize {
     if is_prover {
@@ -388,90 +673,50 @@ impl BasicBlock for MatMulBasicBlock {
       panic!("Wrong proof format")
     };
 
-    let acc_holder = acc_proof_to_acc(self, acc_proof, true);
-    let mut new_acc_holder = AccHolder {
-      acc_g1: Vec::new(),
-      acc_g2: Vec::new(),
-      acc_fr: Vec::new(),
-      mu: Fr::zero(),
-      errs: Vec::new(),
-      acc_errs: Vec::new(),
-    };
+    let matmul_acc = acc_proof_to_matmul_acc(self, acc_proof, true).unwrap();
 
-    let [acc_left_x, acc_left_Q_x, _acc_left_zero, _acc_left_zero_div, _acc_right_x, _acc_right_Q_x, _acc_right_zero_div, _acc_corr1, _acc_corr2, _acc_corr3, _acc_corr4, acc_flat_A, _acc_flat_B, _acc_flat_C, acc_part_corr1, acc_flat_A_no_blind, acc_flat_B_no_blind] =
-      acc_holder.acc_g1[..]
-    else {
-      panic!("Wrong acc proof format")
-    };
-    let [acc_flat_B_g2, acc_beta_pow_g2] = acc_holder.acc_g2[..] else {
-      panic!("Wrong acc proof format")
-    };
-    assert!(beta_pow_g2 == acc_beta_pow_g2);
-    let acc_mu = acc_holder.mu;
-    let [acc_flat_A_r, acc_flat_B_r] = acc_holder.acc_fr[..] else {
-      panic!("Wrong acc proof format")
-    };
+    let acc_flat_A = matmul_acc.fiat_shamir.acc_flat_A;
+    let acc_left_x = matmul_acc.fiat_shamir.acc_left_x;
+    let acc_left_Q_x = matmul_acc.fiat_shamir.acc_left_Q_x;
+    let acc_mu = matmul_acc.mu;
+    let acc_part_corr1 = matmul_acc.prover_only.as_ref().unwrap().acc_part_corr1;
+    let po = matmul_acc.prover_only.as_ref().unwrap();
+    let acc_flat_A_no_blind = po.acc_flat_A_no_blind;
+    let acc_flat_B_no_blind = po.acc_flat_B_no_blind;
+    let acc_flat_A_r = po.acc_flat_A_r;
+    let acc_flat_B_r = po.acc_flat_B_r;
+    let acc_flat_B_g2 = matmul_acc.fiat_shamir.acc_flat_B_g2;
 
     // Compute the error
-    let err: (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) = (
-      vec![
-        flat_A,
-        acc_flat_A,
-        acc_left_Q_x + left_Q_x * acc_mu,
-        acc_left_x + left_x * acc_mu,
-        acc_part_corr1
-          + part_corr1 * acc_mu
-          + acc_flat_A_no_blind * flat_B_r
-          + flat_A_no_blind * acc_flat_B_r
-          + acc_flat_B_no_blind * flat_A_r
-          + flat_B_no_blind * acc_flat_A_r
-          + srs.Y1P * (flat_A_r * acc_flat_B_r + flat_B_r * acc_flat_A_r),
-      ],
-      vec![acc_flat_B_g2, flat_B_g2],
-      vec![],
-    );
-    let mut errs = vec![err];
+    let errs = MatMulErrs {
+      flat_A,
+      acc_flat_A,
+      acc_left_Q_x: acc_left_Q_x + left_Q_x * acc_mu,
+      acc_left_x: acc_left_x + left_x * acc_mu,
+      acc_part_corr1: acc_part_corr1
+        + part_corr1 * acc_mu
+        + acc_flat_A_no_blind * flat_B_r
+        + flat_A_no_blind * acc_flat_B_r
+        + acc_flat_B_no_blind * flat_A_r
+        + flat_B_no_blind * acc_flat_A_r
+        + srs.Y1P * (flat_A_r * acc_flat_B_r + flat_B_r * acc_flat_A_r),
+      acc_flat_B_g2,
+      flat_B_g2,
+    };
 
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    acc_holder.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
-    acc_holder.acc_g1[11..14].serialize_uncompressed(&mut bytes).unwrap();
-    acc_holder.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
+    matmul_acc.fiat_shamir.serialize_uncompressed(&mut bytes).unwrap();
     proof.0[..7].serialize_uncompressed(&mut bytes).unwrap();
     proof.0[11..14].serialize_uncompressed(&mut bytes).unwrap();
     proof.1.serialize_uncompressed(&mut bytes).unwrap();
-    errs.iter().for_each(|(g1, g2, f)| {
-      g1.serialize_uncompressed(&mut bytes).unwrap();
-      g2.serialize_uncompressed(&mut bytes).unwrap();
-      f.serialize_uncompressed(&mut bytes).unwrap();
-    });
+    errs.serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
     let acc_gamma = Fr::rand(rng);
 
-    new_acc_holder.acc_g1 = proof.0.iter().zip(acc_holder.acc_g1.iter()).map(|(x, y)| *x * acc_gamma + y).collect();
-    new_acc_holder.acc_g2 = vec![flat_B_g2 * acc_gamma + acc_flat_B_g2, beta_pow_g2];
-    new_acc_holder.acc_fr = proof.2.iter().zip(acc_holder.acc_fr.iter()).map(|(x, y)| *x * acc_gamma + y).collect();
-    new_acc_holder.mu = acc_mu + acc_gamma;
-    new_acc_holder.errs = errs.clone();
-    new_acc_holder.acc_errs = acc_holder.acc_errs;
+    let new_matmul_acc = accumulate(&matmul_acc, &errs, &proof, acc_gamma);
 
-    errs[0].0 = errs[0].0.iter().map(|x| (*x * acc_gamma).into()).collect();
-
-    // Append error terms
-    let err1_g1_len = new_acc_holder.acc_errs[0].0.len();
-    let q_term_g1 = new_acc_holder.acc_errs[0].0[err1_g1_len - 3].clone() + errs[0].0[2];
-    let l_term_g1 = new_acc_holder.acc_errs[0].0[err1_g1_len - 2].clone() + errs[0].0[3];
-    let c_term_g1 = new_acc_holder.acc_errs[0].0[err1_g1_len - 1].clone() + errs[0].0[4];
-    let mut errs_0_g1 = errs[0].0[..2].to_vec();
-    let mut errs_0_g2 = errs[0].1[..2].to_vec();
-
-    new_acc_holder.acc_errs[0].0 = new_acc_holder.acc_errs[0].0[..err1_g1_len - 3].to_vec();
-    new_acc_holder.acc_errs[0].0.append(&mut errs_0_g1);
-    new_acc_holder.acc_errs[0].0.push(q_term_g1);
-    new_acc_holder.acc_errs[0].0.push(l_term_g1);
-    new_acc_holder.acc_errs[0].0.push(c_term_g1);
-    new_acc_holder.acc_errs[0].1.append(&mut errs_0_g2);
-    acc_to_acc_proof(new_acc_holder)
+    matmul_acc_to_acc_proof(new_matmul_acc, true)
   }
 
   fn acc_clean(
@@ -480,16 +725,16 @@ impl BasicBlock for MatMulBasicBlock {
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
   ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)) {
-    let mut acc_holder = acc_proof_to_acc(self, acc_proof, true);
-    // acc_corr1 = acc_part_corr1 * mu + acc_flat_A_no_blind * acc_flat_B_r + acc_flat_B_no_blind * acc_flat_A_r + srs.Y1P * acc_flat_A_r * acc_flat_B_r
-    acc_holder.acc_g1[7] = acc_holder.acc_g1[14] * acc_holder.mu
-      + acc_holder.acc_g1[15] * acc_holder.acc_fr[1]
-      + acc_holder.acc_g1[16] * acc_holder.acc_fr[0]
-      + srs.Y1P * acc_holder.acc_fr[0] * acc_holder.acc_fr[1];
-    // remove blinding terms from acc proof for the verifier
-    acc_holder.acc_g1 = acc_holder.acc_g1[..acc_holder.acc_g1.len() - 3].to_vec();
-    acc_holder.acc_fr = vec![];
-    let acc_proof = acc_to_acc_proof(acc_holder);
+    let mut matmul_acc = acc_proof_to_matmul_acc(self, acc_proof, true).unwrap();
+
+    let po = matmul_acc.prover_only.as_ref().unwrap();
+    matmul_acc.acc_corr1 = po.acc_part_corr1 * matmul_acc.mu
+      + po.acc_flat_A_no_blind * po.acc_flat_B_r
+      + po.acc_flat_B_no_blind * po.acc_flat_A_r
+      + srs.Y1P * po.acc_flat_A_r * po.acc_flat_B_r;
+
+    matmul_acc.prover_only = None;
+    let acc_proof = matmul_acc_to_acc_proof(matmul_acc, false);
 
     // remove blinding terms from bb proof for the verifier
     let cqlin_proof = (proof.0[..11].to_vec(), proof.1.to_vec(), vec![]);
@@ -567,10 +812,10 @@ impl BasicBlock for MatMulBasicBlock {
 
     let proof0_11_14 = vec![flat_A, flat_B, flat_C];
 
-    let prev_acc_holder = acc_proof_to_acc(self, prev_acc_proof, false);
-    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
+    let prev_acc = acc_proof_to_matmul_acc(self, prev_acc_proof, false);
+    let acc = acc_proof_to_matmul_acc(self, acc_proof, false).unwrap();
 
-    if prev_acc_holder.mu.is_zero() && acc_holder.mu.is_one() {
+    if prev_acc.is_none() || (prev_acc.as_ref().unwrap().mu.is_zero() && acc.mu.is_one()) {
       // skip verifying RLC because no RLC was done in acc_init.
       // Fiat-shamir
       let mut bytes = Vec::new();
@@ -584,65 +829,68 @@ impl BasicBlock for MatMulBasicBlock {
 
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    prev_acc_holder.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
-    prev_acc_holder.acc_g1[11..14].serialize_uncompressed(&mut bytes).unwrap();
-    prev_acc_holder.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
+    let prev_acc = prev_acc.unwrap();
+    prev_acc.fiat_shamir.serialize_uncompressed(&mut bytes).unwrap();
     proof.0[..7].serialize_uncompressed(&mut bytes).unwrap();
     proof0_11_14.serialize_uncompressed(&mut bytes).unwrap();
     proof.1.serialize_uncompressed(&mut bytes).unwrap();
-    acc_holder.errs.iter().for_each(|(g1, g2, f)| {
-      g1.serialize_uncompressed(&mut bytes).unwrap();
-      g2.serialize_uncompressed(&mut bytes).unwrap();
-      f.serialize_uncompressed(&mut bytes).unwrap();
-    });
+    acc.errs.serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
     let acc_gamma = Fr::rand(rng);
 
-    proof.0.iter().enumerate().for_each(|(i, x)| {
-      if i < 7 {
-        // i==7 is corr1
-        let z = *x * acc_gamma + prev_acc_holder.acc_g1[i];
-        result &= acc_holder.acc_g1[i] == z;
-      }
-    });
-    proof0_11_14.iter().enumerate().for_each(|(i, x)| {
-      let z = *x * acc_gamma + prev_acc_holder.acc_g1[i + 11];
-      result &= acc_holder.acc_g1[i + 11] == z;
-    });
-    result &= acc_holder.acc_g2[0] == prev_acc_holder.acc_g2[0] + proof.1[0] * acc_gamma;
-    result &= acc_holder.acc_g2[1] == prev_acc_holder.acc_g2[1] && proof.1[1] == beta_pow_g2 && beta_pow_g2 == acc_holder.acc_g2[1];
-    result &= acc_holder.mu == prev_acc_holder.mu + acc_gamma;
-    acc_holder.errs[0].0[acc_holder.errs[0].0.len() - 3..]
-      .iter()
-      .zip(prev_acc_holder.acc_errs[0].0[prev_acc_holder.acc_errs[0].0.len() - 3..].iter())
-      .enumerate()
-      .for_each(|(j, (x, y))| {
-        let z = *y + *x * acc_gamma;
-        result &= z == acc_holder.acc_errs[0].0[acc_holder.acc_errs[0].0.len() - 3 + j];
-      });
+    result &= (proof.0[0] * acc_gamma + prev_acc.fiat_shamir.acc_left_x) == acc.fiat_shamir.acc_left_x;
+    result &= (proof.0[1] * acc_gamma + prev_acc.fiat_shamir.acc_left_Q_x) == acc.fiat_shamir.acc_left_Q_x;
+    result &= (proof.0[2] * acc_gamma + prev_acc.fiat_shamir.acc_left_zero) == acc.fiat_shamir.acc_left_zero;
+    result &= (proof.0[3] * acc_gamma + prev_acc.fiat_shamir.acc_left_zero_div) == acc.fiat_shamir.acc_left_zero_div;
+    result &= (proof.0[4] * acc_gamma + prev_acc.fiat_shamir.acc_right_x) == acc.fiat_shamir.acc_right_x;
+    result &= (proof.0[5] * acc_gamma + prev_acc.fiat_shamir.acc_right_Q_x) == acc.fiat_shamir.acc_right_Q_x;
+    result &= (proof.0[6] * acc_gamma + prev_acc.fiat_shamir.acc_right_zero_div) == acc.fiat_shamir.acc_right_zero_div;
+
+    result &= (flat_A * acc_gamma + prev_acc.fiat_shamir.acc_flat_A) == acc.fiat_shamir.acc_flat_A;
+    result &= (flat_B * acc_gamma + prev_acc.fiat_shamir.acc_flat_B) == acc.fiat_shamir.acc_flat_B;
+    result &= (flat_C * acc_gamma + prev_acc.fiat_shamir.acc_flat_C) == acc.fiat_shamir.acc_flat_C;
+
+    result &= acc.fiat_shamir.acc_flat_B_g2 == prev_acc.fiat_shamir.acc_flat_B_g2 + proof.1[0] * acc_gamma;
+    result &= acc.fiat_shamir.acc_beta_pow_g2 == prev_acc.fiat_shamir.acc_beta_pow_g2
+      && proof.1[1] == beta_pow_g2
+      && beta_pow_g2 == acc.fiat_shamir.acc_beta_pow_g2;
+    result &= acc.mu == prev_acc.mu + acc_gamma;
+
+    result &= prev_acc.acc_errs.acc_left_Q_x + acc.errs.acc_left_Q_x * acc_gamma == acc.acc_errs.acc_left_Q_x;
+    result &= prev_acc.acc_errs.acc_left_x + acc.errs.acc_left_x * acc_gamma == acc.acc_errs.acc_left_x;
+    result &= prev_acc.acc_errs.acc_part_corr1 + acc.errs.acc_part_corr1 * acc_gamma == acc.acc_errs.acc_part_corr1;
+
     Some(result)
   }
 
   fn acc_decide(&self, srs: &SRS, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {
-    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
-    let [acc_left_x, acc_left_Q_x, acc_left_zero, acc_left_zero_div, acc_right_x, acc_right_Q_x, acc_right_zero_div, acc_corr1, acc_corr2, acc_corr3, acc_corr4, acc_flat_A, acc_flat_B, acc_flat_C] =
-      acc_holder.acc_g1[..]
-    else {
-      panic!("Wrong acc proof format")
-    };
-    let [acc_flat_B_g2, beta_pow_g2] = acc_holder.acc_g2[..] else {
-      panic!("Wrong acc proof format")
-    };
-    let acc_mu = acc_holder.mu;
-    let err_1 = &acc_holder.acc_errs[0];
+    let acc = acc_proof_to_matmul_acc(self, acc_proof, false).unwrap();
+
+    let acc_flat_A = acc.fiat_shamir.acc_flat_A;
+    let acc_flat_B_g2 = acc.fiat_shamir.acc_flat_B_g2;
+    let acc_left_x = acc.fiat_shamir.acc_left_x;
+    let acc_left_Q_x = acc.fiat_shamir.acc_left_Q_x;
+    let acc_left_zero = acc.fiat_shamir.acc_left_zero;
+    let acc_left_zero_div = acc.fiat_shamir.acc_left_zero_div;
+    let acc_right_x = acc.fiat_shamir.acc_right_x;
+    let acc_right_Q_x = acc.fiat_shamir.acc_right_Q_x;
+    let acc_right_zero_div = acc.fiat_shamir.acc_right_zero_div;
+    let acc_flat_B = acc.fiat_shamir.acc_flat_B;
+    let acc_flat_C = acc.fiat_shamir.acc_flat_C;
+    let beta_pow_g2 = acc.fiat_shamir.acc_beta_pow_g2;
+    let acc_corr1 = acc.acc_corr1;
+    let acc_corr2 = acc.acc_corr2;
+    let acc_corr3 = acc.acc_corr3;
+    let acc_corr4 = acc.acc_corr4;
+    let acc_mu = acc.mu;
+    let errs = &acc.acc_errs;
 
     let mut temp: PairingCheck = vec![];
-    for i in 0..err_1.1.len() {
-      temp.push((-err_1.0[i], err_1.1[i]));
-    }
-    temp.push((err_1.0[err_1.1.len()], (srs.X2A[self.m] - srs.X2A[0]).into()));
-    temp.push((err_1.0[err_1.1.len() + 1], srs.X2A[0]));
-    temp.push((err_1.0[err_1.1.len() + 2], srs.Y2A));
+    temp.push((-errs.flat_A, errs.acc_flat_B_g2));
+    temp.push((-errs.acc_flat_A, errs.flat_B_g2));
+    temp.push((errs.acc_left_Q_x, (srs.X2A[self.m] - srs.X2A[0]).into()));
+    temp.push((errs.acc_left_x, srs.X2A[0]));
+    temp.push((errs.acc_part_corr1, srs.Y2A));
 
     let err_1 = temp;
     let mut acc_1: PairingCheck = vec![

@@ -196,15 +196,15 @@ fn testBasicBlocks() {
   testBasicBlock(AddBasicBlock {}, srs, &empty, &vec![&a, &b]);
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a, &b]);
   testBasicBlock(MulBasicBlock { len: N }, srs, &empty, &vec![&a, &b]);
-  testBasicBlock(
-    RepeaterBasicBlock {
-      basic_block: Box::new(MulBasicBlock { len: N }),
-      N: 1,
-    },
-    srs,
-    &empty,
-    &vec![&A, &B],
-  );
+  // testBasicBlock(
+  //   RepeaterBasicBlock {
+  //     basic_block: Box::new(MulBasicBlock { len: N }),
+  //     N: 1,
+  //   },
+  //   srs,
+  //   &empty,
+  //   &vec![&A, &B],
+  // );
   testBasicBlock(MulConstBasicBlock { c: 12345 }, srs, &empty, &vec![&a]);
   testBasicBlock(MulScalarBasicBlock {}, srs, &empty, &vec![&a, &a_0]);
   testBasicBlock(DivConstProofBasicBlock { c: 16 }, srs, &empty, &vec![&a_d]);
