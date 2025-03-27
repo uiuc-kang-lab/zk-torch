@@ -687,7 +687,6 @@ impl BasicBlock for MatMulBasicBlock {
     let acc_flat_B_r = po.acc_flat_B_r;
     let acc_flat_B_g2 = matmul_acc.fiat_shamir.acc_flat_B_g2;
 
-    // Compute the error
     let errs = MatMulErrs {
       flat_A,
       acc_flat_A,
