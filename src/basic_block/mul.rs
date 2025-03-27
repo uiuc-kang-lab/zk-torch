@@ -364,7 +364,9 @@ impl BasicBlock for MulScalarBasicBlock {
       panic!("Wrong acc proof format")
     };
 
-    // Compute the error
+    // Compute the error,
+    // which is f(x) * g'(x) + g(x) * f'(x) - (mu * h(x) + h'(x)) - C
+    // where C is the correction for the blinding term
     let err: (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) = (
       vec![
         inp0,
@@ -387,7 +389,6 @@ impl BasicBlock for MulScalarBasicBlock {
     let mut bytes = Vec::new();
     acc_holder.acc_g1[1..4].serialize_uncompressed(&mut bytes).unwrap();
     acc_holder.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
-    proof.0[1..proof.0.len() - 4].serialize_uncompressed(&mut bytes).unwrap();
     proof.1.serialize_uncompressed(&mut bytes).unwrap();
     errs.iter().for_each(|(g1, g2, f)| {
       g1.serialize_uncompressed(&mut bytes).unwrap();
@@ -490,7 +491,6 @@ impl BasicBlock for MulScalarBasicBlock {
     let mut bytes = Vec::new();
     prev_acc_holder.acc_g1[1..].serialize_uncompressed(&mut bytes).unwrap();
     prev_acc_holder.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
-    proof.0[1..].serialize_uncompressed(&mut bytes).unwrap();
     proof.1.serialize_uncompressed(&mut bytes).unwrap();
     acc_holder.errs.iter().for_each(|(g1, g2, f)| {
       g1.serialize_uncompressed(&mut bytes).unwrap();
@@ -700,7 +700,9 @@ impl BasicBlock for MulBasicBlock {
       panic!("Wrong acc proof format")
     };
 
-    // Compute the error
+    // Compute the error,
+    // which is f(x)*g'(x) + f'(x)*g(x) - (h(x)*mu + h'(x)) - (t(x)*mu + t'(x))z(x) - C
+    // where C is the correction for the blinding term
     let err: (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) = (
       vec![
         inp0,
