@@ -181,8 +181,6 @@ fn acc_proof_to_matmul_acc_holder<P: Clone, Q: Clone>(acc_proof: (&Vec<P>, &Vec<
     vec![],
   );
 
-  // println!("acc_err1: {:?}, {:?}", acc_err1.0.len(), acc_err1.1.len());
-
   let acc_errs = vec![acc_err1];
 
   AccHolder {
