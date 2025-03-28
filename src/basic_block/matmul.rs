@@ -13,10 +13,7 @@ use rayon::iter::ParallelIterator;
 
 struct MatMulAccProof<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize> {
   fiat_shamir: MatMulAccFiatShamir<P, Q>,
-  acc_corr1: P,
-  acc_corr2: P,
-  acc_corr3: P,
-  acc_corr4: P,
+  acc_corr: [P; 4],
   mu: Fr,
   prover_only: Option<MatMulAccProofProverOnly<P>>,
   errs: MatMulErrs<P, Q>,
@@ -114,10 +111,12 @@ fn accumulate(
       acc_flat_B_g2: matmul_acc.fiat_shamir.acc_flat_B_g2 + flat_B_g2 * acc_gamma,
       acc_beta_pow_g2: beta_pow_g2,
     },
-    acc_corr1: matmul_acc.acc_corr1 + corr1 * acc_gamma,
-    acc_corr2: matmul_acc.acc_corr2 + corr2 * acc_gamma,
-    acc_corr3: matmul_acc.acc_corr3 + corr3 * acc_gamma,
-    acc_corr4: matmul_acc.acc_corr4 + corr4 * acc_gamma,
+    acc_corr: [
+      matmul_acc.acc_corr[0] + corr1 * acc_gamma,
+      matmul_acc.acc_corr[1] + corr2 * acc_gamma,
+      matmul_acc.acc_corr[2] + corr3 * acc_gamma,
+      matmul_acc.acc_corr[3] + corr4 * acc_gamma,
+    ],
     mu: matmul_acc.mu + acc_gamma,
     prover_only: Some(MatMulAccProofProverOnly {
       acc_part_corr1: matmul_acc_prover_only.acc_part_corr1 + part_corr1 * acc_gamma,
@@ -205,10 +204,12 @@ fn matmul_acc_holder_to_acc<P: Clone + CanonicalSerialize, Q: Clone + CanonicalS
       acc_flat_B_g2: acc_holder.acc_g2[0].clone(),
       acc_beta_pow_g2: acc_holder.acc_g2[1].clone(),
     },
-    acc_corr1: acc_holder.acc_g1[7].clone(),
-    acc_corr2: acc_holder.acc_g1[8].clone(),
-    acc_corr3: acc_holder.acc_g1[9].clone(),
-    acc_corr4: acc_holder.acc_g1[10].clone(),
+    acc_corr: [
+      acc_holder.acc_g1[7].clone(),
+      acc_holder.acc_g1[8].clone(),
+      acc_holder.acc_g1[9].clone(),
+      acc_holder.acc_g1[10].clone(),
+    ],
     mu: acc_holder.mu,
     prover_only: if is_prover {
       Some(MatMulAccProofProverOnly {
@@ -281,10 +282,10 @@ fn matmul_acc_to_acc_holder<P: Clone + CanonicalSerialize, Q: Clone + CanonicalS
       acc.fiat_shamir.acc_right_x,
       acc.fiat_shamir.acc_right_Q_x,
       acc.fiat_shamir.acc_right_zero_div,
-      acc.acc_corr1,
-      acc.acc_corr2,
-      acc.acc_corr3,
-      acc.acc_corr4,
+      acc.acc_corr[0].clone(),
+      acc.acc_corr[1].clone(),
+      acc.acc_corr[2].clone(),
+      acc.acc_corr[3].clone(),
       acc.fiat_shamir.acc_flat_A,
       acc.fiat_shamir.acc_flat_B,
       acc.fiat_shamir.acc_flat_C,
@@ -310,10 +311,10 @@ fn matmul_acc_to_acc_holder<P: Clone + CanonicalSerialize, Q: Clone + CanonicalS
       acc.fiat_shamir.acc_right_x,
       acc.fiat_shamir.acc_right_Q_x,
       acc.fiat_shamir.acc_right_zero_div,
-      acc.acc_corr1,
-      acc.acc_corr2,
-      acc.acc_corr3,
-      acc.acc_corr4,
+      acc.acc_corr[0].clone(),
+      acc.acc_corr[1].clone(),
+      acc.acc_corr[2].clone(),
+      acc.acc_corr[3].clone(),
       acc.fiat_shamir.acc_flat_A,
       acc.fiat_shamir.acc_flat_B,
       acc.fiat_shamir.acc_flat_C,
@@ -733,7 +734,7 @@ impl BasicBlock for MatMulBasicBlock {
     let mut matmul_acc = acc_proof_to_matmul_acc(acc_proof, true).unwrap();
 
     let po = matmul_acc.prover_only.as_ref().unwrap();
-    matmul_acc.acc_corr1 = po.acc_part_corr1 * matmul_acc.mu
+    matmul_acc.acc_corr[0] = po.acc_part_corr1 * matmul_acc.mu
       + po.acc_flat_A_no_blind * po.acc_flat_B_r
       + po.acc_flat_B_no_blind * po.acc_flat_A_r
       + srs.Y1P * po.acc_flat_A_r * po.acc_flat_B_r;
@@ -883,10 +884,7 @@ impl BasicBlock for MatMulBasicBlock {
     let acc_flat_B = acc.fiat_shamir.acc_flat_B;
     let acc_flat_C = acc.fiat_shamir.acc_flat_C;
     let beta_pow_g2 = acc.fiat_shamir.acc_beta_pow_g2;
-    let acc_corr1 = acc.acc_corr1;
-    let acc_corr2 = acc.acc_corr2;
-    let acc_corr3 = acc.acc_corr3;
-    let acc_corr4 = acc.acc_corr4;
+    let acc_corr = acc.acc_corr;
     let acc_mu = acc.mu;
     let errs = &acc.acc_errs;
 
@@ -902,7 +900,7 @@ impl BasicBlock for MatMulBasicBlock {
       (acc_flat_A, acc_flat_B_g2),
       ((-acc_left_x * acc_mu).into(), srs.X2A[0]),
       ((-acc_left_Q_x * acc_mu).into(), (srs.X2A[self.m] - srs.X2A[0]).into()),
-      (-acc_corr1, srs.Y2A),
+      (-acc_corr[0], srs.Y2A),
     ];
     acc_1.extend(err_1);
 
@@ -911,21 +909,21 @@ impl BasicBlock for MatMulBasicBlock {
     let acc_3: PairingCheck = vec![
       ((acc_left_x - acc_left_zero).into(), srs.X2A[0]),
       (-acc_left_zero_div, srs.X2A[1]),
-      (-acc_corr2, srs.Y2A),
+      (-acc_corr[1], srs.Y2A),
     ];
 
     let acc_4: PairingCheck = vec![
       (acc_flat_C, beta_pow_g2),
       (-acc_right_x, srs.X2A[0]),
       (-acc_right_Q_x, (srs.X2A[self.n] - srs.X2A[0]).into()),
-      (-acc_corr3, srs.Y2A),
+      (-acc_corr[2], srs.Y2A),
     ];
 
     let acc_right_zero: G1Projective = acc_left_zero * (Fr::from(self.m as u32) * Fr::from(self.n as u32).inverse().unwrap());
     let acc_5 = vec![
       ((-acc_right_zero + acc_right_x).into(), srs.X2A[0]),
       (-acc_right_zero_div, srs.X2A[1]),
-      (-acc_corr4, srs.Y2A),
+      (-acc_corr[3], srs.Y2A),
     ];
 
     vec![acc_1, acc_2, acc_3, acc_4, acc_5]
