@@ -17,7 +17,7 @@ struct MatMulAccProof<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSeriali
   mu: Fr,
   prover_only: Option<MatMulAccProofProverOnly<P>>,
   errs: MatMulErrs<P, Q>,
-  acc_errs: MatMulErrs<P, Q>,
+  acc_errs: MatMulAccErrs<P, Q>,
 }
 
 #[derive(CanonicalSerialize)]
@@ -55,6 +55,19 @@ struct MatMulErrs<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize> 
   flat_B_g2: Q,
 }
 
+#[derive(Clone)]
+struct MatMulAccErrs<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize> {
+  prev_g1s: Vec<P>,
+  flat_A: P,
+  acc_flat_A: P,
+  acc_left_Q_x: P,
+  acc_left_x: P,
+  acc_part_corr1: P,
+  prev_g2s: Vec<Q>,
+  acc_flat_B_g2: Q,
+  flat_B_g2: Q,
+}
+
 fn accumulate(
   matmul_acc: &MatMulAccProof<G1Projective, G2Projective>,
   errs: &MatMulErrs<G1Projective, G2Projective>,
@@ -84,15 +97,21 @@ fn accumulate(
     flat_B_g2: errs.flat_B_g2,
   };
 
-  let acc_errs = MatMulErrs {
+  let mut acc_errs = MatMulAccErrs {
+    prev_g1s: matmul_acc.acc_errs.prev_g1s.clone(),
     flat_A: new_errs.flat_A,
     acc_flat_A: new_errs.acc_flat_A,
     acc_left_Q_x: matmul_acc.acc_errs.acc_left_Q_x + new_errs.acc_left_Q_x,
     acc_left_x: matmul_acc.acc_errs.acc_left_x + new_errs.acc_left_x,
     acc_part_corr1: matmul_acc.acc_errs.acc_part_corr1 + new_errs.acc_part_corr1,
+    prev_g2s: matmul_acc.acc_errs.prev_g2s.clone(),
     acc_flat_B_g2: new_errs.acc_flat_B_g2,
     flat_B_g2: new_errs.flat_B_g2,
   };
+  acc_errs.prev_g1s.push(matmul_acc.acc_errs.flat_A);
+  acc_errs.prev_g1s.push(matmul_acc.acc_errs.acc_flat_A);
+  acc_errs.prev_g2s.push(matmul_acc.acc_errs.acc_flat_B_g2);
+  acc_errs.prev_g2s.push(matmul_acc.acc_errs.flat_B_g2);
 
   // Compute the error
   let matmul_acc_prover_only = matmul_acc.prover_only.as_ref().unwrap();
@@ -162,6 +181,8 @@ fn acc_proof_to_matmul_acc_holder<P: Clone, Q: Clone>(acc_proof: (&Vec<P>, &Vec<
     vec![],
   );
 
+  // println!("acc_err1: {:?}, {:?}", acc_err1.0.len(), acc_err1.1.len());
+
   let acc_errs = vec![acc_err1];
 
   AccHolder {
@@ -189,6 +210,8 @@ fn matmul_acc_holder_to_acc<P: Clone + CanonicalSerialize, Q: Clone + CanonicalS
   acc_holder: AccHolder<P, Q>,
   is_prover: bool,
 ) -> MatMulAccProof<P, Q> {
+  let g1_len = acc_holder.acc_errs[0].0.len();
+  let g2_len = acc_holder.acc_errs[0].1.len();
   let acc_proof = MatMulAccProof {
     fiat_shamir: MatMulAccFiatShamir {
       acc_left_x: acc_holder.acc_g1[0].clone(),
@@ -231,14 +254,16 @@ fn matmul_acc_holder_to_acc<P: Clone + CanonicalSerialize, Q: Clone + CanonicalS
       acc_flat_B_g2: acc_holder.errs[0].1[0].clone(),
       flat_B_g2: acc_holder.errs[0].1[1].clone(),
     },
-    acc_errs: MatMulErrs {
-      flat_A: acc_holder.acc_errs[0].0[0].clone(),
-      acc_flat_A: acc_holder.acc_errs[0].0[1].clone(),
-      acc_left_Q_x: acc_holder.acc_errs[0].0[2].clone(),
-      acc_left_x: acc_holder.acc_errs[0].0[3].clone(),
-      acc_part_corr1: acc_holder.acc_errs[0].0[4].clone(),
-      acc_flat_B_g2: acc_holder.acc_errs[0].1[0].clone(),
-      flat_B_g2: acc_holder.acc_errs[0].1[1].clone(),
+    acc_errs: MatMulAccErrs {
+      prev_g1s: acc_holder.acc_errs[0].0[..g1_len - 5].to_vec(),
+      flat_A: acc_holder.acc_errs[0].0[g1_len - 5].clone(),
+      acc_flat_A: acc_holder.acc_errs[0].0[g1_len - 4].clone(),
+      acc_left_Q_x: acc_holder.acc_errs[0].0[g1_len - 3].clone(),
+      acc_left_x: acc_holder.acc_errs[0].0[g1_len - 2].clone(),
+      acc_part_corr1: acc_holder.acc_errs[0].0[g1_len - 1].clone(),
+      prev_g2s: acc_holder.acc_errs[0].1[..g2_len - 2].to_vec(),
+      acc_flat_B_g2: acc_holder.acc_errs[0].1[g2_len - 2].clone(),
+      flat_B_g2: acc_holder.acc_errs[0].1[g2_len - 1].clone(),
     },
   };
   acc_proof
@@ -889,6 +914,9 @@ impl BasicBlock for MatMulBasicBlock {
     let errs = &acc.acc_errs;
 
     let mut temp: PairingCheck = vec![];
+    for i in 0..errs.prev_g2s.len() {
+      temp.push((-errs.prev_g1s[i], errs.prev_g2s[i]));
+    }
     temp.push((-errs.flat_A, errs.acc_flat_B_g2));
     temp.push((-errs.acc_flat_A, errs.flat_B_g2));
     temp.push((errs.acc_left_Q_x, (srs.X2A[self.m] - srs.X2A[0]).into()));
