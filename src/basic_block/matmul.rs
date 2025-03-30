@@ -11,7 +11,7 @@ use ndarray::{arr1, arr2, ArrayD, Ix1, Ix2, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::iter::ParallelIterator;
 
-struct MatMulAccProof<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize> {
+struct MatMulAccProof<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize> {
   fiat_shamir: MatMulAccFiatShamir<P, Q>,
   acc_corr: [P; 4],
   mu: Fr,
@@ -21,7 +21,7 @@ struct MatMulAccProof<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSeriali
 }
 
 #[derive(CanonicalSerialize)]
-struct MatMulAccFiatShamir<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize> {
+struct MatMulAccFiatShamir<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize> {
   acc_left_x: P,
   acc_left_Q_x: P,
   acc_left_zero: P,
@@ -36,7 +36,7 @@ struct MatMulAccFiatShamir<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSe
   acc_beta_pow_g2: Q,
 }
 
-struct MatMulAccProofProverOnly<P: Clone + CanonicalSerialize> {
+struct MatMulAccProofProverOnly<P: Copy + CanonicalSerialize> {
   acc_part_corr1: P,
   acc_flat_A_no_blind: P,
   acc_flat_B_no_blind: P,
@@ -45,7 +45,7 @@ struct MatMulAccProofProverOnly<P: Clone + CanonicalSerialize> {
 }
 
 #[derive(CanonicalSerialize, Clone)]
-struct MatMulErrs<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize> {
+struct MatMulErrs<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize> {
   flat_A: P,
   acc_flat_A: P,
   acc_left_Q_x: P,
@@ -56,7 +56,7 @@ struct MatMulErrs<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize> 
 }
 
 #[derive(Clone)]
-struct MatMulAccErrs<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize> {
+struct MatMulAccErrs<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize> {
   prev_g1s: Vec<P>,
   flat_A: P,
   acc_flat_A: P,
@@ -151,7 +151,7 @@ fn accumulate(
   new_matmul_acc
 }
 
-fn acc_proof_to_matmul_acc_holder<P: Clone, Q: Clone>(acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>), is_prover: bool) -> AccHolder<P, Q> {
+fn acc_proof_to_matmul_acc_holder<P: Copy, Q: Copy>(acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>), is_prover: bool) -> AccHolder<P, Q> {
   if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
     return AccHolder {
       acc_g1: vec![],
@@ -193,7 +193,7 @@ fn acc_proof_to_matmul_acc_holder<P: Clone, Q: Clone>(acc_proof: (&Vec<P>, &Vec<
   }
 }
 
-fn acc_proof_to_matmul_acc<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize>(
+fn acc_proof_to_matmul_acc<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize>(
   acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>),
   is_prover: bool,
 ) -> Option<MatMulAccProof<P, Q>> {
@@ -204,7 +204,7 @@ fn acc_proof_to_matmul_acc<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSe
   Some(matmul_acc_holder_to_acc(acc_holder, is_prover))
 }
 
-fn matmul_acc_holder_to_acc<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize>(
+fn matmul_acc_holder_to_acc<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize>(
   acc_holder: AccHolder<P, Q>,
   is_prover: bool,
 ) -> MatMulAccProof<P, Q> {
@@ -212,31 +212,26 @@ fn matmul_acc_holder_to_acc<P: Clone + CanonicalSerialize, Q: Clone + CanonicalS
   let g2_len = acc_holder.acc_errs[0].1.len();
   let acc_proof = MatMulAccProof {
     fiat_shamir: MatMulAccFiatShamir {
-      acc_left_x: acc_holder.acc_g1[0].clone(),
-      acc_left_Q_x: acc_holder.acc_g1[1].clone(),
-      acc_left_zero: acc_holder.acc_g1[2].clone(),
-      acc_left_zero_div: acc_holder.acc_g1[3].clone(),
-      acc_right_x: acc_holder.acc_g1[4].clone(),
-      acc_right_Q_x: acc_holder.acc_g1[5].clone(),
-      acc_right_zero_div: acc_holder.acc_g1[6].clone(),
-      acc_flat_A: acc_holder.acc_g1[11].clone(),
-      acc_flat_B: acc_holder.acc_g1[12].clone(),
-      acc_flat_C: acc_holder.acc_g1[13].clone(),
-      acc_flat_B_g2: acc_holder.acc_g2[0].clone(),
-      acc_beta_pow_g2: acc_holder.acc_g2[1].clone(),
+      acc_left_x: acc_holder.acc_g1[0],
+      acc_left_Q_x: acc_holder.acc_g1[1],
+      acc_left_zero: acc_holder.acc_g1[2],
+      acc_left_zero_div: acc_holder.acc_g1[3],
+      acc_right_x: acc_holder.acc_g1[4],
+      acc_right_Q_x: acc_holder.acc_g1[5],
+      acc_right_zero_div: acc_holder.acc_g1[6],
+      acc_flat_A: acc_holder.acc_g1[11],
+      acc_flat_B: acc_holder.acc_g1[12],
+      acc_flat_C: acc_holder.acc_g1[13],
+      acc_flat_B_g2: acc_holder.acc_g2[0],
+      acc_beta_pow_g2: acc_holder.acc_g2[1],
     },
-    acc_corr: [
-      acc_holder.acc_g1[7].clone(),
-      acc_holder.acc_g1[8].clone(),
-      acc_holder.acc_g1[9].clone(),
-      acc_holder.acc_g1[10].clone(),
-    ],
+    acc_corr: [acc_holder.acc_g1[7], acc_holder.acc_g1[8], acc_holder.acc_g1[9], acc_holder.acc_g1[10]],
     mu: acc_holder.mu,
     prover_only: if is_prover {
       Some(MatMulAccProofProverOnly {
-        acc_part_corr1: acc_holder.acc_g1[14].clone(),
-        acc_flat_A_no_blind: acc_holder.acc_g1[15].clone(),
-        acc_flat_B_no_blind: acc_holder.acc_g1[16].clone(),
+        acc_part_corr1: acc_holder.acc_g1[14],
+        acc_flat_A_no_blind: acc_holder.acc_g1[15],
+        acc_flat_B_no_blind: acc_holder.acc_g1[16],
         acc_flat_A_r: acc_holder.acc_fr[0],
         acc_flat_B_r: acc_holder.acc_fr[1],
       })
@@ -244,30 +239,30 @@ fn matmul_acc_holder_to_acc<P: Clone + CanonicalSerialize, Q: Clone + CanonicalS
       None
     },
     errs: MatMulErrs {
-      flat_A: acc_holder.errs[0].0[0].clone(),
-      acc_flat_A: acc_holder.errs[0].0[1].clone(),
-      acc_left_Q_x: acc_holder.errs[0].0[2].clone(),
-      acc_left_x: acc_holder.errs[0].0[3].clone(),
-      acc_part_corr1: acc_holder.errs[0].0[4].clone(),
-      acc_flat_B_g2: acc_holder.errs[0].1[0].clone(),
-      flat_B_g2: acc_holder.errs[0].1[1].clone(),
+      flat_A: acc_holder.errs[0].0[0],
+      acc_flat_A: acc_holder.errs[0].0[1],
+      acc_left_Q_x: acc_holder.errs[0].0[2],
+      acc_left_x: acc_holder.errs[0].0[3],
+      acc_part_corr1: acc_holder.errs[0].0[4],
+      acc_flat_B_g2: acc_holder.errs[0].1[0],
+      flat_B_g2: acc_holder.errs[0].1[1],
     },
     acc_errs: MatMulAccErrs {
       prev_g1s: acc_holder.acc_errs[0].0[..g1_len - 5].to_vec(),
-      flat_A: acc_holder.acc_errs[0].0[g1_len - 5].clone(),
-      acc_flat_A: acc_holder.acc_errs[0].0[g1_len - 4].clone(),
-      acc_left_Q_x: acc_holder.acc_errs[0].0[g1_len - 3].clone(),
-      acc_left_x: acc_holder.acc_errs[0].0[g1_len - 2].clone(),
-      acc_part_corr1: acc_holder.acc_errs[0].0[g1_len - 1].clone(),
+      flat_A: acc_holder.acc_errs[0].0[g1_len - 5],
+      acc_flat_A: acc_holder.acc_errs[0].0[g1_len - 4],
+      acc_left_Q_x: acc_holder.acc_errs[0].0[g1_len - 3],
+      acc_left_x: acc_holder.acc_errs[0].0[g1_len - 2],
+      acc_part_corr1: acc_holder.acc_errs[0].0[g1_len - 1],
       prev_g2s: acc_holder.acc_errs[0].1[..g2_len - 2].to_vec(),
-      acc_flat_B_g2: acc_holder.acc_errs[0].1[g2_len - 2].clone(),
-      flat_B_g2: acc_holder.acc_errs[0].1[g2_len - 1].clone(),
+      acc_flat_B_g2: acc_holder.acc_errs[0].1[g2_len - 2],
+      flat_B_g2: acc_holder.acc_errs[0].1[g2_len - 1],
     },
   };
   acc_proof
 }
 
-fn matmul_acc_to_acc_holder<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize>(
+fn matmul_acc_to_acc_holder<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize>(
   acc: MatMulAccProof<P, Q>,
   is_prover: bool,
 ) -> AccHolder<P, Q> {
@@ -305,10 +300,10 @@ fn matmul_acc_to_acc_holder<P: Clone + CanonicalSerialize, Q: Clone + CanonicalS
       acc.fiat_shamir.acc_right_x,
       acc.fiat_shamir.acc_right_Q_x,
       acc.fiat_shamir.acc_right_zero_div,
-      acc.acc_corr[0].clone(),
-      acc.acc_corr[1].clone(),
-      acc.acc_corr[2].clone(),
-      acc.acc_corr[3].clone(),
+      acc.acc_corr[0],
+      acc.acc_corr[1],
+      acc.acc_corr[2],
+      acc.acc_corr[3],
       acc.fiat_shamir.acc_flat_A,
       acc.fiat_shamir.acc_flat_B,
       acc.fiat_shamir.acc_flat_C,
@@ -334,10 +329,10 @@ fn matmul_acc_to_acc_holder<P: Clone + CanonicalSerialize, Q: Clone + CanonicalS
       acc.fiat_shamir.acc_right_x,
       acc.fiat_shamir.acc_right_Q_x,
       acc.fiat_shamir.acc_right_zero_div,
-      acc.acc_corr[0].clone(),
-      acc.acc_corr[1].clone(),
-      acc.acc_corr[2].clone(),
-      acc.acc_corr[3].clone(),
+      acc.acc_corr[0],
+      acc.acc_corr[1],
+      acc.acc_corr[2],
+      acc.acc_corr[3],
       acc.fiat_shamir.acc_flat_A,
       acc.fiat_shamir.acc_flat_B,
       acc.fiat_shamir.acc_flat_C,
@@ -353,7 +348,7 @@ fn matmul_acc_to_acc_holder<P: Clone + CanonicalSerialize, Q: Clone + CanonicalS
   }
 }
 
-fn matmul_acc_to_acc_proof<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize>(
+fn matmul_acc_to_acc_proof<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize>(
   acc: MatMulAccProof<P, Q>,
   is_prover: bool,
 ) -> (Vec<P>, Vec<Q>, Vec<Fr>) {

@@ -13,14 +13,14 @@ use rand::{rngs::StdRng, SeedableRng};
 // [acc_left_x, acc_left_Q_x, acc_left_zero, acc_left_zero_div, acc_right_x, acc_right_Q_x, acc_right_zero_div, acc_corr1, acc_corr2, acc_corr3, acc_corr4, acc_flat_L, acc_flat_R]
 //acc_b_g2, acc_d_g2
 
-struct PermuteAccProof<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize> {
+struct PermuteAccProof<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize> {
   fiat_shamir: PermuteAccFiatShamir<P, Q>,
   acc_corr: [P; 4],
   mu: Fr,
 }
 
 #[derive(CanonicalSerialize)]
-struct PermuteAccFiatShamir<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize> {
+struct PermuteAccFiatShamir<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize> {
   acc_left_x: P,
   acc_left_Q_x: P,
   acc_left_zero: P,
@@ -71,7 +71,7 @@ fn accumulate(
   new_matmul_acc
 }
 
-fn acc_proof_to_permute_acc_holder<P: Clone, Q: Clone>(acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>)) -> AccHolder<P, Q> {
+fn acc_proof_to_permute_acc_holder<P: Copy, Q: Copy>(acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>)) -> AccHolder<P, Q> {
   if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
     return AccHolder {
       acc_g1: vec![],
@@ -95,32 +95,27 @@ fn acc_proof_to_permute_acc_holder<P: Clone, Q: Clone>(acc_proof: (&Vec<P>, &Vec
   }
 }
 
-fn permute_acc_holder_to_acc<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize>(acc_holder: AccHolder<P, Q>) -> PermuteAccProof<P, Q> {
+fn permute_acc_holder_to_acc<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize>(acc_holder: AccHolder<P, Q>) -> PermuteAccProof<P, Q> {
   PermuteAccProof {
     fiat_shamir: PermuteAccFiatShamir {
-      acc_left_x: acc_holder.acc_g1[0].clone(),
-      acc_left_Q_x: acc_holder.acc_g1[1].clone(),
-      acc_left_zero: acc_holder.acc_g1[2].clone(),
-      acc_left_zero_div: acc_holder.acc_g1[3].clone(),
-      acc_right_x: acc_holder.acc_g1[4].clone(),
-      acc_right_Q_x: acc_holder.acc_g1[5].clone(),
-      acc_right_zero_div: acc_holder.acc_g1[6].clone(),
-      acc_flat_L: acc_holder.acc_g1[11].clone(),
-      acc_flat_R: acc_holder.acc_g1[12].clone(),
-      acc_b_g2: acc_holder.acc_g2[0].clone(),
-      acc_d_g2: acc_holder.acc_g2[1].clone(),
+      acc_left_x: acc_holder.acc_g1[0],
+      acc_left_Q_x: acc_holder.acc_g1[1],
+      acc_left_zero: acc_holder.acc_g1[2],
+      acc_left_zero_div: acc_holder.acc_g1[3],
+      acc_right_x: acc_holder.acc_g1[4],
+      acc_right_Q_x: acc_holder.acc_g1[5],
+      acc_right_zero_div: acc_holder.acc_g1[6],
+      acc_flat_L: acc_holder.acc_g1[11],
+      acc_flat_R: acc_holder.acc_g1[12],
+      acc_b_g2: acc_holder.acc_g2[0],
+      acc_d_g2: acc_holder.acc_g2[1],
     },
-    acc_corr: [
-      acc_holder.acc_g1[7].clone(),
-      acc_holder.acc_g1[8].clone(),
-      acc_holder.acc_g1[9].clone(),
-      acc_holder.acc_g1[10].clone(),
-    ],
+    acc_corr: [acc_holder.acc_g1[7], acc_holder.acc_g1[8], acc_holder.acc_g1[9], acc_holder.acc_g1[10]],
     mu: acc_holder.mu,
   }
 }
 
-fn permute_acc_to_acc_holder<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize>(acc: PermuteAccProof<P, Q>) -> AccHolder<P, Q> {
+fn permute_acc_to_acc_holder<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize>(acc: PermuteAccProof<P, Q>) -> AccHolder<P, Q> {
   AccHolder {
     acc_g1: vec![
       acc.fiat_shamir.acc_left_x,
@@ -130,10 +125,10 @@ fn permute_acc_to_acc_holder<P: Clone + CanonicalSerialize, Q: Clone + Canonical
       acc.fiat_shamir.acc_right_x,
       acc.fiat_shamir.acc_right_Q_x,
       acc.fiat_shamir.acc_right_zero_div,
-      acc.acc_corr[0].clone(),
-      acc.acc_corr[1].clone(),
-      acc.acc_corr[2].clone(),
-      acc.acc_corr[3].clone(),
+      acc.acc_corr[0],
+      acc.acc_corr[1],
+      acc.acc_corr[2],
+      acc.acc_corr[3],
       acc.fiat_shamir.acc_flat_L,
       acc.fiat_shamir.acc_flat_R,
     ],
@@ -145,7 +140,7 @@ fn permute_acc_to_acc_holder<P: Clone + CanonicalSerialize, Q: Clone + Canonical
   }
 }
 
-fn acc_proof_to_permute_acc<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize>(
+fn acc_proof_to_permute_acc<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize>(
   acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>),
 ) -> Option<PermuteAccProof<P, Q>> {
   if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
@@ -155,7 +150,7 @@ fn acc_proof_to_permute_acc<P: Clone + CanonicalSerialize, Q: Clone + CanonicalS
   Some(permute_acc_holder_to_acc(acc_holder))
 }
 
-fn permute_acc_to_acc_proof<P: Clone + CanonicalSerialize, Q: Clone + CanonicalSerialize>(acc: PermuteAccProof<P, Q>) -> (Vec<P>, Vec<Q>, Vec<Fr>) {
+fn permute_acc_to_acc_proof<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize>(acc: PermuteAccProof<P, Q>) -> (Vec<P>, Vec<Q>, Vec<Fr>) {
   let acc_holder = permute_acc_to_acc_holder(acc);
   acc_to_acc_proof(acc_holder)
 }
@@ -480,7 +475,7 @@ impl BasicBlock for PermuteBasicBlock {
 
     let permute_acc = acc_proof_to_permute_acc(acc_proof).unwrap();
 
-    let [acc_b_g2, acc_d_g2] = [permute_acc.fiat_shamir.acc_b_g2.clone(), permute_acc.fiat_shamir.acc_d_g2.clone()];
+    let [acc_b_g2, acc_d_g2] = [permute_acc.fiat_shamir.acc_b_g2, permute_acc.fiat_shamir.acc_d_g2];
     assert!(b_g2 == acc_b_g2 && d_g2 == acc_d_g2);
 
     // Compute the error (but we skip it because permuteBB has no error)
