@@ -1,8 +1,8 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 use super::{BasicBlock, BasicBlockForTest, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
-use crate::basic_block::cq::{cq_acc_clean, cq_acc_decide, cq_acc_finalize, cq_acc_init, cq_acc_prove, cq_acc_verify, CQLayoutHelper};
-use crate::util::{self, get_cq_N, AccHolder, AccProofLayout};
+use crate::basic_block::cq::{cq_acc_clean, cq_acc_decide, cq_acc_finalize, CQLayoutHelper};
+use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, get_cq_N, AccHolder, AccProofLayout};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
@@ -28,20 +28,41 @@ impl AccProofLayout for CQ2BasicBlock {
   fn acc_fr_num(&self, is_prover: bool) -> usize {
     CQLayoutHelper::acc_fr_num(is_prover)
   }
-  fn err_g1_nums_summable(&self) -> Vec<usize> {
-    CQLayoutHelper::err_g1_nums_summable()
+  fn err_g1_nums(&self) -> Vec<usize> {
+    CQLayoutHelper::err_g1_nums()
   }
-  fn err_g1_nums_non_summable(&self) -> Vec<usize> {
-    CQLayoutHelper::err_g1_nums_non_summable()
-  }
-  fn err_g2_nums_summable(&self) -> Vec<usize> {
-    CQLayoutHelper::err_g2_nums_summable()
-  }
-  fn err_g2_nums_non_summable(&self) -> Vec<usize> {
-    CQLayoutHelper::err_g2_nums_non_summable()
+  fn err_g2_nums(&self) -> Vec<usize> {
+    CQLayoutHelper::err_g2_nums()
   }
   fn err_fr_nums(&self) -> Vec<usize> {
     CQLayoutHelper::err_fr_nums()
+  }
+  fn err_gt_nums(&self) -> Vec<usize> {
+    CQLayoutHelper::err_gt_nums()
+  }
+  fn prover_proof_to_acc(&self, proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective> {
+    CQLayoutHelper::prover_proof_to_acc(proof)
+  }
+  fn verifier_proof_to_acc(&self, proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> AccHolder<G1Affine, G2Affine> {
+    CQLayoutHelper::verifier_proof_to_acc(proof)
+  }
+  fn mira_prove(
+    &self,
+    srs: &SRS,
+    acc_1: AccHolder<G1Projective, G2Projective>,
+    acc_2: AccHolder<G1Projective, G2Projective>,
+    rng: &mut StdRng,
+  ) -> AccHolder<G1Projective, G2Projective> {
+    CQLayoutHelper::mira_prove(srs, acc_1, acc_2, rng)
+  }
+  fn mira_verify(
+    &self,
+    acc_1: AccHolder<G1Affine, G2Affine>,
+    acc_2: AccHolder<G1Affine, G2Affine>,
+    new_acc: AccHolder<G1Affine, G2Affine>,
+    rng: &mut StdRng,
+  ) -> Option<bool> {
+    CQLayoutHelper::mira_verify(acc_1, acc_2, new_acc, rng)
   }
 }
 
@@ -364,39 +385,44 @@ impl BasicBlock for CQ2BasicBlock {
     vec![]
   }
 
-  fn acc_init(
-    &self,
-    _srs: &SRS,
-    _model: &ArrayD<Data>,
-    _inputs: &Vec<&ArrayD<Data>>,
-    _outputs: &Vec<&ArrayD<Data>>,
-    proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    rng: &mut StdRng,
-    _cache: ProveVerifyCache,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
-    cq_acc_init(self, proof, rng)
-  }
-
   fn acc_prove(
     &self,
     srs: &SRS,
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
-    acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    acc_proof: (
+      &Vec<G1Projective>,
+      &Vec<G2Projective>,
+      &Vec<Fr>,
+      &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
+    ),
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
-    cq_acc_prove(self, srs, acc_proof, proof, rng)
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
+    let proof = self.prover_proof_to_acc(proof);
+    if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
+      return acc_to_acc_proof(proof);
+    }
+    let acc_proof = acc_proof_to_acc(self, acc_proof, true);
+    acc_to_acc_proof(self.mira_prove(srs, acc_proof, proof, rng))
   }
 
   fn acc_clean(
     &self,
     srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)) {
+    acc_proof: (
+      &Vec<G1Projective>,
+      &Vec<G2Projective>,
+      &Vec<Fr>,
+      &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
+    ),
+  ) -> (
+    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>),
+    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+  ) {
     cq_acc_clean(self, srs, proof, acc_proof)
   }
 
@@ -406,16 +432,32 @@ impl BasicBlock for CQ2BasicBlock {
     _model: &ArrayD<DataEnc>,
     _inputs: &Vec<&ArrayD<DataEnc>>,
     _outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
   ) -> Option<bool> {
-    cq_acc_verify(self, prev_acc_proof, acc_proof, proof, rng)
+    let prev_acc_holder = acc_proof_to_acc(self, prev_acc_proof, false);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
+
+    let mut result = true;
+
+    if prev_acc_holder.mu.is_zero() && acc_holder.mu.is_one() {
+      return Some(result);
+    }
+    let proof = self.verifier_proof_to_acc(proof);
+    let prev_acc_holder = acc_proof_to_acc(self, prev_acc_proof, false);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
+    result &= self.mira_verify(prev_acc_holder, proof, acc_holder, rng).unwrap();
+    Some(result)
   }
 
-  fn acc_decide(&self, srs: &SRS, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {
+  fn acc_decide(
+    &self,
+    srs: &SRS,
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+  ) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     let N = self.setup.as_ref().unwrap().2;
     let n = self.n;
     cq_acc_decide(self, srs, acc_proof, N, n)
@@ -424,7 +466,7 @@ impl BasicBlock for CQ2BasicBlock {
   fn acc_finalize(
     &self,
     srs: &SRS,
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
   ) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
     let N = self.setup.as_ref().unwrap().2;
     let n = self.n;

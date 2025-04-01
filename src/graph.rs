@@ -53,7 +53,7 @@ impl Graph {
   pub fn run(&self, inputs: &Vec<&ArrayD<Fr>>, models: &Vec<&ArrayD<Fr>>) -> Result<Vec<Vec<ArrayD<Fr>>>, util::CQOutOfRangeError> {
     let mut outputs = vec![vec![]; self.nodes.len()];
     let res: Result<(), util::CQOutOfRangeError> = self.nodes.iter().enumerate().try_for_each(|(i, n)| {
-      println!("{} | running {i} {:<200?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
+      println!("{} | running {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
       let myInputs = n
         .inputs
         .iter()
@@ -95,12 +95,12 @@ impl Graph {
         // These layers require no proving and verifying, and their outputs are not used as inputs of
         // `encodeOutputs` in any other layers that need proving and verifying.
         println!(
-          "{} | skipping encodingOutputs for {i} {:<200?} because the output is precomputable and will not be used as input in any layer that needs proving and verifying",
+          "{} | skipping encodingOutputs for {i} {:?} because the output is precomputable and will not be used as input in any layer that needs proving and verifying",
           self.layer_names[i], self.basic_blocks[n.basic_block]
         );
         return;
       }
-      let encode_id = format!("{} | encoding node {i} {:<200?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
+      let encode_id = format!("{} | encoding node {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
       println!("{}", encode_id);
       let myInputs = n
         .inputs
@@ -135,12 +135,12 @@ impl Graph {
           // Skip setup for some basicblocks if they are precomputable.
           // These basicblocks require no proving and verifying since they are not used in any layer that needs proving and verifying.
           println!(
-            "skipping setup for {:?} {:<200?} because the basicblock is not used in any layer that needs proving and verifying",
+            "skipping setup for {:?} {:?} because the basicblock is not used in any layer that needs proving and verifying",
             i, b
           );
           return (vec![], vec![], vec![]);
         }
-        println!("setting up {:?} {:<200?}", i, b);
+        println!("setting up {:?} {:?}", i, b);
         let bb_name = format!("{b:?}");
         let save_cq_layer_setup = CONFIG.prover.enable_layer_setup && (bb_name.contains("CQ2BasicBlock") || bb_name.contains("CQBasicBlock"));
         #[cfg(not(feature = "mock_prove"))]
@@ -192,12 +192,12 @@ impl Graph {
           // Skip proving for some layers if they are precomputable.
           // These layers require no proving and verifying as their inputs are known (i.e., constants) during graph construction.
           println!(
-            "{} | skipping proving for {i} {:<200?} because this layer is precomputable given the constant inputs",
+            "{} | skipping proving for {i} {:?} because this layer is precomputable given the constant inputs",
             self.layer_names[i], self.basic_blocks[n.basic_block]
           );
           return (vec![], vec![], vec![]);
         }
-        let prove_id = format!("{} | proving {i} {:<200?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
+        let prove_id = format!("{} | proving {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
         println!("{}", prove_id);
         let myInputs = n
           .inputs
@@ -246,12 +246,15 @@ impl Graph {
     outputs: &Vec<&Vec<&ArrayD<Data>>>,
     rng: &mut StdRng,
     timing: &mut TimingTree,
-  ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> {
+  ) -> (
+    Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)>,
+    Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)>,
+  ) {
     assert!(self.nodes.len() == self.precomputable.prove_and_verify.len());
     let cache = Arc::new(Mutex::new(HashMap::new()));
     let mut proofs = vec![];
     let mut acc_proofs_for_verifier = vec![];
-    let mut prev_acc_map: HashMap<usize, (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>)> = HashMap::new(); // (basicblock, acc_proof)
+    let mut prev_acc_map: HashMap<usize, (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)> = HashMap::new(); // (basicblock, acc_proof)
 
     self.nodes.iter().enumerate().for_each(|(i, n)| {
       let bb_index_for_folding = self.foldable_bb_map.get(&n.basic_block).unwrap();
@@ -260,15 +263,15 @@ impl Graph {
         // Skip proving for some layers if they are precomputable.
         // These layers require no proving and verifying as their inputs are known (i.e., constants) during graph construction.
         println!(
-          "{} | skipping proving for {i} {:<200?} because this layer is precomputable given the constant inputs",
+          "{} | skipping proving for {i} {:?} because this layer is precomputable given the constant inputs",
           self.layer_names[i], self.basic_blocks[n.basic_block]
         );
         proofs.push((vec![], vec![], vec![]));
-        prev_acc_map.insert(*bb_index_for_folding, (vec![], vec![], vec![]));
-        acc_proofs_for_verifier.push((vec![], vec![], vec![]));
+        prev_acc_map.insert(*bb_index_for_folding, (vec![], vec![], vec![], vec![]));
+        acc_proofs_for_verifier.push((vec![], vec![], vec![], vec![]));
         return;
       }
-      let prove_id = format!("{} | proving {i} {:<200?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
+      let prove_id = format!("{} | proving {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
       println!("{}", prove_id);
       let myInputs = n
         .inputs
@@ -295,36 +298,33 @@ impl Graph {
         )
       );
 
+      let mut prev_acc_proof: (
+        &Vec<G1Projective>,
+        &Vec<G2Projective>,
+        &Vec<Fr>,
+        &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
+      ) = (&vec![], &vec![], &vec![], &vec![]);
+
       // check if basicblock is in prev_acc_map
-      let new_acc_proof = if let Some(prev_acc) = prev_acc_map.get(bb_index_for_folding) {
-        let prev_acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>) =
-          (&prev_acc.0, &prev_acc.1, &prev_acc.2);
-        self.basic_blocks[n.basic_block].acc_prove(
-          srs,
-          models[n.basic_block],
-          &myInputs,
-          outputs[i],
-          prev_acc_proof,
-          (&proof.0, &proof.1, &proof.2),
-          rng,
-          cache.clone(),
-        )
-      } else {
-        self.basic_blocks[n.basic_block].acc_init(
-          srs,
-          models[n.basic_block],
-          &myInputs,
-          outputs[i],
-          (&proof.0, &proof.1, &proof.2),
-          rng,
-          cache.clone(),
-        )
-      };
+      if let Some(prev_acc) = prev_acc_map.get(bb_index_for_folding) {
+        prev_acc_proof = (&prev_acc.0, &prev_acc.1, &prev_acc.2, &prev_acc.3);
+      }
+
+      let new_acc_proof = self.basic_blocks[n.basic_block].acc_prove(
+        srs,
+        models[n.basic_block],
+        &myInputs,
+        outputs[i],
+        prev_acc_proof,
+        (&proof.0, &proof.1, &proof.2),
+        rng,
+        cache.clone(),
+      );
 
       let (proof, new_acc_proof_v) = self.basic_blocks[self.nodes[i].basic_block].acc_clean(
         srs,
         (&proof.0, &proof.1, &proof.2),
-        (&new_acc_proof.0, &new_acc_proof.1, &new_acc_proof.2),
+        (&new_acc_proof.0, &new_acc_proof.1, &new_acc_proof.2, &new_acc_proof.3),
       );
 
       proofs.push(proof);
@@ -336,9 +336,7 @@ impl Graph {
       util::add_randomness(rng, bytes);
     });
 
-    proofs.append(&mut acc_proofs_for_verifier);
-
-    proofs
+    (proofs, acc_proofs_for_verifier)
   }
 
   #[cfg(not(feature = "fold"))]
@@ -365,12 +363,12 @@ impl Graph {
           // Skip verifying for some layers if they are precomputable.
           // These layers require no proving and verifying as their inputs are known (i.e., constants) during graph construction.
           println!(
-            "{} | skipping verifying for {i} {:<200?} because this layer is precomputable given the constant inputs",
+            "{} | skipping verifying for {i} {:?} because this layer is precomputable given the constant inputs",
             self.layer_names[i], self.basic_blocks[n.basic_block]
           );
           return vec![];
         }
-        let verify_id = format!("{} | verifying {i} {:<200?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
+        let verify_id = format!("{} | verifying {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
         println!("{}", verify_id);
         let myInputs = n
           .inputs
@@ -412,13 +410,13 @@ impl Graph {
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&Vec<&ArrayD<DataEnc>>>,
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)>,
+    acc_proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>)>,
     rng: &mut StdRng,
     timing: &mut TimingTree,
   ) -> (Vec<usize>, Vec<usize>) {
     assert!(self.nodes.len() == self.precomputable.prove_and_verify.len());
     let cache = Arc::new(Mutex::new(HashMap::new()));
     let mut prev_acc_map: HashMap<usize, usize> = HashMap::new();
-    let (proofs, acc_proofs) = (&proofs[..self.nodes.len()], &proofs[self.nodes.len()..]);
     let (mut final_proofs_idx, mut final_acc_proofs_idx) = (vec![], vec![]);
 
     let mut pairings: Vec<Vec<PairingCheck>> = self
@@ -431,13 +429,13 @@ impl Graph {
           // Skip verifying for some layers if they are precomputable.
           // These layers require no proving and verifying as their inputs are known (i.e., constants) during graph construction.
           println!(
-            "{} | skipping verifying for {i} {:<200?} because this layer is precomputable given the constant inputs",
+            "{} | skipping verifying for {i} {:?} because this layer is precomputable given the constant inputs",
             self.layer_names[i], self.basic_blocks[n.basic_block]
           );
           return vec![];
         }
-        let verify_id = format!("{} | verifying {i} {:<200?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
-        let acc_verify_id = format!("{} | acc verifying {i} {:<200?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
+        let verify_id = format!("{} | verifying {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
+        let acc_verify_id = format!("{} | acc verifying {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
         println!("{}", verify_id);
         let myInputs = n
           .inputs
@@ -452,13 +450,20 @@ impl Graph {
           .collect();
 
         let bb_index_for_folding = self.foldable_bb_map.get(&n.basic_block).unwrap();
-        let mut prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>) = (&vec![], &vec![], &vec![]);
+        let mut prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>) =
+          (&vec![], &vec![], &vec![], &vec![]);
         if let Some(prev_acc) = prev_acc_map.get(bb_index_for_folding) {
-          prev_acc_proof = (&acc_proofs[*prev_acc].0, &acc_proofs[*prev_acc].1, &acc_proofs[*prev_acc].2);
+          prev_acc_proof = (
+            &acc_proofs[*prev_acc].0,
+            &acc_proofs[*prev_acc].1,
+            &acc_proofs[*prev_acc].2,
+            &acc_proofs[*prev_acc].3,
+          );
         }
         prev_acc_map.insert(*bb_index_for_folding, i);
 
-        let acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>) = (&acc_proofs[i].0, &acc_proofs[i].1, &acc_proofs[i].2);
+        let acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>) =
+          (&acc_proofs[i].0, &acc_proofs[i].1, &acc_proofs[i].2, &acc_proofs[i].3);
         let pairings = timed!(
           timing,
           &verify_id,
@@ -495,17 +500,18 @@ impl Graph {
       })
       .collect();
 
-    let mut decider_pairings: Vec<Vec<PairingCheck>> = prev_acc_map
+    let mut decider_pairings: Vec<Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)>> = prev_acc_map
       .iter()
       .map(|(k, v)| {
         if !final_proofs_idx.contains(v) {
           final_acc_proofs_idx.push(*v);
         }
-        let acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>) = (&acc_proofs[*v].0, &acc_proofs[*v].1, &acc_proofs[*v].2);
+        let acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>) =
+          (&acc_proofs[*v].0, &acc_proofs[*v].1, &acc_proofs[*v].2, &acc_proofs[*v].3);
         self.basic_blocks[*k].acc_decide(srs, acc_proof)
       })
       .collect();
-    pairings.append(&mut decider_pairings);
+    // TODO: add decider_pairings to pairings
 
     let pairings = timed!(
       timing,
@@ -525,15 +531,15 @@ impl Graph {
     final_proofs_idx: Vec<usize>,
     final_acc_proofs_idx: Vec<usize>,
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)>,
+    acc_proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>)>,
   ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)> {
-    let (proofs, acc_proofs) = (&proofs[..self.nodes.len()], &proofs[self.nodes.len()..]);
     let mut final_proofs: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)> =
       final_proofs_idx.iter().map(|i| (proofs[*i].0.clone(), proofs[*i].1.clone(), proofs[*i].2.clone(), vec![])).collect();
     let mut final_acc_proofs: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)> = final_acc_proofs_idx
       .iter()
       .map(|i| {
         let n = &self.nodes[*i];
-        self.basic_blocks[n.basic_block].acc_finalize(srs, (&acc_proofs[*i].0, &acc_proofs[*i].1, &acc_proofs[*i].2))
+        self.basic_blocks[n.basic_block].acc_finalize(srs, (&acc_proofs[*i].0, &acc_proofs[*i].1, &acc_proofs[*i].2, &acc_proofs[*i].3))
       })
       .collect();
     final_proofs.append(&mut final_acc_proofs);
@@ -555,13 +561,13 @@ impl Graph {
     let cache = Arc::new(Mutex::new(HashMap::new()));
 
     self.nodes.iter().enumerate().for_each(|(i, n)| {
-      println!("verifying (debug mode) {i} {:<200?}", self.basic_blocks[n.basic_block]);
+      println!("verifying (debug mode) {i} {:?}", self.basic_blocks[n.basic_block]);
       let precomputable = self.precomputable.prove_and_verify[i];
       if precomputable {
         // Skip verifying for some layers if they are precomputable.
         // These layers require no proving and verifying as their inputs are known (i.e., constants) during graph construction.
         println!(
-          "{} | skipping verifying for {i} {:<200?} because this layer is precomputable given the constant inputs",
+          "{} | skipping verifying for {i} {:?} because this layer is precomputable given the constant inputs",
           self.layer_names[i], self.basic_blocks[n.basic_block]
         );
         return;

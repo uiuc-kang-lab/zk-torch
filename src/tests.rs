@@ -76,27 +76,31 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
   let cache = Arc::new(Mutex::new(HashMap::new()));
 
   let mut proofs = vec![];
-  let mut acc_proofs: Vec<(Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>)> = vec![];
+  let mut acc_proofs: Vec<(Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<_>)> = vec![];
   let mut acc_proofs_v = vec![];
 
   for i in 0..num_folds {
     let proof = basic_block.prove(srs, setup, &model, &inputs, &outputs, &mut rng, cache.clone());
     let acc_proof = if proofs.is_empty() {
-      basic_block.acc_init(srs, &model, &inputs, &outputs, (&proof.0, &proof.1, &proof.2), &mut rng, cache.clone())
+      (&vec![], &vec![], &vec![], &vec![])
     } else {
-      let acc_proof = (&acc_proofs[i - 1].0, &acc_proofs[i - 1].1, &acc_proofs[i - 1].2);
-      basic_block.acc_prove(
-        srs,
-        &model,
-        &inputs,
-        &outputs,
-        acc_proof,
-        (&proof.0, &proof.1, &proof.2),
-        &mut rng,
-        cache.clone(),
-      )
+      (&acc_proofs[i - 1].0, &acc_proofs[i - 1].1, &acc_proofs[i - 1].2, &acc_proofs[i - 1].3)
     };
-    let (proof, acc_proof_v) = basic_block.acc_clean(srs, (&proof.0, &proof.1, &proof.2), (&acc_proof.0, &acc_proof.1, &acc_proof.2));
+    let acc_proof = basic_block.acc_prove(
+      srs,
+      &model,
+      &inputs,
+      &outputs,
+      acc_proof,
+      (&proof.0, &proof.1, &proof.2),
+      &mut rng,
+      cache.clone(),
+    );
+    let (proof, acc_proof_v) = basic_block.acc_clean(
+      srs,
+      (&proof.0, &proof.1, &proof.2),
+      (&acc_proof.0, &acc_proof.1, &acc_proof.2, &acc_proof.3),
+    );
     println!("acc_proof 0 len: {:?}", acc_proof.0.len());
     println!("acc_proof 1 len: {:?}", acc_proof.1.len());
     println!("acc_proof 2 len: {:?}", acc_proof.2.len());
@@ -118,14 +122,15 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
   let mut all_pairings = vec![];
   for i in 0..num_folds {
     let proof = (&proofs[i].0, &proofs[i].1, &proofs[i].2);
-    let acc_proof = (&acc_proofs_v[i].0, &acc_proofs_v[i].1, &acc_proofs_v[i].2);
+    let acc_proof = (&acc_proofs_v[i].0, &acc_proofs_v[i].1, &acc_proofs_v[i].2, &acc_proofs[i].3);
     let acc_proof_prev = if i == 0 {
-      (vec![], vec![], vec![])
+      (vec![], vec![], vec![], vec![])
     } else {
       (
         acc_proofs_v[i - 1].0.clone(),
         acc_proofs_v[i - 1].1.clone(),
         acc_proofs_v[i - 1].2.clone(),
+        acc_proofs_v[i - 1].3.clone(),
       )
     };
     let pairings = basic_block.verify(srs, &model, &inputs, &outputs, proof, &mut rng2, cache.clone());
@@ -134,7 +139,7 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
       &model,
       &inputs,
       &outputs,
-      (&acc_proof_prev.0, &acc_proof_prev.1, &acc_proof_prev.2),
+      (&acc_proof_prev.0, &acc_proof_prev.1, &acc_proof_prev.2, &acc_proof_prev.3),
       acc_proof,
       proof,
       &mut rng2,
@@ -153,9 +158,10 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
       &acc_proofs_v[num_folds - 1].0,
       &acc_proofs_v[num_folds - 1].1,
       &acc_proofs_v[num_folds - 1].2,
+      &acc_proofs_v[num_folds - 1].3,
     ),
   );
-  all_pairings.push(decider_pairings);
+  //all_pairings.push(decider_pairings);
 
   for pairings in all_pairings {
     for i in 0..pairings.len() {
@@ -163,6 +169,13 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
       let pairing: (Vec<_>, Vec<_>) = (pairing.iter().map(|x| x.0).collect(), pairing.iter().map(|x| x.1).collect());
       assert_eq!(Bn254::multi_pairing(pairing.0.iter(), pairing.1.iter()), PairingOutput::zero());
     }
+  }
+
+  for pairings in decider_pairings {
+    let pairing: Vec<_> = pairings.0.iter().map(|x| x).collect();
+    let err = pairings.1;
+    let pairing: (Vec<_>, Vec<_>) = (pairing.iter().map(|x| x.0).collect(), pairing.iter().map(|x| x.1).collect());
+    assert_eq!(Bn254::multi_pairing(pairing.0.iter(), pairing.1.iter()) - err, PairingOutput::zero());
   }
 
   assert_eq!(Fr::rand(&mut rng), Fr::rand(&mut rng2));

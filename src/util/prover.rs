@@ -178,8 +178,14 @@ pub fn prove(
   let mut rng = StdRng::from_seed(buf);
 
   // Prove:
+  #[cfg(feature = "fold")]
+  let (proofs, acc_proofs) = timed!(timing, "prove", graph.prove(srs, &setups, &models, &inputs, &outputs, &mut rng, timing));
+  #[cfg(not(feature = "fold"))]
   let proofs = timed!(timing, "prove", graph.prove(srs, &setups, &models, &inputs, &outputs, &mut rng, timing));
+
   proofs.serialize_uncompressed(File::create(&CONFIG.prover.proof_path).unwrap()).unwrap();
+  #[cfg(feature = "fold")]
+  acc_proofs.serialize_uncompressed(File::create(&CONFIG.prover.acc_proof_path).unwrap()).unwrap();
 }
 
 #[cfg(not(feature = "mock_prove"))]
@@ -304,6 +310,8 @@ pub fn zktorch_kernel() {
   measure_file_size(&CONFIG.prover.enc_input_path);
   measure_file_size(&CONFIG.prover.enc_output_path);
   measure_file_size(&CONFIG.prover.proof_path);
+  #[cfg(feature = "fold")]
+  measure_file_size(&CONFIG.prover.final_proof_path);
   timing.print();
   println!("Cargo run was successful.");
 }

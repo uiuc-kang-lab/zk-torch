@@ -1,5 +1,5 @@
 #![allow(unused_imports)]
-use crate::util::{self, ark_de, ark_se};
+use crate::util::{self, ark_de, ark_se, AccHolder, AccProofLayout};
 pub use add::{AddAlongAxisBasicBlock, AddBasicBlock, MultipleAddBasicBlock};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
@@ -202,20 +202,6 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     vec![]
   }
 
-  // This function is the special case of acc_prove for the first block in the computation
-  fn acc_init(
-    &self,
-    _srs: &SRS,
-    _model: &ArrayD<Data>,
-    _inputs: &Vec<&ArrayD<Data>>,
-    _outputs: &Vec<&ArrayD<Data>>,
-    _proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    _rng: &mut StdRng,
-    _cache: ProveVerifyCache,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
-    (Vec::new(), Vec::new(), Vec::new())
-  }
-
   // This function performs folding for the rest of the blocks in the computation
   fn acc_prove(
     &self,
@@ -223,12 +209,17 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
-    _acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    _acc_proof: (
+      &Vec<G1Projective>,
+      &Vec<G2Projective>,
+      &Vec<Fr>,
+      &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
+    ),
     _proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     _rng: &mut StdRng,
     _cache: ProveVerifyCache,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
-    (Vec::new(), Vec::new(), Vec::new())
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
+    (Vec::new(), Vec::new(), Vec::new(), Vec::new())
   }
 
   // This function cleans the blinding terms in accumulators for the verifier to do acc_verify
@@ -236,8 +227,16 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     &self,
     _srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)) {
+    acc_proof: (
+      &Vec<G1Projective>,
+      &Vec<G2Projective>,
+      &Vec<Fr>,
+      &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
+    ),
+  ) -> (
+    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>),
+    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+  ) {
     (
       (
         proof.0.iter().map(|x| (*x).into()).collect(),
@@ -248,6 +247,7 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
         acc_proof.0.iter().map(|x| (*x).into()).collect(),
         acc_proof.1.iter().map(|x| (*x).into()).collect(),
         acc_proof.2.iter().map(|x| *x).collect(),
+        acc_proof.3.iter().map(|x| *x).collect(),
       ),
     )
   }
@@ -258,8 +258,8 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     _model: &ArrayD<DataEnc>,
     _inputs: &Vec<&ArrayD<DataEnc>>,
     _outputs: &Vec<&ArrayD<DataEnc>>,
-    _prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
-    _acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    _prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+    _acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
     _cache: ProveVerifyCache,
@@ -271,17 +271,21 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
   fn acc_finalize(
     &self,
     _srs: &SRS,
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
   ) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
     (
       acc_proof.0.iter().map(|x| *x).collect(),
       acc_proof.1.iter().map(|x| *x).collect(),
       acc_proof.2.iter().map(|x| *x).collect(),
-      vec![],
+      acc_proof.3.iter().map(|x| *x).collect(),
     )
   }
 
-  fn acc_decide(&self, _srs: &SRS, _acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {
+  fn acc_decide(
+    &self,
+    _srs: &SRS,
+    _acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+  ) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     vec![]
   }
 }
@@ -289,5 +293,52 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
 #[derive(Debug)]
 pub struct BasicBlockForTest;
 impl BasicBlock for BasicBlockForTest {}
+impl AccProofLayout for BasicBlockForTest {
+  fn acc_g1_num(&self, _is_prover: bool) -> usize {
+    0
+  }
+  fn acc_g2_num(&self, _is_prover: bool) -> usize {
+    0
+  }
+  fn acc_fr_num(&self, _is_prover: bool) -> usize {
+    0
+  }
+  fn prover_proof_to_acc(&self, _proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective> {
+    AccHolder {
+      acc_g1: vec![],
+      acc_g2: vec![],
+      acc_fr: vec![],
+      mu: Fr::zero(),
+      errs: vec![],
+      acc_errs: vec![],
+    }
+  }
+  fn verifier_proof_to_acc(&self, _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> AccHolder<G1Affine, G2Affine> {
+    AccHolder {
+      acc_g1: vec![],
+      acc_g2: vec![],
+      acc_fr: vec![],
+      mu: Fr::zero(),
+      errs: vec![],
+      acc_errs: vec![],
+    }
+  }
+  fn mira_prove(
+    &self,
+    _srs: &SRS,
+    _acc_1: AccHolder<G1Projective, G2Projective>,
+    _acc_2: AccHolder<G1Projective, G2Projective>,
+    _rng: &mut StdRng,
+  ) -> AccHolder<G1Projective, G2Projective> {
+    AccHolder {
+      acc_g1: vec![],
+      acc_g2: vec![],
+      acc_fr: vec![],
+      mu: Fr::zero(),
+      errs: vec![],
+      acc_errs: vec![],
+    }
+  }
+}
 
 impl_downcast!(BasicBlock);

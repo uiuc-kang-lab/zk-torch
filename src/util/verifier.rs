@@ -8,7 +8,9 @@ use crate::graph::Graph;
 use crate::util::msm;
 use crate::{onnx, util, CONFIG, LAYER_SETUP_DIR};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_ec::bn::Bn;
 use ark_ec::models::short_weierstrass::SWCurveConfig;
+use ark_ec::pairing::PairingOutput;
 use ark_ec::short_weierstrass::Affine;
 use ark_ec::AffineRepr;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
@@ -103,6 +105,13 @@ pub fn verify(srs: &SRS, graph: &Graph, timing: &mut TimingTree) {
   let proofs =
     Vec::<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)>::deserialize_uncompressed_unchecked(File::open(&CONFIG.verifier.proof_path).unwrap()).unwrap();
   let proofs = proofs.iter().map(|x| (&x.0, &x.1, &x.2)).collect();
+  #[cfg(feature = "fold")]
+  let acc_proofs = Vec::<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)>::deserialize_uncompressed_unchecked(
+    File::open(&CONFIG.prover.acc_proof_path).unwrap(),
+  )
+  .unwrap();
+  #[cfg(feature = "fold")]
+  let acc_proofs = acc_proofs.iter().map(|x| (&x.0, &x.1, &x.2, &x.3)).collect();
   let mut modelsEncBytes = Vec::new();
   File::open(&CONFIG.verifier.enc_model_path).unwrap().read_to_end(&mut modelsEncBytes).unwrap();
   let modelsEnc: Vec<ArrayD<DataEnc>> = bincode::deserialize(&modelsEncBytes).unwrap();
@@ -144,9 +153,9 @@ pub fn verify(srs: &SRS, graph: &Graph, timing: &mut TimingTree) {
     let (final_proofs_idx, final_acc_proofs_idx) = timed!(
       timing,
       "verify",
-      graph.verify(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng, timing)
+      graph.verify(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &acc_proofs, &mut rng, timing)
     );
-    let final_proof = graph.fold_proofs(srs, final_proofs_idx, final_acc_proofs_idx, &proofs);
-    final_proof.serialize_uncompressed(File::create(&CONFIG.prover.proof_path).unwrap()).unwrap();
+    let final_proof = graph.fold_proofs(srs, final_proofs_idx, final_acc_proofs_idx, &proofs, &acc_proofs);
+    final_proof.serialize_uncompressed(File::create(&CONFIG.prover.final_proof_path).unwrap()).unwrap();
   }
 }

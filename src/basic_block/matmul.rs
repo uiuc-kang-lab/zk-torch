@@ -5,6 +5,7 @@ use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, calc_pow, AccHolder,
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
+use ark_ec::AffineRepr;
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::CanonicalSerialize;
@@ -31,20 +32,197 @@ impl AccProofLayout for MatMulBasicBlock {
       0
     }
   }
-  fn err_g1_nums_summable(&self) -> Vec<usize> {
+  fn err_g1_nums(&self) -> Vec<usize> {
     vec![3]
   }
-  fn err_g1_nums_non_summable(&self) -> Vec<usize> {
-    vec![2]
-  }
-  fn err_g2_nums_summable(&self) -> Vec<usize> {
+  fn err_g2_nums(&self) -> Vec<usize> {
     vec![0]
-  }
-  fn err_g2_nums_non_summable(&self) -> Vec<usize> {
-    vec![2]
   }
   fn err_fr_nums(&self) -> Vec<usize> {
     vec![0]
+  }
+  fn err_gt_nums(&self) -> Vec<usize> {
+    vec![1]
+  }
+  fn prover_proof_to_acc(&self, proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective> {
+    AccHolder {
+      acc_g1: proof.0.clone(),
+      acc_g2: proof.1.clone(),
+      acc_fr: proof.2.clone(),
+      mu: Fr::one(),
+      errs: vec![(
+        vec![G1Projective::zero(); 3],
+        vec![],
+        vec![],
+        vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
+      )],
+      acc_errs: vec![(
+        vec![G1Projective::zero(); 3],
+        vec![],
+        vec![],
+        vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
+      )],
+    }
+  }
+  fn verifier_proof_to_acc(&self, proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> AccHolder<G1Affine, G2Affine> {
+    AccHolder {
+      acc_g1: proof.0.clone(),
+      acc_g2: proof.1.clone(),
+      acc_fr: proof.2.clone(),
+      mu: Fr::one(),
+      errs: vec![(
+        vec![G1Affine::zero(); 3],
+        vec![],
+        vec![],
+        vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
+      )],
+      acc_errs: vec![(
+        vec![G1Affine::zero(); 3],
+        vec![],
+        vec![],
+        vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
+      )],
+    }
+  }
+  fn mira_prove(
+    &self,
+    srs: &SRS,
+    acc_1: AccHolder<G1Projective, G2Projective>,
+    acc_2: AccHolder<G1Projective, G2Projective>,
+    rng: &mut StdRng,
+  ) -> AccHolder<G1Projective, G2Projective> {
+    let [left_x, left_Q_x, _left_zero, _left_zero_div, _right_x, _right_Q_x, _right_zero_div, _corr1, _corr2, _corr3, _corr4, flat_A, _flat_B, _flat_C, part_corr1, flat_A_no_blind, flat_B_no_blind] =
+      acc_2.acc_g1[..]
+    else {
+      panic!("Wrong proof format")
+    };
+
+    let [flat_B_g2, beta_pow_g2] = acc_2.acc_g2[..] else {
+      panic!("Wrong proof format")
+    };
+    let [flat_A_r, flat_B_r] = acc_2.acc_fr[..] else {
+      panic!("Wrong proof format")
+    };
+
+    let mut new_acc_holder = AccHolder {
+      acc_g1: Vec::new(),
+      acc_g2: Vec::new(),
+      acc_fr: Vec::new(),
+      mu: Fr::zero(),
+      errs: Vec::new(),
+      acc_errs: Vec::new(),
+    };
+
+    let [acc_left_x, acc_left_Q_x, _acc_left_zero, _acc_left_zero_div, _acc_right_x, _acc_right_Q_x, _acc_right_zero_div, _acc_corr1, _acc_corr2, _acc_corr3, _acc_corr4, acc_flat_A, _acc_flat_B, _acc_flat_C, acc_part_corr1, acc_flat_A_no_blind, acc_flat_B_no_blind] =
+      acc_1.acc_g1[..]
+    else {
+      panic!("Wrong acc proof format")
+    };
+    let [acc_flat_B_g2, acc_beta_pow_g2] = acc_1.acc_g2[..] else {
+      panic!("Wrong acc proof format")
+    };
+    assert!(beta_pow_g2 == acc_beta_pow_g2);
+    let acc_mu = acc_1.mu;
+    let [acc_flat_A_r, acc_flat_B_r] = acc_1.acc_fr[..] else {
+      panic!("Wrong acc proof format")
+    };
+
+    // Compute the error
+    let err: (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) = (
+      vec![
+        acc_left_Q_x * acc_2.mu + left_Q_x * acc_mu,
+        acc_left_x * acc_2.mu + left_x * acc_mu,
+        acc_part_corr1 * acc_2.mu
+          + part_corr1 * acc_mu
+          + acc_flat_A_no_blind * flat_B_r
+          + flat_A_no_blind * acc_flat_B_r
+          + acc_flat_B_no_blind * flat_A_r
+          + flat_B_no_blind * acc_flat_A_r
+          + srs.Y1P * (flat_A_r * acc_flat_B_r + flat_B_r * acc_flat_A_r),
+      ],
+      vec![],
+      vec![],
+      vec![Bn254::multi_pairing(vec![flat_A, acc_flat_A], vec![acc_flat_B_g2, flat_B_g2])],
+    );
+    let errs = vec![err];
+
+    // Fiat-Shamir
+    let mut bytes = Vec::new();
+    acc_1.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[11..14].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[11..14].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
+    errs.iter().for_each(|(g1, g2, f, gt)| {
+      g1.serialize_uncompressed(&mut bytes).unwrap();
+      g2.serialize_uncompressed(&mut bytes).unwrap();
+      f.serialize_uncompressed(&mut bytes).unwrap();
+      gt.serialize_uncompressed(&mut bytes).unwrap();
+    });
+    util::add_randomness(rng, bytes);
+    let acc_gamma = Fr::rand(rng);
+    let acc_gamma_sq = acc_gamma * acc_gamma;
+
+    new_acc_holder.acc_g1 = acc_2.acc_g1.iter().zip(acc_1.acc_g1.iter()).map(|(x, y)| *x * acc_gamma + y).collect();
+    new_acc_holder.acc_g2 = vec![flat_B_g2 * acc_gamma + acc_flat_B_g2, beta_pow_g2];
+    new_acc_holder.acc_fr = acc_2.acc_fr.iter().zip(acc_1.acc_fr.iter()).map(|(x, y)| *x * acc_gamma + y).collect();
+    new_acc_holder.mu = acc_mu + acc_gamma * acc_2.mu;
+    new_acc_holder.errs = errs;
+
+    // Append error terms
+    let q_term_g1 = acc_1.acc_errs[0].0[0] + new_acc_holder.errs[0].0[0] * acc_gamma + acc_2.acc_errs[0].0[0] * acc_gamma_sq;
+    let l_term_g1 = acc_1.acc_errs[0].0[1] + new_acc_holder.errs[0].0[1] * acc_gamma + acc_2.acc_errs[0].0[1] * acc_gamma_sq;
+    let c_term_g1 = acc_1.acc_errs[0].0[2] + new_acc_holder.errs[0].0[2] * acc_gamma + acc_2.acc_errs[0].0[2] * acc_gamma_sq;
+    let term_gt = acc_1.acc_errs[0].3[0] + new_acc_holder.errs[0].3[0] * acc_gamma + acc_2.acc_errs[0].3[0] * acc_gamma_sq;
+    new_acc_holder.acc_errs = vec![(vec![q_term_g1, l_term_g1, c_term_g1], vec![], vec![], vec![term_gt])];
+
+    new_acc_holder
+  }
+  fn mira_verify(
+    &self,
+    acc_1: AccHolder<G1Affine, G2Affine>,
+    acc_2: AccHolder<G1Affine, G2Affine>,
+    new_acc: AccHolder<G1Affine, G2Affine>,
+    rng: &mut StdRng,
+  ) -> Option<bool> {
+    let mut result = true;
+
+    // Fiat-Shamir
+    let mut bytes = Vec::new();
+    acc_1.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[11..14].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[11..14].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
+    new_acc.errs.iter().for_each(|(g1, g2, f, gt)| {
+      g1.serialize_uncompressed(&mut bytes).unwrap();
+      g2.serialize_uncompressed(&mut bytes).unwrap();
+      f.serialize_uncompressed(&mut bytes).unwrap();
+      gt.serialize_uncompressed(&mut bytes).unwrap();
+    });
+    util::add_randomness(rng, bytes);
+    let acc_gamma = Fr::rand(rng);
+    let acc_gamma_sq = acc_gamma * acc_gamma;
+
+    acc_2.acc_g1[..7].iter().enumerate().for_each(|(i, x)| {
+      let z = *x * acc_gamma + acc_1.acc_g1[i];
+      result &= new_acc.acc_g1[i] == z;
+    });
+    acc_2.acc_g1[11..14].iter().enumerate().for_each(|(i, x)| {
+      let z = *x * acc_gamma + acc_1.acc_g1[i + 11];
+      result &= new_acc.acc_g1[i + 11] == z;
+    });
+    result &= new_acc.acc_g2[0] == acc_1.acc_g2[0] + acc_2.acc_g2[0] * acc_gamma;
+    result &= new_acc.acc_g2[1] == acc_1.acc_g2[1];
+    result &= new_acc.mu == acc_1.mu + acc_gamma * acc_2.mu;
+    new_acc.errs[0].0.iter().zip(acc_1.acc_errs[0].0.iter()).enumerate().for_each(|(j, (x, y))| {
+      let z = *y + *x * acc_gamma + acc_2.acc_errs[0].0[j] * acc_gamma_sq;
+      result &= z == new_acc.acc_errs[0].0[j];
+    });
+    result &= acc_1.acc_errs[0].3[0] + new_acc.errs[0].3[0] * acc_gamma + acc_2.acc_errs[0].3[0] * acc_gamma_sq == new_acc.acc_errs[0].3[0];
+    Some(result)
   }
 }
 
@@ -361,153 +539,44 @@ impl BasicBlock for MatMulBasicBlock {
     vec![]
   }
 
-  fn acc_init(
-    &self,
-    _srs: &SRS,
-    _model: &ArrayD<Data>,
-    _inputs: &Vec<&ArrayD<Data>>,
-    _outputs: &Vec<&ArrayD<Data>>,
-    proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    rng: &mut StdRng,
-    _cache: ProveVerifyCache,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
-    let mut acc_proof = (proof.0.clone(), proof.1.clone(), proof.2.clone());
-
-    // Fiat-Shamir
-    let mut bytes = Vec::new();
-    proof.0[..7].serialize_uncompressed(&mut bytes).unwrap();
-    proof.0[11..14].serialize_uncompressed(&mut bytes).unwrap();
-    proof.1.serialize_uncompressed(&mut bytes).unwrap();
-    util::add_randomness(rng, bytes);
-    let _acc_gamma = Fr::rand(rng);
-
-    // acc errs and errs
-    let g1_zero = G1Projective::zero();
-    let g2_zero = G2Projective::zero();
-    acc_proof.0.extend(vec![g1_zero; 5 * 2]);
-    acc_proof.1.extend(vec![g2_zero; 2 * 2]);
-
-    // mu
-    acc_proof.2.push(Fr::one());
-    acc_proof
-  }
-
   fn acc_prove(
     &self,
     srs: &SRS,
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
-    acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    acc_proof: (
+      &Vec<G1Projective>,
+      &Vec<G2Projective>,
+      &Vec<Fr>,
+      &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
+    ),
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
-    let [left_x, left_Q_x, _left_zero, _left_zero_div, _right_x, _right_Q_x, _right_zero_div, _corr1, _corr2, _corr3, _corr4, flat_A, _flat_B, _flat_C, part_corr1, flat_A_no_blind, flat_B_no_blind] =
-      proof.0[..]
-    else {
-      panic!("Wrong proof format")
-    };
-
-    let [flat_B_g2, beta_pow_g2] = proof.1[..] else {
-      panic!("Wrong proof format")
-    };
-    let [flat_A_r, flat_B_r] = proof.2[..] else {
-      panic!("Wrong proof format")
-    };
-
-    let acc_holder = acc_proof_to_acc(self, acc_proof, true);
-    let mut new_acc_holder = AccHolder {
-      acc_g1: Vec::new(),
-      acc_g2: Vec::new(),
-      acc_fr: Vec::new(),
-      mu: Fr::zero(),
-      errs: Vec::new(),
-      acc_errs: Vec::new(),
-    };
-
-    let [acc_left_x, acc_left_Q_x, _acc_left_zero, _acc_left_zero_div, _acc_right_x, _acc_right_Q_x, _acc_right_zero_div, _acc_corr1, _acc_corr2, _acc_corr3, _acc_corr4, acc_flat_A, _acc_flat_B, _acc_flat_C, acc_part_corr1, acc_flat_A_no_blind, acc_flat_B_no_blind] =
-      acc_holder.acc_g1[..]
-    else {
-      panic!("Wrong acc proof format")
-    };
-    let [acc_flat_B_g2, acc_beta_pow_g2] = acc_holder.acc_g2[..] else {
-      panic!("Wrong acc proof format")
-    };
-    assert!(beta_pow_g2 == acc_beta_pow_g2);
-    let acc_mu = acc_holder.mu;
-    let [acc_flat_A_r, acc_flat_B_r] = acc_holder.acc_fr[..] else {
-      panic!("Wrong acc proof format")
-    };
-
-    // Compute the error
-    let err: (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) = (
-      vec![
-        flat_A,
-        acc_flat_A,
-        acc_left_Q_x + left_Q_x * acc_mu,
-        acc_left_x + left_x * acc_mu,
-        acc_part_corr1
-          + part_corr1 * acc_mu
-          + acc_flat_A_no_blind * flat_B_r
-          + flat_A_no_blind * acc_flat_B_r
-          + acc_flat_B_no_blind * flat_A_r
-          + flat_B_no_blind * acc_flat_A_r
-          + srs.Y1P * (flat_A_r * acc_flat_B_r + flat_B_r * acc_flat_A_r),
-      ],
-      vec![acc_flat_B_g2, flat_B_g2],
-      vec![],
-    );
-    let mut errs = vec![err];
-
-    // Fiat-Shamir
-    let mut bytes = Vec::new();
-    acc_holder.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
-    acc_holder.acc_g1[11..14].serialize_uncompressed(&mut bytes).unwrap();
-    acc_holder.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
-    proof.0[..7].serialize_uncompressed(&mut bytes).unwrap();
-    proof.0[11..14].serialize_uncompressed(&mut bytes).unwrap();
-    proof.1.serialize_uncompressed(&mut bytes).unwrap();
-    errs.iter().for_each(|(g1, g2, f)| {
-      g1.serialize_uncompressed(&mut bytes).unwrap();
-      g2.serialize_uncompressed(&mut bytes).unwrap();
-      f.serialize_uncompressed(&mut bytes).unwrap();
-    });
-    util::add_randomness(rng, bytes);
-    let acc_gamma = Fr::rand(rng);
-
-    new_acc_holder.acc_g1 = proof.0.iter().zip(acc_holder.acc_g1.iter()).map(|(x, y)| *x * acc_gamma + y).collect();
-    new_acc_holder.acc_g2 = vec![flat_B_g2 * acc_gamma + acc_flat_B_g2, beta_pow_g2];
-    new_acc_holder.acc_fr = proof.2.iter().zip(acc_holder.acc_fr.iter()).map(|(x, y)| *x * acc_gamma + y).collect();
-    new_acc_holder.mu = acc_mu + acc_gamma;
-    new_acc_holder.errs = errs.clone();
-    new_acc_holder.acc_errs = acc_holder.acc_errs;
-
-    errs[0].0 = errs[0].0.iter().map(|x| (*x * acc_gamma).into()).collect();
-
-    // Append error terms
-    let err1_g1_len = new_acc_holder.acc_errs[0].0.len();
-    let q_term_g1 = new_acc_holder.acc_errs[0].0[err1_g1_len - 3].clone() + errs[0].0[2];
-    let l_term_g1 = new_acc_holder.acc_errs[0].0[err1_g1_len - 2].clone() + errs[0].0[3];
-    let c_term_g1 = new_acc_holder.acc_errs[0].0[err1_g1_len - 1].clone() + errs[0].0[4];
-    let mut errs_0_g1 = errs[0].0[..2].to_vec();
-    let mut errs_0_g2 = errs[0].1[..2].to_vec();
-
-    new_acc_holder.acc_errs[0].0 = new_acc_holder.acc_errs[0].0[..err1_g1_len - 3].to_vec();
-    new_acc_holder.acc_errs[0].0.append(&mut errs_0_g1);
-    new_acc_holder.acc_errs[0].0.push(q_term_g1);
-    new_acc_holder.acc_errs[0].0.push(l_term_g1);
-    new_acc_holder.acc_errs[0].0.push(c_term_g1);
-    new_acc_holder.acc_errs[0].1.append(&mut errs_0_g2);
-    acc_to_acc_proof(new_acc_holder)
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
+    let proof = self.prover_proof_to_acc(proof);
+    if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
+      return acc_to_acc_proof(proof);
+    }
+    let acc_proof = acc_proof_to_acc(self, acc_proof, true);
+    acc_to_acc_proof(self.mira_prove(srs, acc_proof, proof, rng))
   }
 
   fn acc_clean(
     &self,
     srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)) {
+    acc_proof: (
+      &Vec<G1Projective>,
+      &Vec<G2Projective>,
+      &Vec<Fr>,
+      &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
+    ),
+  ) -> (
+    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>),
+    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+  ) {
     let mut acc_holder = acc_proof_to_acc(self, acc_proof, true);
     // acc_corr1 = acc_part_corr1 * mu + acc_flat_A_no_blind * acc_flat_B_r + acc_flat_B_no_blind * acc_flat_A_r + srs.Y1P * acc_flat_A_r * acc_flat_B_r
     acc_holder.acc_g1[7] = acc_holder.acc_g1[14] * acc_holder.mu
@@ -520,7 +589,7 @@ impl BasicBlock for MatMulBasicBlock {
     let acc_proof = acc_to_acc_proof(acc_holder);
 
     // remove blinding terms from bb proof for the verifier
-    let cqlin_proof = (proof.0[..11].to_vec(), proof.1.to_vec(), vec![]);
+    let cqlin_proof = (proof.0[..proof.0.len() - 3].to_vec(), proof.1.to_vec(), vec![]);
 
     (
       (
@@ -532,6 +601,7 @@ impl BasicBlock for MatMulBasicBlock {
         acc_proof.0.iter().map(|x| (*x).into()).collect(),
         acc_proof.1.iter().map(|x| (*x).into()).collect(),
         acc_proof.2,
+        acc_proof.3.iter().map(|x| *x).collect(),
       ),
     )
   }
@@ -542,8 +612,8 @@ impl BasicBlock for MatMulBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     cache: ProveVerifyCache,
@@ -593,65 +663,23 @@ impl BasicBlock for MatMulBasicBlock {
     let temp: Vec<_> = (0..l).map(|i| index(outputs[0], i).g1).collect();
     let flat_C = util::msm::<G1Projective>(&temp, &alpha_pow);
 
-    let proof0_11_14 = vec![flat_A, flat_B, flat_C];
-
-    let prev_acc_holder = acc_proof_to_acc(self, prev_acc_proof, false);
-    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
-
-    if prev_acc_holder.mu.is_zero() && acc_holder.mu.is_one() {
-      // skip verifying RLC because no RLC was done in acc_init.
-      // Fiat-shamir
-      let mut bytes = Vec::new();
-      proof.0[..7].serialize_uncompressed(&mut bytes).unwrap();
-      proof0_11_14.serialize_uncompressed(&mut bytes).unwrap();
-      proof.1.serialize_uncompressed(&mut bytes).unwrap();
-      util::add_randomness(rng, bytes);
-      let _acc_gamma = Fr::rand(rng);
+    result &= flat_A == proof.0[11] && flat_B == proof.0[12];
+    result &= flat_C == proof.0[13];
+    if prev_acc_proof.2.len() == 0 && acc_proof.2[0].is_one() {
       return Some(result);
     }
-
-    // Fiat-Shamir
-    let mut bytes = Vec::new();
-    prev_acc_holder.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
-    prev_acc_holder.acc_g1[11..14].serialize_uncompressed(&mut bytes).unwrap();
-    prev_acc_holder.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
-    proof.0[..7].serialize_uncompressed(&mut bytes).unwrap();
-    proof0_11_14.serialize_uncompressed(&mut bytes).unwrap();
-    proof.1.serialize_uncompressed(&mut bytes).unwrap();
-    acc_holder.errs.iter().for_each(|(g1, g2, f)| {
-      g1.serialize_uncompressed(&mut bytes).unwrap();
-      g2.serialize_uncompressed(&mut bytes).unwrap();
-      f.serialize_uncompressed(&mut bytes).unwrap();
-    });
-    util::add_randomness(rng, bytes);
-    let acc_gamma = Fr::rand(rng);
-
-    proof.0.iter().enumerate().for_each(|(i, x)| {
-      if i < 7 {
-        // i==7 is corr1
-        let z = *x * acc_gamma + prev_acc_holder.acc_g1[i];
-        result &= acc_holder.acc_g1[i] == z;
-      }
-    });
-    proof0_11_14.iter().enumerate().for_each(|(i, x)| {
-      let z = *x * acc_gamma + prev_acc_holder.acc_g1[i + 11];
-      result &= acc_holder.acc_g1[i + 11] == z;
-    });
-    result &= acc_holder.acc_g2[0] == prev_acc_holder.acc_g2[0] + proof.1[0] * acc_gamma;
-    result &= acc_holder.acc_g2[1] == prev_acc_holder.acc_g2[1] && proof.1[1] == beta_pow_g2 && beta_pow_g2 == acc_holder.acc_g2[1];
-    result &= acc_holder.mu == prev_acc_holder.mu + acc_gamma;
-    acc_holder.errs[0].0[acc_holder.errs[0].0.len() - 3..]
-      .iter()
-      .zip(prev_acc_holder.acc_errs[0].0[prev_acc_holder.acc_errs[0].0.len() - 3..].iter())
-      .enumerate()
-      .for_each(|(j, (x, y))| {
-        let z = *y + *x * acc_gamma;
-        result &= z == acc_holder.acc_errs[0].0[acc_holder.acc_errs[0].0.len() - 3 + j];
-      });
+    let proof = self.verifier_proof_to_acc(proof);
+    let prev_acc_holder = acc_proof_to_acc(self, prev_acc_proof, false);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
+    result &= self.mira_verify(prev_acc_holder, proof, acc_holder, rng).unwrap();
     Some(result)
   }
 
-  fn acc_decide(&self, srs: &SRS, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {
+  fn acc_decide(
+    &self,
+    srs: &SRS,
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+  ) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     let acc_holder = acc_proof_to_acc(self, acc_proof, false);
     let [acc_left_x, acc_left_Q_x, acc_left_zero, acc_left_zero_div, acc_right_x, acc_right_Q_x, acc_right_zero_div, acc_corr1, acc_corr2, acc_corr3, acc_corr4, acc_flat_A, acc_flat_B, acc_flat_C] =
       acc_holder.acc_g1[..]
@@ -665,21 +693,17 @@ impl BasicBlock for MatMulBasicBlock {
     let err_1 = &acc_holder.acc_errs[0];
 
     let mut temp: PairingCheck = vec![];
-    for i in 0..err_1.1.len() {
-      temp.push((-err_1.0[i], err_1.1[i]));
-    }
-    temp.push((err_1.0[err_1.1.len()], (srs.X2A[self.m] - srs.X2A[0]).into()));
-    temp.push((err_1.0[err_1.1.len() + 1], srs.X2A[0]));
-    temp.push((err_1.0[err_1.1.len() + 2], srs.Y2A));
+    temp.push((err_1.0[0], (srs.X2A[self.m] - srs.X2A[0]).into()));
+    temp.push((err_1.0[1], srs.X2A[0]));
+    temp.push((err_1.0[2], srs.Y2A));
 
-    let err_1 = temp;
     let mut acc_1: PairingCheck = vec![
       (acc_flat_A, acc_flat_B_g2),
       ((-acc_left_x * acc_mu).into(), srs.X2A[0]),
       ((-acc_left_Q_x * acc_mu).into(), (srs.X2A[self.m] - srs.X2A[0]).into()),
       (-acc_corr1, srs.Y2A),
     ];
-    acc_1.extend(err_1);
+    acc_1.extend(temp);
 
     let acc_2: PairingCheck = vec![(acc_flat_B, srs.X2A[0]), (srs.X1A[0], -acc_flat_B_g2)];
 
@@ -703,28 +727,23 @@ impl BasicBlock for MatMulBasicBlock {
       (-acc_corr4, srs.Y2A),
     ];
 
-    vec![acc_1, acc_2, acc_3, acc_4, acc_5]
+    vec![
+      (acc_1, err_1.3[0]),
+      (acc_2, PairingOutput::<Bn<ark_bn254::Config>>::zero()),
+      (acc_3, PairingOutput::<Bn<ark_bn254::Config>>::zero()),
+      (acc_4, PairingOutput::<Bn<ark_bn254::Config>>::zero()),
+      (acc_5, PairingOutput::<Bn<ark_bn254::Config>>::zero()),
+    ]
   }
 
   fn acc_finalize(
     &self,
-    srs: &SRS,
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    _srs: &SRS,
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
   ) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
     let mut acc_holder = acc_proof_to_acc(self, acc_proof, false);
     let err_1 = &acc_holder.acc_errs[0];
-
-    let mut temp: PairingCheck = vec![];
-    for i in 0..err_1.1.len() {
-      temp.push((-err_1.0[i], err_1.1[i]));
-    }
-    temp.push((err_1.0[err_1.1.len()], (srs.X2A[self.m] - srs.X2A[0]).into()));
-    temp.push((err_1.0[err_1.1.len() + 1], srs.X2A[0]));
-    temp.push((err_1.0[err_1.1.len() + 2], srs.Y2A));
-    let pairing: Vec<_> = temp.iter().map(|x| x).collect();
-    let pairing: (Vec<_>, Vec<_>) = (pairing.iter().map(|x| x.0).collect(), pairing.iter().map(|x| x.1).collect());
-    let acc_err1 = Bn254::multi_pairing(pairing.0.iter(), pairing.1.iter());
-
+    let acc_err1 = err_1.3[0].clone();
     acc_holder.errs = vec![];
     acc_holder.acc_errs = vec![];
     let acc_proof = acc_to_acc_proof(acc_holder);
