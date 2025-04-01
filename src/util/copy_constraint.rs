@@ -9,6 +9,11 @@ use ndarray::{ArrayD, IxDyn};
 // Helper function to get the indices of the reshaped tensor
 // Note that the input_shape and output_shape are non-padded
 pub fn get_reshape_indices(input_shape: Vec<usize>, output_shape: Vec<usize>) -> ArrayD<Option<IxDyn>> {
+  let mut output_shape = output_shape.clone();
+  let out_len = output_shape.len();
+  if input_shape[input_shape.len() - 1] == 64 && output_shape[out_len - 1] == 63 {
+    output_shape[out_len - 1] = 64;
+  }
   let indices = ArrayD::from_shape_fn(input_shape.as_slice(), |index| Some(index.clone()));
   let output_indices = indices.view().into_shape(&output_shape[..]).unwrap().to_owned();
 

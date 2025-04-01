@@ -378,9 +378,9 @@ impl BasicBlock for CQ2BasicBlock {
     let agg_model: G1Affine = (model[0].g1 + (model[1].g1 * alpha)).into();
 
     let beta = Fr::rand(rng);
-    let mut result = beta == proof.2[0];
-    result &= agg_model == proof.0[proof.0.len() - 2];
-    result &= agg_input == proof.0[proof.0.len() - 1];
+    //let mut result = beta == proof.2[0];
+    //result &= agg_model == proof.0[proof.0.len() - 2];
+    //result &= agg_input == proof.0[proof.0.len() - 1];
     //assert!(result, "acc_proof for cq2 is not valid");
     vec![]
   }

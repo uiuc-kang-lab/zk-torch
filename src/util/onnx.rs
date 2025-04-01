@@ -26,7 +26,7 @@ pub fn get_shape_from_onnx_tensor(tensor: &Tensor) -> Vec<usize> {
         *x as usize
       } else {
         //panic!("Unknown dimension")
-        2
+        1
       }
     })
     .collect::<Vec<_>>()

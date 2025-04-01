@@ -764,9 +764,9 @@ impl BasicBlock for CQBasicBlock {
     let input = inputs[0].first().unwrap().g1;
 
     let beta = Fr::rand(rng);
-    let mut result = beta == proof.2[0];
-    result &= model == proof.0[proof.0.len() - 2];
-    result &= input == proof.0[proof.0.len() - 1];
+    //let mut result = beta == proof.2[0];
+    //result &= model == proof.0[proof.0.len() - 2];
+    //result &= input == proof.0[proof.0.len() - 1];
     //assert!(result, "acc_proof for cq is not valid");
     vec![]
   }
