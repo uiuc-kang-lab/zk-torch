@@ -2,7 +2,7 @@ use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::basic_block::*;
 use crate::{
   ndarr_azip,
-  util::{self, acc_to_acc_proof, AccHolder, AccProofLayout},
+  util::{self, acc_proof_to_acc, acc_to_acc_proof, AccHolder, AccProofLayout},
 };
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
@@ -325,9 +325,9 @@ impl BasicBlock for RepeaterBasicBlock {
       acc_proof.2[acc_divC[len_acc_div - 1]..acc_divC[len_acc_div]].to_vec(),
       acc_proof.3[acc_divD[len_acc_div - 1]..acc_divD[len_acc_div]].to_vec(),
     );
-    //current_level.push(
-    //  bb.prover_proof_to_acc((&acc_proof.0, &acc_proof.1, &acc_proof.2)),
-    //);
+    if acc_divA != vec![0, 0] {
+      current_level.push(acc_proof_to_acc(bb, (&acc_proof.0, &acc_proof.1, &acc_proof.2, &acc_proof.3), true));
+    }
 
     // Step 2: Merkle reduction
     let mut buffer = Vec::with_capacity(current_level.len());
