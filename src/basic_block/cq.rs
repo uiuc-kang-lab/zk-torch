@@ -443,7 +443,7 @@ impl CQLayoutHelper {
     // Check RLC for errors
     for i in 0..2 {
       new_acc.errs[i].0.iter().zip(acc_1.acc_errs[i].0.iter()).enumerate().for_each(|(j, (x, y))| {
-        let z = *y + *x * acc_gamma + acc_2.errs[i].0[j] * acc_gamma_sq;
+        let z = *y + *x * acc_gamma + acc_2.acc_errs[i].0[j] * acc_gamma_sq;
         result &= z == new_acc.acc_errs[i].0[j];
       });
       result &= acc_1.acc_errs[i].3[0] + new_acc.errs[i].3[0] * acc_gamma + acc_2.acc_errs[i].3[0] * acc_gamma_sq == new_acc.acc_errs[i].3[0];

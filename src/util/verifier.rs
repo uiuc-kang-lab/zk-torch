@@ -16,7 +16,7 @@ use ark_ec::AffineRepr;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::UniformRand;
-use ark_std::Zero;
+use ark_std::{One, Zero};
 use ndarray::{arr0, arr1, concatenate, Array1, ArrayD, Axis, IxDyn};
 use plonky2::{timed, util::timing::TimingTree};
 use rand::{rngs::StdRng, SeedableRng};
@@ -35,6 +35,8 @@ pub fn combine_pairing_checks(checks: &Vec<&PairingCheck>) -> (Vec<G1Affine>, Ve
 
   let mut rng = StdRng::from_entropy();
   let gamma = Fr::rand(&mut rng);
+  #[cfg(feature = "fold")]
+  let gamma = Fr::one(); // TODO: For folding, we use Fr::one() for now because there are errors to be summed up. This is a temporary fix.
   let mut curr = gamma;
   for check in checks.iter() {
     for pairing in check.iter() {

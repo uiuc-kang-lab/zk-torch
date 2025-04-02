@@ -227,7 +227,6 @@ impl AccProofLayout for CQLinBasicBlock {
     });
     util::add_randomness(rng, bytes);
     let acc_gamma = Fr::rand(rng);
-    println!("acc_gamma: {:?}", acc_gamma);
     let acc_gamma_sq = acc_gamma * acc_gamma;
 
     // Random linear combination for folding (i.e., acc + cqlin * acc_gamma)
@@ -300,7 +299,6 @@ impl AccProofLayout for CQLinBasicBlock {
     });
     util::add_randomness(rng, bytes);
     let acc_gamma = Fr::rand(rng);
-    println!("acc_gamma: {:?}", acc_gamma);
     let acc_gamma_sq = acc_gamma * acc_gamma;
     acc_2.acc_g1.iter().zip(acc_1.acc_g1.iter()).enumerate().for_each(|(i, (x, y))| {
       if i >= 9 && i < 15 {

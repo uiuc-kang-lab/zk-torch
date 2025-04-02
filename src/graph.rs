@@ -500,7 +500,8 @@ impl Graph {
       })
       .collect();
 
-    let mut decider_pairings: Vec<Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)>> = prev_acc_map
+    let mut err_collector = vec![];
+    let mut decider_pairings: Vec<Vec<PairingCheck>> = prev_acc_map
       .iter()
       .map(|(k, v)| {
         if !final_proofs_idx.contains(v) {
@@ -508,10 +509,16 @@ impl Graph {
         }
         let acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>) =
           (&acc_proofs[*v].0, &acc_proofs[*v].1, &acc_proofs[*v].2, &acc_proofs[*v].3);
-        self.basic_blocks[*k].acc_decide(srs, acc_proof)
+        let decider_result = self.basic_blocks[*k].acc_decide(srs, acc_proof);
+        err_collector.push(decider_result.iter().map(|x| x.1).collect::<Vec<PairingOutput<Bn<ark_bn254::Config>>>>());
+        decider_result.iter().map(|x| x.0.clone()).collect::<Vec<PairingCheck>>()
       })
       .collect();
-    // TODO: add decider_pairings to pairings
+    let err_sum = err_collector.iter().flatten().fold(
+      PairingOutput::<Bn254>::zero(), 
+      |acc, x| acc + x
+    );
+    pairings.append(&mut decider_pairings);
 
     let pairings = timed!(
       timing,
@@ -520,7 +527,7 @@ impl Graph {
     );
     let pairing_check = timed!(timing, "pairings", Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()));
     //assert_eq!(pairing_check, PairingOutput::zero());
-    println!("Is verification successful? {}", pairing_check == PairingOutput::zero());
+    println!("Is verification successful? {}", pairing_check == err_sum);
     (final_proofs_idx, final_acc_proofs_idx)
   }
 

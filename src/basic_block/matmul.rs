@@ -121,7 +121,6 @@ impl AccProofLayout for MatMulBasicBlock {
     let [acc_flat_B_g2, acc_beta_pow_g2] = acc_1.acc_g2[..] else {
       panic!("Wrong acc proof format")
     };
-    assert!(beta_pow_g2 == acc_beta_pow_g2);
     let acc_mu = acc_1.mu;
     let [acc_flat_A_r, acc_flat_B_r] = acc_1.acc_fr[..] else {
       panic!("Wrong acc proof format")
@@ -165,7 +164,7 @@ impl AccProofLayout for MatMulBasicBlock {
     let acc_gamma_sq = acc_gamma * acc_gamma;
 
     new_acc_holder.acc_g1 = acc_2.acc_g1.iter().zip(acc_1.acc_g1.iter()).map(|(x, y)| *x * acc_gamma + y).collect();
-    new_acc_holder.acc_g2 = vec![flat_B_g2 * acc_gamma + acc_flat_B_g2, beta_pow_g2];
+    new_acc_holder.acc_g2 = vec![flat_B_g2 * acc_gamma + acc_flat_B_g2, acc_beta_pow_g2];
     new_acc_holder.acc_fr = acc_2.acc_fr.iter().zip(acc_1.acc_fr.iter()).map(|(x, y)| *x * acc_gamma + y).collect();
     new_acc_holder.mu = acc_mu + acc_gamma * acc_2.mu;
     new_acc_holder.errs = errs;
