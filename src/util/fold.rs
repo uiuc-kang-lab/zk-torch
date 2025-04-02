@@ -4,6 +4,7 @@ use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_std::Zero;
+use ark_ec::AffineRepr;
 use rand::rngs::StdRng;
 
 pub fn get_foldable_bb_info(bb: &Box<dyn BasicBlock>) -> String {
@@ -60,9 +61,9 @@ pub fn acc_to_acc_proof<P: Copy, Q: Copy>(acc: AccHolder<P, Q>) -> (Vec<P>, Vec<
 }
 
 pub trait AccProofLayout: BasicBlock {
-  fn acc_g1_num(&self, is_prover: bool) -> usize;
-  fn acc_g2_num(&self, is_prover: bool) -> usize;
-  fn acc_fr_num(&self, is_prover: bool) -> usize;
+  fn acc_g1_num(&self, is_prover: bool) -> usize {0}
+  fn acc_g2_num(&self, is_prover: bool) -> usize {0}
+  fn acc_fr_num(&self, is_prover: bool) -> usize {0}
   fn prover_proof_to_acc(&self, proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective>;
   fn verifier_proof_to_acc(&self, proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> AccHolder<G1Affine, G2Affine>;
   fn mira_prove(
@@ -92,6 +93,28 @@ pub trait AccProofLayout: BasicBlock {
   }
   fn err_gt_nums(&self) -> Vec<usize> {
     vec![]
+  }
+  fn prover_dummy_holder(&self) -> AccHolder<G1Projective, G2Projective> {
+    let errs: Vec<_> = self.err_g1_nums().iter().enumerate().map(|(i, v)| (vec![G1Projective::zero(); *v], vec![G2Projective::zero(); self.err_g2_nums()[i]], vec![Fr::zero(); self.err_fr_nums()[i]], vec![PairingOutput::<Bn<ark_bn254::Config>>::zero(); self.err_gt_nums()[i]])).collect();
+    AccHolder {
+      acc_g1: vec![G1Projective::zero(); self.acc_g1_num(true)],
+      acc_g2: vec![G2Projective::zero(); self.acc_g2_num(true)],
+      acc_fr: vec![Fr::zero(); self.acc_fr_num(true)],
+      mu: Fr::zero(),
+      errs: errs.clone(),
+      acc_errs: errs
+    }
+  }
+  fn verifier_dummy_holder(&self) -> AccHolder<G1Affine, G2Affine> {
+    let errs: Vec<_> = self.err_g1_nums().iter().enumerate().map(|(i, v)| (vec![G1Affine::zero(); *v], vec![G2Affine::zero(); self.err_g2_nums()[i]], vec![Fr::zero(); self.err_fr_nums()[i]], vec![PairingOutput::<Bn<ark_bn254::Config>>::zero(); self.err_gt_nums()[i]])).collect();
+    AccHolder {
+      acc_g1: vec![G1Affine::zero(); self.acc_g1_num(false)],
+      acc_g2: vec![G2Affine::zero(); self.acc_g2_num(false)],
+      acc_fr: vec![Fr::zero(); self.acc_fr_num(false)],
+      mu: Fr::zero(),
+      errs: errs.clone(),
+      acc_errs: errs
+    }
   }
 }
 
