@@ -449,8 +449,9 @@ impl BasicBlock for PermuteBasicBlock {
     (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>),
   ) {
     let cqlin_proof_g1 = proof.0.to_vec();
+    let cqlin_proof_g2 = proof.1.to_vec();
     (
-      (cqlin_proof_g1.iter().map(|x| (*x).into()).collect(), vec![], vec![]),
+      (cqlin_proof_g1.iter().map(|x| (*x).into()).collect(), cqlin_proof_g2.iter().map(|x| (*x).into()).collect(), vec![]),
       (
         acc_proof.0.iter().map(|x| (*x).into()).collect(),
         acc_proof.1.iter().map(|x| (*x).into()).collect(),
