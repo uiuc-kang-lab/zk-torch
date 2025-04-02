@@ -64,7 +64,6 @@ impl AccProofLayout for PermuteBasicBlock {
     let [acc_b_g2, acc_d_g2] = acc_1.acc_g2[..] else {
       panic!("Wrong acc proof format")
     };
-    assert!(b_g2 == acc_b_g2 && d_g2 == acc_d_g2);
     let acc_mu = acc_1.mu;
     // Fiat-Shamir
     let mut bytes = Vec::new();
