@@ -147,6 +147,7 @@ impl BasicBlock for CustomResizeBasicBlock {
         result[[0, i * D_o + j]] = input[[0, (i / scale) * D + (j / scale)]].clone();
       }
     }
+    result = util::pad_to_pow_of_two(&result, &data_zero);
     vec![result]
   }
 }
