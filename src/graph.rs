@@ -514,10 +514,7 @@ impl Graph {
         decider_result.iter().map(|x| x.0.clone()).collect::<Vec<PairingCheck>>()
       })
       .collect();
-    let err_sum = err_collector.iter().flatten().fold(
-      PairingOutput::<Bn254>::zero(), 
-      |acc, x| acc + x
-    );
+    let err_sum = err_collector.iter().flatten().fold(PairingOutput::<Bn254>::zero(), |acc, x| acc + x);
     pairings.append(&mut decider_pairings);
 
     let pairings = timed!(

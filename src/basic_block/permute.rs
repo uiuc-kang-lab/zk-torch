@@ -451,7 +451,11 @@ impl BasicBlock for PermuteBasicBlock {
     let cqlin_proof_g1 = proof.0.to_vec();
     let cqlin_proof_g2 = proof.1.to_vec();
     (
-      (cqlin_proof_g1.iter().map(|x| (*x).into()).collect(), cqlin_proof_g2.iter().map(|x| (*x).into()).collect(), vec![]),
+      (
+        cqlin_proof_g1.iter().map(|x| (*x).into()).collect(),
+        cqlin_proof_g2.iter().map(|x| (*x).into()).collect(),
+        vec![],
+      ),
       (
         acc_proof.0.iter().map(|x| (*x).into()).collect(),
         acc_proof.1.iter().map(|x| (*x).into()).collect(),

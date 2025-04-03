@@ -307,14 +307,32 @@ impl Layer for InstanceNormLayer {
 
     // X_shape_for_mean: [N, C, D1 * D2 * ... * DN]
     let len = X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y);
-    let x_shape_for_mean = vec![X_shape[0], X_shape[1], len];
-    let permutation = get_reshape_indices(X_shape.to_vec(), x_shape_for_mean);
-    let padded_input_shape: Vec<_> = X_shape.iter().map(|x| util::next_pow(*x as u32) as usize).collect();
-    let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
-      permutation,
-      input_dim: IxDyn(&padded_input_shape),
-      padding_partition: copy_constraint::PaddingEnum::Zero,
-    }));
+    let x_shape_for_mean = vec![
+      X_shape[0].next_power_of_two(),
+      X_shape[1].next_power_of_two(),
+      X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y).next_power_of_two(),
+    ];
+    let n = X_shape.len();
+    let mut perm = vec![n - 2];
+    perm.append(&mut (0..(n - 3)).collect());
+    perm.push(n - 1);
+    let transpose = graph.addBB(Box::new(TransposeBasicBlock { perm }));
+    let mut permutes = vec![];
+    let mut dim = X_shape[n - 1];
+    for i in 0..n - 3 {
+      dim *= X_shape[n - 2 - i].next_power_of_two();
+      let a = 1;
+      let permutation = ((0..a).map(|x| x * dim).collect(), (0..dim).collect());
+      permutes.push(graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(PermuteBasicBlock {
+          permutation: permutation,
+          n: dim,
+          m: 1,
+        }),
+        N: 2,
+      })));
+    }
+    let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: x_shape_for_mean }));
 
     let len = util::next_pow(len as u32) as usize;
     let sum = graph.addBB(Box::new(RepeaterBasicBlock {
@@ -487,8 +505,14 @@ impl Layer for InstanceNormLayer {
     let epsilon_output = graph.addNode(epsilon, vec![]);
 
     // compute mean (shape: [N, C, 1, ..., 1])
-    let cc_output = graph.addNode(cc, vec![(-1, 0)]);
-    let sum_output = graph.addNode(sum, vec![(cc_output, 0)]);
+    let mut prev_permute = -1;
+    for i in 0..permutes.len() {
+      let transpose_output = graph.addNode(transpose, vec![(prev_permute, 0)]);
+      prev_permute = graph.addNode(permutes[i], vec![(transpose_output, 0)]);
+    }
+    let reshape_output = graph.addNode(reshape, vec![(prev_permute, 0)]);
+    // let cc_output = graph.addNode(cc, vec![(-1, 0)]);
+    let sum_output = graph.addNode(sum, vec![(reshape_output, 0)]);
     let mean_output = graph.addNode(div_const, vec![(sum_output, 0)]);
     let _ = graph.addNode(div_const_check, vec![(mean_output, 1)]);
     let _ = graph.addNode(div_const_check, vec![(mean_output, 2)]);
@@ -504,9 +528,14 @@ impl Layer for InstanceNormLayer {
     let _ = graph.addNode(div_SF_check, vec![(sub_output, 0), (div_SF_output, 0)]);
     // (X - m)^2 / s
     let mul_output = graph.addNode(mul, vec![(sub_output, 0), (sub_output, 0)]);
-    let cc_output = graph.addNode(cc, vec![(mul_output, 0)]);
+    let mut prev_permute = mul_output;
+    for i in 0..permutes.len() {
+      let transpose_output = graph.addNode(transpose, vec![(prev_permute, 0)]);
+      prev_permute = graph.addNode(permutes[i], vec![(transpose_output, 0)]);
+    }
+    let reshape_output = graph.addNode(reshape, vec![(prev_permute, 0)]);
     // SUM((X - m)^2) / s
-    let var_output = graph.addNode(sum, vec![(cc_output, 0)]);
+    let var_output = graph.addNode(sum, vec![(reshape_output, 0)]);
     let var_output = graph.addNode(reshape_0, vec![(var_output, 0)]);
 
     // reshape scale (shape: [C, 1, ..., 1])

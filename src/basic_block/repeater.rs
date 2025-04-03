@@ -11,8 +11,8 @@ use ark_poly::univariate::DensePolynomial;
 use itertools::multiunzip;
 use ndarray::{arr1, azip, par_azip, s, ArrayD, Axis, Dimension, IxDyn, SliceInfo, SliceInfoElem};
 use rand::rngs::StdRng;
-use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
+use std::sync::{Arc, Mutex};
 
 fn build_proven_level_sizes(mut n: usize) -> Vec<usize> {
   let mut sizes = vec![n];
@@ -360,19 +360,16 @@ impl BasicBlock for RepeaterBasicBlock {
         .collect();
       let proven_count = current_level.len() / 2;
       all_levels.extend_from_slice(&buffer[..proven_count]);
-        
+
       std::mem::swap(&mut current_level, &mut buffer);
       buffer.clear();
     }
     assert!(all_levels.len() == l, "acc_prove: all_levels.len() != l");
 
     // Step 3: postprocess all_levels
-    let mut acc_proof = all_levels
-      .into_par_iter()
-      .map(|x| acc_to_acc_proof(x))
-      .collect::<Vec<_>>();
+    let mut acc_proof = all_levels.into_par_iter().map(|x| acc_to_acc_proof(x)).collect::<Vec<_>>();
 
-    let acc_proof: (Vec<_>, Vec<_>, Vec<_>, Vec<_>) = multiunzip(acc_proof.into_iter());    
+    let acc_proof: (Vec<_>, Vec<_>, Vec<_>, Vec<_>) = multiunzip(acc_proof.into_iter());
     (
       acc_proof.0.into_iter().flatten().collect(),
       acc_proof.1.into_iter().flatten().collect(),
@@ -474,7 +471,8 @@ impl BasicBlock for RepeaterBasicBlock {
     }
 
     let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
-    let (acc_divA, acc_divB, acc_divC, acc_divD) = get_local_acc_proof_indices(self.basic_block.as_ref(), acc_proof.0.len(), acc_proof.2.len(), false);
+    let (acc_divA, acc_divB, acc_divC, acc_divD) =
+      get_local_acc_proof_indices(self.basic_block.as_ref(), acc_proof.0.len(), acc_proof.2.len(), false);
     let l = temp.len();
 
     let divA = proof.0.len() / l;
@@ -490,7 +488,7 @@ impl BasicBlock for RepeaterBasicBlock {
         )
       })
       .collect();
-    
+
     let bb: &dyn AccProofLayout = downcast_to_layout!(
       self.basic_block.as_ref(),
       MulBasicBlock,
@@ -505,8 +503,7 @@ impl BasicBlock for RepeaterBasicBlock {
     );
 
     // Step 1: preprocess leaves in parallel
-    let mut all_levels: Vec<AccHolder<G1Affine, G2Affine>> =
-      combined.into_par_iter().map(|x| bb.verifier_proof_to_acc((&x.0, &x.1, &x.2))).collect();
+    let mut all_levels: Vec<AccHolder<G1Affine, G2Affine>> = combined.into_par_iter().map(|x| bb.verifier_proof_to_acc((&x.0, &x.1, &x.2))).collect();
 
     let (prev_acc_divA, prev_acc_divB, prev_acc_divC, prev_acc_divD) =
       get_local_acc_proof_indices(self.basic_block.as_ref(), prev_acc_proof.0.len(), prev_acc_proof.2.len(), false);
@@ -518,7 +515,11 @@ impl BasicBlock for RepeaterBasicBlock {
       prev_acc_proof.3[prev_acc_divD[prev_l - 1]..prev_acc_divD[prev_l]].to_vec(),
     );
     if localPrevAccProof.2.len() > 0 {
-      all_levels.push(acc_proof_to_acc(bb, (&localPrevAccProof.0, &localPrevAccProof.1, &localPrevAccProof.2, &localPrevAccProof.3), false));
+      all_levels.push(acc_proof_to_acc(
+        bb,
+        (&localPrevAccProof.0, &localPrevAccProof.1, &localPrevAccProof.2, &localPrevAccProof.3),
+        false,
+      ));
     } else {
       println!("push verifier dummy holder");
       all_levels.push(bb.verifier_dummy_holder());
@@ -527,11 +528,16 @@ impl BasicBlock for RepeaterBasicBlock {
 
     let mut combined: Vec<_> = (0..l)
       .map(|i| {
-        acc_proof_to_acc(bb, 
-          (&acc_proof.0[acc_divA[i]..acc_divA[i + 1]].to_vec(),
-          &acc_proof.1[acc_divB[i]..acc_divB[i + 1]].to_vec(),
-          &acc_proof.2[acc_divC[i]..acc_divC[i + 1]].to_vec(),
-          &acc_proof.3[acc_divD[i]..acc_divD[i + 1]].to_vec()), false)
+        acc_proof_to_acc(
+          bb,
+          (
+            &acc_proof.0[acc_divA[i]..acc_divA[i + 1]].to_vec(),
+            &acc_proof.1[acc_divB[i]..acc_divB[i + 1]].to_vec(),
+            &acc_proof.2[acc_divC[i]..acc_divC[i + 1]].to_vec(),
+            &acc_proof.3[acc_divD[i]..acc_divD[i + 1]].to_vec(),
+          ),
+          false,
+        )
       })
       .collect();
     all_levels.append(&mut combined);
@@ -540,38 +546,36 @@ impl BasicBlock for RepeaterBasicBlock {
     let lonely_child = Arc::new(Mutex::new(None));
 
     for i in 1..level_sizes.len() {
-        let parent_level_size = level_sizes[i];
-        let child_level_size = level_sizes[i - 1];
+      let parent_level_size = level_sizes[i];
+      let child_level_size = level_sizes[i - 1];
 
-        let parents = &all_levels[level_start + child_level_size .. level_start + child_level_size + parent_level_size];
-        let children = &all_levels[level_start .. level_start + child_level_size];
+      let parents = &all_levels[level_start + child_level_size..level_start + child_level_size + parent_level_size];
+      let children = &all_levels[level_start..level_start + child_level_size];
 
-        // Check each parent node against its two children
-        let valid = (0..parent_level_size)
-            .into_par_iter()
-            .all(|j| {
-                let mut rng = rng.clone();
-                let left = &children[2 * j];
-                let r = if 2 * j + 1 < child_level_size {
-                  let right = &children[2 * j + 1];
-                  bb.mira_verify(left.clone(), right.clone(), parents[j].clone(), &mut rng).unwrap()
-                } else {
-                  let mut l_child = lonely_child.lock().unwrap();
-                  let right: AccHolder<G1Affine, G2Affine> = l_child.clone().unwrap();
-                  *l_child = None;
-                  bb.mira_verify(left.clone(), right, parents[j].clone(), &mut rng).unwrap()
-                };
-                r
-            });
-        
-        if 2 * parent_level_size == child_level_size - 1 {
+      // Check each parent node against its two children
+      let valid = (0..parent_level_size).into_par_iter().all(|j| {
+        let mut rng = rng.clone();
+        let left = &children[2 * j];
+        let r = if 2 * j + 1 < child_level_size {
+          let right = &children[2 * j + 1];
+          bb.mira_verify(left.clone(), right.clone(), parents[j].clone(), &mut rng).unwrap()
+        } else {
           let mut l_child = lonely_child.lock().unwrap();
-          *l_child = Some(children[2 * parent_level_size].clone());
-        }
+          let right: AccHolder<G1Affine, G2Affine> = l_child.clone().unwrap();
+          *l_child = None;
+          bb.mira_verify(left.clone(), right, parents[j].clone(), &mut rng).unwrap()
+        };
+        r
+      });
 
-        result &= valid;
+      if 2 * parent_level_size == child_level_size - 1 {
+        let mut l_child = lonely_child.lock().unwrap();
+        *l_child = Some(children[2 * parent_level_size].clone());
+      }
 
-        level_start += child_level_size;
+      result &= valid;
+
+      level_start += child_level_size;
     }
 
     Some(result)

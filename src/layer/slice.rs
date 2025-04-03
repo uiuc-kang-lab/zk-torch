@@ -121,7 +121,7 @@ impl Layer for SliceLayer {
       .enumerate()
       .map(|(i, &x)| {
         if x < 0 {
-          (input_shapes[0][axes[i]] as i32 + x) as usize
+          (input_shapes[0][axes[i]] as i32 + x + 1) as usize
         } else {
           x as usize
         }
