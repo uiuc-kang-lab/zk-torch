@@ -21,12 +21,18 @@ pub fn get_shape_from_onnx_tensor(tensor: &Tensor) -> Vec<usize> {
     .unwrap()
     .dim
     .iter()
-    .map(|x| {
+    .enumerate()
+    .map(|(i, x)| {
       if let tract_onnx::pb::tensor_shape_proto::dimension::Value::DimValue(x) = x.value.as_ref().unwrap() {
         *x as usize
       } else {
-        //panic!("Unknown dimension")
-        2
+        if i == 0 {
+          1 as usize
+        } else if i < 4 {
+          4 as usize
+        } else {
+          panic!("Unknown dimension")
+        }
       }
     })
     .collect::<Vec<_>>()

@@ -303,6 +303,7 @@ impl Layer for InstanceNormLayer {
       // epsilon is not provided, use the default value
       1e-5
     };
+    epsilon = 1.0;
     epsilon *= onnx::SF_FLOAT.read().unwrap().to_owned();
 
     // X_shape_for_mean: [N, C, D1 * D2 * ... * DN]
