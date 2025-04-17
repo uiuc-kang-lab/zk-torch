@@ -1,5 +1,4 @@
 use crate::basic_block::*;
-use crate::util::get_cq_N;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};

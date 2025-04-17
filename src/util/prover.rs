@@ -30,17 +30,6 @@ pub enum CQArrayType {
   Custom(Vec<Fr>),
 }
 
-pub fn get_cq_N(cq_type: &CQArrayType) -> usize {
-  match cq_type {
-    CQArrayType::Negative => (-*onnx::CQ_RANGE_LOWER) as usize,
-    CQArrayType::NonNegative => *onnx::CQ_RANGE as usize,
-    CQArrayType::NonZero => (2 * (-*onnx::CQ_RANGE_LOWER) + 1) as usize,
-    CQArrayType::NonPositive => (-*onnx::CQ_RANGE_LOWER) as usize,
-    CQArrayType::Positive => (-*onnx::CQ_RANGE_LOWER) as usize,
-    CQArrayType::Custom(range) => range.len(),
-  }
-}
-
 pub fn gen_cq_array(cq_type: CQArrayType) -> ArrayD<Fr> {
   let r = match cq_type {
     CQArrayType::Negative => (*onnx::CQ_RANGE_LOWER..0).map(Fr::from).collect::<Vec<_>>(),
