@@ -66,7 +66,7 @@ impl Layer for ReshapeLayer {
       }
       graph.outputs.push((unsq_output, 0));
     } else {
-      let permutation = get_reshape_indices(startShape.clone(), endShape.clone());
+      let permutation = get_reshape_indices(startShape_padded.clone(), endShape_padded.clone());
       let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
         permutation: permutation.clone(),
         input_dim: IxDyn(&startShape_padded),
