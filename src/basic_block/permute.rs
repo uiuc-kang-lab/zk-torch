@@ -2,7 +2,10 @@
 #![allow(non_upper_case_globals)]
 use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util::{self, acc_to_acc_proof, calc_pow, AccHolder};
-use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_ec::bn::Bn;
+use ark_ec::pairing::{Pairing, PairingOutput};
+use ark_ec::AffineRepr;
 use ark_ff::Field;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::CanonicalSerialize;
@@ -71,7 +74,9 @@ fn accumulate(
   new_matmul_acc
 }
 
-fn acc_proof_to_permute_acc_holder<P: Copy, Q: Copy>(acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>)) -> AccHolder<P, Q> {
+fn acc_proof_to_permute_acc_holder<P: Copy, Q: Copy>(
+  acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+) -> AccHolder<P, Q> {
   if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
     return AccHolder {
       acc_g1: vec![],
@@ -141,7 +146,7 @@ fn permute_acc_to_acc_holder<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSe
 }
 
 fn acc_proof_to_permute_acc<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize>(
-  acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>),
+  acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
 ) -> Option<PermuteAccProof<P, Q>> {
   if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
     return None;
@@ -150,7 +155,9 @@ fn acc_proof_to_permute_acc<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSer
   Some(permute_acc_holder_to_acc(acc_holder))
 }
 
-fn permute_acc_to_acc_proof<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize>(acc: PermuteAccProof<P, Q>) -> (Vec<P>, Vec<Q>, Vec<Fr>) {
+fn permute_acc_to_acc_proof<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize>(
+  acc: PermuteAccProof<P, Q>,
+) -> (Vec<P>, Vec<Q>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
   let acc_holder = permute_acc_to_acc_holder(acc);
   acc_to_acc_proof(acc_holder)
 }
@@ -436,41 +443,22 @@ impl BasicBlock for PermuteBasicBlock {
     checks
   }
 
-  fn acc_init(
-    &self,
-    _srs: &SRS,
-    _model: &ArrayD<Data>,
-    _inputs: &Vec<&ArrayD<Data>>,
-    _outputs: &Vec<&ArrayD<Data>>,
-    proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    rng: &mut StdRng,
-    _cache: ProveVerifyCache,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
-    let mut acc_proof = (proof.0.clone(), proof.1.clone(), proof.2.clone());
-
-    // Fiat-Shamir
-    let mut bytes = Vec::new();
-    proof.0[..7].serialize_uncompressed(&mut bytes).unwrap();
-    proof.0[11..13].serialize_uncompressed(&mut bytes).unwrap();
-    util::add_randomness(rng, bytes);
-    let _acc_gamma = Fr::rand(rng);
-
-    // mu
-    acc_proof.2.push(Fr::one());
-    acc_proof
-  }
-
   fn acc_prove(
     &self,
-    _srs: &SRS,
+    srs: &SRS,
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
-    acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    acc_proof: (
+      &Vec<G1Projective>,
+      &Vec<G2Projective>,
+      &Vec<Fr>,
+      &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
+    ),
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
     let [b_g2, d_g2] = proof.1[..] else { panic!("Wrong proof format") };
 
     let permute_acc = acc_proof_to_permute_acc(acc_proof).unwrap();
@@ -496,8 +484,16 @@ impl BasicBlock for PermuteBasicBlock {
     &self,
     _srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)) {
+    acc_proof: (
+      &Vec<G1Projective>,
+      &Vec<G2Projective>,
+      &Vec<Fr>,
+      &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
+    ),
+  ) -> (
+    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>),
+    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+  ) {
     // remove unnecessary terms from bb proof for the verifier
     let cqlin_proof_g1 = proof.0[..11].to_vec();
 
@@ -507,6 +503,7 @@ impl BasicBlock for PermuteBasicBlock {
         acc_proof.0.iter().map(|x| (*x).into()).collect(),
         acc_proof.1.iter().map(|x| (*x).into()).collect(),
         acc_proof.2.to_vec(),
+        vec![],
       ),
     )
   }
@@ -517,8 +514,8 @@ impl BasicBlock for PermuteBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     cache: ProveVerifyCache,
@@ -620,7 +617,11 @@ impl BasicBlock for PermuteBasicBlock {
     Some(result)
   }
 
-  fn acc_decide(&self, srs: &SRS, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {
+  fn acc_decide(
+    &self,
+    srs: &SRS,
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+  ) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     let m2 = self.permutation.1.len();
     let acc_holder = acc_proof_to_permute_acc(acc_proof).unwrap();
 
@@ -667,6 +668,7 @@ impl BasicBlock for PermuteBasicBlock {
       (-acc_corr4, srs.Y2A),
     ];
 
-    vec![acc_1, acc_2, acc_3, acc_4]
+    let pairing_zero = PairingOutput::<Bn<ark_bn254::Config>>::zero();
+    vec![(acc_1, pairing_zero), (acc_2, pairing_zero), (acc_3, pairing_zero), (acc_4, pairing_zero)]
   }
 }

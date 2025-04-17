@@ -30,6 +30,17 @@ pub enum CQArrayType {
   Custom(Vec<Fr>),
 }
 
+pub fn get_cq_N(cq_type: &CQArrayType) -> usize {
+  match cq_type {
+    CQArrayType::Negative => (-*onnx::CQ_RANGE_LOWER) as usize,
+    CQArrayType::NonNegative => *onnx::CQ_RANGE as usize,
+    CQArrayType::NonZero => (2 * (-*onnx::CQ_RANGE_LOWER) + 1) as usize,
+    CQArrayType::NonPositive => (-*onnx::CQ_RANGE_LOWER) as usize,
+    CQArrayType::Positive => (-*onnx::CQ_RANGE_LOWER) as usize,
+    CQArrayType::Custom(range) => range.len(),
+  }
+}
+
 pub fn gen_cq_array(cq_type: CQArrayType) -> ArrayD<Fr> {
   let r = match cq_type {
     CQArrayType::Negative => (*onnx::CQ_RANGE_LOWER..0).map(Fr::from).collect::<Vec<_>>(),
@@ -73,7 +84,7 @@ pub fn convert_to_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
     return arr0(Data::new(srs, a.view().as_slice().unwrap())).into_dyn();
   }
   let mut a = a.map_axis(Axis(a.ndim() - 1), |r| Data {
-    raw: r.as_slice().unwrap().to_vec(),
+    raw: r.as_standard_layout().as_slice().unwrap().to_vec(),
     poly: ark_poly::polynomial::univariate::DensePolynomial::zero(),
     r: Fr::zero(),
     g1: G1Projective::zero(),
@@ -89,7 +100,7 @@ pub fn convert_to_mock_data(srs: &SRS, a: &ArrayD<Fr>) -> ArrayD<Data> {
     return arr0(mock_data_new(srs, a.view().as_slice().unwrap())).into_dyn();
   }
   let mut a = a.map_axis(Axis(a.ndim() - 1), |r| Data {
-    raw: r.as_slice().unwrap().to_vec(),
+    raw: r.as_standard_layout().as_slice().unwrap().to_vec(),
     poly: ark_poly::polynomial::univariate::DensePolynomial::zero(),
     r: Fr::zero(),
     g1: G1Projective::zero(),
@@ -167,8 +178,14 @@ pub fn prove(
   let mut rng = StdRng::from_seed(buf);
 
   // Prove:
+  #[cfg(feature = "fold")]
+  let (proofs, acc_proofs) = timed!(timing, "prove", graph.prove(srs, &setups, &models, &inputs, &outputs, &mut rng, timing));
+  #[cfg(not(feature = "fold"))]
   let proofs = timed!(timing, "prove", graph.prove(srs, &setups, &models, &inputs, &outputs, &mut rng, timing));
+
   proofs.serialize_uncompressed(File::create(&CONFIG.prover.proof_path).unwrap()).unwrap();
+  #[cfg(feature = "fold")]
+  acc_proofs.serialize_uncompressed(File::create(&CONFIG.prover.acc_proof_path).unwrap()).unwrap();
 }
 
 #[cfg(not(feature = "mock_prove"))]
@@ -286,14 +303,15 @@ pub fn zktorch_kernel() {
   prove(&srs, &inputs, outputs.unwrap(), setups, models, &mut graph, &mut timing);
 
   // Verify
-  #[cfg(not(feature = "mock_prove"))]
   verify(&srs, &graph, &mut timing);
 
-  // Measure proof size;
+  // Measure proof size
   measure_file_size(&CONFIG.prover.enc_model_path);
   measure_file_size(&CONFIG.prover.enc_input_path);
   measure_file_size(&CONFIG.prover.enc_output_path);
   measure_file_size(&CONFIG.prover.proof_path);
+  #[cfg(feature = "fold")]
+  measure_file_size(&CONFIG.prover.final_proof_path);
   timing.print();
   println!("Cargo run was successful.");
 }

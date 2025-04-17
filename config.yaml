@@ -17,6 +17,8 @@ prover:
   enc_input_path: inputsEnc
   enc_output_path: outputsEnc
   proof_path: proofs
+  acc_proof_path: acc_proofs
+  final_proof_path: final_proofs
   enable_layer_setup: true
 verifier:
   enc_model_path: modelsEnc
