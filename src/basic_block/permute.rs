@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use super::{AccProofAff, AccProofProj, BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util::{self, acc_to_acc_proof, calc_pow, AccHolder};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
@@ -449,12 +449,7 @@ impl BasicBlock for PermuteBasicBlock {
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
-    acc_proof: (
-      &Vec<G1Projective>,
-      &Vec<G2Projective>,
-      &Vec<Fr>,
-      &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
-    ),
+    acc_proof: AccProofProj,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
@@ -484,12 +479,7 @@ impl BasicBlock for PermuteBasicBlock {
     &self,
     _srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    acc_proof: (
-      &Vec<G1Projective>,
-      &Vec<G2Projective>,
-      &Vec<Fr>,
-      &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
-    ),
+    acc_proof: AccProofProj,
   ) -> (
     (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>),
     (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>),
@@ -514,8 +504,8 @@ impl BasicBlock for PermuteBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+    prev_acc_proof: AccProofAff,
+    acc_proof: AccProofAff,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     cache: ProveVerifyCache,
@@ -617,11 +607,7 @@ impl BasicBlock for PermuteBasicBlock {
     Some(result)
   }
 
-  fn acc_decide(
-    &self,
-    srs: &SRS,
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-  ) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
+  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAff) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     let m2 = self.permutation.1.len();
     let acc_holder = acc_proof_to_permute_acc(acc_proof).unwrap();
 

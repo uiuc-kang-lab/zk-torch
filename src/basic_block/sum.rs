@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use super::{AccProofAff, AccProofProj, BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, AccHolder, AccProofLayout};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
@@ -16,12 +16,15 @@ impl AccProofLayout for SumBasicBlock {
   fn acc_g1_num(&self, _is_prover: bool) -> usize {
     4
   }
+
   fn acc_g2_num(&self, _is_prover: bool) -> usize {
     0
   }
+
   fn acc_fr_num(&self, _is_prover: bool) -> usize {
     0
   }
+
   fn prover_proof_to_acc(&self, proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective> {
     AccHolder {
       acc_g1: proof.0.clone(),
@@ -32,6 +35,7 @@ impl AccProofLayout for SumBasicBlock {
       acc_errs: Vec::new(),
     }
   }
+
   fn verifier_proof_to_acc(&self, proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> AccHolder<G1Affine, G2Affine> {
     AccHolder {
       acc_g1: proof.0.clone(),
@@ -42,6 +46,7 @@ impl AccProofLayout for SumBasicBlock {
       acc_errs: Vec::new(),
     }
   }
+
   fn mira_prove(
     &self,
     _srs: &SRS,
@@ -64,6 +69,7 @@ impl AccProofLayout for SumBasicBlock {
       acc_errs: Vec::new(),
     }
   }
+
   fn mira_verify(
     &self,
     acc_1: AccHolder<G1Affine, G2Affine>,
@@ -162,12 +168,7 @@ impl BasicBlock for SumBasicBlock {
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
-    acc_proof: (
-      &Vec<G1Projective>,
-      &Vec<G2Projective>,
-      &Vec<Fr>,
-      &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
-    ),
+    acc_proof: AccProofProj,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
@@ -186,8 +187,8 @@ impl BasicBlock for SumBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+    prev_acc_proof: AccProofAff,
+    acc_proof: AccProofAff,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
@@ -203,11 +204,7 @@ impl BasicBlock for SumBasicBlock {
     Some(result)
   }
 
-  fn acc_decide(
-    &self,
-    srs: &SRS,
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-  ) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
+  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAff) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     let [zero_div, C, inp, out] = acc_proof.0[..] else {
       panic!("Wrong proof format")
     };

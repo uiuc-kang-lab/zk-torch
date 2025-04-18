@@ -1,4 +1,4 @@
-use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use super::{AccProofAff, AccProofProj, BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, AccHolder, AccProofLayout};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
@@ -19,12 +19,15 @@ impl AccProofLayout for MulConstBasicBlock {
   fn acc_g1_num(&self, _is_prover: bool) -> usize {
     3
   }
+
   fn acc_g2_num(&self, _is_prover: bool) -> usize {
     0
   }
+
   fn acc_fr_num(&self, _is_prover: bool) -> usize {
     0
   }
+
   fn prover_proof_to_acc(&self, proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective> {
     AccHolder {
       acc_g1: proof.0.clone(),
@@ -35,6 +38,7 @@ impl AccProofLayout for MulConstBasicBlock {
       acc_errs: Vec::new(),
     }
   }
+
   fn verifier_proof_to_acc(&self, proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> AccHolder<G1Affine, G2Affine> {
     AccHolder {
       acc_g1: proof.0.clone(),
@@ -45,6 +49,7 @@ impl AccProofLayout for MulConstBasicBlock {
       acc_errs: Vec::new(),
     }
   }
+
   fn mira_prove(
     &self,
     _srs: &SRS,
@@ -67,6 +72,7 @@ impl AccProofLayout for MulConstBasicBlock {
       acc_errs: Vec::new(),
     }
   }
+
   fn mira_verify(
     &self,
     acc_1: AccHolder<G1Affine, G2Affine>,
@@ -146,12 +152,7 @@ impl BasicBlock for MulConstBasicBlock {
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
-    acc_proof: (
-      &Vec<G1Projective>,
-      &Vec<G2Projective>,
-      &Vec<Fr>,
-      &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
-    ),
+    acc_proof: AccProofProj,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
@@ -170,8 +171,8 @@ impl BasicBlock for MulConstBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+    prev_acc_proof: AccProofAff,
+    acc_proof: AccProofAff,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
@@ -187,11 +188,7 @@ impl BasicBlock for MulConstBasicBlock {
     Some(result)
   }
 
-  fn acc_decide(
-    &self,
-    srs: &SRS,
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-  ) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
+  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAff) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     vec![(
       vec![
         (acc_proof.0[1], (srs.X2P[0] * Fr::from(self.c as u32)).into()),
@@ -211,9 +208,11 @@ impl AccProofLayout for MulScalarBasicBlock {
       4
     }
   }
+
   fn acc_g2_num(&self, _is_prover: bool) -> usize {
     1
   }
+
   fn acc_fr_num(&self, is_prover: bool) -> usize {
     if is_prover {
       2
@@ -221,15 +220,19 @@ impl AccProofLayout for MulScalarBasicBlock {
       0
     }
   }
+
   fn err_g1_nums(&self) -> Vec<usize> {
     vec![2]
   }
+
   fn err_g2_nums(&self) -> Vec<usize> {
     vec![0]
   }
+
   fn err_fr_nums(&self) -> Vec<usize> {
     vec![0]
   }
+
   fn err_gt_nums(&self) -> Vec<usize> {
     vec![1]
   }
@@ -254,6 +257,7 @@ impl AccProofLayout for MulScalarBasicBlock {
       )],
     }
   }
+
   fn verifier_proof_to_acc(&self, proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> AccHolder<G1Affine, G2Affine> {
     AccHolder {
       acc_g1: proof.0.clone(),
@@ -274,6 +278,7 @@ impl AccProofLayout for MulScalarBasicBlock {
       )],
     }
   }
+
   fn mira_prove(
     &self,
     srs: &SRS,
@@ -357,6 +362,7 @@ impl AccProofLayout for MulScalarBasicBlock {
 
     new_acc_holder
   }
+
   fn mira_verify(
     &self,
     acc_1: AccHolder<G1Affine, G2Affine>,
@@ -474,12 +480,7 @@ impl BasicBlock for MulScalarBasicBlock {
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
-    acc_proof: (
-      &Vec<G1Projective>,
-      &Vec<G2Projective>,
-      &Vec<Fr>,
-      &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
-    ),
+    acc_proof: AccProofProj,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
@@ -497,12 +498,7 @@ impl BasicBlock for MulScalarBasicBlock {
     &self,
     srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    acc_proof: (
-      &Vec<G1Projective>,
-      &Vec<G2Projective>,
-      &Vec<Fr>,
-      &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
-    ),
+    acc_proof: AccProofProj,
   ) -> (
     (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>),
     (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>),
@@ -541,8 +537,8 @@ impl BasicBlock for MulScalarBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+    prev_acc_proof: AccProofAff,
+    acc_proof: AccProofAff,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
@@ -564,11 +560,7 @@ impl BasicBlock for MulScalarBasicBlock {
     Some(result)
   }
 
-  fn acc_decide(
-    &self,
-    srs: &SRS,
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-  ) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
+  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAff) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     let acc_holder = acc_proof_to_acc(self, acc_proof, false);
     let [acc_C, acc_inp0, acc_inp1, acc_out] = acc_holder.acc_g1[..] else {
       panic!("Wrong acc proof format")
@@ -591,11 +583,7 @@ impl BasicBlock for MulScalarBasicBlock {
     vec![(acc_1, err_1.3[0]), (acc_2, PairingOutput::<Bn<ark_bn254::Config>>::zero())]
   }
 
-  fn acc_finalize(
-    &self,
-    _srs: &SRS,
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-  ) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
+  fn acc_finalize(&self, _srs: &SRS, acc_proof: AccProofAff) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
     let mut acc_holder = acc_proof_to_acc(self, acc_proof, false);
     let err_1 = &acc_holder.acc_errs[0];
     let acc_err1 = err_1.3[0].clone();
@@ -614,9 +602,11 @@ impl AccProofLayout for MulBasicBlock {
       5
     }
   }
+
   fn acc_g2_num(&self, _is_prover: bool) -> usize {
     1
   }
+
   fn acc_fr_num(&self, is_prover: bool) -> usize {
     if is_prover {
       2
@@ -624,18 +614,23 @@ impl AccProofLayout for MulBasicBlock {
       0
     }
   }
+
   fn err_g1_nums(&self) -> Vec<usize> {
     vec![3]
   }
+
   fn err_g2_nums(&self) -> Vec<usize> {
     vec![0]
   }
+
   fn err_fr_nums(&self) -> Vec<usize> {
     vec![0]
   }
+
   fn err_gt_nums(&self) -> Vec<usize> {
     vec![1]
   }
+
   fn prover_proof_to_acc(&self, proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective> {
     AccHolder {
       acc_g1: proof.0.clone(),
@@ -656,6 +651,7 @@ impl AccProofLayout for MulBasicBlock {
       )],
     }
   }
+
   fn verifier_proof_to_acc(&self, proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> AccHolder<G1Affine, G2Affine> {
     AccHolder {
       acc_g1: proof.0.clone(),
@@ -676,6 +672,7 @@ impl AccProofLayout for MulBasicBlock {
       )],
     }
   }
+
   fn mira_prove(
     &self,
     srs: &SRS,
@@ -764,6 +761,7 @@ impl AccProofLayout for MulBasicBlock {
 
     new_acc_holder
   }
+
   fn mira_verify(
     &self,
     acc_1: AccHolder<G1Affine, G2Affine>,
@@ -894,12 +892,7 @@ impl BasicBlock for MulBasicBlock {
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
-    acc_proof: (
-      &Vec<G1Projective>,
-      &Vec<G2Projective>,
-      &Vec<Fr>,
-      &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
-    ),
+    acc_proof: AccProofProj,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
@@ -916,12 +909,7 @@ impl BasicBlock for MulBasicBlock {
     &self,
     srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    acc_proof: (
-      &Vec<G1Projective>,
-      &Vec<G2Projective>,
-      &Vec<Fr>,
-      &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
-    ),
+    acc_proof: AccProofProj,
   ) -> (
     (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>),
     (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>),
@@ -960,8 +948,8 @@ impl BasicBlock for MulBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+    prev_acc_proof: AccProofAff,
+    acc_proof: AccProofAff,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
@@ -983,11 +971,7 @@ impl BasicBlock for MulBasicBlock {
     Some(result)
   }
 
-  fn acc_decide(
-    &self,
-    srs: &SRS,
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-  ) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
+  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAff) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     let acc_holder = acc_proof_to_acc(self, acc_proof, false);
     let [acc_tx, acc_C, acc_inp0, acc_inp1, acc_out] = acc_holder.acc_g1[..] else {
       panic!("Wrong acc proof format")
@@ -1016,11 +1000,7 @@ impl BasicBlock for MulBasicBlock {
     vec![(acc_1, err_1.3[0]), (acc_2, PairingOutput::<Bn<ark_bn254::Config>>::zero())]
   }
 
-  fn acc_finalize(
-    &self,
-    _srs: &SRS,
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-  ) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
+  fn acc_finalize(&self, _srs: &SRS, acc_proof: AccProofAff) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
     let mut acc_holder = acc_proof_to_acc(self, acc_proof, false);
     let err_1 = &acc_holder.acc_errs[0];
     let acc_err1 = err_1.3[0].clone();

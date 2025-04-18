@@ -55,14 +55,19 @@ pub trait AccProofLayout: BasicBlock {
   fn acc_g1_num(&self, is_prover: bool) -> usize {
     0
   }
+
   fn acc_g2_num(&self, is_prover: bool) -> usize {
     0
   }
+
   fn acc_fr_num(&self, is_prover: bool) -> usize {
     0
   }
+
   fn prover_proof_to_acc(&self, proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective>;
+
   fn verifier_proof_to_acc(&self, proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> AccHolder<G1Affine, G2Affine>;
+
   fn mira_prove(
     &self,
     srs: &SRS,
@@ -70,6 +75,7 @@ pub trait AccProofLayout: BasicBlock {
     acc_2: AccHolder<G1Projective, G2Projective>,
     rng: &mut StdRng,
   ) -> AccHolder<G1Projective, G2Projective>;
+
   fn mira_verify(
     &self,
     acc_1: AccHolder<G1Affine, G2Affine>,
@@ -79,18 +85,23 @@ pub trait AccProofLayout: BasicBlock {
   ) -> Option<bool> {
     None
   }
+
   fn err_g1_nums(&self) -> Vec<usize> {
     vec![]
   }
+
   fn err_g2_nums(&self) -> Vec<usize> {
     vec![]
   }
+
   fn err_fr_nums(&self) -> Vec<usize> {
     vec![]
   }
+
   fn err_gt_nums(&self) -> Vec<usize> {
     vec![]
   }
+
   fn prover_dummy_holder(&self) -> AccHolder<G1Projective, G2Projective> {
     let errs: Vec<_> = self
       .err_g1_nums()
@@ -114,6 +125,7 @@ pub trait AccProofLayout: BasicBlock {
       acc_errs: errs,
     }
   }
+
   fn verifier_dummy_holder(&self) -> AccHolder<G1Affine, G2Affine> {
     let errs: Vec<_> = self
       .err_g1_nums()
