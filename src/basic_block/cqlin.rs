@@ -1,6 +1,8 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{AccProofAff, AccProofProj, BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use super::{
+  AccProofAff, AccProofAffRef, AccProofProj, AccProofProjRef, BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS,
+};
 use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, calc_pow, AccHolder, AccProofLayout};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
@@ -161,7 +163,7 @@ impl AccProofLayout for CQLinBasicBlock {
     let cqlin_mask_M = acc_2.acc_fr[log_n + 2];
 
     // Compute error terms
-    let err1: (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) = (
+    let err1: AccProofProj = (
       vec![
         acc_Q * acc_2.mu + Q_x * acc_mu,
         acc_R * acc_2.mu + R_x * acc_mu,
@@ -178,7 +180,7 @@ impl AccProofLayout for CQLinBasicBlock {
       vec![Bn254::multi_pairing(vec![A_x.into(), acc_A], vec![acc_M, M_x_2.into()])],
     );
 
-    let err5: (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) = (
+    let err5: AccProofProj = (
       vec![
         acc_flat_A * acc_2.mu + flat_A * acc_mu - acc_z * acc_2.mu - z * acc_mu + acc_pi * beta_k + pi * acc_beta_k,
         acc_pi * acc_2.mu + pi * acc_mu,
@@ -738,11 +740,11 @@ impl BasicBlock for CQLinBasicBlock {
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
-    acc_proof: AccProofProj,
+    acc_proof: AccProofProjRef,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
+  ) -> AccProofProj {
     let proof = self.prover_proof_to_acc(proof);
     if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 {
       return acc_to_acc_proof(proof);
@@ -756,11 +758,8 @@ impl BasicBlock for CQLinBasicBlock {
     &self,
     srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    acc_proof: AccProofProj,
-  ) -> (
-    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>),
-    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-  ) {
+    acc_proof: AccProofProjRef,
+  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAff) {
     let n = self.setup.shape()[1];
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
     let mut acc_holder = acc_proof_to_acc(self, acc_proof, true);
@@ -802,8 +801,8 @@ impl BasicBlock for CQLinBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: AccProofAff,
-    acc_proof: AccProofAff,
+    prev_acc_proof: AccProofAffRef,
+    acc_proof: AccProofAffRef,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     cache: ProveVerifyCache,
@@ -853,7 +852,7 @@ impl BasicBlock for CQLinBasicBlock {
     Some(result)
   }
 
-  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAff) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
+  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     let m = self.setup.shape()[0];
     let n = self.setup.shape()[1];
     let N = srs.X2P.len() - 1;
@@ -926,7 +925,7 @@ impl BasicBlock for CQLinBasicBlock {
     ]
   }
 
-  fn acc_finalize(&self, srs: &SRS, acc_proof: AccProofAff) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
+  fn acc_finalize(&self, srs: &SRS, acc_proof: AccProofAffRef) -> AccProofAff {
     let m = self.setup.shape()[0];
     let n = self.setup.shape()[1];
     let mut acc_holder = acc_proof_to_acc(self, acc_proof, false);

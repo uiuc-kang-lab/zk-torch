@@ -155,7 +155,6 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
       &acc_proofs_v[num_folds - 1].3,
     ),
   );
-  //all_pairings.push(decider_pairings);
 
   for pairings in all_pairings {
     for i in 0..pairings.len() {
@@ -261,9 +260,7 @@ fn testBasicBlocks() {
   let p1 = (vec![0], (0..l * m).collect::<Vec<_>>()); // Concatenate columns
   let p2 = (vec![0], (0..l * m).map(|i| (i % m) * l + (i / m)).collect::<Vec<_>>()); // Concatenate rows
   let p3 = ((0..m).map(|i| i * l).collect::<Vec<_>>(), (0..l).collect::<Vec<_>>()); // Transpose
-                                                                                    //testBasicBlock(PermuteBasicBlock { permutation: p1, n: l, m: m }, srs, &empty, &vec![&a]);
-                                                                                    //testBasicBlock(PermuteBasicBlock { permutation: p2, n: l, m: m }, srs, &empty, &vec![&a]);
-                                                                                    //testBasicBlock(PermuteBasicBlock { permutation: p3, n: l, m: m }, srs, &empty, &vec![&a]);
+
   let min = 1.;
   let max = 8.;
   testBasicBlock(ClipBasicBlock { min, max }, srs, &empty, &vec![&a]);

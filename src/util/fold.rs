@@ -51,23 +51,31 @@ pub fn acc_to_acc_proof<P: Copy, Q: Copy>(acc: AccHolder<P, Q>) -> (Vec<P>, Vec<
   (g1, g2, fr, gt)
 }
 
+// AccProofLayout is a trait that defines the layout of the accumulator proof
+// It is used to implement the generalized accumulator proof for different basic blocks
 pub trait AccProofLayout: BasicBlock {
+  // acc_g1_num returns the number of G1 elements in an accumulator instance
   fn acc_g1_num(&self, is_prover: bool) -> usize {
     0
   }
 
+  // acc_g2_num returns the number of G2 elements in an accumulator instance
   fn acc_g2_num(&self, is_prover: bool) -> usize {
     0
   }
 
+  // acc_fr_num returns the number of Fr elements in an accumulator instance
   fn acc_fr_num(&self, is_prover: bool) -> usize {
     0
   }
 
+  // prover_proof_to_acc converts the NARK proof from the prover to an accumulator instance
   fn prover_proof_to_acc(&self, proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective>;
 
+  // verifier_proof_to_acc converts the NARK proof from the verifier to an accumulator instance
   fn verifier_proof_to_acc(&self, proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> AccHolder<G1Affine, G2Affine>;
 
+  // mira_prove is the main function that performs the generalized accumulator proof
   fn mira_prove(
     &self,
     srs: &SRS,
@@ -76,6 +84,7 @@ pub trait AccProofLayout: BasicBlock {
     rng: &mut StdRng,
   ) -> AccHolder<G1Projective, G2Projective>;
 
+  // mira_verify is the main function that verifies the generalized accumulator proof
   fn mira_verify(
     &self,
     acc_1: AccHolder<G1Affine, G2Affine>,
@@ -86,18 +95,36 @@ pub trait AccProofLayout: BasicBlock {
     None
   }
 
+  // err_g1_nums returns the number of G1 elements in the error terms
+  // Its length should be equal to the number of error terms
+  // The i-th element of the vector is the number of G1 elements in the i-th error term
+  // Note: technically, we can realize the pairing in G1 with the predefined G2 elements;
+  // but we do not do this in the current implementation because it is not efficient
   fn err_g1_nums(&self) -> Vec<usize> {
     vec![]
   }
 
+  // err_g2_nums returns the number of G2 elements in the error terms
+  // Its length should be equal to the number of error terms
+  // The i-th element of the vector is the number of G2 elements in the i-th error term
+  // Note: technically, we can realize the pairing in G2 with the predefined G1 elements;
+  // but we do not do this in the current implementation because it is not efficient
   fn err_g2_nums(&self) -> Vec<usize> {
     vec![]
   }
 
+  // err_fr_nums returns the number of Fr elements in the error terms
+  // Its length should be equal to the number of error terms
+  // The i-th element of the vector is the number of Fr elements in the i-th error term
   fn err_fr_nums(&self) -> Vec<usize> {
     vec![]
   }
 
+  // err_gt_nums returns the number of GT elements (the realized pairings) in the error terms
+  // Its length should be equal to the number of error terms
+  // The i-th element of the vector is the number of GT elements in the i-th error term
+  // Note: we only realize the pairing between G1 and G2 elements when both of them are not predefined
+  // In this case, we do the pairing (i.e., gt = e(g1, g2)) to prevent too much memory usage
   fn err_gt_nums(&self) -> Vec<usize> {
     vec![]
   }

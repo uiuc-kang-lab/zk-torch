@@ -150,14 +150,18 @@ impl DataEnc {
   }
 }
 
-pub type AccProofProj<'a> = (
+pub type AccProofProj = (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>);
+
+pub type AccProofProjRef<'a> = (
   &'a Vec<G1Projective>,
   &'a Vec<G2Projective>,
   &'a Vec<Fr>,
   &'a Vec<PairingOutput<Bn<ark_bn254::Config>>>,
 );
 
-pub type AccProofAff<'a> = (
+pub type AccProofAff = (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>);
+
+pub type AccProofAffRef<'a> = (
   &'a Vec<G1Affine>,
   &'a Vec<G2Affine>,
   &'a Vec<Fr>,
@@ -221,11 +225,11 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
-    _acc_proof: AccProofProj,
+    _acc_proof: AccProofProjRef,
     _proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     _rng: &mut StdRng,
     _cache: ProveVerifyCache,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
+  ) -> AccProofProj {
     (Vec::new(), Vec::new(), Vec::new(), Vec::new())
   }
 
@@ -234,11 +238,8 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     &self,
     _srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    acc_proof: AccProofProj,
-  ) -> (
-    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>),
-    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-  ) {
+    acc_proof: AccProofProjRef,
+  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAff) {
     (
       (
         proof.0.iter().map(|x| (*x).into()).collect(),
@@ -260,8 +261,8 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     _model: &ArrayD<DataEnc>,
     _inputs: &Vec<&ArrayD<DataEnc>>,
     _outputs: &Vec<&ArrayD<DataEnc>>,
-    _prev_acc_proof: AccProofAff,
-    _acc_proof: AccProofAff,
+    _prev_acc_proof: AccProofAffRef,
+    _acc_proof: AccProofAffRef,
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
     _cache: ProveVerifyCache,
@@ -270,7 +271,7 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
   }
 
   // This function is used to clean the errs in the final accumulator proof to calculate the proof size correctly.
-  fn acc_finalize(&self, _srs: &SRS, acc_proof: AccProofAff) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
+  fn acc_finalize(&self, _srs: &SRS, acc_proof: AccProofAffRef) -> AccProofAff {
     (
       acc_proof.0.iter().map(|x| *x).collect(),
       acc_proof.1.iter().map(|x| *x).collect(),
@@ -279,7 +280,7 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     )
   }
 
-  fn acc_decide(&self, _srs: &SRS, _acc_proof: AccProofAff) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
+  fn acc_decide(&self, _srs: &SRS, _acc_proof: AccProofAffRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     vec![]
   }
 }

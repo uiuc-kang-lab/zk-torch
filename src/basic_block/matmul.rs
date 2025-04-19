@@ -1,6 +1,8 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{AccProofAff, AccProofProj, BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use super::{
+  AccProofAff, AccProofAffRef, AccProofProj, AccProofProjRef, BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS,
+};
 use crate::util::{self, acc_to_acc_proof, calc_pow, AccHolder};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
@@ -663,11 +665,11 @@ impl BasicBlock for MatMulBasicBlock {
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
-    acc_proof: AccProofProj,
+    acc_proof: AccProofProjRef,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
-  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
+  ) -> AccProofProj {
     let [left_x, left_Q_x, _left_zero, _left_zero_div, _right_x, _right_Q_x, _right_zero_div, _corr1, _corr2, _corr3, _corr4, flat_A, _flat_B, _flat_C, part_corr1, flat_A_no_blind, flat_B_no_blind] =
       proof.0[..]
     else {
@@ -730,11 +732,8 @@ impl BasicBlock for MatMulBasicBlock {
     &self,
     srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    acc_proof: AccProofProj,
-  ) -> (
-    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>),
-    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-  ) {
+    acc_proof: AccProofProjRef,
+  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAff) {
     let mut matmul_acc = acc_proof_to_matmul_acc(acc_proof, true).unwrap();
 
     let po = matmul_acc.prover_only.as_ref().unwrap();
@@ -770,8 +769,8 @@ impl BasicBlock for MatMulBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: AccProofAff,
-    acc_proof: AccProofAff,
+    prev_acc_proof: AccProofAffRef,
+    acc_proof: AccProofAffRef,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     cache: ProveVerifyCache,
@@ -874,7 +873,7 @@ impl BasicBlock for MatMulBasicBlock {
     Some(result)
   }
 
-  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAff) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
+  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     let acc = acc_proof_to_matmul_acc(acc_proof, false).unwrap();
 
     let acc_flat_A = acc.fiat_shamir.acc_flat_A;
@@ -944,7 +943,7 @@ impl BasicBlock for MatMulBasicBlock {
     ]
   }
 
-  fn acc_finalize(&self, _srs: &SRS, acc_proof: AccProofAff) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
+  fn acc_finalize(&self, _srs: &SRS, acc_proof: AccProofAffRef) -> AccProofAff {
     let mut acc_holder = acc_proof_to_matmul_acc_holder(acc_proof, false);
     acc_holder.errs = vec![];
     acc_to_acc_proof(acc_holder)
