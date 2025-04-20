@@ -483,7 +483,6 @@ impl Layer for InstanceNormLayer {
       prev_permute = graph.addNode(permutes[i], vec![(transpose_output, 0)]);
     }
     let reshape_output = graph.addNode(reshape, vec![(prev_permute, 0)]);
-    // let cc_output = graph.addNode(cc, vec![(-1, 0)]);
     let sum_output = graph.addNode(sum, vec![(reshape_output, 0)]);
     let mean_output = graph.addNode(div_const, vec![(sum_output, 0)]);
     let _ = graph.addNode(div_const_check, vec![(mean_output, 1)]);
