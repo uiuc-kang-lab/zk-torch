@@ -2,6 +2,7 @@ use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
 use crate::onnx;
+use crate::util;
 use ark_bn254::Fr;
 use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;
@@ -39,8 +40,9 @@ impl Layer for SoftmaxLayer {
       }),
       N: 1,
     }));
+    let len = util::next_pow(input_shapes[0][input_shapes[0].len() - 1] as u32) as usize;
     let sum = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(SumBasicBlock {}),
+      basic_block: Box::new(SumBasicBlock { len }),
       N: 1,
     }));
     let reciprocal = graph.addBB(Box::new(ReciprocalBasicBlock {

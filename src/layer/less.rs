@@ -25,8 +25,9 @@ impl Layer for LessLayer {
     // Check 2 is equivalent to (A - B) * (1 - L) >= 0
     let mut graph = Graph::new();
 
+    let len = util::next_pow(input_shapes[0][input_shapes[0].len() - 1] as u32) as usize;
     let mul = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MulBasicBlock {}),
+      basic_block: Box::new(MulBasicBlock { len }),
       N: 1,
     }));
     let less = graph.addBB(Box::new(RepeaterBasicBlock {

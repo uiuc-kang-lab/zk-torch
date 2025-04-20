@@ -14,6 +14,7 @@ pub use cq::CQBasicBlock;
 pub use cq2::CQ2BasicBlock;
 pub use cqlin::CQLinBasicBlock;
 pub use div::{DivConstBasicBlock, DivConstProofBasicBlock, DivScalarBasicBlock, ModConstBasicBlock};
+use downcast_rs::impl_downcast;
 pub use eq::{ElementwiseEqBasicBlock, EqBasicBlock};
 pub use id::IdBasicBlock;
 pub use less::LessBasicBlock;
@@ -147,7 +148,7 @@ impl DataEnc {
   }
 }
 
-pub trait BasicBlock: std::fmt::Debug + Send + Sync {
+pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
   fn genModel(&self) -> ArrayD<Fr> {
     ArrayD::zeros(IxDyn(&[0]))
   }
@@ -196,4 +197,84 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync {
   ) -> Vec<PairingCheck> {
     vec![]
   }
+
+  // This function is the special case of acc_prove for the first block in the computation
+  fn acc_init(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<Data>,
+    _inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    _proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    (Vec::new(), Vec::new(), Vec::new())
+  }
+
+  // This function performs folding for the rest of the blocks in the computation
+  fn acc_prove(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<Data>,
+    _inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    _acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    _proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    (Vec::new(), Vec::new(), Vec::new())
+  }
+
+  // This function cleans the blinding terms in accumulators for the verifier to do acc_verify
+  fn acc_clean(
+    &self,
+    _srs: &SRS,
+    proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)) {
+    (
+      (
+        proof.0.iter().map(|x| (*x).into()).collect(),
+        proof.1.iter().map(|x| (*x).into()).collect(),
+        proof.2.iter().map(|x| *x).collect(),
+      ),
+      (
+        acc_proof.0.iter().map(|x| (*x).into()).collect(),
+        acc_proof.1.iter().map(|x| (*x).into()).collect(),
+        acc_proof.2.iter().map(|x| *x).collect(),
+      ),
+    )
+  }
+
+  fn acc_verify(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<DataEnc>,
+    _inputs: &Vec<&ArrayD<DataEnc>>,
+    _outputs: &Vec<&ArrayD<DataEnc>>,
+    _prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    _acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> Option<bool> {
+    None
+  }
+
+  // This function is used to clean the errs in the final accumulator proof to calculate the proof size correctly.
+  fn acc_clean_errs(&self, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) {
+    (
+      acc_proof.0.iter().map(|x| *x).collect(),
+      acc_proof.1.iter().map(|x| *x).collect(),
+      acc_proof.2.iter().map(|x| *x).collect(),
+    )
+  }
+
+  fn acc_decide(&self, _srs: &SRS, _acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {
+    vec![]
+  }
 }
+
+impl_downcast!(BasicBlock);

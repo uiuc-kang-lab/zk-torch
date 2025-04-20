@@ -48,12 +48,13 @@ impl Layer for ReduceMeanLayer {
     // PermuteBasicBlock is used for permute the last two dimensions for the case of reducing along two axes
     // (we need it because our mean computation is done along the last dimension)
     let permute = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
+      basic_block: Box::new(PermuteBasicBlock { permutation, n: a, m: 1 }),
       N: 2,
     }));
 
+    let len = util::next_pow(input_shapes[0][input_shapes[0].len() - 1] as u32) as usize;
     let sum = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(SumBasicBlock {}),
+      basic_block: Box::new(SumBasicBlock { len }),
       N: 1,
     }));
     let div = graph.addBB(Box::new(DivConstBasicBlock {
@@ -77,6 +78,11 @@ impl Layer for ReduceMeanLayer {
 
     if axes.len() == 2 {
       let permute_output = graph.addNode(permute, vec![(div_output, 0)]);
+      let len = util::next_pow(input_shapes[0][input_shapes[0].len() - 2] as u32) as usize;
+      let sum = graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(SumBasicBlock { len }),
+        N: 1,
+      }));
       let sum_output1 = graph.addNode(sum, vec![(permute_output, 0)]);
       let div_output1 = graph.addNode(div, vec![(sum_output1, 0)]);
       let _ = graph.addNode(div_check, vec![(sum_output1, 0), (div_output1, 0)]);

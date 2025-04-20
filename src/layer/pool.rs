@@ -100,7 +100,11 @@ impl Layer for MaxPoolLayer {
     let a = output_shape[output_shape.len() - 1].next_power_of_two();
     let transpose1 = ((0..1).map(|x| x * a).collect(), (0..a).collect());
     let permute = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(PermuteBasicBlock { permutation: transpose1 }),
+      basic_block: Box::new(PermuteBasicBlock {
+        permutation: transpose1,
+        n: a,
+        m: 1,
+      }),
       N: 2,
     }));
 

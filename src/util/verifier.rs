@@ -36,6 +36,9 @@ pub fn combine_pairing_checks(checks: &Vec<&PairingCheck>) -> (Vec<G1Affine>, Ve
   let mut curr = gamma;
   for check in checks.iter() {
     for pairing in check.iter() {
+      if pairing.0.is_zero() || pairing.1.is_zero() {
+        continue;
+      }
       A.entry(pairing.0).or_insert_with(|| HashSet::new()).insert((pairing.1, curr));
       B.entry(pairing.1).or_insert_with(|| HashSet::new()).insert((pairing.0, curr));
     }
@@ -124,16 +127,26 @@ pub fn verify(srs: &SRS, graph: &Graph, timing: &mut TimingTree) {
   let mut rng = StdRng::from_seed(buf);
 
   // Verify:
-  #[cfg(feature = "debug")]
+  #[cfg(all(feature = "debug", not(feature = "fold")))]
   timed!(
     timing,
     "verify (debug)",
     graph.verify_for_each_pairing(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng)
   );
-  #[cfg(not(feature = "debug"))]
+  #[cfg(all(not(feature = "debug"), not(feature = "fold")))]
   timed!(
     timing,
     "verify",
     graph.verify(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng, timing)
   );
+  #[cfg(feature = "fold")]
+  {
+    let (final_proofs_idx, final_acc_proofs_idx) = timed!(
+      timing,
+      "verify",
+      graph.verify(srs, &modelsEnc, &inputsEnc, &outputsEnc, &proofs, &mut rng, timing)
+    );
+    let final_proof = graph.fold_proofs(final_proofs_idx, final_acc_proofs_idx, &proofs);
+    final_proof.serialize_uncompressed(File::create(&CONFIG.prover.proof_path).unwrap()).unwrap();
+  }
 }

@@ -18,10 +18,6 @@ impl Layer for MulLayer {
     _attributes: &Vec<&AttributeProto>,
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
-    let mul = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MulBasicBlock {}),
-      N: 1,
-    }));
     let mul_scalar = if input_shapes[0].len() == input_shapes[1].len() && input_shapes[0].len() == 0 {
       graph.addBB(Box::new(MulScalarBasicBlock {}))
     } else {
@@ -62,15 +58,9 @@ impl Layer for MulLayer {
       }))
     };
     // If any of the inputs are scalars, use the scalar version of the mul basic block.
-    let mul_basicblock = if input_shapes[1].len() == 0 || input_shapes[0].len() == 0 {
-      mul_scalar
-    // otherwise, use the normal version of the mul basic block.
-    } else {
-      mul
-    };
     // If the first input is a scalar, swap the inputs, because the mul scalar basic block expects the scalar to be the second input. If the last dimension differs between the two inputs, broadcast.
     let mul_output = if input_shapes[0].len() == 0 {
-      graph.addNode(mul_basicblock, vec![(-2, 0), (-1, 0)])
+      graph.addNode(mul_scalar, vec![(-2, 0), (-1, 0)])
     } else if input_shapes[1].len() > 0 && input_shapes[0].last().unwrap() != input_shapes[1].last().unwrap() {
       let (broadcast_inp, mul_inp, broadcast_idx) = if input_shapes[0].last().unwrap() > input_shapes[1].last().unwrap() {
         (-2, -1, 0)
@@ -85,19 +75,40 @@ impl Layer for MulLayer {
         basic_block: Box::new(MulScalarBasicBlock {}),
         N: 1,
       }));
-      let mul = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(MulBasicBlock {}),
-        N: 1,
-      }));
       let constantOfShape_output = graph.addNode(constantOfShape, vec![]);
       if *input_shapes[0].last().unwrap() == 1 || *input_shapes[1].last().unwrap() == 1 {
         let broadcast_output = graph.addNode(mul_scalar, vec![(constantOfShape_output, 0), (broadcast_inp, 0)]);
-        graph.addNode(mul_basicblock, vec![(mul_inp, 0), (broadcast_output, 0)])
+        let mul_inp_idx = (-mul_inp - 1) as usize;
+        let len = util::next_pow(input_shapes[mul_inp_idx][input_shapes[mul_inp_idx].len() - 1] as u32) as usize;
+        let mul = graph.addBB(Box::new(RepeaterBasicBlock {
+          basic_block: Box::new(MulBasicBlock { len }),
+          N: 1,
+        }));
+        graph.addNode(mul, vec![(mul_inp, 0), (broadcast_output, 0)])
       } else {
+        let inp_shape = input_shapes[broadcast_idx];
+        let len = util::next_pow(inp_shape[inp_shape.len() - 1] as u32) as usize;
+        let mul = graph.addBB(Box::new(RepeaterBasicBlock {
+          basic_block: Box::new(MulBasicBlock { len }),
+          N: 1,
+        }));
         let broadcast_output = graph.addNode(mul, vec![(constantOfShape_output, 0), (broadcast_inp, 0)]);
         graph.addNode(mul, vec![(broadcast_output, 0), (mul_inp, 0)])
       }
     } else {
+      let mul_basicblock = if input_shapes[1].len() == 0 || input_shapes[0].len() == 0 {
+        mul_scalar
+      } else {
+        let len = if input_shapes[0].len() > input_shapes[1].len() {
+          util::next_pow(input_shapes[0][input_shapes[0].len() - 1] as u32) as usize
+        } else {
+          util::next_pow(input_shapes[1][input_shapes[1].len() - 1] as u32) as usize
+        };
+        graph.addBB(Box::new(RepeaterBasicBlock {
+          basic_block: Box::new(MulBasicBlock { len }),
+          N: 1,
+        }))
+      };
       graph.addNode(mul_basicblock, vec![(-1, 0), (-2, 0)])
     };
 
