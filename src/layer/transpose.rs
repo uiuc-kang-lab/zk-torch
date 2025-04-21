@@ -55,7 +55,7 @@ impl Layer for TransposeLayer {
       d = util::next_pow(d as u32) as usize;
       let permutation = ((0..c).map(|x| x * d).collect(), (0..d).collect());
       let permute = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(PermuteBasicBlock { permutation }),
+        basic_block: Box::new(PermuteBasicBlock { permutation, n: d, m: c }),
         N: 2,
       }));
       let permute_output = graph.addNode(permute, vec![(intermediate, 0)]);

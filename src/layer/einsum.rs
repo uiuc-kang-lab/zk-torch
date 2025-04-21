@@ -93,7 +93,11 @@ fn vector_outer_product(graph: &mut Graph, input_shapes: &Vec<&Vec<usize>>) -> V
   b = util::next_pow(b as u32) as usize;
   let permutation = ((0..b).map(|x| x).collect(), vec![0]);
   let permute = graph.addBB(Box::new(RepeaterBasicBlock {
-    basic_block: Box::new(PermuteBasicBlock { permutation: permutation }),
+    basic_block: Box::new(PermuteBasicBlock {
+      permutation: permutation,
+      n: 1,
+      m: b,
+    }),
     N: 2,
   }));
   // to split the input vector into scalars, we first unsqueeze and permute it
@@ -115,9 +119,10 @@ fn vector_outer_product(graph: &mut Graph, input_shapes: &Vec<&Vec<usize>>) -> V
   output_shape
 }
 
-fn vector_inner_product(graph: &mut Graph, _input_shapes: &Vec<&Vec<usize>>) -> Vec<usize> {
+fn vector_inner_product(graph: &mut Graph, input_shapes: &Vec<&Vec<usize>>) -> Vec<usize> {
+  let len = util::next_pow(input_shapes[0][input_shapes[0].len() - 1] as u32) as usize;
   let mul = graph.addBB(Box::new(RepeaterBasicBlock {
-    basic_block: Box::new(MulBasicBlock {}),
+    basic_block: Box::new(MulBasicBlock { len }),
     N: 1,
   }));
   let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
@@ -139,7 +144,7 @@ fn vector_inner_product(graph: &mut Graph, _input_shapes: &Vec<&Vec<usize>>) -> 
     N: 1,
   }));
   let sum = graph.addBB(Box::new(RepeaterBasicBlock {
-    basic_block: Box::new(SumBasicBlock {}),
+    basic_block: Box::new(SumBasicBlock { len }),
     N: 1,
   }));
   let mul_output = graph.addNode(mul, vec![(-1, 0), (-2, 0)]);

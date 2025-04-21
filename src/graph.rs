@@ -45,6 +45,8 @@ pub struct Graph {
   pub layer_names: Vec<String>,
   pub nodes: Vec<Node>,
   pub outputs: Vec<(i32, usize)>,
+  #[cfg(feature = "fold")]
+  pub foldable_bb_map: HashMap<usize, usize>,
 }
 
 impl Graph {
@@ -166,6 +168,7 @@ impl Graph {
       .collect()
   }
 
+  #[cfg(not(feature = "fold"))]
   pub fn prove(
     &mut self,
     srs: &SRS,
@@ -233,6 +236,114 @@ impl Graph {
       .collect()
   }
 
+  #[cfg(feature = "fold")]
+  pub fn prove(
+    &mut self,
+    srs: &SRS,
+    setups: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<DensePolynomial<Fr>>)>,
+    models: &Vec<&ArrayD<Data>>,
+    inputs: &Vec<&ArrayD<Data>>,
+    outputs: &Vec<&Vec<&ArrayD<Data>>>,
+    rng: &mut StdRng,
+    timing: &mut TimingTree,
+  ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> {
+    assert!(self.nodes.len() == self.precomputable.prove_and_verify.len());
+    let cache = Arc::new(Mutex::new(HashMap::new()));
+    let mut proofs = vec![];
+    let mut acc_proofs_for_verifier = vec![];
+    let mut acc_proofs: Vec<(Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>)> = vec![];
+    let mut prev_acc_map: HashMap<usize, usize> = HashMap::new(); // (basicblock, acc_proofs index)
+
+    self.nodes.iter().enumerate().for_each(|(i, n)| {
+      let precomputable = self.precomputable.prove_and_verify[i];
+      if precomputable {
+        // Skip proving for some layers if they are precomputable.
+        // These layers require no proving and verifying as their inputs are known (i.e., constants) during graph construction.
+        println!(
+          "{} | skipping proving for {i} {:?} because this layer is precomputable given the constant inputs",
+          self.layer_names[i], self.basic_blocks[n.basic_block]
+        );
+        proofs.push((vec![], vec![], vec![]));
+        acc_proofs.push((vec![], vec![], vec![]));
+        acc_proofs_for_verifier.push((vec![], vec![], vec![]));
+        return;
+      }
+      let prove_id = format!("{} | proving {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
+      println!("{}", prove_id);
+      let myInputs = n
+        .inputs
+        .iter()
+        .map(|(basicblock_idx, output_idx)| {
+          if *basicblock_idx < 0 {
+            inputs[*output_idx + (-basicblock_idx - 1) as usize]
+          } else {
+            &(outputs[*basicblock_idx as usize][*output_idx])
+          }
+        })
+        .collect();
+      let proof = timed!(
+        timing,
+        &prove_id,
+        self.basic_blocks[n.basic_block].prove(
+          srs,
+          setups[n.basic_block],
+          models[n.basic_block],
+          &myInputs,
+          outputs[i],
+          rng,
+          cache.clone(),
+        )
+      );
+
+      // check if basicblock is in prev_acc_map
+      let bb_index_for_folding = self.foldable_bb_map.get(&n.basic_block).unwrap();
+      let new_acc_proof = if let Some(prev_acc) = prev_acc_map.get(bb_index_for_folding) {
+        let prev_acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>) =
+          (&acc_proofs[*prev_acc].0, &acc_proofs[*prev_acc].1, &acc_proofs[*prev_acc].2);
+        self.basic_blocks[n.basic_block].acc_prove(
+          srs,
+          models[n.basic_block],
+          &myInputs,
+          outputs[i],
+          prev_acc_proof,
+          (&proof.0, &proof.1, &proof.2),
+          rng,
+          cache.clone(),
+        )
+      } else {
+        self.basic_blocks[n.basic_block].acc_init(
+          srs,
+          models[n.basic_block],
+          &myInputs,
+          outputs[i],
+          (&proof.0, &proof.1, &proof.2),
+          rng,
+          cache.clone(),
+        )
+      };
+
+      let (proof, new_acc_proof_v) = self.basic_blocks[self.nodes[i].basic_block].acc_clean(
+        srs,
+        (&proof.0, &proof.1, &proof.2),
+        (&new_acc_proof.0, &new_acc_proof.1, &new_acc_proof.2),
+      );
+
+      proofs.push(proof);
+      acc_proofs.push(new_acc_proof);
+      acc_proofs_for_verifier.push(new_acc_proof_v);
+      prev_acc_map.insert(*bb_index_for_folding, acc_proofs.len() - 1);
+
+      let mut bytes = Vec::new();
+      proofs[proofs.len() - 1].serialize_uncompressed(&mut bytes).unwrap();
+      util::add_randomness(rng, bytes);
+    });
+
+    proofs.append(&mut acc_proofs_for_verifier);
+
+    proofs
+  }
+
+  #[cfg(not(feature = "fold"))]
   pub fn verify(
     &self,
     srs: &SRS,
@@ -293,6 +404,137 @@ impl Graph {
     );
     let pairing_check = timed!(timing, "pairings", Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()));
     assert_eq!(pairing_check, PairingOutput::zero());
+  }
+
+  #[cfg(feature = "fold")]
+  pub fn verify(
+    &self,
+    srs: &SRS,
+    models: &Vec<&ArrayD<DataEnc>>,
+    inputs: &Vec<&ArrayD<DataEnc>>,
+    outputs: &Vec<&Vec<&ArrayD<DataEnc>>>,
+    proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)>,
+    rng: &mut StdRng,
+    timing: &mut TimingTree,
+  ) -> (Vec<usize>, Vec<usize>) {
+    assert!(self.nodes.len() == self.precomputable.prove_and_verify.len());
+    let cache = Arc::new(Mutex::new(HashMap::new()));
+    let mut prev_acc_map: HashMap<usize, usize> = HashMap::new();
+    let (proofs, acc_proofs) = (&proofs[..self.nodes.len()], &proofs[self.nodes.len()..]);
+    let (mut final_proofs_idx, mut final_acc_proofs_idx) = (vec![], vec![]);
+
+    let mut pairings: Vec<Vec<PairingCheck>> = self
+      .nodes
+      .iter()
+      .enumerate()
+      .map(|(i, n)| {
+        let precomputable = self.precomputable.prove_and_verify[i];
+        if precomputable {
+          // Skip verifying for some layers if they are precomputable.
+          // These layers require no proving and verifying as their inputs are known (i.e., constants) during graph construction.
+          println!(
+            "{} | skipping verifying for {i} {:?} because this layer is precomputable given the constant inputs",
+            self.layer_names[i], self.basic_blocks[n.basic_block]
+          );
+          return vec![];
+        }
+        let verify_id = format!("{} | verifying {i} {:?}", self.layer_names[i], self.basic_blocks[n.basic_block]);
+        println!("{}", verify_id);
+        let myInputs = n
+          .inputs
+          .iter()
+          .map(|(basicblock_idx, output_idx)| {
+            if *basicblock_idx < 0 {
+              inputs[*output_idx + (-basicblock_idx - 1) as usize]
+            } else {
+              &(outputs[*basicblock_idx as usize][*output_idx])
+            }
+          })
+          .collect();
+
+        let bb_index_for_folding = self.foldable_bb_map.get(&n.basic_block).unwrap();
+        let mut prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>) = (&vec![], &vec![], &vec![]);
+        if let Some(prev_acc) = prev_acc_map.get(bb_index_for_folding) {
+          prev_acc_proof = (&acc_proofs[*prev_acc].0, &acc_proofs[*prev_acc].1, &acc_proofs[*prev_acc].2);
+        }
+        prev_acc_map.insert(*bb_index_for_folding, i);
+
+        let acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>) = (&acc_proofs[i].0, &acc_proofs[i].1, &acc_proofs[i].2);
+        let acc_verification = self.basic_blocks[n.basic_block].acc_verify(
+          srs,
+          models[n.basic_block],
+          &myInputs,
+          outputs[i],
+          prev_acc_proof,
+          acc_proof,
+          (&proofs[i].0, &proofs[i].1, &proofs[i].2),
+          rng,
+          cache.clone(),
+        );
+
+        let pairings = if acc_verification.is_none() {
+          final_proofs_idx.push(i);
+          timed!(
+            timing,
+            &verify_id,
+            self.basic_blocks[n.basic_block].verify(srs, models[n.basic_block], &myInputs, outputs[i], proofs[i], rng, cache.clone())
+          )
+        } else {
+          if acc_verification.unwrap() {
+            vec![]
+          } else {
+            panic!("Accumulator verification failed");
+          }
+        };
+        let mut bytes = Vec::new();
+        let temp: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) = (proofs[i].0.clone(), proofs[i].1.clone(), proofs[i].2.clone());
+        temp.serialize_uncompressed(&mut bytes).unwrap();
+        util::add_randomness(rng, bytes);
+        pairings
+      })
+      .collect();
+
+    let mut decider_pairings: Vec<Vec<PairingCheck>> = prev_acc_map
+      .iter()
+      .map(|(k, v)| {
+        if !final_proofs_idx.contains(v) {
+          final_acc_proofs_idx.push(*v);
+        }
+        let acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>) = (&acc_proofs[*v].0, &acc_proofs[*v].1, &acc_proofs[*v].2);
+        self.basic_blocks[*k].acc_decide(srs, acc_proof)
+      })
+      .collect();
+    pairings.append(&mut decider_pairings);
+
+    let pairings = timed!(
+      timing,
+      "combine pairings",
+      util::combine_pairing_checks(&pairings.iter().flatten().collect())
+    );
+    let pairing_check = timed!(timing, "pairings", Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()));
+    assert_eq!(pairing_check, PairingOutput::zero());
+    (final_proofs_idx, final_acc_proofs_idx)
+  }
+
+  #[cfg(feature = "fold")]
+  pub fn fold_proofs(
+    &self,
+    final_proofs_idx: Vec<usize>,
+    final_acc_proofs_idx: Vec<usize>,
+    proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)>,
+  ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> {
+    let (proofs, acc_proofs) = (&proofs[..self.nodes.len()], &proofs[self.nodes.len()..]);
+    let mut final_proofs: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)> =
+      final_proofs_idx.iter().map(|i| (proofs[*i].0.clone(), proofs[*i].1.clone(), proofs[*i].2.clone())).collect();
+    let mut final_acc_proofs = final_acc_proofs_idx
+      .iter()
+      .map(|i| {
+        let n = &self.nodes[*i];
+        self.basic_blocks[n.basic_block].acc_clean_errs((&acc_proofs[*i].0, &acc_proofs[*i].1, &acc_proofs[*i].2))
+      })
+      .collect();
+    final_proofs.append(&mut final_acc_proofs);
+    final_proofs
   }
 
   // This function should be only used for debugging purposes (it is very slow).
@@ -357,6 +599,8 @@ impl Graph {
       layer_names: vec![],
       nodes: vec![],
       outputs: vec![],
+      #[cfg(feature = "fold")]
+      foldable_bb_map: HashMap::new(),
     }
   }
 

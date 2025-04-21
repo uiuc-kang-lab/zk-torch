@@ -36,8 +36,10 @@ impl Layer for EqualLayer {
       basic_block: Box::new(EqBasicBlock {}),
       N: 1,
     }));
+
+    let len = util::next_pow(input_shapes[1][input_shapes[1].len() - 1] as u32) as usize;
     let mul = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MulBasicBlock {}),
+      basic_block: Box::new(MulBasicBlock { len }),
       N: 1,
     }));
 

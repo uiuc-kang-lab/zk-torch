@@ -65,8 +65,11 @@ impl Layer for GemmLayer {
       basic_block: Box::new(MulScalarBasicBlock {}),
       N: 1,
     }));
+    let M_pad = util::next_pow(M as u32) as usize;
+    let N_pad = util::next_pow(N as u32) as usize;
+    let K_pad = util::next_pow(K_a as u32) as usize;
     let matmul = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(MatMulBasicBlock {}),
+      basic_block: Box::new(MatMulBasicBlock { m: K_pad, n: N_pad }),
       N: 2,
     }));
     let sf_log = onnx::SF_LOG.read().unwrap().to_owned();
@@ -95,23 +98,28 @@ impl Layer for GemmLayer {
       c: arr1(&vec![Fr::from((beta * sf_float) as i64)]).into_dyn(),
     }));
 
-    let M_pad = util::next_pow(M as u32) as usize;
-    let N_pad = util::next_pow(N as u32) as usize;
-    let K_pad = util::next_pow(K_a as u32) as usize;
     let permutation_A = ((0..M_pad).map(|x| x * K_pad).collect(), (0..K_pad).collect());
     let permutation_B = ((0..N_pad).map(|x| x * K_pad).collect(), (0..K_pad).collect());
     let mut A_output = -1;
     let mut B_output = -2;
     if transA != 0 {
       let transpose_A = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(PermuteBasicBlock { permutation: permutation_A }),
+        basic_block: Box::new(PermuteBasicBlock {
+          permutation: permutation_A,
+          n: K_pad,
+          m: M_pad,
+        }),
         N: 2,
       }));
       A_output = graph.addNode(transpose_A, vec![(A_output, 0)]);
     }
     if transB == 0 {
       let transpose_B = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(PermuteBasicBlock { permutation: permutation_B }),
+        basic_block: Box::new(PermuteBasicBlock {
+          permutation: permutation_B,
+          n: K_pad,
+          m: N_pad,
+        }),
         N: 2,
       }));
       B_output = graph.addNode(transpose_B, vec![(B_output, 0)]);

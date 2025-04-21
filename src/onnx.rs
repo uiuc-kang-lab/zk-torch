@@ -1,7 +1,7 @@
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::*;
-use crate::util;
+use crate::util::{self, get_foldable_bb_info};
 use crate::CONFIG;
 use ark_bn254::Fr;
 use ark_std::Zero;
@@ -164,6 +164,12 @@ fn get_local_graph(
     "Less" => Ok(LessLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "LSTM" => Ok(LSTMLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "MultiHeadMatMul" => Ok(MultiHeadMatMulLayer::graph(
+      &input_shapes,
+      &input_types,
+      &node_constants,
+      &node_attributes,
+    )),
     "Mod" => Ok(ModLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Neg" => Ok(NegLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Not" => Ok(NotLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
@@ -390,6 +396,8 @@ pub fn load_file(filename: &str) -> (Graph, Vec<(ArrayD<Fr>, DatumType)>) {
     layer_names: vec![],
     nodes: vec![],
     outputs: vec![],
+    #[cfg(feature = "fold")]
+    foldable_bb_map: HashMap::new(),
   };
   let mut outputs_idx = create_output_indices(constants, &mut graph);
 
@@ -412,6 +420,21 @@ pub fn load_file(filename: &str) -> (Graph, Vec<(ArrayD<Fr>, DatumType)>) {
   }
 
   propagate_precomputable(&mut graph);
+
+  #[cfg(feature = "fold")]
+  {
+    let mut bb_to_index = HashMap::new();
+    graph.foldable_bb_map = graph
+      .basic_blocks
+      .iter()
+      .enumerate()
+      .map(|(i, b)| {
+        let bb_info = get_foldable_bb_info(b);
+        let index = *bb_to_index.entry(bb_info.clone()).or_insert(i);
+        (i, index)
+      })
+      .collect();
+  }
 
   (graph, models)
 }
