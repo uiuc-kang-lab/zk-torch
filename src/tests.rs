@@ -228,6 +228,18 @@ fn testBasicBlocks() {
     &vec![&data_to_concat, &data_to_concat.clone()],
   );
 
+  let inp1 = ArrayD::from_shape_fn(IxDyn(&[1, 3, 2]), |_| Fr::rand(&mut rng));
+  let inp2 = ArrayD::from_shape_fn(IxDyn(&[1, 1, 2]), |_| Fr::rand(&mut rng));
+  testBasicBlock(
+    ConcatBasicBlock {
+      axis: 1,
+      input_shapes: vec![vec![1, 1, 2], vec![1, 3, 2], vec![1, 3, 2]],
+    },
+    srs,
+    &empty,
+    &vec![&inp2, &inp1, &inp1],
+  );
+
   let l: usize = 1 << 3;
   let m: usize = 1 << 2;
   let n: usize = 1 << 1;
