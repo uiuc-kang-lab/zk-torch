@@ -247,6 +247,16 @@ fn testBasicBlocks() {
     &vec![&a],
   );
   let a = ArrayD::from_shape_fn(IxDyn(&[l, m]), |_| Fr::rand(&mut rng));
+  testBasicBlock(MatMulBasicBlock { m, n }, srs, &empty, &vec![&a, &b]);
+  testBasicBlock(
+    RepeaterBasicBlock {
+      basic_block: Box::new(MatMulBasicBlock { m, n }),
+      N: 2,
+    },
+    srs,
+    &empty,
+    &vec![&a, &b],
+  );
   testBasicBlock(CQLinBasicBlock { setup: c.clone() }, srs, &c, &vec![&a]);
   testBasicBlock(
     RepeaterBasicBlock {
@@ -260,7 +270,9 @@ fn testBasicBlocks() {
   let p1 = (vec![0], (0..l * m).collect::<Vec<_>>()); // Concatenate columns
   let p2 = (vec![0], (0..l * m).map(|i| (i % m) * l + (i / m)).collect::<Vec<_>>()); // Concatenate rows
   let p3 = ((0..m).map(|i| i * l).collect::<Vec<_>>(), (0..l).collect::<Vec<_>>()); // Transpose
-
+  testBasicBlock(PermuteBasicBlock { permutation: p1, n: l, m: m }, srs, &empty, &vec![&a]);
+  testBasicBlock(PermuteBasicBlock { permutation: p2, n: l, m: m }, srs, &empty, &vec![&a]);
+  testBasicBlock(PermuteBasicBlock { permutation: p3, n: l, m: m }, srs, &empty, &vec![&a]);
   let min = 1.;
   let max = 8.;
   testBasicBlock(ClipBasicBlock { min, max }, srs, &empty, &vec![&a]);
