@@ -68,7 +68,7 @@ impl Layer for BatchNormLayer {
     let permutation = ((0..scale_shape_padded).collect(), vec![0]);
     let permute = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(PermuteBasicBlock {
-        permutation,
+        permutation: permutation,
         n: 1,
         m: scale_shape_padded,
       }),
@@ -359,7 +359,7 @@ impl Layer for InstanceNormLayer {
     let permutation = ((0..scale_shape_padded).collect(), vec![0]);
     let permute = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(PermuteBasicBlock {
-        permutation,
+        permutation: permutation,
         n: 1,
         m: scale_shape_padded,
       }),

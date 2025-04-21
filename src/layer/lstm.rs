@@ -72,7 +72,11 @@ impl Layer for LSTMLayer {
     (a, b) = (util::next_pow(a as u32) as usize, util::next_pow(b as u32) as usize);
     let permutation = ((0..b).map(|x| x * a).collect(), (0..a).map(|x| x).collect());
     let permute = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(PermuteBasicBlock { permutation, n: a, m: b }),
+      basic_block: Box::new(PermuteBasicBlock {
+        permutation: permutation,
+        n: a,
+        m: b,
+      }),
       N: 2,
     }));
     let split_bb = graph.addBB(Box::new(SplitBasicBlock {
@@ -119,7 +123,7 @@ impl Layer for LSTMLayer {
       // sublayer 6: MatMul for X_t and W_T
       let matmul = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(MatMulBasicBlock {
-          m: util::next_pow(initial_h_shape[2] as u32) as usize,
+          m: util::next_pow(W_shape[2] as u32) as usize,
           n: util::next_pow(W_shape[1] as u32) as usize,
         }),
         N: 2,
@@ -172,7 +176,11 @@ impl Layer for LSTMLayer {
       (a, b) = (util::next_pow(a as u32) as usize, util::next_pow(b as u32) as usize);
       let permutation = ((0..b).map(|x| x * a).collect(), (0..a).map(|x| x).collect());
       let permute = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(PermuteBasicBlock { permutation, n: a, m: b }),
+        basic_block: Box::new(PermuteBasicBlock {
+          permutation: permutation,
+          n: a,
+          m: b,
+        }),
         N: 2,
       }));
       let split_bb = graph.addBB(Box::new(SplitBasicBlock {
