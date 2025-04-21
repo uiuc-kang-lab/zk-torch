@@ -139,7 +139,7 @@ impl Layer for BatchNormLayer {
     }));
     let split_x = graph.addBB(Box::new(SplitBasicBlock { axis: 1, split: split_ind }));
     let mut split_shape = scale_shape.clone();
-    split_shape[1] = 1;
+    split_shape[0] = 1;
     let concat = graph.addBB(Box::new(ConcatBasicBlock {
       axis: 1,
       input_shapes: vec![split_shape; util::next_pow(scale_shape[0] as u32) as usize],
