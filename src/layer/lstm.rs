@@ -151,6 +151,13 @@ impl Layer for LSTMLayer {
       let _ = graph.addNode(change_SF_check, vec![(matmul_output, 0), (sublayer6, 0)]);
 
       // sublayer 7: MatMul for H_t and R_T
+      let matmul = graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(MatMulBasicBlock {
+          m: util::next_pow(initial_h_shape[2] as u32) as usize,
+          n: util::next_pow(W_shape[1] as u32) as usize,
+        }),
+        N: 2,
+      }));
       let matmul_output = graph.addNode(matmul, vec![(H_t_output, 0), (R_T_output, 0)]);
       let sublayer7 = graph.addNode(change_SF, vec![(matmul_output, 0)]); // matmul(H_t, R_T)
       let _ = graph.addNode(change_SF_check, vec![(matmul_output, 0), (sublayer7, 0)]);
