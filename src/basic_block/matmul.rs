@@ -942,4 +942,10 @@ impl BasicBlock for MatMulBasicBlock {
       (acc_5, pairing_zero),
     ]
   }
+
+  fn acc_finalize(&self, _srs: &SRS, acc_proof: AccProofAffRef) -> AccProofAff {
+    let mut acc_holder = acc_proof_to_matmul_acc_holder(acc_proof, false);
+    acc_holder.errs = vec![];
+    acc_to_acc_proof(acc_holder)
+  }
 }
