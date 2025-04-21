@@ -1,10 +1,5 @@
-use crate::basic_block::*;
-use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ec::bn::Bn;
-use ark_ec::pairing::{Pairing, PairingOutput};
-use ark_ec::AffineRepr;
-use ark_std::Zero;
-use rand::rngs::StdRng;
+use crate::basic_block::{BasicBlock, CQ2BasicBlock, CQLinBasicBlock};
+use ark_bn254::Fr;
 
 pub fn get_foldable_bb_info(bb: &Box<dyn BasicBlock>) -> String {
   if bb.is::<CQLinBasicBlock>() {
@@ -17,237 +12,29 @@ pub fn get_foldable_bb_info(bb: &Box<dyn BasicBlock>) -> String {
   }
 }
 
-#[derive(Clone, Debug)]
-pub struct AccHolder<P: Copy, Q: Copy> {
+pub struct AccHolder<P: Clone, Q: Clone> {
   pub acc_g1: Vec<P>,
   pub acc_g2: Vec<Q>,
   pub acc_fr: Vec<Fr>,
   pub mu: Fr,
-  pub errs: Vec<(Vec<P>, Vec<Q>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)>, // i-th element contains err_i: [e_j]_j=1..n
-  pub acc_errs: Vec<(Vec<P>, Vec<Q>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)>, // i-th element contains acc_err_i += SUM{acc_gamma^j * e_j} for j=1..n
+  pub errs: Vec<(Vec<P>, Vec<Q>, Vec<Fr>)>,     // i-th element contains err_i: [e_j]_j=1..n
+  pub acc_errs: Vec<(Vec<P>, Vec<Q>, Vec<Fr>)>, // i-th element contains acc_err_i += SUM{acc_gamma^j * e_j} for j=1..n
 }
 
-pub fn acc_to_acc_proof<P: Copy, Q: Copy>(acc: AccHolder<P, Q>) -> (Vec<P>, Vec<Q>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
-  if acc.acc_g1.len() == 0 && acc.acc_g2.len() == 0 && acc.acc_fr.len() == 0 {
-    return (vec![], vec![], vec![], vec![]);
-  }
-  let mut g1 = acc.acc_g1;
-  let mut g2 = acc.acc_g2;
-  let mut fr = acc.acc_fr;
-  let mut gt = vec![];
-  acc.errs.into_iter().for_each(|x| {
-    g1.extend(x.0);
-    g2.extend(x.1);
-    fr.extend(x.2);
-    gt.extend(x.3);
+pub fn acc_to_acc_proof<P: Clone, Q: Clone>(acc: AccHolder<P, Q>) -> (Vec<P>, Vec<Q>, Vec<Fr>) {
+  let mut g1 = acc.acc_g1.clone();
+  let mut g2 = acc.acc_g2.clone();
+  let mut fr = acc.acc_fr.clone();
+  acc.errs.iter().for_each(|x| {
+    g1.extend(x.0.clone());
+    g2.extend(x.1.clone());
+    fr.extend(x.2.clone());
   });
-  acc.acc_errs.into_iter().for_each(|x| {
-    g1.extend(x.0);
-    g2.extend(x.1);
-    fr.extend(x.2);
-    gt.extend(x.3);
+  acc.acc_errs.iter().for_each(|x| {
+    g1.extend(x.0.clone());
+    g2.extend(x.1.clone());
+    fr.extend(x.2.clone());
   });
   fr.push(acc.mu);
-  (g1, g2, fr, gt)
-}
-
-// AccProofLayout is a trait that defines the layout of the accumulator proof
-// It is used to implement the generalized accumulator proof for different basic blocks
-pub trait AccProofLayout: BasicBlock {
-  // acc_g1_num returns the number of G1 elements in an accumulator instance
-  fn acc_g1_num(&self, is_prover: bool) -> usize {
-    0
-  }
-
-  // acc_g2_num returns the number of G2 elements in an accumulator instance
-  fn acc_g2_num(&self, is_prover: bool) -> usize {
-    0
-  }
-
-  // acc_fr_num returns the number of Fr elements in an accumulator instance
-  fn acc_fr_num(&self, is_prover: bool) -> usize {
-    0
-  }
-
-  // prover_proof_to_acc converts the NARK proof from the prover to an accumulator instance
-  fn prover_proof_to_acc(&self, proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective>;
-
-  // verifier_proof_to_acc converts the NARK proof from the verifier to an accumulator instance
-  fn verifier_proof_to_acc(&self, proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> AccHolder<G1Affine, G2Affine>;
-
-  // mira_prove is the main function that performs the generalized accumulator proof
-  fn mira_prove(
-    &self,
-    srs: &SRS,
-    acc_1: AccHolder<G1Projective, G2Projective>,
-    acc_2: AccHolder<G1Projective, G2Projective>,
-    rng: &mut StdRng,
-  ) -> AccHolder<G1Projective, G2Projective>;
-
-  // mira_verify is the main function that verifies the generalized accumulator proof
-  fn mira_verify(
-    &self,
-    acc_1: AccHolder<G1Affine, G2Affine>,
-    acc_2: AccHolder<G1Affine, G2Affine>,
-    new_acc: AccHolder<G1Affine, G2Affine>,
-    rng: &mut StdRng,
-  ) -> Option<bool> {
-    None
-  }
-
-  // err_g1_nums returns the number of G1 elements in the error terms
-  // Its length should be equal to the number of error terms
-  // The i-th element of the vector is the number of G1 elements in the i-th error term
-  // Note: technically, we can realize the pairing in G1 with the predefined G2 elements;
-  // but we do not do this in the current implementation because it is not efficient
-  fn err_g1_nums(&self) -> Vec<usize> {
-    vec![]
-  }
-
-  // err_g2_nums returns the number of G2 elements in the error terms
-  // Its length should be equal to the number of error terms
-  // The i-th element of the vector is the number of G2 elements in the i-th error term
-  // Note: technically, we can realize the pairing in G2 with the predefined G1 elements;
-  // but we do not do this in the current implementation because it is not efficient
-  fn err_g2_nums(&self) -> Vec<usize> {
-    vec![]
-  }
-
-  // err_fr_nums returns the number of Fr elements in the error terms
-  // Its length should be equal to the number of error terms
-  // The i-th element of the vector is the number of Fr elements in the i-th error term
-  fn err_fr_nums(&self) -> Vec<usize> {
-    vec![]
-  }
-
-  // err_gt_nums returns the number of GT elements (the realized pairings) in the error terms
-  // Its length should be equal to the number of error terms
-  // The i-th element of the vector is the number of GT elements in the i-th error term
-  // Note: we only realize the pairing between G1 and G2 elements when both of them are not predefined
-  // In this case, we do the pairing (i.e., gt = e(g1, g2)) to prevent too much memory usage
-  fn err_gt_nums(&self) -> Vec<usize> {
-    vec![]
-  }
-
-  fn prover_dummy_holder(&self) -> AccHolder<G1Projective, G2Projective> {
-    let errs: Vec<_> = self
-      .err_g1_nums()
-      .iter()
-      .enumerate()
-      .map(|(i, v)| {
-        (
-          vec![G1Projective::zero(); *v],
-          vec![G2Projective::zero(); self.err_g2_nums()[i]],
-          vec![Fr::zero(); self.err_fr_nums()[i]],
-          vec![PairingOutput::<Bn<ark_bn254::Config>>::zero(); self.err_gt_nums()[i]],
-        )
-      })
-      .collect();
-    AccHolder {
-      acc_g1: vec![G1Projective::zero(); self.acc_g1_num(true)],
-      acc_g2: vec![G2Projective::zero(); self.acc_g2_num(true)],
-      acc_fr: vec![Fr::zero(); self.acc_fr_num(true)],
-      mu: Fr::zero(),
-      errs: errs.clone(),
-      acc_errs: errs,
-    }
-  }
-
-  fn verifier_dummy_holder(&self) -> AccHolder<G1Affine, G2Affine> {
-    let errs: Vec<_> = self
-      .err_g1_nums()
-      .iter()
-      .enumerate()
-      .map(|(i, v)| {
-        (
-          vec![G1Affine::zero(); *v],
-          vec![G2Affine::zero(); self.err_g2_nums()[i]],
-          vec![Fr::zero(); self.err_fr_nums()[i]],
-          vec![PairingOutput::<Bn<ark_bn254::Config>>::zero(); self.err_gt_nums()[i]],
-        )
-      })
-      .collect();
-    AccHolder {
-      acc_g1: vec![G1Affine::zero(); self.acc_g1_num(false)],
-      acc_g2: vec![G2Affine::zero(); self.acc_g2_num(false)],
-      acc_fr: vec![Fr::zero(); self.acc_fr_num(false)],
-      mu: Fr::zero(),
-      errs: errs.clone(),
-      acc_errs: errs,
-    }
-  }
-}
-
-pub fn acc_proof_to_acc<P: Copy, Q: Copy>(
-  bb: &dyn AccProofLayout,
-  acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-  is_prover: bool,
-) -> AccHolder<P, Q> {
-  if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
-    return AccHolder {
-      acc_g1: vec![],
-      acc_g2: vec![],
-      acc_fr: vec![],
-      mu: Fr::zero(),
-      errs: vec![],
-      acc_errs: vec![],
-    };
-  }
-
-  let acc_g1_num = bb.acc_g1_num(is_prover);
-  let acc_g2_num = bb.acc_g2_num(is_prover);
-  let acc_fr_num = bb.acc_fr_num(is_prover);
-
-  let mut errs = vec![];
-  let (mut err_g1_start, mut err_g2_start, mut err_fr_start, mut err_gt_start) = (acc_g1_num, acc_g2_num, acc_fr_num, 0);
-  for i in 0..bb.err_g1_nums().len() {
-    let (err_g1_end, err_g2_end, err_fr_end, err_gt_end) = (
-      err_g1_start + bb.err_g1_nums()[i],
-      err_g2_start + bb.err_g2_nums()[i],
-      err_fr_start + bb.err_fr_nums()[i],
-      err_gt_start + bb.err_gt_nums()[i],
-    );
-    let err: (Vec<P>, Vec<Q>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) = (
-      acc_proof.0[err_g1_start..err_g1_end].to_vec(),
-      acc_proof.1[err_g2_start..err_g2_end].to_vec(),
-      acc_proof.2[err_fr_start..err_fr_end].to_vec(),
-      acc_proof.3[err_gt_start..err_gt_end].to_vec(),
-    );
-    err_g1_start = err_g1_end;
-    err_g2_start = err_g2_end;
-    err_fr_start = err_fr_end;
-    err_gt_start = err_gt_end;
-
-    errs.push(err);
-  }
-  let mut acc_errs = vec![];
-  for i in 0..bb.err_g1_nums().len() {
-    let (err_g1_end, err_g2_end, err_fr_end, err_gt_end) = (
-      err_g1_start + bb.err_g1_nums()[i],
-      err_g2_start + bb.err_g2_nums()[i],
-      err_fr_start + bb.err_fr_nums()[i],
-      err_gt_start + bb.err_gt_nums()[i],
-    );
-    let err: (Vec<P>, Vec<Q>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) = (
-      acc_proof.0[err_g1_start..err_g1_end].to_vec(),
-      acc_proof.1[err_g2_start..err_g2_end].to_vec(),
-      acc_proof.2[err_fr_start..err_fr_end].to_vec(),
-      acc_proof.3[err_gt_start..err_gt_end].to_vec(),
-    );
-    err_g1_start = err_g1_end;
-    err_g2_start = err_g2_end;
-    err_fr_start = err_fr_end;
-    err_gt_start = err_gt_end;
-
-    acc_errs.push(err);
-  }
-
-  AccHolder {
-    acc_g1: acc_proof.0[..acc_g1_num].to_vec(),
-    acc_g2: acc_proof.1[..acc_g2_num].to_vec(),
-    acc_fr: acc_proof.2[..acc_fr_num].to_vec(),
-    mu: acc_proof.2[acc_proof.2.len() - 1],
-    errs,
-    acc_errs,
-  }
+  (g1, g2, fr)
 }

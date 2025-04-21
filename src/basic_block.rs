@@ -1,9 +1,7 @@
 #![allow(unused_imports)]
-use crate::util::{self, ark_de, ark_se, AccHolder, AccProofLayout};
+use crate::util::{self, ark_de, ark_se};
 pub use add::AddBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ec::bn::Bn;
-use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{UniformRand, Zero};
@@ -150,24 +148,6 @@ impl DataEnc {
   }
 }
 
-pub type AccProofProj = (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>);
-
-pub type AccProofProjRef<'a> = (
-  &'a Vec<G1Projective>,
-  &'a Vec<G2Projective>,
-  &'a Vec<Fr>,
-  &'a Vec<PairingOutput<Bn<ark_bn254::Config>>>,
-);
-
-pub type AccProofAff = (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>);
-
-pub type AccProofAffRef<'a> = (
-  &'a Vec<G1Affine>,
-  &'a Vec<G2Affine>,
-  &'a Vec<Fr>,
-  &'a Vec<PairingOutput<Bn<ark_bn254::Config>>>,
-);
-
 pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
   fn genModel(&self) -> ArrayD<Fr> {
     ArrayD::zeros(IxDyn(&[0]))
@@ -218,6 +198,20 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     vec![]
   }
 
+  // This function is the special case of acc_prove for the first block in the computation
+  fn acc_init(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<Data>,
+    _inputs: &Vec<&ArrayD<Data>>,
+    _outputs: &Vec<&ArrayD<Data>>,
+    _proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    (Vec::new(), Vec::new(), Vec::new())
+  }
+
   // This function performs folding for the rest of the blocks in the computation
   fn acc_prove(
     &self,
@@ -225,12 +219,12 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
-    _acc_proof: AccProofProjRef,
+    _acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     _proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     _rng: &mut StdRng,
     _cache: ProveVerifyCache,
-  ) -> AccProofProj {
-    (Vec::new(), Vec::new(), Vec::new(), Vec::new())
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>) {
+    (Vec::new(), Vec::new(), Vec::new())
   }
 
   // This function cleans the blinding terms in accumulators for the verifier to do acc_verify
@@ -238,8 +232,8 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     &self,
     _srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    acc_proof: AccProofProjRef,
-  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAff) {
+    acc_proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
+  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)) {
     (
       (
         proof.0.iter().map(|x| (*x).into()).collect(),
@@ -250,7 +244,6 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
         acc_proof.0.iter().map(|x| (*x).into()).collect(),
         acc_proof.1.iter().map(|x| (*x).into()).collect(),
         acc_proof.2.iter().map(|x| *x).collect(),
-        acc_proof.3.iter().map(|x| *x).collect(),
       ),
     )
   }
@@ -261,8 +254,8 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     _model: &ArrayD<DataEnc>,
     _inputs: &Vec<&ArrayD<DataEnc>>,
     _outputs: &Vec<&ArrayD<DataEnc>>,
-    _prev_acc_proof: AccProofAffRef,
-    _acc_proof: AccProofAffRef,
+    _prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    _acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
     _cache: ProveVerifyCache,
@@ -271,16 +264,15 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
   }
 
   // This function is used to clean the errs in the final accumulator proof to calculate the proof size correctly.
-  fn acc_finalize(&self, _srs: &SRS, acc_proof: AccProofAffRef) -> AccProofAff {
+  fn acc_clean_errs(&self, acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>) {
     (
       acc_proof.0.iter().map(|x| *x).collect(),
       acc_proof.1.iter().map(|x| *x).collect(),
       acc_proof.2.iter().map(|x| *x).collect(),
-      acc_proof.3.iter().map(|x| *x).collect(),
     )
   }
 
-  fn acc_decide(&self, _srs: &SRS, _acc_proof: AccProofAffRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
+  fn acc_decide(&self, _srs: &SRS, _acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> Vec<PairingCheck> {
     vec![]
   }
 }
