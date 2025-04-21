@@ -88,23 +88,14 @@ impl Layer for ConcatLayer {
       // If not concatenating along the last axis, directly concatenate
       let mut constOfShape_shape = input_shapes[0].clone();
       constOfShape_shape[axis] = 1;
-      let constantOfShape = graph.addBB(Box::new(ConstOfShapeBasicBlock {
-        c: Fr::zero(),
-        shape: constOfShape_shape.iter().map(|&x| util::next_pow(x as u32) as usize).collect(),
-      }));
-      let constantOfShape_output = graph.addNode(constantOfShape, vec![]);
 
       let n_input = input_shapes.len();
-      let n_input_padded = util::next_pow(n_input as u32) as usize;
 
       let concat = graph.addBB(Box::new(ConcatBasicBlock {
         axis: axis as usize,
         input_shapes: input_shapes.iter().map(|x| (*x).clone()).collect(),
       }));
-      let mut concat_input: Vec<_> = (0..n_input).map(|i| (-(i as i32 + 1), 0)).collect();
-      for _ in 0..n_input_padded - n_input {
-        concat_input.push((constantOfShape_output, 0));
-      }
+      let concat_input: Vec<_> = (0..n_input).map(|i| (-(i as i32 + 1), 0)).collect();
       let concat_output = graph.addNode(concat, concat_input);
       graph.outputs.push((concat_output, 0));
     }

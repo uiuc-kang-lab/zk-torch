@@ -2,7 +2,7 @@ use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_std::Zero;
-use ndarray::{Array1, ArrayD, Axis, Slice, SliceInfoElem};
+use ndarray::{indices, Array1, ArrayD, Axis, Slice, SliceInfoElem};
 use rand::rngs::StdRng;
 use std::fmt::Debug;
 
@@ -68,10 +68,17 @@ impl BasicBlock for ConcatBasicBlock {
       let r = inputs.iter().map(|input| input.first().unwrap().clone()).collect::<Vec<DataEnc>>();
       let r_enc = outputs[0];
       for i in 0..r.len() {
-        assert!(r[i] == r_enc[i]);
+        assert!(r[i] == r_enc[i], "Mismatch at index {:?}", i);
       }
     } else {
-      assert!(ndarray::concatenate(Axis(self.axis), &inputs.iter().map(|x| x.view()).collect::<Vec<_>>()) == Ok(outputs[0].clone()));
+      let r = concatenate_sliced(inputs, self.axis, &self.input_shapes);
+      let r_enc = outputs[0];
+
+      for indices in ndarray::indices(r.shape()) {
+        let r_val = &r[&indices];
+        let r_enc_val = &r_enc[&indices];
+        assert!(r_val == r_enc_val, "Mismatch at indices {:?}", indices);
+      }
     }
     vec![]
   }
