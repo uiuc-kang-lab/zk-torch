@@ -119,7 +119,7 @@ impl Layer for LSTMLayer {
       // sublayer 6: MatMul for X_t and W_T
       let matmul = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(MatMulBasicBlock {
-          m: util::next_pow(W_shape[2] as u32) as usize,
+          m: util::next_pow(initial_h_shape[2] as u32) as usize,
           n: util::next_pow(W_shape[1] as u32) as usize,
         }),
         N: 2,
