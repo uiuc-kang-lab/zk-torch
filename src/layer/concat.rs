@@ -86,11 +86,7 @@ impl Layer for ConcatLayer {
       graph.outputs.push(final_output);
     } else {
       // If not concatenating along the last axis, directly concatenate
-      let mut constOfShape_shape = input_shapes[0].clone();
-      constOfShape_shape[axis] = 1;
-
       let n_input = input_shapes.len();
-
       let concat = graph.addBB(Box::new(ConcatBasicBlock {
         axis: axis as usize,
         input_shapes: input_shapes.iter().map(|x| (*x).clone()).collect(),
