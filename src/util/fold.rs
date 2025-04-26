@@ -27,7 +27,7 @@ pub struct AccHolder<P: Copy, Q: Copy> {
   pub acc_errs: Vec<(Vec<P>, Vec<Q>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)>, // i-th element contains acc_err_i += SUM{acc_gamma^j * e_j} for j=1..n
 }
 
-pub fn acc_to_acc_proof<P: Copy, Q: Copy>(acc: AccHolder<P, Q>) -> (Vec<P>, Vec<Q>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
+pub fn holder_to_acc_proof<P: Copy, Q: Copy>(acc: AccHolder<P, Q>) -> (Vec<P>, Vec<Q>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
   if acc.acc_g1.len() == 0 && acc.acc_g2.len() == 0 && acc.acc_fr.len() == 0 {
     return (vec![], vec![], vec![], vec![]);
   }
@@ -54,6 +54,17 @@ pub fn acc_to_acc_proof<P: Copy, Q: Copy>(acc: AccHolder<P, Q>) -> (Vec<P>, Vec<
 // AccProofLayout is a trait that defines the layout of the accumulator proof
 // It is used to implement the generalized accumulator proof for different basic blocks
 pub trait AccProofLayout: BasicBlock {
+  // Define the accumulator terms
+  type AccG1Terms;
+  type AccG2Terms;
+  type AccFrTerms;
+
+  // Define the error terms
+  type ErrG1Terms;
+  type ErrG2Terms;
+  type ErrFrTerms;
+  type ErrGtTerms;
+
   // acc_g1_num returns the number of G1 elements in an accumulator instance
   fn acc_g1_num(&self, is_prover: bool) -> usize {
     0
@@ -178,8 +189,8 @@ pub trait AccProofLayout: BasicBlock {
   }
 }
 
-pub fn acc_proof_to_acc<P: Copy, Q: Copy>(
-  bb: &dyn AccProofLayout,
+pub fn acc_proof_to_holder<P: Copy, Q: Copy, L: AccProofLayout>(
+  bb: &L,
   acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
   is_prover: bool,
 ) -> AccHolder<P, Q> {
@@ -250,4 +261,69 @@ pub fn acc_proof_to_acc<P: Copy, Q: Copy>(
     errs,
     acc_errs,
   }
+}
+
+#[macro_export]
+macro_rules! define_acc_terms {
+  ($name:ident, [$($public:ident),*], [$($prover:ident),*]) => {
+    #[derive(Debug, Clone, Copy)]
+    pub enum $name {
+      #[allow(dead_code)]
+      __EmptyPlaceholder $(, $public)* $(, $prover)*
+    }
+
+    impl $name {
+      pub const PUBLIC_COUNT: usize = 0 $(+ { let _ = stringify!($public); 1 })*;
+      pub const PROVER_COUNT: usize = 0 $(+ { let _ = stringify!($prover); 1 })*;
+      pub const COUNT: usize = Self::PUBLIC_COUNT + Self::PROVER_COUNT;
+      pub fn idx(idx: Self) -> usize {
+        idx as usize - 1
+      }
+    }
+  };
+}
+
+#[macro_export]
+macro_rules! define_acc_err_terms {
+    ($name:ident) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub enum $name {}
+
+        impl $name {
+            pub const COUNTS: &'static [usize] = &[];
+            pub const COUNT: usize = 0;
+
+            pub fn get_group(_idx: usize) -> usize {
+                panic!("Index out of bounds: empty error terms");
+            }
+        }
+    };
+
+    ($name:ident, $([$($group:ident),*]),+) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub enum $name {
+            $($(
+                $group,
+            )*)+
+        }
+
+        impl $name {
+            pub const COUNTS: &'static [usize] = &[
+                $(0 $(+ { let _ = $name::$group; 1 })*),+
+            ];
+
+            pub const COUNT: usize = 0 $($(+ { let _ = $name::$group; 1 })*)+;
+
+            pub fn get_group(idx: usize) -> usize {
+                let mut sum = 0;
+                for (i, &count) in Self::COUNTS.iter().enumerate() {
+                    sum += count;
+                    if idx < sum {
+                        return i;
+                    }
+                }
+                panic!("Index out of bounds");
+            }
+        }
+    };
 }

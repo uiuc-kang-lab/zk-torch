@@ -3,7 +3,7 @@
 use super::{
   AccProofAff, AccProofAffRef, AccProofProj, AccProofProjRef, BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS,
 };
-use crate::util::{self, acc_to_acc_proof, calc_pow, AccHolder};
+use crate::util::{self, calc_pow, holder_to_acc_proof, AccHolder};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
@@ -364,12 +364,12 @@ fn matmul_acc_to_acc_holder<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSer
   }
 }
 
-fn matmul_acc_to_acc_proof<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize>(
+fn matmul_holder_to_acc_proof<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize>(
   acc: MatMulAccProof<P, Q>,
   is_prover: bool,
 ) -> (Vec<P>, Vec<Q>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
   let acc_holder = matmul_acc_to_acc_holder(acc, is_prover);
-  acc_to_acc_proof(acc_holder)
+  holder_to_acc_proof(acc_holder)
 }
 
 fn index<'a, T>(A: &'a ArrayD<T>, i: usize) -> &'a T {
@@ -725,7 +725,7 @@ impl BasicBlock for MatMulBasicBlock {
 
     let new_matmul_acc = accumulate(&matmul_acc, &errs, &proof, acc_gamma);
 
-    matmul_acc_to_acc_proof(new_matmul_acc, true)
+    matmul_holder_to_acc_proof(new_matmul_acc, true)
   }
 
   fn acc_clean(
@@ -743,7 +743,7 @@ impl BasicBlock for MatMulBasicBlock {
       + srs.Y1P * po.acc_flat_A_r * po.acc_flat_B_r;
 
     matmul_acc.prover_only = None;
-    let acc_proof = matmul_acc_to_acc_proof(matmul_acc, false);
+    let acc_proof = matmul_holder_to_acc_proof(matmul_acc, false);
 
     // remove blinding terms from bb proof for the verifier
     let cqlin_proof = (proof.0[..11].to_vec(), proof.1.to_vec(), vec![]);
@@ -946,6 +946,6 @@ impl BasicBlock for MatMulBasicBlock {
   fn acc_finalize(&self, _srs: &SRS, acc_proof: AccProofAffRef) -> AccProofAff {
     let mut acc_holder = acc_proof_to_matmul_acc_holder(acc_proof, false);
     acc_holder.errs = vec![];
-    acc_to_acc_proof(acc_holder)
+    holder_to_acc_proof(acc_holder)
   }
 }

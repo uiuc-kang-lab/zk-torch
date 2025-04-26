@@ -3,7 +3,7 @@
 use super::{
   AccProofAff, AccProofAffRef, AccProofProj, AccProofProjRef, BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS,
 };
-use crate::util::{self, acc_to_acc_proof, calc_pow, AccHolder};
+use crate::util::{self, calc_pow, holder_to_acc_proof, AccHolder};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
@@ -157,11 +157,11 @@ fn acc_proof_to_permute_acc<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSer
   Some(permute_acc_holder_to_acc(acc_holder))
 }
 
-fn permute_acc_to_acc_proof<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize>(
+fn permute_holder_to_acc_proof<P: Copy + CanonicalSerialize, Q: Copy + CanonicalSerialize>(
   acc: PermuteAccProof<P, Q>,
 ) -> (Vec<P>, Vec<Q>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
   let acc_holder = permute_acc_to_acc_holder(acc);
-  acc_to_acc_proof(acc_holder)
+  holder_to_acc_proof(acc_holder)
 }
 
 #[derive(Debug)]
@@ -474,7 +474,7 @@ impl BasicBlock for PermuteBasicBlock {
     let acc_gamma = Fr::rand(rng);
 
     let new_permute_acc = accumulate(&permute_acc, &proof, acc_gamma);
-    permute_acc_to_acc_proof(new_permute_acc)
+    permute_holder_to_acc_proof(new_permute_acc)
   }
 
   fn acc_clean(
