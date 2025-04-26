@@ -313,6 +313,7 @@ macro_rules! define_acc_terms {
 //      let (group, idx) = BasicBlockErrG1Terms::idx(BasicBlockErrG1Terms::Err_A);
 //      let err_A = acc_holder.errs[group].0[idx];
 //   To get Err_B and Err_C, the logic is the same
+//   If there is no error term, just use define_acc_err_terms!(BasicBlockErrG1Terms); // (i.e., no arguments)
 #[macro_export]
 macro_rules! define_acc_err_terms {
     ($name:ident) => {

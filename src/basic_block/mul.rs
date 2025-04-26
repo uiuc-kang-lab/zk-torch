@@ -367,9 +367,13 @@ impl AccProofLayout for MulScalarBasicBlock {
 
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    acc_1.acc_g1[1..4].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[MulScalarG1Terms::idx(MulScalarG1Terms::Inp0)..MulScalarG1Terms::idx(MulScalarG1Terms::PartC)]
+      .serialize_uncompressed(&mut bytes)
+      .unwrap();
     acc_1.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[1..4].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[MulScalarG1Terms::idx(MulScalarG1Terms::Inp0)..MulScalarG1Terms::idx(MulScalarG1Terms::PartC)]
+      .serialize_uncompressed(&mut bytes)
+      .unwrap();
     acc_2.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     errs.iter().for_each(|(g1, g2, f, gt)| {
       g1.serialize_uncompressed(&mut bytes).unwrap();
@@ -411,9 +415,13 @@ impl AccProofLayout for MulScalarBasicBlock {
     let mut result = true;
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    acc_1.acc_g1[1..4].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[MulScalarG1Terms::idx(MulScalarG1Terms::Inp0)..MulScalarG1Terms::idx(MulScalarG1Terms::PartC)]
+      .serialize_uncompressed(&mut bytes)
+      .unwrap();
     acc_1.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[1..4].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[MulScalarG1Terms::idx(MulScalarG1Terms::Inp0)..MulScalarG1Terms::idx(MulScalarG1Terms::PartC)]
+      .serialize_uncompressed(&mut bytes)
+      .unwrap();
     acc_2.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     new_acc.errs.iter().for_each(|(g1, g2, f, gt)| {
       g1.serialize_uncompressed(&mut bytes).unwrap();
@@ -584,8 +592,8 @@ impl BasicBlock for MulScalarBasicBlock {
     let inp0 = inputs[0].first().unwrap().g1;
     let inp1 = inputs[1].first().unwrap().g1;
     let out = outputs[0].first().unwrap().g1;
-    result &= inp0 == proof.0[1] && inp1 == proof.0[2];
-    result &= out == proof.0[3];
+    result &= inp0 == proof.0[MulScalarG1Terms::idx(MulScalarG1Terms::Inp0)] && inp1 == proof.0[MulScalarG1Terms::idx(MulScalarG1Terms::Inp1)];
+    result &= out == proof.0[MulScalarG1Terms::idx(MulScalarG1Terms::Out)];
     if prev_acc_proof.2.len() == 0 && acc_proof.2[0].is_one() {
       return Some(result);
     }
@@ -609,15 +617,18 @@ impl BasicBlock for MulScalarBasicBlock {
     let err_1 = &acc_holder.acc_errs[0];
 
     let mut temp: PairingCheck = vec![];
-    temp.push((err_1.0[0], srs.X2A[0]));
-    temp.push((err_1.0[1], srs.Y2A));
+    temp.push((err_1.0[MulScalarErrG1Terms::idx(MulScalarErrG1Terms::Err_G).1], srs.X2A[0]));
+    temp.push((err_1.0[MulScalarErrG1Terms::idx(MulScalarErrG1Terms::Err_C).1], srs.Y2A));
 
     let mut acc_1: PairingCheck = vec![(acc_inp0, acc_inp1_2), ((-acc_out * acc_mu).into(), srs.X2A[0]), (-acc_C, srs.Y2A)];
     acc_1.extend(temp);
 
     let acc_2: PairingCheck = vec![(acc_inp1, srs.X2A[0]), (srs.X1A[0], -acc_inp1_2)];
 
-    vec![(acc_1, err_1.3[0]), (acc_2, PairingOutput::<Bn<ark_bn254::Config>>::zero())]
+    vec![
+      (acc_1, err_1.3[MulScalarErrGtTerms::idx(MulScalarErrGtTerms::Err_0_1).1]),
+      (acc_2, PairingOutput::<Bn<ark_bn254::Config>>::zero()),
+    ]
   }
 
   fn acc_finalize(&self, _srs: &SRS, acc_proof: AccProofAffRef) -> AccProofAff {
@@ -691,13 +702,13 @@ impl AccProofLayout for MulBasicBlock {
       acc_fr: proof.2.clone(),
       mu: Fr::one(),
       errs: vec![(
-        vec![G1Projective::zero(); 3],
+        vec![G1Projective::zero(); MulErrG1Terms::COUNTS[0]],
         vec![],
         vec![],
         vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
       )],
       acc_errs: vec![(
-        vec![G1Projective::zero(); 3],
+        vec![G1Projective::zero(); MulErrG1Terms::COUNTS[0]],
         vec![],
         vec![],
         vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
@@ -712,13 +723,13 @@ impl AccProofLayout for MulBasicBlock {
       acc_fr: proof.2.clone(),
       mu: Fr::one(),
       errs: vec![(
-        vec![G1Affine::zero(); 3],
+        vec![G1Affine::zero(); MulErrG1Terms::COUNTS[0]],
         vec![],
         vec![],
         vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
       )],
       acc_errs: vec![(
-        vec![G1Affine::zero(); 3],
+        vec![G1Affine::zero(); MulErrG1Terms::COUNTS[0]],
         vec![],
         vec![],
         vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
@@ -783,11 +794,11 @@ impl AccProofLayout for MulBasicBlock {
 
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    acc_1.acc_g1[..1].serialize_uncompressed(&mut bytes).unwrap();
-    acc_1.acc_g1[2..5].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[..MulG1Terms::idx(MulG1Terms::C)].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[MulG1Terms::idx(MulG1Terms::Inp0)..MulG1Terms::idx(MulG1Terms::PartC)].serialize_uncompressed(&mut bytes).unwrap();
     acc_1.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[..1].serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[2..5].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[..MulG1Terms::idx(MulG1Terms::C)].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[MulG1Terms::idx(MulG1Terms::Inp0)..MulG1Terms::idx(MulG1Terms::PartC)].serialize_uncompressed(&mut bytes).unwrap();
     acc_2.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     errs.iter().for_each(|(g1, g2, f, gt)| {
       g1.serialize_uncompressed(&mut bytes).unwrap();
@@ -833,11 +844,11 @@ impl AccProofLayout for MulBasicBlock {
     let mut result = true;
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    acc_1.acc_g1[..1].serialize_uncompressed(&mut bytes).unwrap();
-    acc_1.acc_g1[2..5].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[..MulG1Terms::idx(MulG1Terms::C)].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[MulG1Terms::idx(MulG1Terms::Inp0)..MulG1Terms::idx(MulG1Terms::PartC)].serialize_uncompressed(&mut bytes).unwrap();
     acc_1.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[..1].serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[2..5].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[..MulG1Terms::idx(MulG1Terms::C)].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[MulG1Terms::idx(MulG1Terms::Inp0)..MulG1Terms::idx(MulG1Terms::PartC)].serialize_uncompressed(&mut bytes).unwrap();
     acc_2.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     new_acc.errs.iter().for_each(|(g1, g2, f, gt)| {
       g1.serialize_uncompressed(&mut bytes).unwrap();
@@ -1016,8 +1027,8 @@ impl BasicBlock for MulBasicBlock {
     let inp0 = inputs[0].first().unwrap().g1;
     let inp1 = inputs[1].first().unwrap().g1;
     let out = outputs[0].first().unwrap().g1;
-    result &= inp0 == proof.0[2] && inp1 == proof.0[3];
-    result &= out == proof.0[4];
+    result &= inp0 == proof.0[MulG1Terms::idx(MulG1Terms::Inp0)] && inp1 == proof.0[MulG1Terms::idx(MulG1Terms::Inp1)];
+    result &= out == proof.0[MulG1Terms::idx(MulG1Terms::Out)];
     if prev_acc_proof.2.len() == 0 && acc_proof.2[0].is_one() {
       return Some(result);
     }
@@ -1041,9 +1052,12 @@ impl BasicBlock for MulBasicBlock {
     let err_1 = &acc_holder.acc_errs[0];
 
     let mut temp: PairingCheck = vec![];
-    temp.push((err_1.0[0], srs.X2A[0]));
-    temp.push((err_1.0[1], (srs.X2A[self.len] - srs.X2A[0]).into()));
-    temp.push((err_1.0[2], srs.Y2A));
+    temp.push((err_1.0[MulErrG1Terms::idx(MulErrG1Terms::Err_G).1], srs.X2A[0]));
+    temp.push((
+      err_1.0[MulErrG1Terms::idx(MulErrG1Terms::Err_Tx).1],
+      (srs.X2A[self.len] - srs.X2A[0]).into(),
+    ));
+    temp.push((err_1.0[MulErrG1Terms::idx(MulErrG1Terms::Err_C).1], srs.Y2A));
 
     let mut acc_1: PairingCheck = vec![
       (acc_inp0, acc_inp1_2),
