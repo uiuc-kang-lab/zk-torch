@@ -270,12 +270,16 @@ impl AccProofLayout for CQLinBasicBlock {
 
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    acc_1.acc_g1[..acc_1.acc_g1.len() - 11].serialize_uncompressed(&mut bytes).unwrap();
-    acc_1.acc_g1[acc_1.acc_g1.len() - 5..acc_1.acc_g1.len() - 3].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[..CQLinG1Terms::idx(CQLinG1Terms::C1)].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::flat_A)..CQLinG1Terms::idx(CQLinG1Terms::part_C1)]
+      .serialize_uncompressed(&mut bytes)
+      .unwrap();
     acc_1.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     acc_1.acc_fr[..acc_1.acc_fr.len() - 2].serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[..acc_2.acc_g1.len() - 11].serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[acc_2.acc_g1.len() - 5..acc_2.acc_g1.len() - 3].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[..CQLinG1Terms::idx(CQLinG1Terms::C1)].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::flat_A)..CQLinG1Terms::idx(CQLinG1Terms::part_C1)]
+      .serialize_uncompressed(&mut bytes)
+      .unwrap();
     acc_2.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     acc_2.acc_fr[..acc_2.acc_fr.len() - 2].serialize_uncompressed(&mut bytes).unwrap();
     errs.iter().for_each(|(g1, g2, f, gt)| {
@@ -343,12 +347,16 @@ impl AccProofLayout for CQLinBasicBlock {
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    acc_1.acc_g1[..acc_1.acc_g1.len() - 8].serialize_uncompressed(&mut bytes).unwrap();
-    acc_1.acc_g1[acc_1.acc_g1.len() - 2..acc_1.acc_g1.len()].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[..CQLinG1Terms::idx(CQLinG1Terms::C1)].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::flat_A)..CQLinG1Terms::idx(CQLinG1Terms::part_C1)]
+      .serialize_uncompressed(&mut bytes)
+      .unwrap();
     acc_1.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     acc_1.acc_fr.serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[..acc_2.acc_g1.len() - 8].serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[acc_2.acc_g1.len() - 2..acc_2.acc_g1.len()].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[..CQLinG1Terms::idx(CQLinG1Terms::C1)].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::flat_A)..CQLinG1Terms::idx(CQLinG1Terms::part_C1)]
+      .serialize_uncompressed(&mut bytes)
+      .unwrap();
     acc_2.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     acc_2.acc_fr.serialize_uncompressed(&mut bytes).unwrap();
     new_acc.errs.iter().for_each(|(g1, g2, f, gt)| {
@@ -361,7 +369,7 @@ impl AccProofLayout for CQLinBasicBlock {
     let acc_gamma = Fr::rand(rng);
     let acc_gamma_sq = acc_gamma * acc_gamma;
     acc_2.acc_g1.iter().zip(acc_1.acc_g1.iter()).enumerate().for_each(|(i, (x, y))| {
-      if i >= 9 && i < 15 {
+      if i >= CQLinG1Terms::idx(CQLinG1Terms::C1) && i <= CQLinG1Terms::idx(CQLinG1Terms::C6) {
         return; // No need to verify RLC for blinding factors
       }
       let z = *y + *x * acc_gamma;
@@ -812,20 +820,20 @@ impl BasicBlock for CQLinBasicBlock {
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
     let mut acc_holder = acc_proof_to_holder(self, acc_proof, true);
     // correct the blinding factor C1
-    acc_holder.acc_g1[9] = acc_holder.acc_g1[acc_holder.acc_g1.len() - 3] * acc_holder.mu
-      + acc_holder.acc_g1[acc_holder.acc_g1.len() - 2] * acc_holder.acc_fr[log_n + 1]
-      + srs.Y1P * acc_holder.acc_fr[log_n + 1] * acc_holder.acc_fr[log_n + 2]
-      + acc_holder.acc_g1[acc_holder.acc_g1.len() - 1] * acc_holder.acc_fr[log_n + 2];
+    acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C1)] = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::part_C1)] * acc_holder.mu
+      + acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::M_x_1)] * acc_holder.acc_fr[log_n + CQLinFrTerms::idx(CQLinFrTerms::A_r)]
+      + srs.Y1P * acc_holder.acc_fr[log_n + CQLinFrTerms::idx(CQLinFrTerms::A_r)] * acc_holder.acc_fr[log_n + CQLinFrTerms::idx(CQLinFrTerms::M_r)]
+      + acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::A_x_1)] * acc_holder.acc_fr[log_n + CQLinFrTerms::idx(CQLinFrTerms::M_r)];
     // remove blinding terms from acc proof for the verifier
-    acc_holder.acc_g1 = acc_holder.acc_g1[..acc_holder.acc_g1.len() - 3].to_vec();
-    acc_holder.acc_fr = acc_holder.acc_fr[..acc_holder.acc_fr.len() - 2].to_vec();
+    acc_holder.acc_g1 = acc_holder.acc_g1[..CQLinG1Terms::idx(CQLinG1Terms::part_C1)].to_vec();
+    acc_holder.acc_fr = acc_holder.acc_fr[..log_n + 1].to_vec();
     let acc_proof = holder_to_acc_proof(acc_holder);
 
     // remove blinding terms from bb proof for the verifier
     let cqlin_proof = (
-      proof.0[..proof.0.len() - 3].to_vec(),
+      proof.0[..CQLinG1Terms::idx(CQLinG1Terms::part_C1)].to_vec(),
       proof.1.to_vec(),
-      proof.2[..proof.2.len() - 2].to_vec(),
+      proof.2[..log_n + 1].to_vec(),
     );
 
     (
@@ -889,7 +897,7 @@ impl BasicBlock for CQLinBasicBlock {
     let flat_C_g1: G1Projective = util::msm::<G1Projective>(&temp, &alpha_pow);
 
     let mut result = true;
-    result &= flat_A_g1 == proof.0[15] && flat_C_g1 == proof.0[16];
+    result &= flat_A_g1 == proof.0[CQLinG1Terms::idx(CQLinG1Terms::flat_A)] && flat_C_g1 == proof.0[CQLinG1Terms::idx(CQLinG1Terms::flat_C)];
     if prev_acc_holder.mu.is_zero() && acc_holder.mu.is_one() {
       return Some(result);
     }
@@ -1008,12 +1016,23 @@ impl BasicBlock for CQLinBasicBlock {
     let err_5 = &acc_holder.acc_errs[1];
     let err_6 = &acc_holder.acc_errs[2];
 
-    temp.push((err_1.0[err_1.1.len()], (srs.X2A[m * n] - srs.X2A[0]).into()));
-    temp.push((err_1.0[err_1.1.len() + 1], srs.X2A[0]));
-    temp.push((err_1.0[err_1.1.len() + 2], srs.Y2A));
+    temp.push((
+      err_1.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_Q).1],
+      (srs.X2A[m * n] - srs.X2A[0]).into(),
+    ));
+    temp.push((err_1.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_R).1], srs.X2A[0]));
+    temp.push((err_1.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_C1).1], srs.Y2A));
     let err_1 = temp;
-    let err_5: PairingCheck = vec![(-err_5.0[0], srs.X2A[0]), (err_5.0[1], srs.X2A[1]), (err_5.0[2], srs.Y2A)];
-    let err_6: PairingCheck = vec![(-err_6.0[0], srs.X2A[0]), (err_6.0[1], srs.X2A[n]), (err_6.0[2], srs.Y2A)];
+    let err_5: PairingCheck = vec![
+      (-err_5.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_flat_A).1], srs.X2A[0]),
+      (err_5.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_pi).1], srs.X2A[1]),
+      (err_5.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_C5).1], srs.Y2A),
+    ];
+    let err_6: PairingCheck = vec![
+      (-err_6.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_A).1], srs.X2A[0]),
+      (err_6.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_pi_1).1], srs.X2A[n]),
+      (err_6.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_C6).1], srs.Y2A),
+    ];
     let acc_errs = vec![err_1, err_5, err_6];
 
     let acc_pairing = acc_errs
