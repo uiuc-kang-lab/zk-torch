@@ -221,7 +221,7 @@ impl BasicBlock for MulConstBasicBlock {
 define_acc_terms!(MulScalarG1Terms, [C, Inp0, Inp1, Out], [PartC, Inp0NoBlind, Inp1NoBlind]);
 define_acc_terms!(MulScalarG2Terms, [Inp1_2], []);
 define_acc_terms!(MulScalarFrTerms, [], [Inp0_r, Inp1_r]);
-define_acc_err_terms!(MulScalarErrG1Terms, [Err_Out, Err_C]);
+define_acc_err_terms!(MulScalarErrG1Terms, [Err_G, Err_C]);
 define_acc_err_terms!(MulScalarErrG2Terms, []);
 define_acc_err_terms!(MulScalarErrFrTerms, []);
 define_acc_err_terms!(MulScalarErrGtTerms, [Err_0_1]);
@@ -278,13 +278,13 @@ impl AccProofLayout for MulScalarBasicBlock {
       acc_fr: proof.2.clone(),
       mu: Fr::one(),
       errs: vec![(
-        vec![G1Projective::zero(); 2],
+        vec![G1Projective::zero(); MulScalarErrG1Terms::COUNTS[0]],
         vec![],
         vec![],
         vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
       )],
       acc_errs: vec![(
-        vec![G1Projective::zero(); 2],
+        vec![G1Projective::zero(); MulScalarErrG1Terms::COUNTS[0]],
         vec![],
         vec![],
         vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
@@ -299,13 +299,13 @@ impl AccProofLayout for MulScalarBasicBlock {
       acc_fr: proof.2.clone(),
       mu: Fr::one(),
       errs: vec![(
-        vec![G1Affine::zero(); 2],
+        vec![G1Affine::zero(); MulScalarErrG1Terms::COUNTS[0]],
         vec![],
         vec![],
         vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
       )],
       acc_errs: vec![(
-        vec![G1Affine::zero(); 2],
+        vec![G1Affine::zero(); MulScalarErrG1Terms::COUNTS[0]],
         vec![],
         vec![],
         vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
@@ -387,9 +387,15 @@ impl AccProofLayout for MulScalarBasicBlock {
     new_acc_holder.mu = acc_1.mu + acc_gamma * acc_2.mu;
     new_acc_holder.errs = errs;
     // Update acc error terms
-    let g_term_g1 = acc_1.acc_errs[0].0[0] + new_acc_holder.errs[0].0[0] * acc_gamma + acc_2.acc_errs[0].0[0] * acc_gamma_sq;
-    let c_term_g1 = acc_1.acc_errs[0].0[1] + new_acc_holder.errs[0].0[1] * acc_gamma + acc_2.acc_errs[0].0[1] * acc_gamma_sq;
-    let term_gt = acc_1.acc_errs[0].3[0] + new_acc_holder.errs[0].3[0] * acc_gamma + acc_2.acc_errs[0].3[0] * acc_gamma_sq;
+    let (g_group, g_idx) = MulScalarErrG1Terms::idx(MulScalarErrG1Terms::Err_G);
+    let (c_group, c_idx) = MulScalarErrG1Terms::idx(MulScalarErrG1Terms::Err_C);
+    let (gt_group, gt_idx) = MulScalarErrGtTerms::idx(MulScalarErrGtTerms::Err_0_1);
+    let g_term_g1 =
+      acc_1.acc_errs[g_group].0[g_idx] + new_acc_holder.errs[g_group].0[g_idx] * acc_gamma + acc_2.acc_errs[g_group].0[g_idx] * acc_gamma_sq;
+    let c_term_g1 =
+      acc_1.acc_errs[c_group].0[c_idx] + new_acc_holder.errs[c_group].0[c_idx] * acc_gamma + acc_2.acc_errs[c_group].0[c_idx] * acc_gamma_sq;
+    let term_gt =
+      acc_1.acc_errs[gt_group].3[gt_idx] + new_acc_holder.errs[gt_group].3[gt_idx] * acc_gamma + acc_2.acc_errs[gt_group].3[gt_idx] * acc_gamma_sq;
     new_acc_holder.acc_errs = vec![(vec![g_term_g1, c_term_g1], vec![], vec![], vec![term_gt])];
 
     new_acc_holder
@@ -628,7 +634,7 @@ impl BasicBlock for MulScalarBasicBlock {
 define_acc_terms!(MulG1Terms, [Tx, C, Inp0, Inp1, Out], [PartC, Inp0NoBlind, Inp1NoBlind]);
 define_acc_terms!(MulG2Terms, [Inp1_2], []);
 define_acc_terms!(MulFrTerms, [], [Inp0_r, Inp1_r]);
-define_acc_err_terms!(MulErrG1Terms, [Err_Out, Err_Tx, Err_C]);
+define_acc_err_terms!(MulErrG1Terms, [Err_G, Err_Tx, Err_C]);
 define_acc_err_terms!(MulErrG2Terms, []);
 define_acc_err_terms!(MulErrFrTerms, []);
 define_acc_err_terms!(MulErrGtTerms, [Err_0_1]);
@@ -800,10 +806,18 @@ impl AccProofLayout for MulBasicBlock {
     new_acc_holder.errs = errs;
 
     // Append error terms
-    let g_term_g1 = acc_1.acc_errs[0].0[0] + new_acc_holder.errs[0].0[0] * acc_gamma + acc_2.acc_errs[0].0[0] * acc_gamma_sq;
-    let t_term_g1 = acc_1.acc_errs[0].0[1] + new_acc_holder.errs[0].0[1] * acc_gamma + acc_2.acc_errs[0].0[1] * acc_gamma_sq;
-    let c_term_g1 = acc_1.acc_errs[0].0[2] + new_acc_holder.errs[0].0[2] * acc_gamma + acc_2.acc_errs[0].0[2] * acc_gamma_sq;
-    let term_gt = acc_1.acc_errs[0].3[0] + new_acc_holder.errs[0].3[0] * acc_gamma + acc_2.acc_errs[0].3[0] * acc_gamma_sq;
+    let (g_group, g_idx) = MulErrG1Terms::idx(MulErrG1Terms::Err_G);
+    let (t_group, t_idx) = MulErrG1Terms::idx(MulErrG1Terms::Err_Tx);
+    let (c_group, c_idx) = MulErrG1Terms::idx(MulErrG1Terms::Err_C);
+    let (gt_group, gt_idx) = MulErrGtTerms::idx(MulErrGtTerms::Err_0_1);
+    let g_term_g1 =
+      acc_1.acc_errs[g_group].0[g_idx] + new_acc_holder.errs[g_group].0[g_idx] * acc_gamma + acc_2.acc_errs[g_group].0[g_idx] * acc_gamma_sq;
+    let t_term_g1 =
+      acc_1.acc_errs[t_group].0[t_idx] + new_acc_holder.errs[t_group].0[t_idx] * acc_gamma + acc_2.acc_errs[t_group].0[t_idx] * acc_gamma_sq;
+    let c_term_g1 =
+      acc_1.acc_errs[c_group].0[c_idx] + new_acc_holder.errs[c_group].0[c_idx] * acc_gamma + acc_2.acc_errs[c_group].0[c_idx] * acc_gamma_sq;
+    let term_gt =
+      acc_1.acc_errs[gt_group].3[gt_idx] + new_acc_holder.errs[gt_group].3[gt_idx] * acc_gamma + acc_2.acc_errs[gt_group].3[gt_idx] * acc_gamma_sq;
     new_acc_holder.acc_errs = vec![(vec![g_term_g1, t_term_g1, c_term_g1], vec![], vec![], vec![term_gt])];
 
     new_acc_holder

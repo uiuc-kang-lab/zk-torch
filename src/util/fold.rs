@@ -263,6 +263,22 @@ pub fn acc_proof_to_holder<P: Copy, Q: Copy, L: AccProofLayout>(
   }
 }
 
+// Define the accumulator terms
+//  The first argument is the name of the accumulator term
+//  The second argument is the list of public accumulator terms
+//  The third argument is the list of prover-only accumulator terms
+//  The function idx returns the index of the accumulator term
+//  The index can be used to access the element in the accumulator holder
+// Example:
+//   define_acc_terms!(BasicBlockG1Terms, [pub_A, pub_B], [priv_A]);
+//   where BasicBlockG1Terms is the name of the accumulator term
+//   pub_A and pub_B are the two public accumulator terms
+//   priv_A is the accumulator term only available to the prover
+//   BasicBlockG1Terms::idx(BasicBlockG1Terms::pub_A) = 0
+//   BasicBlockG1Terms::idx(BasicBlockG1Terms::pub_B) = 1
+//   BasicBlockG1Terms::idx(BasicBlockG1Terms::priv_A) = 2
+//   To get pub_A, use acc_holder.acc_g1[BasicBlockG1Terms::idx(BasicBlockG1Terms::pub_A)]
+//   To get pub_B and priv_A, the logic is the same
 #[macro_export]
 macro_rules! define_acc_terms {
   ($name:ident, [$($public:ident),*], [$($prover:ident),*]) => {
@@ -283,6 +299,20 @@ macro_rules! define_acc_terms {
   };
 }
 
+// Define the error terms in the accumulator proof
+// The first argument is the name of the error term
+// The i-th argument is the list of terms in the i-th error (i > 0)
+// Example:
+//   define_acc_err_terms!(BasicBlockErrG1Terms, [Err_A], [Err_B, Err_C], []);
+//   where BasicBlockErrG1Terms is the name of the error term
+//   Note there are three []s in the definition, which means there are three error terms for this BasicBlock
+//   Err_A is the 1st error term that contains A
+//   Err_B and Err_C are the 2nd error term that contain B and C
+//   The 3rd error term contains nothing, but it is still needed to be specified as there may exist GT terms in the error term
+//   To get Err_A, use the following code
+//      let (group, idx) = BasicBlockErrG1Terms::idx(BasicBlockErrG1Terms::Err_A);
+//      let err_A = acc_holder.errs[group].0[idx];
+//   To get Err_B and Err_C, the logic is the same
 #[macro_export]
 macro_rules! define_acc_err_terms {
     ($name:ident) => {
@@ -293,7 +323,7 @@ macro_rules! define_acc_err_terms {
             pub const COUNTS: &'static [usize] = &[];
             pub const COUNT: usize = 0;
 
-            pub fn get_group(_idx: usize) -> usize {
+            pub fn idx(_idx: Self) -> (usize, usize) {
                 panic!("Index out of bounds: empty error terms");
             }
         }
@@ -314,12 +344,13 @@ macro_rules! define_acc_err_terms {
 
             pub const COUNT: usize = 0 $($(+ { let _ = $name::$group; 1 })*)+;
 
-            pub fn get_group(idx: usize) -> usize {
+            pub fn idx(idx: Self) -> (usize, usize) {
                 let mut sum = 0;
+                let idx = idx as usize;
                 for (i, &count) in Self::COUNTS.iter().enumerate() {
                     sum += count;
                     if idx < sum {
-                        return i;
+                        return (i, idx - sum + count);
                     }
                 }
                 panic!("Index out of bounds");

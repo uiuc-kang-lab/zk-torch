@@ -108,13 +108,13 @@ impl AccProofLayout for CQLinBasicBlock {
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
     let group_errs = vec![
       (
-        vec![G1Projective::zero(); 3],
+        vec![G1Projective::zero(); CQLinErrG1Terms::COUNTS[0]],
         vec![],
         vec![],
         vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
       ),
-      (vec![G1Projective::zero(); 3], vec![], vec![], vec![]),
-      (vec![G1Projective::zero(); 3], vec![], vec![], vec![]),
+      (vec![G1Projective::zero(); CQLinErrG1Terms::COUNTS[1]], vec![], vec![], vec![]),
+      (vec![G1Projective::zero(); CQLinErrG1Terms::COUNTS[2]], vec![], vec![], vec![]),
     ];
     let field_errs = vec![(vec![], vec![], vec![Fr::zero()], vec![]); log_n];
     let errs = group_errs.into_iter().chain(field_errs.into_iter()).collect::<Vec<_>>();
@@ -133,13 +133,13 @@ impl AccProofLayout for CQLinBasicBlock {
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
     let group_errs = vec![
       (
-        vec![G1Affine::zero(); 3],
+        vec![G1Affine::zero(); CQLinErrG1Terms::COUNTS[0]],
         vec![],
         vec![],
         vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
       ),
-      (vec![G1Affine::zero(); 3], vec![], vec![], vec![]),
-      (vec![G1Affine::zero(); 3], vec![], vec![], vec![]),
+      (vec![G1Affine::zero(); CQLinErrG1Terms::COUNTS[1]], vec![], vec![], vec![]),
+      (vec![G1Affine::zero(); CQLinErrG1Terms::COUNTS[2]], vec![], vec![], vec![]),
     ];
     let field_errs = vec![(vec![], vec![], vec![Fr::zero()], vec![]); log_n];
     let errs = group_errs.into_iter().chain(field_errs.into_iter()).collect::<Vec<_>>();
@@ -908,12 +908,26 @@ impl BasicBlock for CQLinBasicBlock {
 
     let acc_holder = acc_proof_to_holder(self, acc_proof, false);
 
-    let [acc_R, acc_Q, acc_A, acc_S, acc_P, acc_P_R, acc_pi, acc_pi_1, acc_z, acc_C1, acc_C2, acc_C3, acc_C4, acc_C5, acc_C6, acc_flat_A, acc_flat_C] =
-      acc_holder.acc_g1[..]
-    else {
-      panic!("Wrong proof format")
-    };
-    let [acc_M] = acc_holder.acc_g2[..] else { panic!("Wrong proof format") };
+    let acc_R = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::R_x)];
+    let acc_Q = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::Q_x)];
+    let acc_A = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::A_x)];
+    let acc_S = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::S_x)];
+    let acc_P = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::P_x)];
+    let acc_P_R = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::P_R_x)];
+    let acc_pi = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::pi)];
+    let acc_pi_1 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::pi_1)];
+    let acc_z = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::z)];
+    let acc_C1 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C1)];
+    let acc_C2 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C2)];
+    let acc_C3 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C3)];
+    let acc_C4 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C4)];
+    let acc_C5 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C5)];
+    let acc_C6 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C6)];
+    let acc_flat_A = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::flat_A)];
+    let acc_flat_C = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::flat_C)];
+
+    let acc_M = acc_holder.acc_g2[CQLinG2Terms::idx(CQLinG2Terms::M_x_2)];
+
     let acc_mu = acc_holder.mu;
     let acc_beta_k = acc_holder.acc_fr[log_n];
     let err_1 = &acc_holder.acc_errs[0];
@@ -922,12 +936,23 @@ impl BasicBlock for CQLinBasicBlock {
     let err_8s = &acc_holder.acc_errs[3..];
 
     let mut temp: PairingCheck = vec![];
-    temp.push((err_1.0[0], (srs.X2A[m * n] - srs.X2A[0]).into()));
-    temp.push((err_1.0[1], srs.X2A[0]));
-    temp.push((err_1.0[2], srs.Y2A));
+    temp.push((
+      err_1.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_Q).1],
+      (srs.X2A[m * n] - srs.X2A[0]).into(),
+    ));
+    temp.push((err_1.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_R).1], srs.X2A[0]));
+    temp.push((err_1.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_C1).1], srs.Y2A));
 
-    let err_5: PairingCheck = vec![(-err_5.0[0], srs.X2A[0]), (err_5.0[1], srs.X2A[1]), (err_5.0[2], srs.Y2A)];
-    let err_6: PairingCheck = vec![(-err_6.0[0], srs.X2A[0]), (err_6.0[1], srs.X2A[n]), (err_6.0[2], srs.Y2A)];
+    let err_5: PairingCheck = vec![
+      (-err_5.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_flat_A).1], srs.X2A[0]),
+      (err_5.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_pi).1], srs.X2A[1]),
+      (err_5.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_C5).1], srs.Y2A),
+    ];
+    let err_6: PairingCheck = vec![
+      (-err_6.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_A).1], srs.X2A[0]),
+      (err_6.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_pi_1).1], srs.X2A[n]),
+      (err_6.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_C6).1], srs.Y2A),
+    ];
 
     let mut acc_1: PairingCheck = vec![
       (acc_A, acc_M),
