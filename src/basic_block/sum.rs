@@ -1,7 +1,9 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
+#![allow(non_camel_case_types)]
 use super::{AccProofAffRef, AccProofProj, AccProofProjRef, BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
-use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, AccHolder, AccProofLayout};
+use crate::util::{self, acc_proof_to_holder, holder_to_acc_proof, AccHolder, AccProofLayout};
+use crate::{define_acc_err_terms, define_acc_terms};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
@@ -12,17 +14,33 @@ use ark_std::{One, UniformRand, Zero};
 use ndarray::{arr1, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
 
+define_acc_terms!(SumG1Terms, [Zero_div, C, Inp, Out], []);
+define_acc_terms!(SumG2Terms, [], []);
+define_acc_terms!(SumFrTerms, [], []);
+define_acc_err_terms!(SumErrG1Terms);
+define_acc_err_terms!(SumErrG2Terms);
+define_acc_err_terms!(SumErrFrTerms);
+define_acc_err_terms!(SumErrGtTerms);
+
 impl AccProofLayout for SumBasicBlock {
+  type AccG1Terms = SumG1Terms;
+  type AccG2Terms = SumG2Terms;
+  type AccFrTerms = SumFrTerms;
+  type ErrG1Terms = SumErrG1Terms;
+  type ErrG2Terms = SumErrG2Terms;
+  type ErrFrTerms = SumErrFrTerms;
+  type ErrGtTerms = SumErrGtTerms;
+
   fn acc_g1_num(&self, _is_prover: bool) -> usize {
-    4
+    SumG1Terms::COUNT
   }
 
   fn acc_g2_num(&self, _is_prover: bool) -> usize {
-    0
+    SumG2Terms::COUNT
   }
 
   fn acc_fr_num(&self, _is_prover: bool) -> usize {
-    0
+    SumFrTerms::COUNT
   }
 
   fn prover_proof_to_acc(&self, proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective> {
@@ -175,10 +193,10 @@ impl BasicBlock for SumBasicBlock {
   ) -> AccProofProj {
     let proof = self.prover_proof_to_acc(proof);
     if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
-      return acc_to_acc_proof(proof);
+      return holder_to_acc_proof(proof);
     }
-    let acc_proof = acc_proof_to_acc(self, acc_proof, true);
-    acc_to_acc_proof(self.mira_prove(srs, acc_proof, proof, rng))
+    let acc_proof = acc_proof_to_holder(self, acc_proof, true);
+    holder_to_acc_proof(self.mira_prove(srs, acc_proof, proof, rng))
   }
 
   fn acc_verify(
@@ -198,8 +216,8 @@ impl BasicBlock for SumBasicBlock {
       return Some(result);
     }
     let proof = self.verifier_proof_to_acc(proof);
-    let acc_proof = acc_proof_to_acc(self, acc_proof, false);
-    let prev_acc_proof = acc_proof_to_acc(self, prev_acc_proof, false);
+    let acc_proof = acc_proof_to_holder(self, acc_proof, false);
+    let prev_acc_proof = acc_proof_to_holder(self, prev_acc_proof, false);
     result &= self.mira_verify(prev_acc_proof, proof, acc_proof, rng).unwrap();
     Some(result)
   }

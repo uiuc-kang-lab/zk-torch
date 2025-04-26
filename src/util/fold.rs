@@ -27,7 +27,7 @@ pub struct AccHolder<P: Copy, Q: Copy> {
   pub acc_errs: Vec<(Vec<P>, Vec<Q>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)>, // i-th element contains acc_err_i += SUM{acc_gamma^j * e_j} for j=1..n
 }
 
-pub fn acc_to_acc_proof<P: Copy, Q: Copy>(acc: AccHolder<P, Q>) -> (Vec<P>, Vec<Q>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
+pub fn holder_to_acc_proof<P: Copy, Q: Copy>(acc: AccHolder<P, Q>) -> (Vec<P>, Vec<Q>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
   if acc.acc_g1.len() == 0 && acc.acc_g2.len() == 0 && acc.acc_fr.len() == 0 {
     return (vec![], vec![], vec![], vec![]);
   }
@@ -54,6 +54,17 @@ pub fn acc_to_acc_proof<P: Copy, Q: Copy>(acc: AccHolder<P, Q>) -> (Vec<P>, Vec<
 // AccProofLayout is a trait that defines the layout of the accumulator proof
 // It is used to implement the generalized accumulator proof for different basic blocks
 pub trait AccProofLayout: BasicBlock {
+  // Define the accumulator terms
+  type AccG1Terms;
+  type AccG2Terms;
+  type AccFrTerms;
+
+  // Define the error terms
+  type ErrG1Terms;
+  type ErrG2Terms;
+  type ErrFrTerms;
+  type ErrGtTerms;
+
   // acc_g1_num returns the number of G1 elements in an accumulator instance
   fn acc_g1_num(&self, is_prover: bool) -> usize {
     0
@@ -178,8 +189,8 @@ pub trait AccProofLayout: BasicBlock {
   }
 }
 
-pub fn acc_proof_to_acc<P: Copy, Q: Copy>(
-  bb: &dyn AccProofLayout,
+pub fn acc_proof_to_holder<P: Copy, Q: Copy, L: AccProofLayout>(
+  bb: &L,
   acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
   is_prover: bool,
 ) -> AccHolder<P, Q> {
@@ -250,4 +261,100 @@ pub fn acc_proof_to_acc<P: Copy, Q: Copy>(
     errs,
     acc_errs,
   }
+}
+
+// Define the accumulator terms
+//  The first argument is the name of the accumulator term
+//  The second argument is the list of public accumulator terms
+//  The third argument is the list of prover-only accumulator terms
+//  The function idx returns the index of the accumulator term
+//  The index can be used to access the element in the accumulator holder
+// Example:
+//   define_acc_terms!(BasicBlockG1Terms, [pub_A, pub_B], [priv_A]);
+//   where BasicBlockG1Terms is the name of the accumulator term
+//   pub_A and pub_B are the two public accumulator terms
+//   priv_A is the accumulator term only available to the prover
+//   BasicBlockG1Terms::idx(BasicBlockG1Terms::pub_A) = 0
+//   BasicBlockG1Terms::idx(BasicBlockG1Terms::pub_B) = 1
+//   BasicBlockG1Terms::idx(BasicBlockG1Terms::priv_A) = 2
+//   To get pub_A, use acc_holder.acc_g1[BasicBlockG1Terms::idx(BasicBlockG1Terms::pub_A)]
+//   To get pub_B and priv_A, the logic is the same
+#[macro_export]
+macro_rules! define_acc_terms {
+  ($name:ident, [$($public:ident),*], [$($prover:ident),*]) => {
+    #[derive(Debug, Clone, Copy)]
+    pub enum $name {
+      #[allow(dead_code)]
+      __EmptyPlaceholder $(, $public)* $(, $prover)*
+    }
+
+    impl $name {
+      pub const PUBLIC_COUNT: usize = 0 $(+ { let _ = stringify!($public); 1 })*;
+      pub const PROVER_COUNT: usize = 0 $(+ { let _ = stringify!($prover); 1 })*;
+      pub const COUNT: usize = Self::PUBLIC_COUNT + Self::PROVER_COUNT;
+      pub fn idx(idx: Self) -> usize {
+        idx as usize - 1
+      }
+    }
+  };
+}
+
+// Define the error terms in the accumulator proof
+// The first argument is the name of the error term
+// The i-th argument is the list of terms in the i-th error (i > 0)
+// Example:
+//   define_acc_err_terms!(BasicBlockErrG1Terms, [Err_A], [Err_B, Err_C], []);
+//   where BasicBlockErrG1Terms is the name of the error term
+//   Note there are three []s in the definition, which means there are three error terms for this BasicBlock
+//   Err_A is the 1st error term that contains A
+//   Err_B and Err_C are the 2nd error term that contain B and C
+//   The 3rd error term contains nothing, but it is still needed to be specified as there may exist GT terms in the error term
+//   To get Err_A, use the following code
+//      let (group, idx) = BasicBlockErrG1Terms::idx(BasicBlockErrG1Terms::Err_A);
+//      let err_A = acc_holder.errs[group].0[idx];
+//   To get Err_B and Err_C, the logic is the same
+#[macro_export]
+macro_rules! define_acc_err_terms {
+    ($name:ident) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub enum $name {}
+
+        impl $name {
+            pub const COUNTS: &'static [usize] = &[];
+            pub const COUNT: usize = 0;
+
+            pub fn idx(_idx: Self) -> (usize, usize) {
+                panic!("Index out of bounds: empty error terms");
+            }
+        }
+    };
+
+    ($name:ident, $([$($group:ident),*]),+) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub enum $name {
+            $($(
+                $group,
+            )*)+
+        }
+
+        impl $name {
+            pub const COUNTS: &'static [usize] = &[
+                $(0 $(+ { let _ = $name::$group; 1 })*),+
+            ];
+
+            pub const COUNT: usize = 0 $($(+ { let _ = $name::$group; 1 })*)+;
+
+            pub fn idx(idx: Self) -> (usize, usize) {
+                let mut sum = 0;
+                let idx = idx as usize;
+                for (i, &count) in Self::COUNTS.iter().enumerate() {
+                    sum += count;
+                    if idx < sum {
+                        return (i, idx - sum + count);
+                    }
+                }
+                panic!("Index out of bounds");
+            }
+        }
+    };
 }

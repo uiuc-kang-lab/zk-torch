@@ -3,7 +3,7 @@
 use super::{
   AccProofAff, AccProofAffRef, AccProofProj, AccProofProjRef, BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS,
 };
-use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, calc_pow, AccHolder, AccProofLayout};
+use crate::util::{self, acc_proof_to_holder, calc_pow, holder_to_acc_proof, AccHolder, AccProofLayout};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
@@ -763,10 +763,10 @@ impl BasicBlock for MatMulBasicBlock {
   ) -> AccProofProj {
     let proof = self.prover_proof_to_acc(proof);
     if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
-      return acc_to_acc_proof(proof);
+      return holder_to_acc_proof(proof);
     }
     let acc_proof = acc_proof_to_acc(self, acc_proof, true);
-    acc_to_acc_proof(self.mira_prove(srs, acc_proof, proof, rng))
+    holder_to_acc_proof(self.mira_prove(srs, acc_proof, proof, rng))
   }
 
   fn acc_clean(
@@ -784,7 +784,7 @@ impl BasicBlock for MatMulBasicBlock {
     // remove blinding terms from acc proof for the verifier
     acc_holder.acc_g1 = acc_holder.acc_g1[..acc_holder.acc_g1.len() - 3].to_vec();
     acc_holder.acc_fr = vec![];
-    let acc_proof = acc_to_acc_proof(acc_holder);
+    let acc_proof = holder_to_acc_proof(acc_holder);
 
     // remove blinding terms from bb proof for the verifier
     let cqlin_proof = (proof.0[..proof.0.len() - 3].to_vec(), proof.1.to_vec(), vec![]);
@@ -937,7 +937,7 @@ impl BasicBlock for MatMulBasicBlock {
     let acc_err1 = err_1.3[0].clone();
     acc_holder.errs = vec![];
     acc_holder.acc_errs = vec![];
-    let acc_proof = acc_to_acc_proof(acc_holder);
+    let acc_proof = holder_to_acc_proof(acc_holder);
     (acc_proof.0, acc_proof.1, acc_proof.2, vec![acc_err1])
   }
 }

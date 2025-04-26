@@ -3,7 +3,7 @@
 use super::{
   AccProofAff, AccProofAffRef, AccProofProj, AccProofProjRef, BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS,
 };
-use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, calc_pow, AccHolder, AccProofLayout};
+use crate::util::{self, acc_proof_to_holder, calc_pow, holder_to_acc_proof, AccHolder, AccProofLayout};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
@@ -431,10 +431,10 @@ impl BasicBlock for PermuteBasicBlock {
   ) -> AccProofProj {
     let proof = self.prover_proof_to_acc(proof);
     if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
-      return acc_to_acc_proof(proof);
+      return holder_to_acc_proof(proof);
     }
-    let acc_proof = acc_proof_to_acc(self, acc_proof, true);
-    acc_to_acc_proof(self.mira_prove(srs, acc_proof, proof, rng))
+    let acc_proof = acc_proof_to_holder(self, acc_proof, true);
+    holder_to_acc_proof(self.mira_prove(srs, acc_proof, proof, rng))
   }
 
   fn acc_clean(
@@ -534,15 +534,15 @@ impl BasicBlock for PermuteBasicBlock {
     }
 
     let proof = self.verifier_proof_to_acc(proof);
-    let prev_acc_holder = acc_proof_to_acc(self, prev_acc_proof, true);
-    let acc_holder = acc_proof_to_acc(self, acc_proof, true);
+    let prev_acc_holder = acc_proof_to_holder(self, prev_acc_proof, true);
+    let acc_holder = acc_proof_to_holder(self, acc_proof, true);
     result &= self.mira_verify(prev_acc_holder, proof, acc_holder, rng).unwrap();
     Some(result)
   }
 
   fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     let m2 = self.permutation.1.len();
-    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
+    let acc_holder = acc_proof_to_holder(self, acc_proof, false);
     let [acc_left_x, acc_left_Q_x, acc_left_zero, acc_left_zero_div, acc_right_x, acc_right_Q_x, acc_right_zero_div, acc_corr1, acc_corr2, acc_corr3, acc_corr4, acc_flat_L, acc_flat_R] =
       acc_holder.acc_g1[..]
     else {

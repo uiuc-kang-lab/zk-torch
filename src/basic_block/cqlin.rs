@@ -1,9 +1,11 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
+#![allow(non_camel_case_types)]
 use super::{
   AccProofAff, AccProofAffRef, AccProofProj, AccProofProjRef, BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS,
 };
-use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, calc_pow, AccHolder, AccProofLayout};
+use crate::util::{self, acc_proof_to_holder, calc_pow, holder_to_acc_proof, AccHolder, AccProofLayout};
+use crate::{define_acc_err_terms, define_acc_terms};
 use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
@@ -16,31 +18,56 @@ use ndarray::{ArrayD, Ix2, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 
+define_acc_terms!(
+  CQLinG1Terms,
+  [R_x, Q_x, A_x, S_x, P_x, P_R_x, pi, pi_1, z, C1, C2, C3, C4, C5, C6, flat_A, flat_C],
+  [part_C1, M_x_1, A_x_1]
+);
+define_acc_terms!(CQLinG2Terms, [M_x_2], []);
+define_acc_terms!(CQLinFrTerms, [gamma], [A_r, M_r]);
+define_acc_err_terms!(
+  CQLinErrG1Terms,
+  [Err_Q, Err_R, Err_C1],
+  [Err_flat_A, Err_pi, Err_C5],
+  [Err_A, Err_pi_1, Err_C6]
+);
+define_acc_err_terms!(CQLinErrG2Terms, [], [], []);
+define_acc_err_terms!(CQLinErrFrTerms, [], [], []);
+define_acc_err_terms!(CQLinErrGtTerms, [Err_A_M], [], []);
+
 #[derive(Debug)]
 pub struct CQLinBasicBlock {
   pub setup: ArrayD<Fr>,
 }
 
 impl AccProofLayout for CQLinBasicBlock {
+  type AccG1Terms = CQLinG1Terms;
+  type AccG2Terms = CQLinG2Terms;
+  type AccFrTerms = CQLinFrTerms;
+  type ErrG1Terms = CQLinErrG1Terms;
+  type ErrG2Terms = CQLinErrG2Terms;
+  type ErrFrTerms = CQLinErrFrTerms;
+  type ErrGtTerms = CQLinErrGtTerms;
+
   fn acc_g1_num(&self, is_prover: bool) -> usize {
     if is_prover {
-      20
+      CQLinG1Terms::COUNT
     } else {
-      17
+      CQLinG1Terms::PUBLIC_COUNT
     }
   }
 
   fn acc_g2_num(&self, _is_prover: bool) -> usize {
-    1
+    CQLinG2Terms::COUNT
   }
 
   fn acc_fr_num(&self, is_prover: bool) -> usize {
     let n = self.setup.shape()[1];
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
     if is_prover {
-      log_n + 3
+      CQLinFrTerms::COUNT + log_n
     } else {
-      log_n + 1
+      CQLinFrTerms::PUBLIC_COUNT + log_n
     }
   }
 
@@ -48,27 +75,32 @@ impl AccProofLayout for CQLinBasicBlock {
     let n = self.setup.shape()[1];
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
     let zeros = vec![0; log_n];
-    vec![3, 3, 3].into_iter().chain(zeros.into_iter()).collect()
+    let errs = CQLinErrG1Terms::COUNTS.to_vec();
+    errs.into_iter().chain(zeros.into_iter()).collect()
   }
 
   fn err_g2_nums(&self) -> Vec<usize> {
     let n = self.setup.shape()[1];
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
-    vec![0; log_n + 3]
+    let zeros = vec![0; log_n];
+    let errs = CQLinErrG2Terms::COUNTS.to_vec();
+    errs.into_iter().chain(zeros.into_iter()).collect()
   }
 
   fn err_fr_nums(&self) -> Vec<usize> {
     let n = self.setup.shape()[1];
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
     let ones = vec![1; log_n];
-    vec![0, 0, 0].into_iter().chain(ones.into_iter()).collect()
+    let errs = CQLinErrFrTerms::COUNTS.to_vec();
+    errs.into_iter().chain(ones.into_iter()).collect()
   }
 
   fn err_gt_nums(&self) -> Vec<usize> {
     let n = self.setup.shape()[1];
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
     let zeros = vec![0; log_n];
-    vec![1, 0, 0].into_iter().chain(zeros.into_iter()).collect()
+    let errs = CQLinErrGtTerms::COUNTS.to_vec();
+    errs.into_iter().chain(zeros.into_iter()).collect()
   }
 
   fn prover_proof_to_acc(&self, proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective> {
@@ -76,13 +108,13 @@ impl AccProofLayout for CQLinBasicBlock {
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
     let group_errs = vec![
       (
-        vec![G1Projective::zero(); 3],
+        vec![G1Projective::zero(); CQLinErrG1Terms::COUNTS[0]],
         vec![],
         vec![],
         vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
       ),
-      (vec![G1Projective::zero(); 3], vec![], vec![], vec![]),
-      (vec![G1Projective::zero(); 3], vec![], vec![], vec![]),
+      (vec![G1Projective::zero(); CQLinErrG1Terms::COUNTS[1]], vec![], vec![], vec![]),
+      (vec![G1Projective::zero(); CQLinErrG1Terms::COUNTS[2]], vec![], vec![], vec![]),
     ];
     let field_errs = vec![(vec![], vec![], vec![Fr::zero()], vec![]); log_n];
     let errs = group_errs.into_iter().chain(field_errs.into_iter()).collect::<Vec<_>>();
@@ -101,13 +133,13 @@ impl AccProofLayout for CQLinBasicBlock {
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
     let group_errs = vec![
       (
-        vec![G1Affine::zero(); 3],
+        vec![G1Affine::zero(); CQLinErrG1Terms::COUNTS[0]],
         vec![],
         vec![],
         vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
       ),
-      (vec![G1Affine::zero(); 3], vec![], vec![], vec![]),
-      (vec![G1Affine::zero(); 3], vec![], vec![], vec![]),
+      (vec![G1Affine::zero(); CQLinErrG1Terms::COUNTS[1]], vec![], vec![], vec![]),
+      (vec![G1Affine::zero(); CQLinErrG1Terms::COUNTS[2]], vec![], vec![], vec![]),
     ];
     let field_errs = vec![(vec![], vec![], vec![Fr::zero()], vec![]); log_n];
     let errs = group_errs.into_iter().chain(field_errs.into_iter()).collect::<Vec<_>>();
@@ -131,13 +163,43 @@ impl AccProofLayout for CQLinBasicBlock {
     let n = self.setup.shape()[1];
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
 
-    let [R_x, Q_x, A_x, _S_x, _P_x, _P_R_x, pi, pi_1, z, _C1, _C2, _C3, _C4, C5, C6, flat_A, _flat_C, part_C1, M_x_1, A_x_1] = acc_2.acc_g1[..]
-    else {
-      panic!("Wrong proof format")
-    };
+    let R_x = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::R_x)];
+    let Q_x = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::Q_x)];
+    let A_x = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::A_x)];
+    let pi = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::pi)];
+    let pi_1 = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::pi_1)];
+    let z = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::z)];
+    let C5 = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C5)];
+    let C6 = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C6)];
+    let flat_A = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::flat_A)];
+    let part_C1 = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::part_C1)];
+    let M_x_1 = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::M_x_1)];
+    let A_x_1 = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::A_x_1)];
 
-    let [M_x_2] = acc_2.acc_g2[..] else { panic!("Wrong proof format") };
+    let M_x_2 = acc_2.acc_g2[CQLinG2Terms::idx(CQLinG2Terms::M_x_2)];
+
     let beta_k = acc_2.acc_fr[log_n];
+    let cqlin_mask_A = acc_2.acc_fr[log_n + CQLinFrTerms::idx(CQLinFrTerms::A_r)];
+    let cqlin_mask_M = acc_2.acc_fr[log_n + CQLinFrTerms::idx(CQLinFrTerms::M_r)];
+
+    let acc_R = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::R_x)];
+    let acc_Q = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::Q_x)];
+    let acc_A = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::A_x)];
+    let acc_pi = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::pi)];
+    let acc_pi_1 = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::pi_1)];
+    let acc_z = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::z)];
+    let acc_C5 = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C5)];
+    let acc_C6 = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C6)];
+    let acc_flat_A = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::flat_A)];
+    let acc_part_C1 = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::part_C1)];
+    let acc_M_1 = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::M_x_1)];
+    let acc_A_1 = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::A_x_1)];
+
+    let acc_M = acc_1.acc_g2[CQLinG2Terms::idx(CQLinG2Terms::M_x_2)];
+
+    let acc_beta_k = acc_1.acc_fr[log_n];
+    let acc_mask_A = acc_1.acc_fr[log_n + CQLinFrTerms::idx(CQLinFrTerms::A_r)];
+    let acc_mask_M = acc_1.acc_fr[log_n + CQLinFrTerms::idx(CQLinFrTerms::M_r)];
 
     let mut new_acc_holder = AccHolder {
       acc_g1: Vec::new(),
@@ -148,27 +210,13 @@ impl AccProofLayout for CQLinBasicBlock {
       acc_errs: Vec::new(),
     };
 
-    let [acc_R, acc_Q, acc_A, _acc_S, _acc_P, _acc_P_R, acc_pi, acc_pi_1, acc_z, _acc_C1, _acc_C2, _acc_C3, _acc_C4, acc_C5, acc_C6, acc_flat_A, _acc_flat_C, acc_part_C1, acc_M_1, acc_A_1] =
-      acc_1.acc_g1[..]
-    else {
-      panic!("Wrong proof format")
-    };
-    let [acc_M] = acc_1.acc_g2[..] else { panic!("Wrong proof format") };
-    let acc_mu = acc_1.mu;
-    let acc_beta_k = acc_1.acc_fr[log_n];
-
-    let acc_mask_A = acc_1.acc_fr[log_n + 1];
-    let acc_mask_M = acc_1.acc_fr[log_n + 2];
-    let cqlin_mask_A = acc_2.acc_fr[log_n + 1];
-    let cqlin_mask_M = acc_2.acc_fr[log_n + 2];
-
     // Compute error terms
     let err1: AccProofProj = (
       vec![
-        acc_Q * acc_2.mu + Q_x * acc_mu,
-        acc_R * acc_2.mu + R_x * acc_mu,
+        acc_Q * acc_2.mu + Q_x * acc_1.mu,
+        acc_R * acc_2.mu + R_x * acc_1.mu,
         acc_part_C1 * acc_2.mu
-          + part_C1 * acc_mu
+          + part_C1 * acc_1.mu
           + acc_M_1 * cqlin_mask_A
           + M_x_1 * acc_mask_A
           + acc_A_1 * cqlin_mask_M
@@ -182,9 +230,9 @@ impl AccProofLayout for CQLinBasicBlock {
 
     let err5: AccProofProj = (
       vec![
-        acc_flat_A * acc_2.mu + flat_A * acc_mu - acc_z * acc_2.mu - z * acc_mu + acc_pi * beta_k + pi * acc_beta_k,
-        acc_pi * acc_2.mu + pi * acc_mu,
-        acc_C5 * acc_2.mu + C5 * acc_mu,
+        acc_flat_A * acc_2.mu + flat_A * acc_1.mu - acc_z * acc_2.mu - z * acc_1.mu + acc_pi * beta_k + pi * acc_beta_k,
+        acc_pi * acc_2.mu + pi * acc_1.mu,
+        acc_C5 * acc_2.mu + C5 * acc_1.mu,
       ],
       vec![],
       vec![],
@@ -193,9 +241,9 @@ impl AccProofLayout for CQLinBasicBlock {
 
     let err6 = (
       vec![
-        acc_A * acc_2.mu + A_x * acc_mu - acc_z * acc_2.mu - z * acc_mu + acc_pi_1 * beta_k + pi_1 * acc_beta_k,
-        acc_pi_1 * acc_2.mu + pi_1 * acc_mu,
-        acc_C6 * acc_2.mu + C6 * acc_mu,
+        acc_A * acc_2.mu + A_x * acc_1.mu - acc_z * acc_2.mu - z * acc_1.mu + acc_pi_1 * beta_k + pi_1 * acc_beta_k,
+        acc_pi_1 * acc_2.mu + pi_1 * acc_1.mu,
+        acc_C6 * acc_2.mu + C6 * acc_1.mu,
       ],
       vec![],
       vec![],
@@ -211,7 +259,7 @@ impl AccProofLayout for CQLinBasicBlock {
       let err = (
         vec![],
         vec![],
-        vec![cqlin_beta_i * acc_beta_i + cqlin_beta_i * acc_beta_i - acc_beta_i_1 * acc_2.mu - cqlin_beta_i_1 * acc_mu],
+        vec![cqlin_beta_i * acc_beta_i + cqlin_beta_i * acc_beta_i - acc_beta_i_1 * acc_2.mu - cqlin_beta_i_1 * acc_1.mu],
         vec![],
       );
       err8s.push(err);
@@ -244,7 +292,7 @@ impl AccProofLayout for CQLinBasicBlock {
     new_acc_holder.acc_g1 = acc_2.acc_g1.iter().enumerate().map(|(i, x)| (*x * acc_gamma) + acc_1.acc_g1[i]).collect();
     new_acc_holder.acc_g2 = vec![acc_M + M_x_2 * acc_gamma];
     new_acc_holder.acc_fr = acc_2.acc_fr.iter().enumerate().map(|(i, x)| *x * acc_gamma + acc_1.acc_fr[i]).collect();
-    new_acc_holder.mu = acc_mu + acc_gamma * acc_2.mu;
+    new_acc_holder.mu = acc_1.mu + acc_gamma * acc_2.mu;
     new_acc_holder.errs = errs;
     new_acc_holder.acc_errs = acc_1.acc_errs;
 
@@ -747,10 +795,10 @@ impl BasicBlock for CQLinBasicBlock {
   ) -> AccProofProj {
     let proof = self.prover_proof_to_acc(proof);
     if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 {
-      return acc_to_acc_proof(proof);
+      return holder_to_acc_proof(proof);
     }
-    let acc_proof = acc_proof_to_acc(self, acc_proof, true);
-    acc_to_acc_proof(self.mira_prove(srs, acc_proof, proof, rng))
+    let acc_proof = acc_proof_to_holder(self, acc_proof, true);
+    holder_to_acc_proof(self.mira_prove(srs, acc_proof, proof, rng))
   }
 
   // This function cleans the blinding terms in accumulators for the verifier to do acc_verify without knowing them
@@ -762,7 +810,7 @@ impl BasicBlock for CQLinBasicBlock {
   ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAff) {
     let n = self.setup.shape()[1];
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
-    let mut acc_holder = acc_proof_to_acc(self, acc_proof, true);
+    let mut acc_holder = acc_proof_to_holder(self, acc_proof, true);
     // correct the blinding factor C1
     acc_holder.acc_g1[9] = acc_holder.acc_g1[acc_holder.acc_g1.len() - 3] * acc_holder.mu
       + acc_holder.acc_g1[acc_holder.acc_g1.len() - 2] * acc_holder.acc_fr[log_n + 1]
@@ -771,7 +819,7 @@ impl BasicBlock for CQLinBasicBlock {
     // remove blinding terms from acc proof for the verifier
     acc_holder.acc_g1 = acc_holder.acc_g1[..acc_holder.acc_g1.len() - 3].to_vec();
     acc_holder.acc_fr = acc_holder.acc_fr[..acc_holder.acc_fr.len() - 2].to_vec();
-    let acc_proof = acc_to_acc_proof(acc_holder);
+    let acc_proof = holder_to_acc_proof(acc_holder);
 
     // remove blinding terms from bb proof for the verifier
     let cqlin_proof = (
@@ -817,8 +865,8 @@ impl BasicBlock for CQLinBasicBlock {
       alpha.clone()
     };
 
-    let prev_acc_holder = acc_proof_to_acc(self, prev_acc_proof, false);
-    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
+    let prev_acc_holder = acc_proof_to_holder(self, prev_acc_proof, false);
+    let acc_holder = acc_proof_to_holder(self, acc_proof, false);
 
     let alpha_pow = calc_pow(alpha, l);
 
@@ -846,8 +894,8 @@ impl BasicBlock for CQLinBasicBlock {
       return Some(result);
     }
     let proof = self.verifier_proof_to_acc(proof);
-    let prev_acc_holder = acc_proof_to_acc(self, prev_acc_proof, false);
-    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
+    let prev_acc_holder = acc_proof_to_holder(self, prev_acc_proof, false);
+    let acc_holder = acc_proof_to_holder(self, acc_proof, false);
     result &= self.mira_verify(prev_acc_holder, proof, acc_holder, rng).unwrap();
     Some(result)
   }
@@ -858,14 +906,28 @@ impl BasicBlock for CQLinBasicBlock {
     let N = srs.X2P.len() - 1;
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
 
-    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
+    let acc_holder = acc_proof_to_holder(self, acc_proof, false);
 
-    let [acc_R, acc_Q, acc_A, acc_S, acc_P, acc_P_R, acc_pi, acc_pi_1, acc_z, acc_C1, acc_C2, acc_C3, acc_C4, acc_C5, acc_C6, acc_flat_A, acc_flat_C] =
-      acc_holder.acc_g1[..]
-    else {
-      panic!("Wrong proof format")
-    };
-    let [acc_M] = acc_holder.acc_g2[..] else { panic!("Wrong proof format") };
+    let acc_R = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::R_x)];
+    let acc_Q = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::Q_x)];
+    let acc_A = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::A_x)];
+    let acc_S = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::S_x)];
+    let acc_P = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::P_x)];
+    let acc_P_R = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::P_R_x)];
+    let acc_pi = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::pi)];
+    let acc_pi_1 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::pi_1)];
+    let acc_z = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::z)];
+    let acc_C1 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C1)];
+    let acc_C2 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C2)];
+    let acc_C3 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C3)];
+    let acc_C4 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C4)];
+    let acc_C5 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C5)];
+    let acc_C6 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C6)];
+    let acc_flat_A = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::flat_A)];
+    let acc_flat_C = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::flat_C)];
+
+    let acc_M = acc_holder.acc_g2[CQLinG2Terms::idx(CQLinG2Terms::M_x_2)];
+
     let acc_mu = acc_holder.mu;
     let acc_beta_k = acc_holder.acc_fr[log_n];
     let err_1 = &acc_holder.acc_errs[0];
@@ -874,12 +936,23 @@ impl BasicBlock for CQLinBasicBlock {
     let err_8s = &acc_holder.acc_errs[3..];
 
     let mut temp: PairingCheck = vec![];
-    temp.push((err_1.0[0], (srs.X2A[m * n] - srs.X2A[0]).into()));
-    temp.push((err_1.0[1], srs.X2A[0]));
-    temp.push((err_1.0[2], srs.Y2A));
+    temp.push((
+      err_1.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_Q).1],
+      (srs.X2A[m * n] - srs.X2A[0]).into(),
+    ));
+    temp.push((err_1.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_R).1], srs.X2A[0]));
+    temp.push((err_1.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_C1).1], srs.Y2A));
 
-    let err_5: PairingCheck = vec![(-err_5.0[0], srs.X2A[0]), (err_5.0[1], srs.X2A[1]), (err_5.0[2], srs.Y2A)];
-    let err_6: PairingCheck = vec![(-err_6.0[0], srs.X2A[0]), (err_6.0[1], srs.X2A[n]), (err_6.0[2], srs.Y2A)];
+    let err_5: PairingCheck = vec![
+      (-err_5.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_flat_A).1], srs.X2A[0]),
+      (err_5.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_pi).1], srs.X2A[1]),
+      (err_5.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_C5).1], srs.Y2A),
+    ];
+    let err_6: PairingCheck = vec![
+      (-err_6.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_A).1], srs.X2A[0]),
+      (err_6.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_pi_1).1], srs.X2A[n]),
+      (err_6.0[CQLinErrG1Terms::idx(CQLinErrG1Terms::Err_C6).1], srs.Y2A),
+    ];
 
     let mut acc_1: PairingCheck = vec![
       (acc_A, acc_M),
@@ -928,7 +1001,7 @@ impl BasicBlock for CQLinBasicBlock {
   fn acc_finalize(&self, srs: &SRS, acc_proof: AccProofAffRef) -> AccProofAff {
     let m = self.setup.shape()[0];
     let n = self.setup.shape()[1];
-    let mut acc_holder = acc_proof_to_acc(self, acc_proof, false);
+    let mut acc_holder = acc_proof_to_holder(self, acc_proof, false);
     let mut temp: PairingCheck = vec![];
 
     let err_1 = &acc_holder.acc_errs[0];
@@ -954,7 +1027,7 @@ impl BasicBlock for CQLinBasicBlock {
 
     acc_holder.acc_errs = acc_holder.acc_errs[3..].to_vec();
     acc_holder.errs = vec![];
-    let acc_proof = acc_to_acc_proof(acc_holder);
+    let acc_proof = holder_to_acc_proof(acc_holder);
     (acc_proof.0, acc_proof.1, acc_proof.2, acc_pairing)
   }
 }
