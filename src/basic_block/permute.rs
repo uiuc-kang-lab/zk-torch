@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
+#![allow(non_camel_case_types)]
 use super::matmul::MatMulG2Terms;
 use super::{
   AccProofAff, AccProofAffRef, AccProofProj, AccProofProjRef, BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS,
@@ -104,10 +105,14 @@ impl AccProofLayout for PermuteBasicBlock {
 
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    acc_1.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
-    acc_1.acc_g1[11..13].serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[11..13].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[..PermuteG1Terms::idx(PermuteG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Flat_L)..PermuteG1Terms::idx(PermuteG1Terms::Flat_R) + 1]
+      .serialize_uncompressed(&mut bytes)
+      .unwrap();
+    acc_2.acc_g1[..PermuteG1Terms::idx(PermuteG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Flat_L)..PermuteG1Terms::idx(PermuteG1Terms::Flat_R) + 1]
+      .serialize_uncompressed(&mut bytes)
+      .unwrap();
     util::add_randomness(rng, bytes);
     let acc_gamma = Fr::rand(rng);
 
@@ -127,10 +132,14 @@ impl AccProofLayout for PermuteBasicBlock {
     let mut result = true;
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    acc_1.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
-    acc_1.acc_g1[11..13].serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[11..13].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[..PermuteG1Terms::idx(PermuteG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Flat_L)..PermuteG1Terms::idx(PermuteG1Terms::Flat_R) + 1]
+      .serialize_uncompressed(&mut bytes)
+      .unwrap();
+    acc_2.acc_g1[..PermuteG1Terms::idx(PermuteG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Flat_L)..PermuteG1Terms::idx(PermuteG1Terms::Flat_R) + 1]
+      .serialize_uncompressed(&mut bytes)
+      .unwrap();
     util::add_randomness(rng, bytes);
     let acc_gamma = Fr::rand(rng);
 

@@ -188,11 +188,15 @@ impl AccProofLayout for MatMulBasicBlock {
 
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    acc_1.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
-    acc_1.acc_g1[11..14].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[..MatMulG1Terms::idx(MatMulG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)..MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)]
+      .serialize_uncompressed(&mut bytes)
+      .unwrap();
     acc_1.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[11..14].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[..MatMulG1Terms::idx(MatMulG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)..MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)]
+      .serialize_uncompressed(&mut bytes)
+      .unwrap();
     acc_2.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     errs.iter().for_each(|(g1, g2, f, gt)| {
       g1.serialize_uncompressed(&mut bytes).unwrap();
@@ -239,11 +243,15 @@ impl AccProofLayout for MatMulBasicBlock {
 
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    acc_1.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
-    acc_1.acc_g1[11..14].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[..MatMulG1Terms::idx(MatMulG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)..MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)]
+      .serialize_uncompressed(&mut bytes)
+      .unwrap();
     acc_1.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[11..14].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[..MatMulG1Terms::idx(MatMulG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)..MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)]
+      .serialize_uncompressed(&mut bytes)
+      .unwrap();
     acc_2.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     new_acc.errs.iter().for_each(|(g1, g2, f, gt)| {
       g1.serialize_uncompressed(&mut bytes).unwrap();
@@ -255,14 +263,17 @@ impl AccProofLayout for MatMulBasicBlock {
     let acc_gamma = Fr::rand(rng);
     let acc_gamma_sq = acc_gamma * acc_gamma;
 
-    acc_2.acc_g1[..7].iter().enumerate().for_each(|(i, x)| {
+    acc_2.acc_g1[..MatMulG1Terms::idx(MatMulG1Terms::Corr1)].iter().enumerate().for_each(|(i, x)| {
       let z = *x * acc_gamma + acc_1.acc_g1[i];
       result &= new_acc.acc_g1[i] == z;
     });
-    acc_2.acc_g1[11..14].iter().enumerate().for_each(|(i, x)| {
-      let z = *x * acc_gamma + acc_1.acc_g1[i + 11];
-      result &= new_acc.acc_g1[i + 11] == z;
-    });
+    acc_2.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)..MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)]
+      .iter()
+      .enumerate()
+      .for_each(|(i, x)| {
+        let z = *x * acc_gamma + acc_1.acc_g1[i + MatMulG1Terms::idx(MatMulG1Terms::Flat_A)];
+        result &= new_acc.acc_g1[i + MatMulG1Terms::idx(MatMulG1Terms::Flat_A)] == z;
+      });
     result &= new_acc.acc_g2[0] == acc_1.acc_g2[0] + acc_2.acc_g2[0] * acc_gamma;
     result &= new_acc.acc_g2[1] == acc_1.acc_g2[1];
     result &= new_acc.mu == acc_1.mu + acc_gamma * acc_2.mu;
@@ -699,8 +710,8 @@ impl BasicBlock for MatMulBasicBlock {
     let temp: Vec<_> = (0..l).map(|i| index(outputs[0], i).g1).collect();
     let flat_C = util::msm::<G1Projective>(&temp, &alpha_pow);
 
-    result &= flat_A == proof.0[11] && flat_B == proof.0[12];
-    result &= flat_C == proof.0[13];
+    result &= flat_A == proof.0[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)] && flat_B == proof.0[MatMulG1Terms::idx(MatMulG1Terms::Flat_B)];
+    result &= flat_C == proof.0[MatMulG1Terms::idx(MatMulG1Terms::Flat_C)];
     if prev_acc_proof.2.len() == 0 && acc_proof.2[0].is_one() {
       return Some(result);
     }
