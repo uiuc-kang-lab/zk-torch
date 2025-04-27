@@ -189,9 +189,7 @@ impl AccProofLayout for MatMulBasicBlock {
     // Fiat-Shamir
     let mut bytes = Vec::new();
     acc_1.acc_g1[..MatMulG1Terms::idx(MatMulG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
-    acc_1.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)..MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)]
-      .serialize_uncompressed(&mut bytes)
-      .unwrap();
+    acc_1.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)..MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)].serialize_uncompressed(&mut bytes).unwrap();
     acc_1.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     acc_2.acc_g1[..MatMulG1Terms::idx(MatMulG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
     acc_2.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)..MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)]
