@@ -265,6 +265,7 @@ pub fn cq_acc_finalize<
   (acc_proof.0, acc_proof.1, acc_proof.2, vec![err1, err3])
 }
 
+// Helper trait for CQ and CQ2basic blocks
 pub struct CQLayoutHelper;
 
 impl CQLayoutHelper {

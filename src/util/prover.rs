@@ -30,6 +30,7 @@ pub enum CQArrayType {
   Custom(Vec<Fr>),
 }
 
+// Get the number of elements in the CQ array
 pub fn get_cq_N(cq_type: &CQArrayType) -> usize {
   match cq_type {
     CQArrayType::Negative => (-*onnx::CQ_RANGE_LOWER) as usize,
