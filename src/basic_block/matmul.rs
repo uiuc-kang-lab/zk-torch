@@ -189,7 +189,9 @@ impl AccProofLayout for MatMulBasicBlock {
     // Fiat-Shamir
     let mut bytes = Vec::new();
     acc_1.acc_g1[..MatMulG1Terms::idx(MatMulG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
-    acc_1.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)..MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)..MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)]
+      .serialize_uncompressed(&mut bytes)
+      .unwrap();
     acc_1.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     acc_2.acc_g1[..MatMulG1Terms::idx(MatMulG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
     acc_2.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)..MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)]
@@ -623,11 +625,12 @@ impl BasicBlock for MatMulBasicBlock {
     acc_proof: AccProofProjRef,
   ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAff) {
     let mut acc_holder = acc_proof_to_holder(self, acc_proof, true);
-    // acc_corr1 = acc_part_corr1 * mu + acc_flat_A_no_blind * acc_flat_B_r + acc_flat_B_no_blind * acc_flat_A_r + srs.Y1P * acc_flat_A_r * acc_flat_B_r
+
     acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Corr1)] = acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)] * acc_holder.mu
       + acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A_no_blind)] * acc_holder.acc_fr[MatMulFrTerms::idx(MatMulFrTerms::Flat_B_r)]
       + acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_B_no_blind)] * acc_holder.acc_fr[MatMulFrTerms::idx(MatMulFrTerms::Flat_A_r)]
       + srs.Y1P * acc_holder.acc_fr[MatMulFrTerms::idx(MatMulFrTerms::Flat_A_r)] * acc_holder.acc_fr[MatMulFrTerms::idx(MatMulFrTerms::Flat_B_r)];
+
     // remove blinding terms from acc proof for the verifier
     acc_holder.acc_g1 = acc_holder.acc_g1[..MatMulG1Terms::PUBLIC_COUNT].to_vec();
     acc_holder.acc_fr = vec![];
