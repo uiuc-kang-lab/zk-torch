@@ -1,5 +1,6 @@
 #![allow(unused_imports)]
 use crate::util::{self, ark_de, ark_se, AccHolder, AccProofLayout};
+use crate::{define_acc_err_terms, define_acc_terms};
 pub use add::AddBasicBlock;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
@@ -282,6 +283,67 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
 
   fn acc_decide(&self, _srs: &SRS, _acc_proof: AccProofAffRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     vec![]
+  }
+}
+
+define_acc_terms!(TestG1Terms, [], []);
+define_acc_terms!(TestG2Terms, [], []);
+define_acc_terms!(TestFrTerms, [], []);
+define_acc_err_terms!(TestErrG1Terms);
+define_acc_err_terms!(TestErrG2Terms);
+define_acc_err_terms!(TestErrFrTerms);
+define_acc_err_terms!(TestErrGtTerms);
+
+// This is a basic block for testing purposes in tests.rs.
+#[derive(Debug)]
+pub struct BasicBlockForTest;
+impl BasicBlock for BasicBlockForTest {}
+impl AccProofLayout for BasicBlockForTest {
+  type AccG1Terms = TestG1Terms;
+  type AccG2Terms = TestG2Terms;
+  type AccFrTerms = TestFrTerms;
+  type ErrG1Terms = TestErrG1Terms;
+  type ErrG2Terms = TestErrG2Terms;
+  type ErrFrTerms = TestErrFrTerms;
+  type ErrGtTerms = TestErrGtTerms;
+
+  fn prover_proof_to_acc(&self, _proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective> {
+    AccHolder {
+      acc_g1: vec![],
+      acc_g2: vec![],
+      acc_fr: vec![],
+      mu: Fr::zero(),
+      errs: vec![],
+      acc_errs: vec![],
+    }
+  }
+
+  fn verifier_proof_to_acc(&self, _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> AccHolder<G1Affine, G2Affine> {
+    AccHolder {
+      acc_g1: vec![],
+      acc_g2: vec![],
+      acc_fr: vec![],
+      mu: Fr::zero(),
+      errs: vec![],
+      acc_errs: vec![],
+    }
+  }
+
+  fn mira_prove(
+    &self,
+    _srs: &SRS,
+    _acc_1: AccHolder<G1Projective, G2Projective>,
+    _acc_2: AccHolder<G1Projective, G2Projective>,
+    _rng: &mut StdRng,
+  ) -> AccHolder<G1Projective, G2Projective> {
+    AccHolder {
+      acc_g1: vec![],
+      acc_g2: vec![],
+      acc_fr: vec![],
+      mu: Fr::zero(),
+      errs: vec![],
+      acc_errs: vec![],
+    }
   }
 }
 

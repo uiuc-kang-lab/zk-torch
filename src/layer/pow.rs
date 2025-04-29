@@ -107,6 +107,7 @@ impl Layer for PowLayer {
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
+        n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
         setup: Some((
           Box::new(ChangeSFBasicBlock {
             input_SF: sf_log * 2,

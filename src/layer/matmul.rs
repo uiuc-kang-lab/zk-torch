@@ -31,6 +31,7 @@ impl Layer for MatMulLayer {
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
+        n: input_shapes[1][input_shapes[1].len() - 1].next_power_of_two(),
         setup: Some((
           Box::new(ChangeSFBasicBlock {
             input_SF: sf_log * 2,
@@ -112,6 +113,7 @@ impl Layer for MultiHeadMatMulLayer {
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
+        n: output_shape[output_shape.len() - 1].next_power_of_two(),
         setup: Some((
           Box::new(ChangeSFBasicBlock {
             input_SF: sf_log * 2,

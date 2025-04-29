@@ -105,6 +105,7 @@ impl Layer for MaxPoolLayer {
 
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: output_shape[output_shape.len() - 1].next_power_of_two(),
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,

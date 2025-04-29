@@ -197,6 +197,7 @@ macro_rules! create_conv_layer {
         }));
         let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
           basic_block: Box::new(CQ2BasicBlock {
+            n: weights_splatted[0].len().next_power_of_two(),
             setup: Some((
               Box::new(ChangeSFBasicBlock {
                 input_SF: sf_log * 2,
@@ -273,7 +274,8 @@ macro_rules! create_conv_layer {
           perm.append(&mut vec![n - 1]);
           graph.addBB(Box::new(TransposeBasicBlock { perm }))
         } else {
-          let reshape_permutation = util::get_reshape_indices(vec![permutation.len(), weights_splatted[0].len()], output_shape.clone());
+          let output_shape_padded = output_shape.iter().map(|&x| util::next_pow(x as u32) as usize).collect();
+          let reshape_permutation = util::get_reshape_indices(vec![permutation.len(), weights_splatted[0].len()], output_shape_padded);
           graph.addBB(Box::new(CopyConstraintBasicBlock {
             permutation: reshape_permutation,
             input_dim: IxDyn(&[permutation.len().next_power_of_two(), weights_splatted[0].len().next_power_of_two()]),

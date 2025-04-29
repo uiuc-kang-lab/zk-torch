@@ -33,6 +33,7 @@ impl Layer for MulLayer {
     }));
     let change_SF_check = if input_shapes[0].len() == input_shapes[1].len() && input_shapes[0].len() == 0 {
       graph.addBB(Box::new(CQ2BasicBlock {
+        n: 1,
         setup: Some((
           Box::new(ChangeSFBasicBlock {
             input_SF: sf_log * 2,
@@ -45,6 +46,14 @@ impl Layer for MulLayer {
     } else {
       graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
+          n: if input_shapes[1].len() == 0 {
+            input_shapes[0][input_shapes[0].len() - 1].next_power_of_two()
+          } else {
+            std::cmp::max(
+              input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
+              input_shapes[1][input_shapes[1].len() - 1].next_power_of_two(),
+            )
+          },
           setup: Some((
             Box::new(ChangeSFBasicBlock {
               input_SF: sf_log * 2,

@@ -79,6 +79,7 @@ impl Layer for GemmLayer {
     }));
     let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
+        n: N.next_power_of_two(),
         setup: Some((
           Box::new(ChangeSFBasicBlock {
             input_SF: sf_log * 2,

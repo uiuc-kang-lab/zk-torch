@@ -1,4 +1,5 @@
 use crate::basic_block::*;
+use crate::util::get_cq_N;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
@@ -11,7 +12,11 @@ pub fn get_foldable_bb_info(bb: &Box<dyn BasicBlock>) -> String {
     let bb = bb.downcast_ref::<CQLinBasicBlock>().unwrap();
     return format!("CQLin-{:?}", bb.setup.shape());
   } else if bb.is::<CQ2BasicBlock>() {
-    return "CQ2".to_string();
+    let bb = bb.downcast_ref::<CQ2BasicBlock>().unwrap();
+    return format!("CQ2-{}-{}", bb.n, bb.setup.as_ref().unwrap().2);
+  } else if bb.is::<CQBasicBlock>() {
+    let bb = bb.downcast_ref::<CQBasicBlock>().unwrap();
+    return format!("CQ-{}-{}", bb.n, get_cq_N(&bb.setup));
   } else {
     return format!("{:?}", bb);
   }

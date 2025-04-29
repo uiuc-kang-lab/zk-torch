@@ -26,6 +26,11 @@ macro_rules! define_nonlinear_layer {
         }));
         let layer_check = graph.addBB(Box::new(RepeaterBasicBlock {
           basic_block: Box::new(CQ2BasicBlock {
+            n: if input_shapes[0].len() == 0 {
+              1
+            } else {
+              input_shapes[0][input_shapes[0].len() - 1].next_power_of_two()
+            },
             setup: Some((
               Box::new($basic_block {
                 input_SF: sf_log,
