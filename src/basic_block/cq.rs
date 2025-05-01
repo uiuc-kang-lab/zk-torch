@@ -900,9 +900,9 @@ impl BasicBlock for CQBasicBlock {
 
     let beta = Fr::rand(rng);
     let mut result = beta == proof.2[0];
-    result &= model == proof.0[proof.0.len() - 2];
-    result &= input == proof.0[proof.0.len() - 1];
-    //assert!(result, "acc_proof for cq is not valid");
+    result &= model == proof.0[CQG1Terms::idx(CQG1Terms::Model_g1_blinded)];
+    result &= input == proof.0[CQG1Terms::idx(CQG1Terms::Input_g1_blinded)];
+    assert!(result, "acc_proof for cq is not valid");
     vec![]
   }
 

@@ -71,17 +71,17 @@ pub trait AccProofLayout: BasicBlock {
   type ErrGtTerms;
 
   // acc_g1_num returns the number of G1 elements in an accumulator instance
-  fn acc_g1_num(&self, is_prover: bool) -> usize {
+  fn acc_g1_num(&self, _is_prover: bool) -> usize {
     0
   }
 
   // acc_g2_num returns the number of G2 elements in an accumulator instance
-  fn acc_g2_num(&self, is_prover: bool) -> usize {
+  fn acc_g2_num(&self, _is_prover: bool) -> usize {
     0
   }
 
   // acc_fr_num returns the number of Fr elements in an accumulator instance
-  fn acc_fr_num(&self, is_prover: bool) -> usize {
+  fn acc_fr_num(&self, _is_prover: bool) -> usize {
     0
   }
 
@@ -103,10 +103,10 @@ pub trait AccProofLayout: BasicBlock {
   // mira_verify is the main function that verifies the generalized accumulator proof
   fn mira_verify(
     &self,
-    acc_1: AccHolder<G1Affine, G2Affine>,
-    acc_2: AccHolder<G1Affine, G2Affine>,
-    new_acc: AccHolder<G1Affine, G2Affine>,
-    rng: &mut StdRng,
+    _acc_1: AccHolder<G1Affine, G2Affine>,
+    _acc_2: AccHolder<G1Affine, G2Affine>,
+    _new_acc: AccHolder<G1Affine, G2Affine>,
+    _rng: &mut StdRng,
   ) -> Option<bool> {
     None
   }
