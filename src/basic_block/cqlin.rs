@@ -972,36 +972,18 @@ impl BasicBlock for CQLinBasicBlock {
     acc_1.extend(temp);
 
     let g_m: G1Affine = (acc_g1.flat_C * Fr::from(m as u64).inverse().unwrap()).into();
-    let acc_2: PairingCheck = vec![
-      ((acc_g1.R_x - g_m).into(), srs.X2A[0]),
-      (-acc_g1.S_x, srs.X2A[n]),
-      (-acc_g1.C2, srs.Y2A),
-    ];
-    let acc_3: PairingCheck = vec![
-      (acc_g1.flat_C, srs.X2A[N - n]),
-      (-acc_g1.P_x, srs.X2A[0]),
-      (-acc_g1.C3, srs.Y2A),
-    ];
-    let acc_4: PairingCheck = vec![
-      (acc_g1.R_x, srs.X2A[N - m * n]),
-      (-acc_g1.P_R_x, srs.X2A[0]),
-      (-acc_g1.C4, srs.Y2A),
-    ];
+    let acc_2: PairingCheck = vec![((acc_g1.R_x - g_m).into(), srs.X2A[0]), (-acc_g1.S_x, srs.X2A[n]), (-acc_g1.C2, srs.Y2A)];
+    let acc_3: PairingCheck = vec![(acc_g1.flat_C, srs.X2A[N - n]), (-acc_g1.P_x, srs.X2A[0]), (-acc_g1.C3, srs.Y2A)];
+    let acc_4: PairingCheck = vec![(acc_g1.R_x, srs.X2A[N - m * n]), (-acc_g1.P_R_x, srs.X2A[0]), (-acc_g1.C4, srs.Y2A)];
     let mut acc_5: PairingCheck = vec![
-      (
-        ((acc_g1.flat_A - acc_g1.z) * acc_mu + acc_g1.pi * acc_beta_k).into(),
-        srs.X2A[0],
-      ),
+      (((acc_g1.flat_A - acc_g1.z) * acc_mu + acc_g1.pi * acc_beta_k).into(), srs.X2A[0]),
       ((-acc_g1.pi * acc_mu).into(), srs.X2A[1]),
       ((-acc_g1.C5 * acc_mu).into(), srs.Y2A),
     ];
     acc_5.extend(err_5);
 
     let mut acc_6: PairingCheck = vec![
-      (
-        ((acc_g1.A_x - acc_g1.z) * acc_mu + acc_g1.pi_1 * acc_beta_k).into(),
-        srs.X2A[0],
-      ),
+      (((acc_g1.A_x - acc_g1.z) * acc_mu + acc_g1.pi_1 * acc_beta_k).into(), srs.X2A[0]),
       ((-acc_g1.pi_1 * acc_mu).into(), srs.X2A[n]),
       ((-acc_g1.C6 * acc_mu).into(), srs.Y2A),
     ];

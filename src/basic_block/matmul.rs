@@ -154,7 +154,10 @@ impl AccProofLayout for MatMulBasicBlock {
       ],
       vec![],
       vec![],
-      vec![Bn254::multi_pairing(vec![acc_2_g1.Flat_A, acc_1_g1.Flat_A], vec![acc_1_g2.Flat_B_g2, acc_2_g2.Flat_B_g2])],
+      vec![Bn254::multi_pairing(
+        vec![acc_2_g1.Flat_A, acc_1_g1.Flat_A],
+        vec![acc_1_g2.Flat_B_g2, acc_2_g2.Flat_B_g2],
+      )],
     );
     let errs = vec![err];
 
