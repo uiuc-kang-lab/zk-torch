@@ -23,24 +23,16 @@ define_acc_err_terms!(SumErrFrTerms);
 define_acc_err_terms!(SumErrGtTerms);
 
 impl AccProofLayout for SumBasicBlock {
-  type AccG1Terms = SumG1Terms;
-  type AccG2Terms = SumG2Terms;
-  type AccFrTerms = SumFrTerms;
-  type ErrG1Terms = SumErrG1Terms;
-  type ErrG2Terms = SumErrG2Terms;
-  type ErrFrTerms = SumErrFrTerms;
-  type ErrGtTerms = SumErrGtTerms;
-
   fn acc_g1_num(&self, _is_prover: bool) -> usize {
-    SumG1Terms::COUNT
+    SumG1Terms::<G1Projective>::COUNT
   }
 
   fn acc_g2_num(&self, _is_prover: bool) -> usize {
-    SumG2Terms::COUNT
+    SumG2Terms::<G2Projective>::COUNT
   }
 
   fn acc_fr_num(&self, _is_prover: bool) -> usize {
-    SumFrTerms::COUNT
+    SumFrTerms::<Fr>::COUNT
   }
 
   fn prover_proof_to_acc(&self, proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective> {

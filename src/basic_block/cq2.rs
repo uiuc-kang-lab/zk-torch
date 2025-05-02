@@ -25,14 +25,6 @@ use rayon::prelude::*;
 use std::collections::HashMap;
 
 impl AccProofLayout for CQ2BasicBlock {
-  type AccG1Terms = CQG1Terms;
-  type AccG2Terms = CQG2Terms;
-  type AccFrTerms = CQFrTerms;
-  type ErrG1Terms = CQErrG1Terms;
-  type ErrG2Terms = CQErrG2Terms;
-  type ErrFrTerms = CQErrFrTerms;
-  type ErrGtTerms = CQErrGtTerms;
-
   fn acc_g1_num(&self, is_prover: bool) -> usize {
     CQLayoutHelper::acc_g1_num(is_prover)
   }
@@ -403,8 +395,9 @@ impl BasicBlock for CQ2BasicBlock {
 
     let beta = Fr::rand(rng);
     let mut result = beta == proof.2[0];
-    result &= agg_model == proof.0[CQG1Terms::idx(CQG1Terms::Model_g1_blinded)];
-    result &= agg_input == proof.0[CQG1Terms::idx(CQG1Terms::Input_g1_blinded)];
+    let proof_g1 = CQG1Terms::from_vec(&proof.0);
+    result &= agg_model == proof_g1.Model_g1_blinded;
+    result &= agg_input == proof_g1.Input_g1_blinded;
     assert!(result, "acc_proof for cq2 is not valid");
     vec![]
   }

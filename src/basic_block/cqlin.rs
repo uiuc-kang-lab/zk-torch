@@ -41,33 +41,25 @@ pub struct CQLinBasicBlock {
 }
 
 impl AccProofLayout for CQLinBasicBlock {
-  type AccG1Terms = CQLinG1Terms;
-  type AccG2Terms = CQLinG2Terms;
-  type AccFrTerms = CQLinFrTerms;
-  type ErrG1Terms = CQLinErrG1Terms;
-  type ErrG2Terms = CQLinErrG2Terms;
-  type ErrFrTerms = CQLinErrFrTerms;
-  type ErrGtTerms = CQLinErrGtTerms;
-
   fn acc_g1_num(&self, is_prover: bool) -> usize {
     if is_prover {
-      CQLinG1Terms::COUNT
+      CQLinG1Terms::<G1Projective>::COUNT
     } else {
-      CQLinG1Terms::PUBLIC_COUNT
+      CQLinG1Terms::<G1Projective>::PUBLIC_COUNT
     }
   }
 
   fn acc_g2_num(&self, _is_prover: bool) -> usize {
-    CQLinG2Terms::COUNT
+    CQLinG2Terms::<G2Projective>::COUNT
   }
 
   fn acc_fr_num(&self, is_prover: bool) -> usize {
     let n = self.setup.shape()[1];
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
     if is_prover {
-      CQLinFrTerms::COUNT + log_n
+      CQLinFrTerms::<Fr>::COUNT + log_n
     } else {
-      CQLinFrTerms::PUBLIC_COUNT + log_n
+      CQLinFrTerms::<Fr>::PUBLIC_COUNT + log_n
     }
   }
 
@@ -163,43 +155,17 @@ impl AccProofLayout for CQLinBasicBlock {
     let n = self.setup.shape()[1];
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
 
-    let R_x = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::R_x)];
-    let Q_x = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::Q_x)];
-    let A_x = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::A_x)];
-    let pi = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::pi)];
-    let pi_1 = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::pi_1)];
-    let z = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::z)];
-    let C5 = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C5)];
-    let C6 = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C6)];
-    let flat_A = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::flat_A)];
-    let part_C1 = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::part_C1)];
-    let M_x_1 = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::M_x_1)];
-    let A_x_1 = acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::A_x_1)];
-
-    let M_x_2 = acc_2.acc_g2[CQLinG2Terms::idx(CQLinG2Terms::M_x_2)];
-
+    let acc_2_g1 = CQLinG1Terms::<G1Projective>::from_vec(&acc_2.acc_g1);
+    let acc_2_g2 = CQLinG2Terms::<G2Projective>::from_vec(&acc_2.acc_g2);
     let beta_k = acc_2.acc_fr[log_n];
-    let cqlin_mask_A = acc_2.acc_fr[log_n + CQLinFrTerms::idx(CQLinFrTerms::A_r)];
-    let cqlin_mask_M = acc_2.acc_fr[log_n + CQLinFrTerms::idx(CQLinFrTerms::M_r)];
+    let cqlin_mask_A = acc_2.acc_fr[log_n + 1];
+    let cqlin_mask_M = acc_2.acc_fr[log_n + 2];
 
-    let acc_R = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::R_x)];
-    let acc_Q = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::Q_x)];
-    let acc_A = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::A_x)];
-    let acc_pi = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::pi)];
-    let acc_pi_1 = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::pi_1)];
-    let acc_z = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::z)];
-    let acc_C5 = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C5)];
-    let acc_C6 = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C6)];
-    let acc_flat_A = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::flat_A)];
-    let acc_part_C1 = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::part_C1)];
-    let acc_M_1 = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::M_x_1)];
-    let acc_A_1 = acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::A_x_1)];
-
-    let acc_M = acc_1.acc_g2[CQLinG2Terms::idx(CQLinG2Terms::M_x_2)];
-
+    let acc_1_g1 = CQLinG1Terms::<G1Projective>::from_vec(&acc_1.acc_g1);
+    let acc_1_g2 = CQLinG2Terms::<G2Projective>::from_vec(&acc_1.acc_g2);
     let acc_beta_k = acc_1.acc_fr[log_n];
-    let acc_mask_A = acc_1.acc_fr[log_n + CQLinFrTerms::idx(CQLinFrTerms::A_r)];
-    let acc_mask_M = acc_1.acc_fr[log_n + CQLinFrTerms::idx(CQLinFrTerms::M_r)];
+    let acc_mask_A = acc_1.acc_fr[log_n + 1];
+    let acc_mask_M = acc_1.acc_fr[log_n + 2];
 
     let mut new_acc_holder = AccHolder {
       acc_g1: Vec::new(),
@@ -213,26 +179,31 @@ impl AccProofLayout for CQLinBasicBlock {
     // Compute error terms
     let err1: AccProofProj = (
       vec![
-        acc_Q * acc_2.mu + Q_x * acc_1.mu,
-        acc_R * acc_2.mu + R_x * acc_1.mu,
-        acc_part_C1 * acc_2.mu
-          + part_C1 * acc_1.mu
-          + acc_M_1 * cqlin_mask_A
-          + M_x_1 * acc_mask_A
-          + acc_A_1 * cqlin_mask_M
-          + A_x_1 * acc_mask_M
+        acc_1_g1.Q_x * acc_2.mu + acc_2_g1.Q_x * acc_1.mu,
+        acc_1_g1.R_x * acc_2.mu + acc_2_g1.R_x * acc_1.mu,
+        acc_1_g1.part_C1.unwrap() * acc_2.mu
+          + acc_2_g1.part_C1.unwrap() * acc_1.mu
+          + acc_1_g1.M_x_1.unwrap() * cqlin_mask_A
+          + acc_2_g1.M_x_1.unwrap() * acc_mask_A
+          + acc_1_g1.A_x_1.unwrap() * cqlin_mask_M
+          + acc_2_g1.A_x_1.unwrap() * acc_mask_M
           + srs.Y1P * (cqlin_mask_A * acc_mask_M + cqlin_mask_M * acc_mask_A),
       ],
       vec![],
       vec![],
-      vec![Bn254::multi_pairing(vec![A_x.into(), acc_A], vec![acc_M, M_x_2.into()])],
+      vec![Bn254::multi_pairing(
+        vec![acc_2_g1.A_x.into(), acc_1_g1.A_x],
+        vec![acc_1_g2.M_x_2, acc_2_g2.M_x_2.into()],
+      )],
     );
 
     let err5: AccProofProj = (
       vec![
-        acc_flat_A * acc_2.mu + flat_A * acc_1.mu - acc_z * acc_2.mu - z * acc_1.mu + acc_pi * beta_k + pi * acc_beta_k,
-        acc_pi * acc_2.mu + pi * acc_1.mu,
-        acc_C5 * acc_2.mu + C5 * acc_1.mu,
+        acc_1_g1.flat_A * acc_2.mu + acc_2_g1.flat_A * acc_1.mu - acc_1_g1.z * acc_2.mu - acc_2_g1.z * acc_1.mu
+          + acc_1_g1.pi * beta_k
+          + acc_2_g1.pi * acc_beta_k,
+        acc_1_g1.pi * acc_2.mu + acc_2_g1.pi * acc_1.mu,
+        acc_1_g1.C5 * acc_2.mu + acc_2_g1.C5 * acc_1.mu,
       ],
       vec![],
       vec![],
@@ -241,9 +212,11 @@ impl AccProofLayout for CQLinBasicBlock {
 
     let err6 = (
       vec![
-        acc_A * acc_2.mu + A_x * acc_1.mu - acc_z * acc_2.mu - z * acc_1.mu + acc_pi_1 * beta_k + pi_1 * acc_beta_k,
-        acc_pi_1 * acc_2.mu + pi_1 * acc_1.mu,
-        acc_C6 * acc_2.mu + C6 * acc_1.mu,
+        acc_1_g1.A_x * acc_2.mu + acc_2_g1.A_x * acc_1.mu - acc_1_g1.z * acc_2.mu - acc_2_g1.z * acc_1.mu
+          + acc_1_g1.pi_1 * beta_k
+          + acc_2_g1.pi_1 * acc_beta_k,
+        acc_1_g1.pi_1 * acc_2.mu + acc_2_g1.pi_1 * acc_1.mu,
+        acc_1_g1.C6 * acc_2.mu + acc_2_g1.C6 * acc_1.mu,
       ],
       vec![],
       vec![],
@@ -270,16 +243,37 @@ impl AccProofLayout for CQLinBasicBlock {
 
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    acc_1.acc_g1[..CQLinG1Terms::idx(CQLinG1Terms::C1)].serialize_uncompressed(&mut bytes).unwrap();
-    acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::flat_A)..CQLinG1Terms::idx(CQLinG1Terms::part_C1)]
-      .serialize_uncompressed(&mut bytes)
-      .unwrap();
+    let acc_1_g1_fiat_shamir = vec![
+      acc_1_g1.R_x,
+      acc_1_g1.Q_x,
+      acc_1_g1.A_x,
+      acc_1_g1.S_x,
+      acc_1_g1.P_x,
+      acc_1_g1.P_R_x,
+      acc_1_g1.pi,
+      acc_1_g1.pi_1,
+      acc_1_g1.z,
+      acc_1_g1.flat_A,
+      acc_1_g1.flat_C,
+    ];
+    acc_1_g1_fiat_shamir.serialize_uncompressed(&mut bytes).unwrap();
     acc_1.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     acc_1.acc_fr[..acc_1.acc_fr.len() - 2].serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[..CQLinG1Terms::idx(CQLinG1Terms::C1)].serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::flat_A)..CQLinG1Terms::idx(CQLinG1Terms::part_C1)]
-      .serialize_uncompressed(&mut bytes)
-      .unwrap();
+
+    let acc_2_g1_fiat_shamir = vec![
+      acc_2_g1.R_x,
+      acc_2_g1.Q_x,
+      acc_2_g1.A_x,
+      acc_2_g1.S_x,
+      acc_2_g1.P_x,
+      acc_2_g1.P_R_x,
+      acc_2_g1.pi,
+      acc_2_g1.pi_1,
+      acc_2_g1.z,
+      acc_2_g1.flat_A,
+      acc_2_g1.flat_C,
+    ];
+    acc_2_g1_fiat_shamir.serialize_uncompressed(&mut bytes).unwrap();
     acc_2.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     acc_2.acc_fr[..acc_2.acc_fr.len() - 2].serialize_uncompressed(&mut bytes).unwrap();
     errs.iter().for_each(|(g1, g2, f, gt)| {
@@ -294,7 +288,7 @@ impl AccProofLayout for CQLinBasicBlock {
 
     // Random linear combination for folding (i.e., acc + cqlin * acc_gamma)
     new_acc_holder.acc_g1 = acc_2.acc_g1.iter().enumerate().map(|(i, x)| (*x * acc_gamma) + acc_1.acc_g1[i]).collect();
-    new_acc_holder.acc_g2 = vec![acc_M + M_x_2 * acc_gamma];
+    new_acc_holder.acc_g2 = vec![acc_1_g2.M_x_2 + acc_2_g2.M_x_2 * acc_gamma];
     new_acc_holder.acc_fr = acc_2.acc_fr.iter().enumerate().map(|(i, x)| *x * acc_gamma + acc_1.acc_fr[i]).collect();
     new_acc_holder.mu = acc_1.mu + acc_gamma * acc_2.mu;
     new_acc_holder.errs = errs;
@@ -347,16 +341,39 @@ impl AccProofLayout for CQLinBasicBlock {
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    acc_1.acc_g1[..CQLinG1Terms::idx(CQLinG1Terms::C1)].serialize_uncompressed(&mut bytes).unwrap();
-    acc_1.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::flat_A)..CQLinG1Terms::idx(CQLinG1Terms::part_C1)]
-      .serialize_uncompressed(&mut bytes)
-      .unwrap();
+    let acc_1_g1 = CQLinG1Terms::<G1Affine>::from_vec(&acc_1.acc_g1);
+    let acc_1_g1_fiat_shamir = vec![
+      acc_1_g1.R_x,
+      acc_1_g1.Q_x,
+      acc_1_g1.A_x,
+      acc_1_g1.S_x,
+      acc_1_g1.P_x,
+      acc_1_g1.P_R_x,
+      acc_1_g1.pi,
+      acc_1_g1.pi_1,
+      acc_1_g1.z,
+      acc_1_g1.flat_A,
+      acc_1_g1.flat_C,
+    ];
+    acc_1_g1_fiat_shamir.serialize_uncompressed(&mut bytes).unwrap();
     acc_1.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     acc_1.acc_fr.serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[..CQLinG1Terms::idx(CQLinG1Terms::C1)].serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::flat_A)..CQLinG1Terms::idx(CQLinG1Terms::part_C1)]
-      .serialize_uncompressed(&mut bytes)
-      .unwrap();
+
+    let acc_2_g1 = CQLinG1Terms::<G1Affine>::from_vec(&acc_2.acc_g1);
+    let acc_2_g1_fiat_shamir = vec![
+      acc_2_g1.R_x,
+      acc_2_g1.Q_x,
+      acc_2_g1.A_x,
+      acc_2_g1.S_x,
+      acc_2_g1.P_x,
+      acc_2_g1.P_R_x,
+      acc_2_g1.pi,
+      acc_2_g1.pi_1,
+      acc_2_g1.z,
+      acc_2_g1.flat_A,
+      acc_2_g1.flat_C,
+    ];
+    acc_2_g1_fiat_shamir.serialize_uncompressed(&mut bytes).unwrap();
     acc_2.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     acc_2.acc_fr.serialize_uncompressed(&mut bytes).unwrap();
     new_acc.errs.iter().for_each(|(g1, g2, f, gt)| {
@@ -369,12 +386,12 @@ impl AccProofLayout for CQLinBasicBlock {
     let acc_gamma = Fr::rand(rng);
     let acc_gamma_sq = acc_gamma * acc_gamma;
     acc_2.acc_g1.iter().zip(acc_1.acc_g1.iter()).enumerate().for_each(|(i, (x, y))| {
-      if i >= CQLinG1Terms::idx(CQLinG1Terms::C1) && i <= CQLinG1Terms::idx(CQLinG1Terms::C6) {
-        return; // No need to verify RLC for blinding factors
+      if i < 9 && i >= 15 {
+        // No need to verify RLC for blinding factors
+        let z = *y + *x * acc_gamma;
+        let z: G1Affine = z.into();
+        result &= z == new_acc.acc_g1[i];
       }
-      let z = *y + *x * acc_gamma;
-      let z: G1Affine = z.into();
-      result &= z == new_acc.acc_g1[i];
     });
     result &= acc_1.acc_g2[0] + acc_2.acc_g2[0] * acc_gamma == new_acc.acc_g2[0];
     acc_2.acc_fr.iter().zip(acc_1.acc_fr.iter()).enumerate().for_each(|(i, (x, y))| {
@@ -819,19 +836,20 @@ impl BasicBlock for CQLinBasicBlock {
     let n = self.setup.shape()[1];
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
     let mut acc_holder = acc_proof_to_holder(self, acc_proof, true);
+    let mut acc_g1 = CQLinG1Terms::<G1Projective>::from_vec(&acc_holder.acc_g1);
     // correct the blinding factor C1
-    acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C1)] = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::part_C1)] * acc_holder.mu
-      + acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::M_x_1)] * acc_holder.acc_fr[log_n + CQLinFrTerms::idx(CQLinFrTerms::A_r)]
-      + srs.Y1P * acc_holder.acc_fr[log_n + CQLinFrTerms::idx(CQLinFrTerms::A_r)] * acc_holder.acc_fr[log_n + CQLinFrTerms::idx(CQLinFrTerms::M_r)]
-      + acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::A_x_1)] * acc_holder.acc_fr[log_n + CQLinFrTerms::idx(CQLinFrTerms::M_r)];
+    acc_g1.C1 = acc_g1.part_C1.unwrap() * acc_holder.mu
+      + acc_g1.M_x_1.unwrap() * acc_holder.acc_fr[log_n + 1]
+      + srs.Y1P * acc_holder.acc_fr[log_n + 1] * acc_holder.acc_fr[log_n + 2]
+      + acc_g1.A_x_1.unwrap() * acc_holder.acc_fr[log_n + 2];
     // remove blinding terms from acc proof for the verifier
-    acc_holder.acc_g1 = acc_holder.acc_g1[..CQLinG1Terms::idx(CQLinG1Terms::part_C1)].to_vec();
+    acc_holder.acc_g1 = acc_g1.to_vec()[..CQLinG1Terms::<G1Projective>::PUBLIC_COUNT].to_vec();
     acc_holder.acc_fr = acc_holder.acc_fr[..log_n + 1].to_vec();
     let acc_proof = holder_to_acc_proof(acc_holder);
 
     // remove blinding terms from bb proof for the verifier
     let cqlin_proof = (
-      proof.0[..CQLinG1Terms::idx(CQLinG1Terms::part_C1)].to_vec(),
+      proof.0[..CQLinG1Terms::<G1Projective>::PUBLIC_COUNT].to_vec(),
       proof.1.to_vec(),
       proof.2[..log_n + 1].to_vec(),
     );
@@ -897,7 +915,8 @@ impl BasicBlock for CQLinBasicBlock {
     let flat_C_g1: G1Projective = util::msm::<G1Projective>(&temp, &alpha_pow);
 
     let mut result = true;
-    result &= flat_A_g1 == proof.0[CQLinG1Terms::idx(CQLinG1Terms::flat_A)] && flat_C_g1 == proof.0[CQLinG1Terms::idx(CQLinG1Terms::flat_C)];
+    let proof_g1 = CQLinG1Terms::<G1Affine>::from_vec(&proof.0);
+    result &= flat_A_g1 == proof_g1.flat_A && flat_C_g1 == proof_g1.flat_C;
     if prev_acc_holder.mu.is_zero() && acc_holder.mu.is_one() {
       return Some(result);
     }
@@ -915,26 +934,8 @@ impl BasicBlock for CQLinBasicBlock {
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
 
     let acc_holder = acc_proof_to_holder(self, acc_proof, false);
-
-    let acc_R = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::R_x)];
-    let acc_Q = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::Q_x)];
-    let acc_A = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::A_x)];
-    let acc_S = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::S_x)];
-    let acc_P = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::P_x)];
-    let acc_P_R = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::P_R_x)];
-    let acc_pi = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::pi)];
-    let acc_pi_1 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::pi_1)];
-    let acc_z = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::z)];
-    let acc_C1 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C1)];
-    let acc_C2 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C2)];
-    let acc_C3 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C3)];
-    let acc_C4 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C4)];
-    let acc_C5 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C5)];
-    let acc_C6 = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::C6)];
-    let acc_flat_A = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::flat_A)];
-    let acc_flat_C = acc_holder.acc_g1[CQLinG1Terms::idx(CQLinG1Terms::flat_C)];
-
-    let acc_M = acc_holder.acc_g2[CQLinG2Terms::idx(CQLinG2Terms::M_x_2)];
+    let acc_g1 = CQLinG1Terms::<G1Affine>::from_vec(&acc_holder.acc_g1);
+    let acc_g2 = CQLinG2Terms::<G2Affine>::from_vec(&acc_holder.acc_g2);
 
     let acc_mu = acc_holder.mu;
     let acc_beta_k = acc_holder.acc_fr[log_n];
@@ -963,28 +964,28 @@ impl BasicBlock for CQLinBasicBlock {
     ];
 
     let mut acc_1: PairingCheck = vec![
-      (acc_A, acc_M),
-      ((-acc_Q * acc_mu).into(), (srs.X2A[m * n] - srs.X2A[0]).into()),
-      ((-acc_R * acc_mu).into(), srs.X2A[0]),
-      (-acc_C1, srs.Y2A),
+      (acc_g1.A_x, acc_g2.M_x_2),
+      ((-acc_g1.Q_x * acc_mu).into(), (srs.X2A[m * n] - srs.X2A[0]).into()),
+      ((-acc_g1.R_x * acc_mu).into(), srs.X2A[0]),
+      (-acc_g1.C1, srs.Y2A),
     ];
     acc_1.extend(temp);
 
-    let g_m: G1Affine = (acc_flat_C * Fr::from(m as u64).inverse().unwrap()).into();
-    let acc_2: PairingCheck = vec![((acc_R - g_m).into(), srs.X2A[0]), (-acc_S, srs.X2A[n]), (-acc_C2, srs.Y2A)];
-    let acc_3: PairingCheck = vec![(acc_flat_C, srs.X2A[N - n]), (-acc_P, srs.X2A[0]), (-acc_C3, srs.Y2A)];
-    let acc_4: PairingCheck = vec![(acc_R, srs.X2A[N - m * n]), (-acc_P_R, srs.X2A[0]), (-acc_C4, srs.Y2A)];
+    let g_m: G1Affine = (acc_g1.flat_C * Fr::from(m as u64).inverse().unwrap()).into();
+    let acc_2: PairingCheck = vec![((acc_g1.R_x - g_m).into(), srs.X2A[0]), (-acc_g1.S_x, srs.X2A[n]), (-acc_g1.C2, srs.Y2A)];
+    let acc_3: PairingCheck = vec![(acc_g1.flat_C, srs.X2A[N - n]), (-acc_g1.P_x, srs.X2A[0]), (-acc_g1.C3, srs.Y2A)];
+    let acc_4: PairingCheck = vec![(acc_g1.R_x, srs.X2A[N - m * n]), (-acc_g1.P_R_x, srs.X2A[0]), (-acc_g1.C4, srs.Y2A)];
     let mut acc_5: PairingCheck = vec![
-      (((acc_flat_A - acc_z) * acc_mu + acc_pi * acc_beta_k).into(), srs.X2A[0]),
-      ((-acc_pi * acc_mu).into(), srs.X2A[1]),
-      ((-acc_C5 * acc_mu).into(), srs.Y2A),
+      (((acc_g1.flat_A - acc_g1.z) * acc_mu + acc_g1.pi * acc_beta_k).into(), srs.X2A[0]),
+      ((-acc_g1.pi * acc_mu).into(), srs.X2A[1]),
+      ((-acc_g1.C5 * acc_mu).into(), srs.Y2A),
     ];
     acc_5.extend(err_5);
 
     let mut acc_6: PairingCheck = vec![
-      (((acc_A - acc_z) * acc_mu + acc_pi_1 * acc_beta_k).into(), srs.X2A[0]),
-      ((-acc_pi_1 * acc_mu).into(), srs.X2A[n]),
-      ((-acc_C6 * acc_mu).into(), srs.Y2A),
+      (((acc_g1.A_x - acc_g1.z) * acc_mu + acc_g1.pi_1 * acc_beta_k).into(), srs.X2A[0]),
+      ((-acc_g1.pi_1 * acc_mu).into(), srs.X2A[n]),
+      ((-acc_g1.C6 * acc_mu).into(), srs.Y2A),
     ];
     acc_6.extend(err_6);
 

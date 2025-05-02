@@ -299,14 +299,6 @@ define_acc_err_terms!(TestErrGtTerms);
 pub struct BasicBlockForTest;
 impl BasicBlock for BasicBlockForTest {}
 impl AccProofLayout for BasicBlockForTest {
-  type AccG1Terms = TestG1Terms;
-  type AccG2Terms = TestG2Terms;
-  type AccFrTerms = TestFrTerms;
-  type ErrG1Terms = TestErrG1Terms;
-  type ErrG2Terms = TestErrG2Terms;
-  type ErrFrTerms = TestErrFrTerms;
-  type ErrGtTerms = TestErrGtTerms;
-
   fn prover_proof_to_acc(&self, _proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective> {
     AccHolder {
       acc_g1: vec![],

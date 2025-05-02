@@ -46,30 +46,23 @@ define_acc_err_terms!(MatMulErrFrTerms, []);
 define_acc_err_terms!(MatMulErrGtTerms, [Err_Gt]);
 
 impl AccProofLayout for MatMulBasicBlock {
-  type AccG1Terms = MatMulG1Terms;
-  type AccG2Terms = MatMulG2Terms;
-  type AccFrTerms = MatMulFrTerms;
-  type ErrG1Terms = MatMulErrG1Terms;
-  type ErrG2Terms = MatMulErrG2Terms;
-  type ErrFrTerms = MatMulErrFrTerms;
-  type ErrGtTerms = MatMulErrGtTerms;
   fn acc_g1_num(&self, is_prover: bool) -> usize {
     if is_prover {
-      MatMulG1Terms::COUNT
+      MatMulG1Terms::<G1Projective>::COUNT
     } else {
-      MatMulG1Terms::PUBLIC_COUNT
+      MatMulG1Terms::<G1Projective>::PUBLIC_COUNT
     }
   }
 
   fn acc_g2_num(&self, _is_prover: bool) -> usize {
-    MatMulG2Terms::COUNT
+    MatMulG2Terms::<G2Projective>::COUNT
   }
 
   fn acc_fr_num(&self, is_prover: bool) -> usize {
     if is_prover {
-      MatMulFrTerms::COUNT
+      MatMulFrTerms::<Fr>::COUNT
     } else {
-      MatMulFrTerms::PUBLIC_COUNT
+      MatMulFrTerms::<Fr>::PUBLIC_COUNT
     }
   }
 
@@ -138,42 +131,33 @@ impl AccProofLayout for MatMulBasicBlock {
     acc_2: AccHolder<G1Projective, G2Projective>,
     rng: &mut StdRng,
   ) -> AccHolder<G1Projective, G2Projective> {
-    let acc_flat_A = acc_1.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)];
-    let acc_left_x = acc_1.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Left_x)];
-    let acc_left_Q_x = acc_1.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Left_Q_x)];
-    let acc_part_corr1 = acc_1.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)];
-    let acc_flat_A_no_blind = acc_1.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A_no_blind)];
-    let acc_flat_B_no_blind = acc_1.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_B_no_blind)];
-    let acc_flat_A_r = acc_1.acc_fr[MatMulFrTerms::idx(MatMulFrTerms::Flat_A_r)];
-    let acc_flat_B_r = acc_1.acc_fr[MatMulFrTerms::idx(MatMulFrTerms::Flat_B_r)];
-    let acc_flat_B_g2 = acc_1.acc_g2[MatMulG2Terms::idx(MatMulG2Terms::Flat_B_g2)];
-    let acc_beta_pow_g2 = acc_1.acc_g2[MatMulG2Terms::idx(MatMulG2Terms::Beta_pow_g2)];
-    let flat_A = acc_2.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)];
-    let left_x = acc_2.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Left_x)];
-    let left_Q_x = acc_2.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Left_Q_x)];
-    let part_corr1 = acc_2.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)];
-    let flat_A_no_blind = acc_2.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A_no_blind)];
-    let flat_B_no_blind = acc_2.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_B_no_blind)];
-    let flat_A_r = acc_2.acc_fr[MatMulFrTerms::idx(MatMulFrTerms::Flat_A_r)];
-    let flat_B_r = acc_2.acc_fr[MatMulFrTerms::idx(MatMulFrTerms::Flat_B_r)];
-    let flat_B_g2 = acc_2.acc_g2[MatMulG2Terms::idx(MatMulG2Terms::Flat_B_g2)];
+    let acc_1_g1 = MatMulG1Terms::<G1Projective>::from_vec(&acc_1.acc_g1);
+    let acc_1_g2 = MatMulG2Terms::<G2Projective>::from_vec(&acc_1.acc_g2);
+    let acc_1_fr = MatMulFrTerms::<Fr>::from_vec(&acc_1.acc_fr);
+
+    let acc_2_g1 = MatMulG1Terms::<G1Projective>::from_vec(&acc_2.acc_g1);
+    let acc_2_g2 = MatMulG2Terms::<G2Projective>::from_vec(&acc_2.acc_g2);
+    let acc_2_fr = MatMulFrTerms::<Fr>::from_vec(&acc_2.acc_fr);
 
     // Compute the error
     let err: (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) = (
       vec![
-        acc_left_Q_x * acc_2.mu + left_Q_x * acc_1.mu,
-        acc_left_x * acc_2.mu + left_x * acc_1.mu,
-        acc_part_corr1 * acc_2.mu
-          + part_corr1 * acc_1.mu
-          + acc_flat_A_no_blind * flat_B_r
-          + flat_A_no_blind * acc_flat_B_r
-          + acc_flat_B_no_blind * flat_A_r
-          + flat_B_no_blind * acc_flat_A_r
-          + srs.Y1P * (flat_A_r * acc_flat_B_r + flat_B_r * acc_flat_A_r),
+        acc_1_g1.Left_Q_x * acc_2.mu + acc_2_g1.Left_Q_x * acc_1.mu,
+        acc_1_g1.Left_x * acc_2.mu + acc_2_g1.Left_x * acc_1.mu,
+        acc_1_g1.Part_corr1.unwrap() * acc_2.mu
+          + acc_2_g1.Part_corr1.unwrap() * acc_1.mu
+          + acc_1_g1.Flat_A_no_blind.unwrap() * acc_2_fr.Flat_B_r.unwrap()
+          + acc_2_g1.Flat_A_no_blind.unwrap() * acc_1_fr.Flat_B_r.unwrap()
+          + acc_1_g1.Flat_B_no_blind.unwrap() * acc_2_fr.Flat_A_r.unwrap()
+          + acc_2_g1.Flat_B_no_blind.unwrap() * acc_1_fr.Flat_A_r.unwrap()
+          + srs.Y1P * (acc_2_fr.Flat_A_r.unwrap() * acc_1_fr.Flat_B_r.unwrap() + acc_1_fr.Flat_A_r.unwrap() * acc_2_fr.Flat_B_r.unwrap()),
       ],
       vec![],
       vec![],
-      vec![Bn254::multi_pairing(vec![flat_A, acc_flat_A], vec![acc_flat_B_g2, flat_B_g2])],
+      vec![Bn254::multi_pairing(
+        vec![acc_2_g1.Flat_A, acc_1_g1.Flat_A],
+        vec![acc_1_g2.Flat_B_g2, acc_2_g2.Flat_B_g2],
+      )],
     );
     let errs = vec![err];
 
@@ -188,15 +172,34 @@ impl AccProofLayout for MatMulBasicBlock {
 
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    acc_1.acc_g1[..MatMulG1Terms::idx(MatMulG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
-    acc_1.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)..MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)]
-      .serialize_uncompressed(&mut bytes)
-      .unwrap();
+    let acc_1_g1_fiat_shamir = vec![
+      acc_1_g1.Left_x,
+      acc_1_g1.Left_Q_x,
+      acc_1_g1.Left_zero,
+      acc_1_g1.Left_zero_div,
+      acc_1_g1.Right_x,
+      acc_1_g1.Right_Q_x,
+      acc_1_g1.Right_zero_div,
+      acc_1_g1.Flat_A,
+      acc_1_g1.Flat_B,
+      acc_1_g1.Flat_C,
+    ];
+    acc_1_g1_fiat_shamir.serialize_uncompressed(&mut bytes).unwrap();
     acc_1.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[..MatMulG1Terms::idx(MatMulG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)..MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)]
-      .serialize_uncompressed(&mut bytes)
-      .unwrap();
+
+    let acc_2_g1_fiat_shamir = vec![
+      acc_2_g1.Left_x,
+      acc_2_g1.Left_Q_x,
+      acc_2_g1.Left_zero,
+      acc_2_g1.Left_zero_div,
+      acc_2_g1.Right_x,
+      acc_2_g1.Right_Q_x,
+      acc_2_g1.Right_zero_div,
+      acc_2_g1.Flat_A,
+      acc_2_g1.Flat_B,
+      acc_2_g1.Flat_C,
+    ];
+    acc_2_g1_fiat_shamir.serialize_uncompressed(&mut bytes).unwrap();
     acc_2.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     errs.iter().for_each(|(g1, g2, f, gt)| {
       g1.serialize_uncompressed(&mut bytes).unwrap();
@@ -209,7 +212,7 @@ impl AccProofLayout for MatMulBasicBlock {
     let acc_gamma_sq = acc_gamma * acc_gamma;
 
     new_acc_holder.acc_g1 = acc_2.acc_g1.iter().zip(acc_1.acc_g1.iter()).map(|(x, y)| *x * acc_gamma + y).collect();
-    new_acc_holder.acc_g2 = vec![flat_B_g2 * acc_gamma + acc_flat_B_g2, acc_beta_pow_g2];
+    new_acc_holder.acc_g2 = vec![acc_2_g2.Flat_B_g2 * acc_gamma + acc_1_g2.Flat_B_g2, acc_1_g2.Beta_pow_g2];
     new_acc_holder.acc_fr = acc_2.acc_fr.iter().zip(acc_1.acc_fr.iter()).map(|(x, y)| *x * acc_gamma + y).collect();
     new_acc_holder.mu = acc_1.mu + acc_gamma * acc_2.mu;
     new_acc_holder.errs = errs;
@@ -240,18 +243,39 @@ impl AccProofLayout for MatMulBasicBlock {
     rng: &mut StdRng,
   ) -> Option<bool> {
     let mut result = true;
-
+    let acc_1_g1 = MatMulG1Terms::<G1Affine>::from_vec(&acc_1.acc_g1);
+    let acc_2_g1 = MatMulG1Terms::<G1Affine>::from_vec(&acc_2.acc_g1);
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    acc_1.acc_g1[..MatMulG1Terms::idx(MatMulG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
-    acc_1.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)..MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)]
-      .serialize_uncompressed(&mut bytes)
-      .unwrap();
+
+    let acc_1_g1_fiat_shamir = vec![
+      acc_1_g1.Left_x,
+      acc_1_g1.Left_Q_x,
+      acc_1_g1.Left_zero,
+      acc_1_g1.Left_zero_div,
+      acc_1_g1.Right_x,
+      acc_1_g1.Right_Q_x,
+      acc_1_g1.Right_zero_div,
+      acc_1_g1.Flat_A,
+      acc_1_g1.Flat_B,
+      acc_1_g1.Flat_C,
+    ];
+    acc_1_g1_fiat_shamir.serialize_uncompressed(&mut bytes).unwrap();
     acc_1.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[..MatMulG1Terms::idx(MatMulG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)..MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)]
-      .serialize_uncompressed(&mut bytes)
-      .unwrap();
+
+    let acc_2_g1_fiat_shamir = vec![
+      acc_2_g1.Left_x,
+      acc_2_g1.Left_Q_x,
+      acc_2_g1.Left_zero,
+      acc_2_g1.Left_zero_div,
+      acc_2_g1.Right_x,
+      acc_2_g1.Right_Q_x,
+      acc_2_g1.Right_zero_div,
+      acc_2_g1.Flat_A,
+      acc_2_g1.Flat_B,
+      acc_2_g1.Flat_C,
+    ];
+    acc_2_g1_fiat_shamir.serialize_uncompressed(&mut bytes).unwrap();
     acc_2.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     new_acc.errs.iter().for_each(|(g1, g2, f, gt)| {
       g1.serialize_uncompressed(&mut bytes).unwrap();
@@ -263,17 +287,13 @@ impl AccProofLayout for MatMulBasicBlock {
     let acc_gamma = Fr::rand(rng);
     let acc_gamma_sq = acc_gamma * acc_gamma;
 
-    acc_2.acc_g1[..MatMulG1Terms::idx(MatMulG1Terms::Corr1)].iter().enumerate().for_each(|(i, x)| {
-      let z = *x * acc_gamma + acc_1.acc_g1[i];
-      result &= new_acc.acc_g1[i] == z;
+    acc_2.acc_g1.iter().enumerate().for_each(|(i, x)| {
+      if i < 7 || i >= 11 {
+        // Skip the blinding terms
+        let z = *x * acc_gamma + acc_1.acc_g1[i];
+        result &= new_acc.acc_g1[i] == z;
+      }
     });
-    acc_2.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)..MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)]
-      .iter()
-      .enumerate()
-      .for_each(|(i, x)| {
-        let z = *x * acc_gamma + acc_1.acc_g1[i + MatMulG1Terms::idx(MatMulG1Terms::Flat_A)];
-        result &= new_acc.acc_g1[i + MatMulG1Terms::idx(MatMulG1Terms::Flat_A)] == z;
-      });
     result &= new_acc.acc_g2[0] == acc_1.acc_g2[0] + acc_2.acc_g2[0] * acc_gamma;
     result &= new_acc.acc_g2[1] == acc_1.acc_g2[1];
     result &= new_acc.mu == acc_1.mu + acc_gamma * acc_2.mu;
@@ -626,18 +646,19 @@ impl BasicBlock for MatMulBasicBlock {
   ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAff) {
     let mut acc_holder = acc_proof_to_holder(self, acc_proof, true);
 
-    acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Corr1)] = acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Part_corr1)] * acc_holder.mu
-      + acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A_no_blind)] * acc_holder.acc_fr[MatMulFrTerms::idx(MatMulFrTerms::Flat_B_r)]
-      + acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_B_no_blind)] * acc_holder.acc_fr[MatMulFrTerms::idx(MatMulFrTerms::Flat_A_r)]
-      + srs.Y1P * acc_holder.acc_fr[MatMulFrTerms::idx(MatMulFrTerms::Flat_A_r)] * acc_holder.acc_fr[MatMulFrTerms::idx(MatMulFrTerms::Flat_B_r)];
-
+    let mut acc_g1 = MatMulG1Terms::<G1Projective>::from_vec(&acc_holder.acc_g1);
+    let acc_fr = MatMulFrTerms::<Fr>::from_vec(&acc_holder.acc_fr);
+    acc_g1.Corr1 = acc_g1.Part_corr1.unwrap() * acc_holder.mu
+      + acc_g1.Flat_A_no_blind.unwrap() * acc_fr.Flat_B_r.unwrap()
+      + acc_g1.Flat_B_no_blind.unwrap() * acc_fr.Flat_A_r.unwrap()
+      + srs.Y1P * acc_fr.Flat_A_r.unwrap() * acc_fr.Flat_B_r.unwrap();
     // remove blinding terms from acc proof for the verifier
-    acc_holder.acc_g1 = acc_holder.acc_g1[..MatMulG1Terms::PUBLIC_COUNT].to_vec();
+    acc_holder.acc_g1 = acc_g1.to_vec()[..MatMulG1Terms::<G1Projective>::PUBLIC_COUNT].to_vec();
     acc_holder.acc_fr = vec![];
     let acc_proof = holder_to_acc_proof(acc_holder);
 
     // remove blinding terms from bb proof for the verifier
-    let cqlin_proof = (proof.0[..MatMulG1Terms::PUBLIC_COUNT].to_vec(), proof.1.to_vec(), vec![]);
+    let cqlin_proof = (proof.0[..MatMulG1Terms::<G1Projective>::PUBLIC_COUNT].to_vec(), proof.1.to_vec(), vec![]);
 
     (
       (
@@ -711,8 +732,9 @@ impl BasicBlock for MatMulBasicBlock {
     let temp: Vec<_> = (0..l).map(|i| index(outputs[0], i).g1).collect();
     let flat_C = util::msm::<G1Projective>(&temp, &alpha_pow);
 
-    result &= flat_A == proof.0[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)] && flat_B == proof.0[MatMulG1Terms::idx(MatMulG1Terms::Flat_B)];
-    result &= flat_C == proof.0[MatMulG1Terms::idx(MatMulG1Terms::Flat_C)];
+    let proof_g1 = MatMulG1Terms::<G1Affine>::from_vec(&proof.0);
+    result &= flat_A == proof_g1.Flat_A && flat_B == proof_g1.Flat_B;
+    result &= flat_C == proof_g1.Flat_C;
     if prev_acc_proof.2.len() == 0 && acc_proof.2[0].is_one() {
       return Some(result);
     }
@@ -725,23 +747,8 @@ impl BasicBlock for MatMulBasicBlock {
 
   fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     let acc_holder = acc_proof_to_holder(self, acc_proof, false);
-    let acc_left_x = acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Left_x)];
-    let acc_left_Q_x = acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Left_Q_x)];
-    let acc_left_zero = acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Left_zero)];
-    let acc_left_zero_div = acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Left_zero_div)];
-    let acc_right_x = acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Right_x)];
-    let acc_right_Q_x = acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Right_Q_x)];
-    let acc_right_zero_div = acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Right_zero_div)];
-    let acc_corr1 = acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Corr1)];
-    let acc_corr2 = acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Corr2)];
-    let acc_corr3 = acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Corr3)];
-    let acc_corr4 = acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Corr4)];
-    let acc_flat_A = acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_A)];
-    let acc_flat_B = acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_B)];
-    let acc_flat_C = acc_holder.acc_g1[MatMulG1Terms::idx(MatMulG1Terms::Flat_C)];
-
-    let acc_flat_B_g2 = acc_holder.acc_g2[MatMulG2Terms::idx(MatMulG2Terms::Flat_B_g2)];
-    let beta_pow_g2 = acc_holder.acc_g2[MatMulG2Terms::idx(MatMulG2Terms::Beta_pow_g2)];
+    let acc_g1 = MatMulG1Terms::<G1Affine>::from_vec(&acc_holder.acc_g1);
+    let acc_g2 = MatMulG2Terms::<G2Affine>::from_vec(&acc_holder.acc_g2);
 
     let acc_mu = acc_holder.mu;
     let err_1 = &acc_holder.acc_errs[0];
@@ -755,33 +762,33 @@ impl BasicBlock for MatMulBasicBlock {
     temp.push((err_1.0[MatMulErrG1Terms::idx(MatMulErrG1Terms::Err_C).1], srs.Y2A));
 
     let mut acc_1: PairingCheck = vec![
-      (acc_flat_A, acc_flat_B_g2),
-      ((-acc_left_x * acc_mu).into(), srs.X2A[0]),
-      ((-acc_left_Q_x * acc_mu).into(), (srs.X2A[self.m] - srs.X2A[0]).into()),
-      (-acc_corr1, srs.Y2A),
+      (acc_g1.Flat_A, acc_g2.Flat_B_g2),
+      ((-acc_g1.Left_x * acc_mu).into(), srs.X2A[0]),
+      ((-acc_g1.Left_Q_x * acc_mu).into(), (srs.X2A[self.m] - srs.X2A[0]).into()),
+      (-acc_g1.Corr1, srs.Y2A),
     ];
     acc_1.extend(temp);
 
-    let acc_2: PairingCheck = vec![(acc_flat_B, srs.X2A[0]), (srs.X1A[0], -acc_flat_B_g2)];
+    let acc_2: PairingCheck = vec![(acc_g1.Flat_B, srs.X2A[0]), (srs.X1A[0], -acc_g2.Flat_B_g2)];
 
     let acc_3: PairingCheck = vec![
-      ((acc_left_x - acc_left_zero).into(), srs.X2A[0]),
-      (-acc_left_zero_div, srs.X2A[1]),
-      (-acc_corr2, srs.Y2A),
+      ((acc_g1.Left_x - acc_g1.Left_zero).into(), srs.X2A[0]),
+      (-acc_g1.Left_zero_div, srs.X2A[1]),
+      (-acc_g1.Corr2, srs.Y2A),
     ];
 
     let acc_4: PairingCheck = vec![
-      (acc_flat_C, beta_pow_g2),
-      (-acc_right_x, srs.X2A[0]),
-      (-acc_right_Q_x, (srs.X2A[self.n] - srs.X2A[0]).into()),
-      (-acc_corr3, srs.Y2A),
+      (acc_g1.Flat_C, acc_g2.Beta_pow_g2),
+      (-acc_g1.Right_x, srs.X2A[0]),
+      (-acc_g1.Right_Q_x, (srs.X2A[self.n] - srs.X2A[0]).into()),
+      (-acc_g1.Corr3, srs.Y2A),
     ];
 
-    let acc_right_zero: G1Projective = acc_left_zero * (Fr::from(self.m as u32) * Fr::from(self.n as u32).inverse().unwrap());
+    let acc_right_zero: G1Projective = acc_g1.Left_zero * (Fr::from(self.m as u32) * Fr::from(self.n as u32).inverse().unwrap());
     let acc_5 = vec![
-      ((-acc_right_zero + acc_right_x).into(), srs.X2A[0]),
-      (-acc_right_zero_div, srs.X2A[1]),
-      (-acc_corr4, srs.Y2A),
+      ((-acc_right_zero + acc_g1.Right_x).into(), srs.X2A[0]),
+      (-acc_g1.Right_zero_div, srs.X2A[1]),
+      (-acc_g1.Corr4, srs.Y2A),
     ];
 
     let pairing_zero = PairingOutput::<Bn<ark_bn254::Config>>::zero();

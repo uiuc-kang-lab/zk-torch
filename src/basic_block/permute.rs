@@ -44,24 +44,16 @@ define_acc_err_terms!(PermuteErrFrTerms);
 define_acc_err_terms!(PermuteErrGtTerms);
 
 impl AccProofLayout for PermuteBasicBlock {
-  type AccG1Terms = PermuteG1Terms;
-  type AccG2Terms = PermuteG2Terms;
-  type AccFrTerms = PermuteFrTerms;
-  type ErrG1Terms = PermuteErrG1Terms;
-  type ErrG2Terms = PermuteErrG2Terms;
-  type ErrFrTerms = PermuteErrFrTerms;
-  type ErrGtTerms = PermuteErrGtTerms;
-
   fn acc_g1_num(&self, _is_prover: bool) -> usize {
-    PermuteG1Terms::COUNT
+    PermuteG1Terms::<G1Projective>::COUNT
   }
 
   fn acc_g2_num(&self, _is_prover: bool) -> usize {
-    PermuteG2Terms::COUNT
+    PermuteG2Terms::<G2Projective>::COUNT
   }
 
   fn acc_fr_num(&self, _is_prover: bool) -> usize {
-    PermuteFrTerms::COUNT
+    PermuteFrTerms::<Fr>::COUNT
   }
 
   fn prover_proof_to_acc(&self, proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective> {
@@ -104,14 +96,32 @@ impl AccProofLayout for PermuteBasicBlock {
 
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    acc_1.acc_g1[..PermuteG1Terms::idx(PermuteG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
-    acc_1.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Flat_L)..PermuteG1Terms::idx(PermuteG1Terms::Flat_R) + 1]
-      .serialize_uncompressed(&mut bytes)
-      .unwrap();
-    acc_2.acc_g1[..PermuteG1Terms::idx(PermuteG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Flat_L)..PermuteG1Terms::idx(PermuteG1Terms::Flat_R) + 1]
-      .serialize_uncompressed(&mut bytes)
-      .unwrap();
+    let acc1 = PermuteG1Terms::<G1Projective>::from_vec(&acc_1.acc_g1);
+    let acc2 = PermuteG1Terms::<G1Projective>::from_vec(&acc_2.acc_g1);
+    let acc1_fiat_shamir = vec![
+      acc1.Left_x,
+      acc1.Left_Q_x,
+      acc1.Left_zero,
+      acc1.Left_zero_div,
+      acc1.Right_x,
+      acc1.Right_Q_x,
+      acc1.Right_zero_div,
+      acc1.Flat_L,
+      acc1.Flat_R,
+    ];
+    let acc2_fiat_shamir = vec![
+      acc2.Left_x,
+      acc2.Left_Q_x,
+      acc2.Left_zero,
+      acc2.Left_zero_div,
+      acc2.Right_x,
+      acc2.Right_Q_x,
+      acc2.Right_zero_div,
+      acc2.Flat_L,
+      acc2.Flat_R,
+    ];
+    acc1_fiat_shamir.serialize_uncompressed(&mut bytes).unwrap();
+    acc2_fiat_shamir.serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
     let acc_gamma = Fr::rand(rng);
 
@@ -131,14 +141,32 @@ impl AccProofLayout for PermuteBasicBlock {
     let mut result = true;
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    acc_1.acc_g1[..PermuteG1Terms::idx(PermuteG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
-    acc_1.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Flat_L)..PermuteG1Terms::idx(PermuteG1Terms::Flat_R) + 1]
-      .serialize_uncompressed(&mut bytes)
-      .unwrap();
-    acc_2.acc_g1[..PermuteG1Terms::idx(PermuteG1Terms::Corr1)].serialize_uncompressed(&mut bytes).unwrap();
-    acc_2.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Flat_L)..PermuteG1Terms::idx(PermuteG1Terms::Flat_R) + 1]
-      .serialize_uncompressed(&mut bytes)
-      .unwrap();
+    let acc1 = PermuteG1Terms::<G1Affine>::from_vec(&acc_1.acc_g1);
+    let acc2 = PermuteG1Terms::<G1Affine>::from_vec(&acc_2.acc_g1);
+    let acc1_fiat_shamir = vec![
+      acc1.Left_x,
+      acc1.Left_Q_x,
+      acc1.Left_zero,
+      acc1.Left_zero_div,
+      acc1.Right_x,
+      acc1.Right_Q_x,
+      acc1.Right_zero_div,
+      acc1.Flat_L,
+      acc1.Flat_R,
+    ];
+    let acc2_fiat_shamir = vec![
+      acc2.Left_x,
+      acc2.Left_Q_x,
+      acc2.Left_zero,
+      acc2.Left_zero_div,
+      acc2.Right_x,
+      acc2.Right_Q_x,
+      acc2.Right_zero_div,
+      acc2.Flat_L,
+      acc2.Flat_R,
+    ];
+    acc1_fiat_shamir.serialize_uncompressed(&mut bytes).unwrap();
+    acc2_fiat_shamir.serialize_uncompressed(&mut bytes).unwrap();
     util::add_randomness(rng, bytes);
     let acc_gamma = Fr::rand(rng);
 
@@ -565,8 +593,10 @@ impl BasicBlock for PermuteBasicBlock {
     let temp: Vec<_> = (0..n2).map(|i| output[i].g1).collect();
     let flat_R: G1Affine = util::msm::<G1Projective>(&temp, &c).into();
 
-    result &= acc_proof.1[PermuteG2Terms::idx(PermuteG2Terms::B_g2)] == b_g2 && acc_proof.1[PermuteG2Terms::idx(PermuteG2Terms::D_g2)] == d_g2;
-    result &= proof.0[PermuteG1Terms::idx(PermuteG1Terms::Flat_L)] == flat_L && proof.0[PermuteG1Terms::idx(PermuteG1Terms::Flat_R)] == flat_R;
+    let proof_g1 = PermuteG1Terms::<G1Affine>::from_vec(&proof.0);
+    let acc_g2 = PermuteG2Terms::<G2Affine>::from_vec(&acc_proof.1);
+    result &= acc_g2.B_g2 == b_g2 && acc_g2.D_g2 == d_g2;
+    result &= proof_g1.Flat_L == flat_L && proof_g1.Flat_R == flat_R;
     if prev_acc_proof.2.len() == 0 && acc_proof.2[0].is_one() {
       return Some(result);
     }
@@ -582,48 +612,50 @@ impl BasicBlock for PermuteBasicBlock {
     let m2 = self.permutation.1.len();
     let acc_holder = acc_proof_to_holder(self, acc_proof, false);
 
-    let acc_left_x = acc_holder.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Left_x)];
-    let acc_left_Q_x = acc_holder.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Left_Q_x)];
-    let acc_left_zero = acc_holder.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Left_zero)];
-    let acc_left_zero_div = acc_holder.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Left_zero_div)];
-    let acc_right_x = acc_holder.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Right_x)];
-    let acc_right_Q_x = acc_holder.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Right_Q_x)];
-    let acc_right_zero_div = acc_holder.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Right_zero_div)];
-    let acc_corr1 = acc_holder.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Corr1)];
-    let acc_corr2 = acc_holder.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Corr2)];
-    let acc_corr3 = acc_holder.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Corr3)];
-    let acc_corr4 = acc_holder.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Corr4)];
-    let acc_flat_L = acc_holder.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Flat_L)];
-    let acc_flat_R = acc_holder.acc_g1[PermuteG1Terms::idx(PermuteG1Terms::Flat_R)];
+    let acc_g1 = PermuteG1Terms::<G1Affine>::from_vec(&acc_holder.acc_g1);
+    let acc_left_x = acc_g1.Left_x;
+    let acc_left_Q_x = acc_g1.Left_Q_x;
+    let acc_left_zero = acc_g1.Left_zero;
+    let acc_left_zero_div = acc_g1.Left_zero_div;
+    let acc_right_x = acc_g1.Right_x;
+    let acc_right_Q_x = acc_g1.Right_Q_x;
+    let acc_right_zero_div = acc_g1.Right_zero_div;
+    let acc_corr1 = acc_g1.Corr1;
+    let acc_corr2 = acc_g1.Corr2;
+    let acc_corr3 = acc_g1.Corr3;
+    let acc_corr4 = acc_g1.Corr4;
+    let acc_flat_L = acc_g1.Flat_L;
+    let acc_flat_R = acc_g1.Flat_R;
 
-    let acc_b_g2 = acc_holder.acc_g2[PermuteG2Terms::idx(PermuteG2Terms::B_g2)];
-    let acc_d_g2 = acc_holder.acc_g2[PermuteG2Terms::idx(PermuteG2Terms::D_g2)];
+    let acc_g2 = PermuteG2Terms::<G2Affine>::from_vec(&acc_holder.acc_g2);
+    let acc_b_g2 = acc_g2.B_g2;
+    let acc_d_g2 = acc_g2.D_g2;
 
     let acc_1: PairingCheck = vec![
-      (acc_flat_L, acc_b_g2),
-      (-acc_left_x, srs.X2A[0]),
-      (-acc_left_Q_x, (srs.X2A[self.m] - srs.X2A[0]).into()),
-      (-acc_corr1, srs.Y2A),
+      (acc_g1.Flat_L, acc_g2.B_g2),
+      (-acc_g1.Left_x, srs.X2A[0]),
+      (-acc_g1.Left_Q_x, (srs.X2A[self.m] - srs.X2A[0]).into()),
+      (-acc_g1.Corr1, srs.Y2A),
     ];
 
     let acc_2: PairingCheck = vec![
-      ((acc_left_x - acc_left_zero).into(), srs.X2A[0]),
-      (-acc_left_zero_div, srs.X2A[1]),
-      (-acc_corr2, srs.Y2A),
+      ((acc_g1.Left_x - acc_g1.Left_zero).into(), srs.X2A[0]),
+      (-acc_g1.Left_zero_div, srs.X2A[1]),
+      (-acc_g1.Corr2, srs.Y2A),
     ];
 
     let acc_3: PairingCheck = vec![
-      (acc_flat_R, acc_d_g2),
-      (-acc_right_x, srs.X2A[0]),
-      (-acc_right_Q_x, (srs.X2A[m2] - srs.X2A[0]).into()),
-      (-acc_corr3, srs.Y2A),
+      (acc_g1.Flat_R, acc_g2.D_g2),
+      (-acc_g1.Right_x, srs.X2A[0]),
+      (-acc_g1.Right_Q_x, (srs.X2A[m2] - srs.X2A[0]).into()),
+      (-acc_g1.Corr3, srs.Y2A),
     ];
 
-    let acc_right_zero: G1Projective = acc_left_zero * (Fr::from(self.m as u32) * Fr::from(m2 as u32).inverse().unwrap());
+    let acc_right_zero: G1Projective = acc_g1.Left_zero * (Fr::from(self.m as u32) * Fr::from(m2 as u32).inverse().unwrap());
     let acc_4 = vec![
-      ((-acc_right_zero + acc_right_x).into(), srs.X2A[0]),
-      (-acc_right_zero_div, srs.X2A[1]),
-      (-acc_corr4, srs.Y2A),
+      ((-acc_right_zero + acc_g1.Right_x).into(), srs.X2A[0]),
+      (-acc_g1.Right_zero_div, srs.X2A[1]),
+      (-acc_g1.Corr4, srs.Y2A),
     ];
 
     let pairing_zero = PairingOutput::<Bn<ark_bn254::Config>>::zero();
