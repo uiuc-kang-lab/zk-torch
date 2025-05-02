@@ -309,7 +309,7 @@ impl CQLayoutHelper {
     let err_1 = (
       vec![
         acc_1_g1.A_Q_x * acc_2.mu + acc_2_g1.A_Q_x * acc_1.mu,
-        acc_1_g1.A_x * acc_2_fr.Beta + acc_2_g1.A_x * acc_1_fr.Beta - acc_1_g1.M_x * acc_1.mu - acc_2_g1.M_x * acc_2.mu,
+        acc_1_g1.A_x * acc_2_fr.Beta + acc_2_g1.A_x * acc_1_fr.Beta - acc_1_g1.M_x * acc_2.mu - acc_2_g1.M_x * acc_1.mu,
         acc_1_g1.Part_C1.unwrap() * acc_2.mu
           + acc_2_g1.Part_C1.unwrap() * acc_1.mu
           + acc_1_g1.A_x_1.unwrap() * acc_2_fr.Model_r.unwrap()
