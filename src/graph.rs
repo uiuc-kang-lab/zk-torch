@@ -298,17 +298,13 @@ impl Graph {
         )
       );
 
-      let mut prev_acc_proof: (
-        &Vec<G1Projective>,
-        &Vec<G2Projective>,
-        &Vec<Fr>,
-        &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
-      ) = (&vec![], &vec![], &vec![], &vec![]);
-
-      // check if basicblock is in prev_acc_map
-      if let Some(prev_acc) = prev_acc_map.get(bb_index_for_folding) {
-        prev_acc_proof = (&prev_acc.0, &prev_acc.1, &prev_acc.2, &prev_acc.3);
-      }
+      let empty_vecs = (vec![], vec![], vec![], vec![]);
+      let prev_acc_proof = prev_acc_map.get(bb_index_for_folding).map(|prev_acc| (&prev_acc.0, &prev_acc.1, &prev_acc.2, &prev_acc.3)).unwrap_or((
+        &empty_vecs.0,
+        &empty_vecs.1,
+        &empty_vecs.2,
+        &empty_vecs.3,
+      ));
 
       let new_acc_proof = self.basic_blocks[n.basic_block].acc_prove(
         srs,
@@ -450,16 +446,15 @@ impl Graph {
           .collect();
 
         let bb_index_for_folding = self.foldable_bb_map.get(&n.basic_block).unwrap();
-        let mut prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>) =
-          (&vec![], &vec![], &vec![], &vec![]);
-        if let Some(prev_acc) = prev_acc_map.get(bb_index_for_folding) {
-          prev_acc_proof = (
-            &acc_proofs[*prev_acc].0,
-            &acc_proofs[*prev_acc].1,
-            &acc_proofs[*prev_acc].2,
-            &acc_proofs[*prev_acc].3,
-          );
-        }
+
+        let empty_vecs = (vec![], vec![], vec![], vec![]);
+        let prev_acc_proof = prev_acc_map
+          .get(bb_index_for_folding)
+          .map(|prev_acc| {
+            let acc = acc_proofs[*prev_acc];
+            (acc.0, acc.1, acc.2, acc.3)
+          })
+          .unwrap_or((&empty_vecs.0, &empty_vecs.1, &empty_vecs.2, &empty_vecs.3));
         prev_acc_map.insert(*bb_index_for_folding, i);
 
         let acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>) =
