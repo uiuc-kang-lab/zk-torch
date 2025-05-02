@@ -751,7 +751,7 @@ impl AccProofLayout for MulBasicBlock {
       vec![],
       vec![Bn254::multi_pairing(
         vec![acc2_g1.Inp0, acc1_g1.Inp0],
-        vec![acc2_g2.Inp1_2, acc1_g2.Inp1_2],
+        vec![acc1_g2.Inp1_2, acc2_g2.Inp1_2],
       )],
     );
     let errs = vec![err];
