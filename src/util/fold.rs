@@ -17,6 +17,10 @@ pub fn get_foldable_bb_info(bb: &Box<dyn BasicBlock>) -> String {
   } else if bb.is::<CQBasicBlock>() {
     let bb = bb.downcast_ref::<CQBasicBlock>().unwrap();
     return format!("CQ-{}-{}", bb.n, get_cq_N(&bb.setup));
+  } else if bb.is::<RepeaterBasicBlock>() {
+    let bb = bb.downcast_ref::<RepeaterBasicBlock>().unwrap();
+    let b = &bb.basic_block;
+    return format!("Repeater-{}", get_foldable_bb_info(b));
   } else {
     return format!("{:?}", bb);
   }
@@ -183,7 +187,7 @@ pub trait AccProofLayout: BasicBlock {
   }
 }
 
-pub fn acc_proof_to_holder<P: Copy, Q: Copy, L: AccProofLayout>(
+pub fn acc_proof_to_holder<P: Copy, Q: Copy, L: AccProofLayout + ?Sized>(
   bb: &L,
   acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
   is_prover: bool,
