@@ -54,17 +54,6 @@ pub fn holder_to_acc_proof<P: Copy, Q: Copy>(acc: AccHolder<P, Q>) -> (Vec<P>, V
 // AccProofLayout is a trait that defines the layout of the accumulator proof
 // It is used to implement the generalized accumulator proof for different basic blocks
 pub trait AccProofLayout: BasicBlock {
-  // Define the accumulator terms
-  type AccG1Terms;
-  type AccG2Terms;
-  type AccFrTerms;
-
-  // Define the error terms
-  type ErrG1Terms;
-  type ErrG2Terms;
-  type ErrFrTerms;
-  type ErrGtTerms;
-
   // acc_g1_num returns the number of G1 elements in an accumulator instance
   fn acc_g1_num(&self, is_prover: bool) -> usize {
     0
@@ -283,17 +272,43 @@ pub fn acc_proof_to_holder<P: Copy, Q: Copy, L: AccProofLayout>(
 macro_rules! define_acc_terms {
   ($name:ident, [$($public:ident),*], [$($prover:ident),*]) => {
     #[derive(Debug, Clone, Copy)]
-    pub enum $name {
+    pub struct $name<T: Copy> {
       #[allow(dead_code)]
-      __EmptyPlaceholder $(, $public)* $(, $prover)*
+      phantom: std::marker::PhantomData<T>,
+      $(pub $public: T,)*
+      $(pub $prover: Option<T>,)*
     }
 
-    impl $name {
+    impl<T: Copy> $name<T> {
       pub const PUBLIC_COUNT: usize = 0 $(+ { let _ = stringify!($public); 1 })*;
       pub const PROVER_COUNT: usize = 0 $(+ { let _ = stringify!($prover); 1 })*;
       pub const COUNT: usize = Self::PUBLIC_COUNT + Self::PROVER_COUNT;
-      pub fn idx(idx: Self) -> usize {
-        idx as usize - 1
+      pub fn from_vec(vec: &[T]) -> Self {
+        #[allow(unused_mut)]
+        let mut iter = vec.iter();
+        if vec.len() == Self::COUNT {
+          Self {
+            phantom: std::marker::PhantomData,
+            $($public: *iter.next().unwrap(),)*
+            $($prover: Some(*iter.next().unwrap()),)*
+          }
+        } else if vec.len() == Self::PUBLIC_COUNT {
+          Self {
+            phantom: std::marker::PhantomData,
+            $($public: *iter.next().unwrap(),)*
+            $($prover: None,)*
+          }
+        } else {
+          panic!("Invalid vector length");
+        }
+      }
+
+      pub fn to_vec(&self) -> Vec<T> {
+        #[allow(unused_mut)]
+        let mut vec = vec![];
+        $(vec.push(self.$public);)*
+        $(if let Some(prover) = self.$prover { vec.push(prover); })*
+        vec
       }
     }
   };
