@@ -613,23 +613,7 @@ impl BasicBlock for PermuteBasicBlock {
     let acc_holder = acc_proof_to_holder(self, acc_proof, false);
 
     let acc_g1 = PermuteG1Terms::<G1Affine>::from_vec(&acc_holder.acc_g1);
-    let acc_left_x = acc_g1.Left_x;
-    let acc_left_Q_x = acc_g1.Left_Q_x;
-    let acc_left_zero = acc_g1.Left_zero;
-    let acc_left_zero_div = acc_g1.Left_zero_div;
-    let acc_right_x = acc_g1.Right_x;
-    let acc_right_Q_x = acc_g1.Right_Q_x;
-    let acc_right_zero_div = acc_g1.Right_zero_div;
-    let acc_corr1 = acc_g1.Corr1;
-    let acc_corr2 = acc_g1.Corr2;
-    let acc_corr3 = acc_g1.Corr3;
-    let acc_corr4 = acc_g1.Corr4;
-    let acc_flat_L = acc_g1.Flat_L;
-    let acc_flat_R = acc_g1.Flat_R;
-
     let acc_g2 = PermuteG2Terms::<G2Affine>::from_vec(&acc_holder.acc_g2);
-    let acc_b_g2 = acc_g2.B_g2;
-    let acc_d_g2 = acc_g2.D_g2;
 
     let acc_1: PairingCheck = vec![
       (acc_g1.Flat_L, acc_g2.B_g2),
