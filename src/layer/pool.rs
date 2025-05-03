@@ -94,13 +94,22 @@ impl Layer for MaxPoolLayer {
     }
     let mut output_shape = input_shapes[0][..2].to_vec();
     output_shape.append(&mut out_hw(&dims, &strides, &kernel_shape, &padding[2..].to_vec(), false));
-    let reshape_inp_shape = vec![output_shape.iter().fold(1, |acc, &x| acc * x), 1];
-    let reshape_permutation = util::get_reshape_indices(reshape_inp_shape.clone(), output_shape.clone());
-    let reshape_inp_padded: Vec<_> = reshape_inp_shape.iter().map(|x| x.next_power_of_two()).collect();
-    let cc1 = graph.addBB(Box::new(CopyConstraintBasicBlock {
-      permutation: reshape_permutation,
-      input_dim: IxDyn(&reshape_inp_padded),
-      padding_partition: copy_constraint::PaddingEnum::Zero,
+    let mut reshape_shape: Vec<_> = output_shape.iter().map(|x| x.next_power_of_two()).collect();
+    reshape_shape.push(1);
+    let reshape1 = graph.addBB(Box::new(ReshapeBasicBlock { shape: reshape_shape }));
+    let a = output_shape[output_shape.len() - 1].next_power_of_two();
+    let transpose1 = ((0..1).map(|x| x * a).collect(), (0..a).collect());
+    let permute = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(PermuteBasicBlock {
+        permutation: transpose1,
+        n: a,
+        m: 1,
+      }),
+      N: 2,
+    }));
+
+    let reshape2 = graph.addBB(Box::new(ReshapeBasicBlock {
+      shape: output_shape.iter().map(|x| x.next_power_of_two()).collect(),
     }));
 
     let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
@@ -113,9 +122,11 @@ impl Layer for MaxPoolLayer {
 
     let cc_output = graph.addNode(cc, vec![(-1, 0)]);
     let max_output = graph.addNode(max, vec![(cc_output, 0)]);
-    let cc1_output = graph.addNode(cc1, vec![(max_output, 0)]);
+    let reshape1_output = graph.addNode(reshape1, vec![(max_output, 0)]);
+    let permute_output = graph.addNode(permute, vec![(reshape1_output, 0)]);
+    let reshape2_output = graph.addNode(reshape2, vec![(permute_output, 0)]);
     let _ = graph.addNode(range_check, vec![(max_output, 1)]);
-    graph.outputs.push((cc1_output, 0));
+    graph.outputs.push((reshape2_output, 0));
     (graph, vec![output_shape], vec![input_types[0]])
   }
 }
