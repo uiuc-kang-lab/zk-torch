@@ -50,13 +50,15 @@ impl Layer for SqrtLayer {
     }));
     let non_negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,
     }));
     let negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
-        setup: util::CQArrayType::Negative,
+        n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
+        setup: util::CQArrayType::NonPositive,
       }),
       N: 1,
     }));

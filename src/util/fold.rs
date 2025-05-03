@@ -1,4 +1,5 @@
 use crate::basic_block::*;
+use crate::util::get_cq_N;
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
@@ -11,7 +12,11 @@ pub fn get_foldable_bb_info(bb: &Box<dyn BasicBlock>) -> String {
     let bb = bb.downcast_ref::<CQLinBasicBlock>().unwrap();
     return format!("CQLin-{:?}", bb.setup.shape());
   } else if bb.is::<CQ2BasicBlock>() {
-    return "CQ2".to_string();
+    let bb = bb.downcast_ref::<CQ2BasicBlock>().unwrap();
+    return format!("CQ2-{}-{}", bb.n, bb.setup.as_ref().unwrap().2);
+  } else if bb.is::<CQBasicBlock>() {
+    let bb = bb.downcast_ref::<CQBasicBlock>().unwrap();
+    return format!("CQ-{}-{}", bb.n, get_cq_N(&bb.setup));
   } else {
     return format!("{:?}", bb);
   }
@@ -55,17 +60,17 @@ pub fn holder_to_acc_proof<P: Copy, Q: Copy>(acc: AccHolder<P, Q>) -> (Vec<P>, V
 // It is used to implement the generalized accumulator proof for different basic blocks
 pub trait AccProofLayout: BasicBlock {
   // acc_g1_num returns the number of G1 elements in an accumulator instance
-  fn acc_g1_num(&self, is_prover: bool) -> usize {
+  fn acc_g1_num(&self, _is_prover: bool) -> usize {
     0
   }
 
   // acc_g2_num returns the number of G2 elements in an accumulator instance
-  fn acc_g2_num(&self, is_prover: bool) -> usize {
+  fn acc_g2_num(&self, _is_prover: bool) -> usize {
     0
   }
 
   // acc_fr_num returns the number of Fr elements in an accumulator instance
-  fn acc_fr_num(&self, is_prover: bool) -> usize {
+  fn acc_fr_num(&self, _is_prover: bool) -> usize {
     0
   }
 
@@ -87,10 +92,10 @@ pub trait AccProofLayout: BasicBlock {
   // mira_verify is the main function that verifies the generalized accumulator proof
   fn mira_verify(
     &self,
-    acc_1: AccHolder<G1Affine, G2Affine>,
-    acc_2: AccHolder<G1Affine, G2Affine>,
-    new_acc: AccHolder<G1Affine, G2Affine>,
-    rng: &mut StdRng,
+    _acc_1: AccHolder<G1Affine, G2Affine>,
+    _acc_2: AccHolder<G1Affine, G2Affine>,
+    _new_acc: AccHolder<G1Affine, G2Affine>,
+    _rng: &mut StdRng,
   ) -> Option<bool> {
     None
   }

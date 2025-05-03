@@ -43,12 +43,14 @@ impl Layer for LessLayer {
     }));
     let negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
         setup: util::CQArrayType::Negative,
       }),
       N: 1,
     }));
     let non_negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
+        n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,

@@ -31,6 +31,7 @@ impl Layer for CastLayer {
     };
     let change_sf_check = if input_shapes[0].len() == 0 {
       graph.addBB(Box::new(CQ2BasicBlock {
+        n: 1,
         setup: Some((
           Box::new(ChangeSFBasicBlock {
             input_SF: input_SF,
@@ -43,6 +44,7 @@ impl Layer for CastLayer {
     } else {
       graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
+          n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
           setup: Some((
             Box::new(ChangeSFBasicBlock {
               input_SF: input_SF,

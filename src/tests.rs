@@ -205,6 +205,30 @@ fn testBasicBlocks() {
     &empty,
     &vec![&A, &B],
   );
+  testBasicBlock(
+    RepeaterBasicBlock {
+      basic_block: Box::new(CQ2BasicBlock {
+        n,
+        setup: Some((Box::new(BasicBlockForTest {}), 0, N)),
+      }),
+      N: 1,
+    },
+    srs,
+    &ab,
+    &vec![&a_n, &b_n],
+  );
+  testBasicBlock(
+    RepeaterBasicBlock {
+      basic_block: Box::new(CQBasicBlock {
+        n,
+        setup: util::CQArrayType::Custom(a.iter().map(|x| *x).collect::<Vec<_>>()),
+      }),
+      N: 1,
+    },
+    srs,
+    &a,
+    &vec![&a_n],
+  );
   testBasicBlock(MulConstBasicBlock { c: 12345 }, srs, &empty, &vec![&a]);
   testBasicBlock(MulScalarBasicBlock {}, srs, &empty, &vec![&a, &a_0]);
   testBasicBlock(DivConstProofBasicBlock { c: 16 }, srs, &empty, &vec![&a_d]);
@@ -215,6 +239,24 @@ fn testBasicBlocks() {
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a_0, &b]);
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&b, &a_0]);
   testBasicBlock(SubBasicBlock {}, srs, &empty, &vec![&a_0, &a_0]);
+  testBasicBlock(
+    CQBasicBlock {
+      n,
+      setup: util::CQArrayType::Custom(a.iter().map(|x| *x).collect::<Vec<_>>()),
+    },
+    srs,
+    &a,
+    &vec![&a_n],
+  );
+  testBasicBlock(
+    CQ2BasicBlock {
+      n,
+      setup: Some((Box::new(BasicBlockForTest {}), 0, N)),
+    },
+    srs,
+    &ab,
+    &vec![&a_n, &b_n],
+  );
   testBasicBlock(SumBasicBlock { len: N }, srs, &empty, &vec![&a]);
 
   let data_to_split = ArrayD::from_shape_fn(IxDyn(&[4, 2]), |_| Fr::rand(&mut rng));

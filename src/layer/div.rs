@@ -48,11 +48,13 @@ macro_rules! create_division_layer {
           // Add a basic block for range checking with custom setup
           let const_check = if input_shapes[0].len() == input_shapes[1].len() && input_shapes[0].len() == 0 {
             graph.addBB(Box::new(CQ2BasicBlock {
+              n: 1,
               setup: Some((Box::new($const_block { c: c_value as _ }), *onnx::CQ_RANGE_LOWER, *onnx::CQ_RANGE)),
             }))
           } else {
             graph.addBB(Box::new(RepeaterBasicBlock {
               basic_block: Box::new(CQ2BasicBlock {
+                n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
                 setup: Some((Box::new($const_block { c: c_value as _ }), *onnx::CQ_RANGE_LOWER, *onnx::CQ_RANGE)),
               }),
               N: 1,
@@ -86,6 +88,7 @@ macro_rules! create_division_layer {
         // Add a range check basic block for ensuring the remainder is non-negative
         let range_check = graph.addBB(Box::new(RepeaterBasicBlock {
           basic_block: Box::new(CQBasicBlock {
+            n: input_shapes[0][input_shapes[0].len() - 1].next_power_of_two(),
             setup: util::CQArrayType::NonNegative,
           }),
           N: 1,

@@ -133,8 +133,24 @@ impl Layer for LSTMLayer {
         input_SF: sf_log * 2,
         output_SF: sf_log,
       }));
-      let change_SF_check = graph.addBB(Box::new(RepeaterBasicBlock {
+      let change_SF_check_h = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
+          n: hidden_size.next_power_of_two(),
+          setup: Some((
+            Box::new(ChangeSFBasicBlock {
+              input_SF: sf_log * 2,
+              output_SF: sf_log,
+            }),
+            *onnx::CQ_RANGE_LOWER,
+            *onnx::CQ_RANGE,
+          )),
+        }),
+        N: 1,
+      }));
+
+      let change_SF_check_4h = graph.addBB(Box::new(RepeaterBasicBlock {
+        basic_block: Box::new(CQ2BasicBlock {
+          n: (hidden_size * 4).next_power_of_two(),
           setup: Some((
             Box::new(ChangeSFBasicBlock {
               input_SF: sf_log * 2,
@@ -148,7 +164,7 @@ impl Layer for LSTMLayer {
       }));
       let matmul_output = graph.addNode(matmul, vec![(X_output, t), (W_T_output, 0)]);
       let sublayer6 = graph.addNode(change_SF, vec![(matmul_output, 0)]); // matmul(X_t, W_T)
-      let _ = graph.addNode(change_SF_check, vec![(matmul_output, 0), (sublayer6, 0)]);
+      let _ = graph.addNode(change_SF_check_4h, vec![(matmul_output, 0), (sublayer6, 0)]);
 
       // sublayer 7: MatMul for H_t and R_T
       let matmul = graph.addBB(Box::new(RepeaterBasicBlock {
@@ -160,7 +176,7 @@ impl Layer for LSTMLayer {
       }));
       let matmul_output = graph.addNode(matmul, vec![(H_t_output, 0), (R_T_output, 0)]);
       let sublayer7 = graph.addNode(change_SF, vec![(matmul_output, 0)]); // matmul(H_t, R_T)
-      let _ = graph.addNode(change_SF_check, vec![(matmul_output, 0), (sublayer7, 0)]);
+      let _ = graph.addNode(change_SF_check_4h, vec![(matmul_output, 0), (sublayer7, 0)]);
 
       // sublayer 8: Calculate matmul(X_t, W_T) + matmul(H_t, R_T)
       let sublayer8 = graph.addNode(add, vec![(sublayer6, 0), (sublayer7, 0)]);
@@ -225,6 +241,7 @@ impl Layer for LSTMLayer {
       }));
       let sigmoid_check = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
+          n: hidden_size.next_power_of_two(),
           setup: Some((
             Box::new(SigmoidBasicBlock {
               input_SF: sf_log * 2,
@@ -254,6 +271,7 @@ impl Layer for LSTMLayer {
       }));
       let tanh_check = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(CQ2BasicBlock {
+          n: hidden_size.next_power_of_two(),
           setup: Some((
             Box::new(TanhBasicBlock {
               input_SF: sf_log * 2,
@@ -277,12 +295,12 @@ impl Layer for LSTMLayer {
       }));
       let mul_output = graph.addNode(mul, vec![(input_gate_output, 0), (candidate_memory_output, 0)]);
       let sublayer15 = graph.addNode(change_SF, vec![(mul_output, 0)]);
-      let _ = graph.addNode(change_SF_check, vec![(mul_output, 0), (sublayer15, 0)]);
+      let _ = graph.addNode(change_SF_check_h, vec![(mul_output, 0), (sublayer15, 0)]);
 
       // sublayer 16: forget gate * C_t
       let mul_output = graph.addNode(mul, vec![(forget_gate_output, 0), (C_t_output, 0)]);
       let sublayer16 = graph.addNode(change_SF, vec![(mul_output, 0)]);
-      let _ = graph.addNode(change_SF_check, vec![(mul_output, 0), (sublayer16, 0)]);
+      let _ = graph.addNode(change_SF_check_h, vec![(mul_output, 0), (sublayer16, 0)]);
 
       // sublayer 17: C = sublayer15 + sublayer16 = input_gate * candidate_memory + forget gate * C_t
       let C = graph.addNode(add, vec![(sublayer15, 0), (sublayer16, 0)]);
@@ -294,7 +312,7 @@ impl Layer for LSTMLayer {
       // sublayer 19: H = output_gate * Tanh(C)
       let mul_output = graph.addNode(mul, vec![(output_gate_output, 0), (sublayer18, 0)]);
       let H = graph.addNode(change_SF, vec![(mul_output, 0)]); // shape = [num_directions, batch_size, hidden_size]
-      let _ = graph.addNode(change_SF_check, vec![(mul_output, 0), (H, 0)]);
+      let _ = graph.addNode(change_SF_check_h, vec![(mul_output, 0), (H, 0)]);
 
       // update H_t_output and C_t_output
       H_t_output = H;
