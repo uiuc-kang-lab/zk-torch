@@ -14,9 +14,9 @@ use rand::rngs::StdRng;
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
 
-// build the proven level sizes given the number of nodes
+// Calculate the merkle tree level sizes given the number of nodes
 // this is used to build the acc proof indices for the repeater verifier
-fn build_proven_level_sizes(mut n: usize) -> Vec<usize> {
+fn calculate_merkle_level_sizes(mut n: usize) -> Vec<usize> {
   let mut sizes = vec![n];
   while n > 1 {
     let pairs = n / 2; // only paired nodes produce new results
@@ -26,7 +26,9 @@ fn build_proven_level_sizes(mut n: usize) -> Vec<usize> {
   sizes
 }
 
-// downcast the basic block to the correct layout
+// Downcast the basic block to the corresponding acc proof layout.
+// This is needed because the basic block in a repeater is a Box<dyn BasicBlock> (dynamic dispatch)
+// and we need to downcast it to the correct layout to prove/verify the accumulation.
 macro_rules! downcast_to_layout {
   ($bb:expr, $( $ty:ty ),+ ) => {
     {
@@ -37,15 +39,17 @@ macro_rules! downcast_to_layout {
           } else
         )+
       {
-        &BasicBlockForTest {} as &dyn AccProofLayout
+        // Use the default basic block as a placeholder for the repeater
+        // when the basic block doesn't have an acc proof layout
+        &DefaultBasicBlock {} as &dyn AccProofLayout
       };
       bb_ref
     }
   };
 }
 
-// get the base number of elements in the accumulator proof
-// (an accumulator proof in the repeater is the concatenation of all the accumulator proofs in the basic block)
+// Get the base number of elements in the accumulator proof.
+// (an accumulator proof in a repeater is the concatenation of all the accumulator proofs in the basic block of the repeater)
 fn get_acc_proof_bases(bb: &dyn BasicBlock, is_prover: bool) -> (usize, usize, usize, usize) {
   let bb: &dyn AccProofLayout = downcast_to_layout!(
     bb,
@@ -502,7 +506,7 @@ impl BasicBlock for RepeaterBasicBlock {
     } else {
       all_levels.push(bb.verifier_dummy_holder());
     }
-    let level_sizes = build_proven_level_sizes(all_levels.len());
+    let level_sizes = calculate_merkle_level_sizes(all_levels.len());
 
     let mut combined: Vec<_> = (0..l)
       .map(|i| {

@@ -209,7 +209,7 @@ fn testBasicBlocks() {
     RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         n,
-        setup: Some((Box::new(BasicBlockForTest {}), 0, N)),
+        setup: Some((Box::new(DefaultBasicBlock {}), 0, N)),
       }),
       N: 1,
     },
@@ -251,7 +251,7 @@ fn testBasicBlocks() {
   testBasicBlock(
     CQ2BasicBlock {
       n,
-      setup: Some((Box::new(BasicBlockForTest {}), 0, N)),
+      setup: Some((Box::new(DefaultBasicBlock {}), 0, N)),
     },
     srs,
     &ab,

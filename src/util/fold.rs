@@ -36,6 +36,7 @@ pub struct AccHolder<P: Copy, Q: Copy> {
   pub acc_errs: Vec<(Vec<P>, Vec<Q>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)>, // i-th element contains acc_err_i += SUM{acc_gamma^j * e_j} for j=1..n
 }
 
+// holder_to_acc_proof converts an accumulator holder (AccHolder) to an accumulator proof
 pub fn holder_to_acc_proof<P: Copy, Q: Copy>(acc: AccHolder<P, Q>) -> (Vec<P>, Vec<Q>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
   if acc.acc_g1.len() == 0 && acc.acc_g2.len() == 0 && acc.acc_fr.len() == 0 {
     return (vec![], vec![], vec![], vec![]);
@@ -187,6 +188,9 @@ pub trait AccProofLayout: BasicBlock {
   }
 }
 
+// acc_proof_to_holder converts an accumulator proof to an accumulator holder (AccHolder)
+// L: ?Sized means "L could be a type that implements Sized or a type that doesn’t implement Sized".
+// This is required because we need this property to implement get_acc_proof_bases(.) in repeater.rs
 pub fn acc_proof_to_holder<P: Copy, Q: Copy, L: AccProofLayout + ?Sized>(
   bb: &L,
   acc_proof: (&Vec<P>, &Vec<Q>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
