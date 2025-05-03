@@ -151,8 +151,10 @@ impl DataEnc {
   }
 }
 
+// AccProofProj is the accumulator proof for the prover, where the G1 and G2 elements are in projective coordinates.
 pub type AccProofProj = (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>);
 
+// AccProofProjRef is the accumulator proof for the prover. It is a tuple of references to the elements of the AccProofProj.
 pub type AccProofProjRef<'a> = (
   &'a Vec<G1Projective>,
   &'a Vec<G2Projective>,
@@ -160,8 +162,10 @@ pub type AccProofProjRef<'a> = (
   &'a Vec<PairingOutput<Bn<ark_bn254::Config>>>,
 );
 
+// AccProofAff is the accumulator proof for the verifier, where the G1 and G2 elements are in affine coordinates.
 pub type AccProofAff = (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>);
 
+// AccProofAffRef is the accumulator proof for the verifier. It is a tuple of references to the elements of the AccProofAff.
 pub type AccProofAffRef<'a> = (
   &'a Vec<G1Affine>,
   &'a Vec<G2Affine>,
