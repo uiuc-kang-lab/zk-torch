@@ -14,8 +14,11 @@ use rand::rngs::StdRng;
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
 
-// Calculate the merkle tree level sizes given the number of nodes
-// this is used to build the acc proof indices for the repeater verifier
+// Calculate the Merkle tree level sizes given the number of nodes.
+// We use this helper function for the following purpose:
+//   The repeater prover uses Merkle reduction to prove the accumulation, where the root is the final accumulator instance.
+//   In the Merkle tree, all the intermediate nodes are the accumulator instances to be verified, which are stored in a vector.
+//   The repeater verifier needs to know how many nodes to process at each level to transform the vector into a Merkle tree for verification.
 fn calculate_merkle_level_sizes(mut n: usize) -> Vec<usize> {
   let mut sizes = vec![n];
   while n > 1 {
@@ -27,8 +30,16 @@ fn calculate_merkle_level_sizes(mut n: usize) -> Vec<usize> {
 }
 
 // Downcast the basic block to the corresponding acc proof layout.
-// This is needed because the basic block in a repeater is a Box<dyn BasicBlock> (dynamic dispatch)
-// and we need to downcast it to the correct layout to prove/verify the accumulation.
+// We use this macro for the following purpose:
+//   The basic block in a repeater is a Box<dyn BasicBlock> (dynamic dispatch)
+//   and we need to transform it to the AccProofLayout defined in the basic block to access the acc proof methods
+//   including mira_prove, prover_proof_to_acc, etc.
+//
+//   For example, to access the methods defined in AccProofLayout of XXXBasicBlock, this macro can:
+//   1. check if the basic block is a XXXBasicBlock
+//   2. downcast the basic block to the XXXBasicBlock
+//   3a. return the AccProofLayout of the XXXBasicBlock if we support acc proof for the XXXBasicBlock
+//   3b. return the default AccProofLayout as a placeholder for other basic blocks that do not have an acc proof layout
 macro_rules! downcast_to_layout {
   ($bb:expr, $( $ty:ty ),+ ) => {
     {
