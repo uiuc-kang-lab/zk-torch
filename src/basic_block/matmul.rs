@@ -2,7 +2,7 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 use super::{
-  AccProofAff, AccProofAffRef, AccProofProj, AccProofProjRef, BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS,
+  AccProofAffine, AccProofAffineRef, AccProofProj, AccProofProjRef, BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS,
 };
 use crate::util::{self, acc_proof_to_holder, calc_pow, holder_to_acc_proof, AccHolder, AccProofLayout};
 use crate::{define_acc_err_terms, define_acc_terms};
@@ -643,7 +643,7 @@ impl BasicBlock for MatMulBasicBlock {
     srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     acc_proof: AccProofProjRef,
-  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAff) {
+  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAffine) {
     let mut acc_holder = acc_proof_to_holder(self, acc_proof, true);
 
     let mut acc_g1 = MatMulG1Terms::<G1Projective>::from_vec(&acc_holder.acc_g1);
@@ -681,8 +681,8 @@ impl BasicBlock for MatMulBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: AccProofAffRef,
-    acc_proof: AccProofAffRef,
+    prev_acc_proof: AccProofAffineRef,
+    acc_proof: AccProofAffineRef,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     cache: ProveVerifyCache,
@@ -745,7 +745,7 @@ impl BasicBlock for MatMulBasicBlock {
     Some(result)
   }
 
-  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
+  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffineRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     let acc_holder = acc_proof_to_holder(self, acc_proof, false);
     let acc_g1 = MatMulG1Terms::<G1Affine>::from_vec(&acc_holder.acc_g1);
     let acc_g2 = MatMulG2Terms::<G2Affine>::from_vec(&acc_holder.acc_g2);
@@ -801,7 +801,7 @@ impl BasicBlock for MatMulBasicBlock {
     ]
   }
 
-  fn acc_finalize(&self, _srs: &SRS, acc_proof: AccProofAffRef) -> AccProofAff {
+  fn acc_finalize(&self, _srs: &SRS, acc_proof: AccProofAffineRef) -> AccProofAffine {
     let mut acc_holder = acc_proof_to_holder(self, acc_proof, false);
     let err_1 = &acc_holder.acc_errs[0];
     let acc_err1 = err_1.3[0].clone();
