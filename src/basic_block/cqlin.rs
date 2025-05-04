@@ -2,7 +2,7 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 use super::{
-  AccProofAff, AccProofAffRef, AccProofProj, AccProofProjRef, BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS,
+  AccProofAffine, AccProofAffineRef, AccProofProj, AccProofProjRef, BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS,
 };
 use crate::util::{self, acc_proof_to_holder, calc_pow, holder_to_acc_proof, AccHolder, AccProofLayout};
 use crate::{define_acc_err_terms, define_acc_terms};
@@ -832,7 +832,7 @@ impl BasicBlock for CQLinBasicBlock {
     srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     acc_proof: AccProofProjRef,
-  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAff) {
+  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAffine) {
     let n = self.setup.shape()[1];
     let log_n = n.next_power_of_two().trailing_zeros() as usize;
     let mut acc_holder = acc_proof_to_holder(self, acc_proof, true);
@@ -875,8 +875,8 @@ impl BasicBlock for CQLinBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: AccProofAffRef,
-    acc_proof: AccProofAffRef,
+    prev_acc_proof: AccProofAffineRef,
+    acc_proof: AccProofAffineRef,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     cache: ProveVerifyCache,
@@ -927,7 +927,7 @@ impl BasicBlock for CQLinBasicBlock {
     Some(result)
   }
 
-  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
+  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffineRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     let m = self.setup.shape()[0];
     let n = self.setup.shape()[1];
     let N = srs.X2P.len() - 1;
@@ -1007,7 +1007,7 @@ impl BasicBlock for CQLinBasicBlock {
     ]
   }
 
-  fn acc_finalize(&self, srs: &SRS, acc_proof: AccProofAffRef) -> AccProofAff {
+  fn acc_finalize(&self, srs: &SRS, acc_proof: AccProofAffineRef) -> AccProofAffine {
     let m = self.setup.shape()[0];
     let n = self.setup.shape()[1];
     let mut acc_holder = acc_proof_to_holder(self, acc_proof, false);

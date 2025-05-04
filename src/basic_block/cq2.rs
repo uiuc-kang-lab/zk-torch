@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 use super::{
-  AccProofAff, AccProofAffRef, AccProofProj, AccProofProjRef, BasicBlock, DefaultBasicBlock, CacheValues, Data, DataEnc, PairingCheck,
+  AccProofAffine, AccProofAffineRef, AccProofProj, AccProofProjRef, BasicBlock, CacheValues, Data, DataEnc, DefaultBasicBlock, PairingCheck,
   ProveVerifyCache, SRS,
 };
 use crate::basic_block::cq::{
@@ -425,7 +425,7 @@ impl BasicBlock for CQ2BasicBlock {
     srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     acc_proof: AccProofProjRef,
-  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAff) {
+  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAffine) {
     cq_acc_clean(self, srs, proof, acc_proof)
   }
 
@@ -435,8 +435,8 @@ impl BasicBlock for CQ2BasicBlock {
     _model: &ArrayD<DataEnc>,
     _inputs: &Vec<&ArrayD<DataEnc>>,
     _outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: AccProofAffRef,
-    acc_proof: AccProofAffRef,
+    prev_acc_proof: AccProofAffineRef,
+    acc_proof: AccProofAffineRef,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
@@ -456,13 +456,13 @@ impl BasicBlock for CQ2BasicBlock {
     Some(result)
   }
 
-  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
+  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffineRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     let N = self.setup.as_ref().unwrap().2;
     let n = self.n;
     cq_acc_decide(self, srs, acc_proof, N, n)
   }
 
-  fn acc_finalize(&self, srs: &SRS, acc_proof: AccProofAffRef) -> AccProofAff {
+  fn acc_finalize(&self, srs: &SRS, acc_proof: AccProofAffineRef) -> AccProofAffine {
     let N = self.setup.as_ref().unwrap().2;
     let n = self.n;
     cq_acc_finalize(self, srs, acc_proof, N, n)

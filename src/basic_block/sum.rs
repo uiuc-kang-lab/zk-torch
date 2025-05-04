@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
-use super::{AccProofAffRef, AccProofProj, AccProofProjRef, BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use super::{AccProofAffineRef, AccProofProj, AccProofProjRef, BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::util::{self, acc_proof_to_holder, holder_to_acc_proof, AccHolder, AccProofLayout};
 use crate::{define_acc_err_terms, define_acc_terms};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
@@ -197,8 +197,8 @@ impl BasicBlock for SumBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: AccProofAffRef,
-    acc_proof: AccProofAffRef,
+    prev_acc_proof: AccProofAffineRef,
+    acc_proof: AccProofAffineRef,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
@@ -214,7 +214,7 @@ impl BasicBlock for SumBasicBlock {
     Some(result)
   }
 
-  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
+  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffineRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     let [zero_div, C, inp, out] = acc_proof.0[..] else {
       panic!("Wrong proof format")
     };

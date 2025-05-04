@@ -1,4 +1,4 @@
-use super::{AccProofAff, AccProofAffRef, AccProofProj, AccProofProjRef, BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use super::{AccProofAffine, AccProofAffineRef, AccProofProj, AccProofProjRef, BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::basic_block::*;
 use crate::{
   ndarr_azip,
@@ -371,16 +371,8 @@ impl BasicBlock for RepeaterBasicBlock {
     &self,
     srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    acc_proof: (
-      &Vec<G1Projective>,
-      &Vec<G2Projective>,
-      &Vec<Fr>,
-      &Vec<PairingOutput<Bn<ark_bn254::Config>>>,
-    ),
-  ) -> (
-    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>),
-    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-  ) {
+    acc_proof: AccProofProjRef,
+  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAffine) {
     if acc_proof.2.len() == 0 {
       return (
         (
@@ -447,8 +439,8 @@ impl BasicBlock for RepeaterBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
+    prev_acc_proof: AccProofAffineRef,
+    acc_proof: AccProofAffineRef,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
@@ -564,11 +556,7 @@ impl BasicBlock for RepeaterBasicBlock {
   }
 
   // This function is used to clean the errs in the final accumulator proof to calculate the proof size correctly.
-  fn acc_finalize(
-    &self,
-    srs: &SRS,
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-  ) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) {
+  fn acc_finalize(&self, srs: &SRS, acc_proof: AccProofAffineRef) -> AccProofAffine {
     let (base_g1, base_g2, base_fr, base_gt) = get_acc_proof_bases(self.basic_block.as_ref(), false);
     let acc_proof = if acc_proof.2.len() > 0 {
       (
@@ -583,11 +571,7 @@ impl BasicBlock for RepeaterBasicBlock {
     self.basic_block.acc_finalize(srs, (&acc_proof.0, &acc_proof.1, &acc_proof.2, &acc_proof.3))
   }
 
-  fn acc_decide(
-    &self,
-    srs: &SRS,
-    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>),
-  ) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
+  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffineRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     let (base_g1, base_g2, base_fr, base_gt) = get_acc_proof_bases(self.basic_block.as_ref(), false);
     let acc_proof = if acc_proof.2.len() > 0 {
       (

@@ -2,7 +2,7 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 use super::{
-  AccProofAff, AccProofAffRef, AccProofProj, AccProofProjRef, BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS,
+  AccProofAffine, AccProofAffineRef, AccProofProj, AccProofProjRef, BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS,
 };
 use crate::util::{self, acc_proof_to_holder, get_cq_N, holder_to_acc_proof, AccHolder, AccProofLayout};
 use crate::{define_acc_err_terms, define_acc_terms};
@@ -57,7 +57,7 @@ pub fn cq_acc_clean<L: AccProofLayout>(
   srs: &SRS,
   proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
   acc_proof: AccProofProjRef,
-) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAff) {
+) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAffine) {
   let mut acc_holder = acc_proof_to_holder(bb, acc_proof, true);
   let mut acc_g1 = CQG1Terms::<G1Projective>::from_vec(&acc_holder.acc_g1);
   let acc_fr = CQFrTerms::<Fr>::from_vec(&acc_holder.acc_fr);
@@ -99,7 +99,7 @@ pub fn cq_acc_clean<L: AccProofLayout>(
 pub fn cq_acc_decide<L: AccProofLayout>(
   bb: &L,
   srs: &SRS,
-  acc_proof: AccProofAffRef,
+  acc_proof: AccProofAffineRef,
   N: usize,
   n: usize,
 ) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
@@ -174,7 +174,7 @@ pub fn cq_acc_decide<L: AccProofLayout>(
   checks
 }
 
-pub fn cq_acc_finalize<L: AccProofLayout>(bb: &L, srs: &SRS, acc_proof: AccProofAffRef, N: usize, n: usize) -> AccProofAff {
+pub fn cq_acc_finalize<L: AccProofLayout>(bb: &L, srs: &SRS, acc_proof: AccProofAffineRef, N: usize, n: usize) -> AccProofAffine {
   let mut acc_holder = acc_proof_to_holder(bb, acc_proof, false);
 
   let tmp_1 = &acc_holder.acc_errs[0];
@@ -885,7 +885,7 @@ impl BasicBlock for CQBasicBlock {
     srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     acc_proof: AccProofProjRef,
-  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAff) {
+  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAffine) {
     cq_acc_clean(self, srs, proof, acc_proof)
   }
 
@@ -895,8 +895,8 @@ impl BasicBlock for CQBasicBlock {
     _model: &ArrayD<DataEnc>,
     _inputs: &Vec<&ArrayD<DataEnc>>,
     _outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: AccProofAffRef,
-    acc_proof: AccProofAffRef,
+    prev_acc_proof: AccProofAffineRef,
+    acc_proof: AccProofAffineRef,
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
@@ -916,13 +916,13 @@ impl BasicBlock for CQBasicBlock {
     Some(result)
   }
 
-  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
+  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffineRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
     let N = get_cq_N(&self.setup);
     let n = self.n;
     cq_acc_decide(self, srs, acc_proof, N, n)
   }
 
-  fn acc_finalize(&self, srs: &SRS, acc_proof: AccProofAffRef) -> AccProofAff {
+  fn acc_finalize(&self, srs: &SRS, acc_proof: AccProofAffineRef) -> AccProofAffine {
     let N = get_cq_N(&self.setup);
     let n = self.n;
     cq_acc_finalize(self, srs, acc_proof, N, n)
