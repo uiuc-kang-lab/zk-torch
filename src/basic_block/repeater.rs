@@ -33,9 +33,9 @@ fn calculate_merkle_level_sizes(mut n: usize) -> Vec<usize> {
 // We use this macro for the following purpose:
 //   The basic block in a repeater is a Box<dyn BasicBlock> (dynamic dispatch)
 //   and we need to transform it to the AccProofLayout defined in the basic block to access the acc proof methods
-//   including mira_prove, prover_proof_to_acc, etc.
+//   including mira_prove, prover_proof_to_acc, etc. (they are not defined in dyn BasicBlock)
 //
-//   For example, to access the methods defined in AccProofLayout of XXXBasicBlock, this macro can:
+//   To access the methods defined in AccProofLayout of XXXBasicBlock, this macro can:
 //   1. check if the basic block is a XXXBasicBlock
 //   2. downcast the basic block to the XXXBasicBlock
 //   3a. return the AccProofLayout of the XXXBasicBlock if we support acc proof for the XXXBasicBlock
