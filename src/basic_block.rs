@@ -1,7 +1,7 @@
 #![allow(unused_imports)]
 use crate::util::{self, ark_de, ark_se, AccHolder, AccProofLayout};
 use crate::{define_acc_err_terms, define_acc_terms};
-pub use add::AddBasicBlock;
+pub use add::{AddBasicBlock, BatchAddBasicBlock};
 use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
@@ -25,6 +25,7 @@ pub use matmul::MatMulBasicBlock;
 pub use max::{MaxBasicBlock, MaxProofBasicBlock};
 pub use mul::{MulBasicBlock, MulConstBasicBlock, MulScalarBasicBlock};
 use ndarray::{ArrayD, IxDyn};
+pub use new_conv::{Conv2DAddBasicBlock, Conv3DAddBasicBlock, Conv3DTransposeBasicBlock};
 pub use one_to_one::OneToOneBasicBlock;
 pub use ops::*;
 pub use ordered::OrderedBasicBlock;
@@ -60,6 +61,7 @@ pub mod less;
 pub mod matmul;
 pub mod max;
 pub mod mul;
+pub mod new_conv;
 pub mod one_to_one;
 pub mod ops;
 pub mod ordered;
