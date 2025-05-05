@@ -298,11 +298,13 @@ define_acc_err_terms!(TestErrG2Terms);
 define_acc_err_terms!(TestErrFrTerms);
 define_acc_err_terms!(TestErrGtTerms);
 
-// This is a basic block for testing purposes in tests.rs.
+// This is a default basic block
+// It does nothing and is used as a placeholder for the repeater
+// It's also used as a default basic block for the cq2 basic block when testing
 #[derive(Debug)]
-pub struct BasicBlockForTest;
-impl BasicBlock for BasicBlockForTest {}
-impl AccProofLayout for BasicBlockForTest {
+pub struct DefaultBasicBlock;
+impl BasicBlock for DefaultBasicBlock {}
+impl AccProofLayout for DefaultBasicBlock {
   fn prover_proof_to_acc(&self, _proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective> {
     AccHolder {
       acc_g1: vec![],

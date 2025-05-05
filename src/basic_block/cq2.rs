@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 use super::{
-  AccProofAffine, AccProofAffineRef, AccProofProj, AccProofProjRef, BasicBlock, BasicBlockForTest, CacheValues, Data, DataEnc, PairingCheck,
+  AccProofAffine, AccProofAffineRef, AccProofProj, AccProofProjRef, BasicBlock, CacheValues, Data, DataEnc, DefaultBasicBlock, PairingCheck,
   ProveVerifyCache, SRS,
 };
 use crate::basic_block::cq::{
@@ -104,7 +104,7 @@ impl BasicBlock for CQ2BasicBlock {
     assert!(inputs.len() == 2);
     let n = inputs[0].len();
     assert!(n == self.n, "self.n is not equal to n, which is {}", inputs[0].len());
-    if self.setup.is_some() && !self.setup.as_ref().unwrap().0.is::<BasicBlockForTest>() {
+    if self.setup.is_some() && !self.setup.as_ref().unwrap().0.is::<DefaultBasicBlock>() {
       for x in inputs[0].iter().zip(inputs[1].iter()) {
         let temp = (*x.0, *x.1);
         let x_0_int = util::fr_to_int(temp.0);
