@@ -627,7 +627,7 @@ impl Layer for InstanceNormLayer {
 }
 
 // CustomInstanceNorm is similar to InstanceNorm,
-// the only difference is that it puts the kernel dimension in the last dimension to avoid using copy constraints in CNNs.
+// the only difference is that it puts the channel dimension in the last dimension to avoid using copy constraints in CNNs.
 pub struct CustomInstanceNormLayer;
 impl Layer for CustomInstanceNormLayer {
   fn graph(

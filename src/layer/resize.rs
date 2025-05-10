@@ -102,6 +102,8 @@ impl Layer for ResizeLayer {
   }
 }
 
+// This is a custom resize layer.
+// The only difference between this and the ResizeLayer is that it puts the channel dimension last.
 #[derive(Debug)]
 pub struct CustomResizeBasicBlock {
   pub input_shape: Vec<usize>,  // [1, H_in * W_in, C]

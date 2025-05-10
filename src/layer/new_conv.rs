@@ -1,6 +1,6 @@
 /*
   All layers in this file are used to perform the customized convolutional layers,
-  (where we put the kernel dimension in the last dimension to avoid using copy constraints).
+  (where we put the channel dimension in the last dimension to avoid using copy constraints).
 */
 use crate::basic_block::*;
 use crate::graph::*;
