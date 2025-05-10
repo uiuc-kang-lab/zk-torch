@@ -3,11 +3,11 @@ use crate::graph::*;
 use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
-use ark_bn254::Fr;
-use ark_bn254::G1Projective;
+use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_std::Zero;
 use ndarray::Dimension;
 use ndarray::{ArrayD, IxDyn};
+use rand::rngs::StdRng;
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
 
@@ -150,8 +150,38 @@ impl BasicBlock for CustomResizeBasicBlock {
     result = util::pad_to_pow_of_two(&result, &data_zero);
     vec![result]
   }
+
+  fn verify(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<DataEnc>,
+    inputs: &Vec<&ArrayD<DataEnc>>,
+    outputs: &Vec<&ArrayD<DataEnc>>,
+    _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> Vec<PairingCheck> {
+    //let inputs_g1 = inputs.iter().fold(G1Projective::zero(), |acc, x| acc + x.first().unwrap().g1);
+    //let c_g1 = outputs[0].first().unwrap().g1;
+    //// Verify f1(x)+f2(x)+...+fn(x)=h(x)
+    //assert!(inputs_g1 == c_g1);
+    let input = inputs[0];
+    let output = outputs[0];
+    let D = (self.input_shape[1] as f64).sqrt() as usize;
+    let D_o = (self.output_shape[1] as f64).sqrt() as usize;
+    let scale = (D_o as f64 / D as f64) as usize;
+    for i in 0..D_o {
+      for j in 0..D_o {
+        assert!(output[[0, i * D_o + j]].g1 == input[[0, (i / scale) * D + (j / scale)]].g1);
+      }
+    }
+
+    vec![]
+  }
 }
 
+// This is a custom resize layer.
+// The only difference between this and the ResizeLayer is that it puts the channel dimension last.
 pub struct CustomResizeLayer;
 impl Layer for CustomResizeLayer {
   fn graph(

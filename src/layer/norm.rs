@@ -626,9 +626,8 @@ impl Layer for InstanceNormLayer {
   }
 }
 
-// InstanceNorm is a struct that represents an instance normalization layer, which computes
-// Y = (X - mean) * scale / sqrt(var + epsilon) + bias,
-// where mean and var are computed per instance per channel
+// CustomInstanceNorm is similar to InstanceNorm,
+// the only difference is that it puts the kernel dimension in the last dimension to avoid using copy constraints in CNNs.
 pub struct CustomInstanceNormLayer;
 impl Layer for CustomInstanceNormLayer {
   fn graph(
@@ -650,15 +649,7 @@ impl Layer for CustomInstanceNormLayer {
     assert!(X_shape[2] == scale_shape[0] && scale_shape[0] == bias_shape[0]);
     assert!(scale_shape.len() == 1 && bias_shape.len() == 1);
 
-    let epsilon_attr = attributes.iter().filter(|x| x.name == "epsilon").next();
-    let mut epsilon = if let Some(x) = epsilon_attr {
-      // epsilon is provided
-      x.f as f32
-    } else {
-      // epsilon is not provided, use the default value
-      1e-5
-    };
-    epsilon = 1.0;
+    let mut epsilon = 1.0;
     epsilon *= onnx::SF_FLOAT.read().unwrap().to_owned();
 
     // X_shape_for_mean: [N, C, D1 * D2 * ... * DN]
@@ -835,43 +826,39 @@ impl Layer for CustomInstanceNormLayer {
     // output epsilon
     let epsilon_output = graph.addNode(epsilon, vec![]);
 
-    // compute mean (shape: [N, C, 1, ..., 1])
-    let cc_output = graph.addNode(cc, vec![(-1, 0)]); // [1, C, D1*D2*D3]
-    let sum_output = graph.addNode(sum, vec![(cc_output, 0)]); // [1, C, 1]
-    let mean_output = graph.addNode(div_const, vec![(sum_output, 0)]); // [1, C, 1]
+    // compute mean
+    let cc_output = graph.addNode(cc, vec![(-1, 0)]);
+    let sum_output = graph.addNode(sum, vec![(cc_output, 0)]);
+    let mean_output = graph.addNode(div_const, vec![(sum_output, 0)]);
     let _ = graph.addNode(div_const_check, vec![(mean_output, 1)]);
     let _ = graph.addNode(div_const_check, vec![(mean_output, 2)]);
     let mean_output = graph.addNode(cc2, vec![(mean_output, 0)]);
-    let mean_output = graph.addNode(reshape_0, vec![(mean_output, 0)]); // [1, C]
+    let mean_output = graph.addNode(reshape_0, vec![(mean_output, 0)]);
 
-    // compute var (shape: [N, C, 1, ..., 1])
+    // compute var
     // m = mean(X)
     // s = size(X)
     // X - m
     let sub_output = graph.addNode(sub, vec![(-1, 0), (mean_output, 0)]); // [1, D1*D2*D3, C]
-                                                                          // (X - m) * SF / (sqrt(s) * SF)
     let div_SF_output = graph.addNode(div_SF, vec![(sub_output, 0)]);
     let _ = graph.addNode(div_SF_check, vec![(sub_output, 0), (div_SF_output, 0)]);
     // (X - m)^2 / s
     let mul_output = graph.addNode(mul, vec![(sub_output, 0), (sub_output, 0)]);
-    let cc_output = graph.addNode(cc, vec![(mul_output, 0)]); // [1, C, D1*D2*D3]
-                                                              // SUM((X - m)^2) / s
-    let var_output = graph.addNode(sum, vec![(cc_output, 0)]); // [1, C, 1]
+    let cc_output = graph.addNode(cc, vec![(mul_output, 0)]);
+    let var_output = graph.addNode(sum, vec![(cc_output, 0)]);
     let var_output = graph.addNode(cc2, vec![(var_output, 0)]);
     let var_output = graph.addNode(reshape_0, vec![(var_output, 0)]); // [1, C]
 
-    // Step 1. X - mean (shape: [N * C, D1, D2, ..., DN])
+    // Step 1. X - mean
     let x_minus_mean_output = graph.addNode(sub, vec![(-1, 0), (mean_output, 0)]); // [1, D1*D2*D3, C]
 
-    // Step 2. var + epsilon (shape: [N * C, 1, ..., 1])
+    // Step 2. var + epsilon
     let var_plus_eps_output = graph.addNode(add, vec![(var_output, 0), (epsilon_output, 0)]); // [1, C]
 
-    // Step 3. sqrt(var + epsilon) (shape: [N * C, 1, ..., 1])
+    // Step 3. sqrt(var + epsilon)
     // x = var + epsilon
     // SqrtBB(x) = sqrt(x/SF)*SF + eps (where -1 < eps < 1)
     let sqrt_output = graph.addNode(sqrt, vec![(var_plus_eps_output, 0)]); // [1, C]
-                                                                           // The following operations are to check if sqrt_output is correct
-                                                                           // square_sqrt = SqrtBB(x)^2 = x*SF + 2*sqrt(x/SF)*SF*eps + eps^2
     let square_sqrt = graph.addNode(mul, vec![(sqrt_output, 0), (sqrt_output, 0)]);
     // scale_input_by_sf = x*SF
     let sf_const_output = graph.addNode(sf_const, vec![]);
@@ -893,13 +880,13 @@ impl Layer for CustomInstanceNormLayer {
     let _ = graph.addNode(non_negative_check, vec![(d_plus_scale_output_by_2, 0)]);
     let _ = graph.addNode(non_positive_check, vec![(d_minus_scale_output_by_2, 0)]);
 
-    let sqrt_output = graph.addNode(cc2_back, vec![(sqrt_output, 0)]); // [C, 1]
-    let sqrt_output = graph.addNode(unsqueeze, vec![(sqrt_output, 0)]); // [1, C, 1]
+    let sqrt_output = graph.addNode(cc2_back, vec![(sqrt_output, 0)]);
+    let sqrt_output = graph.addNode(unsqueeze, vec![(sqrt_output, 0)]);
 
     // Step 4. (X - mean) / sqrt(var + epsilon)
-    let x_minus_mean_output = graph.addNode(cc, vec![(x_minus_mean_output, 0)]); // [1, C, D1*D2*D3]
-    let split_sub_output = graph.addNode(split_x, vec![(x_minus_mean_output, 0)]); // C outputs (shape: [1, 1, D1*D2*D3])
-    let split_sqrt_output = graph.addNode(split_x, vec![(sqrt_output, 0)]); // C outputs (shape: [1, 1, 1])
+    let x_minus_mean_output = graph.addNode(cc, vec![(x_minus_mean_output, 0)]);
+    let split_sub_output = graph.addNode(split_x, vec![(x_minus_mean_output, 0)]); // C outputs
+    let split_sqrt_output = graph.addNode(split_x, vec![(sqrt_output, 0)]); // C outputs
     let mut tmp_outputs = vec![];
     // here we perform the batch normalization for each channel
     let (N, C) = (mean_shape_padded[0], mean_shape_padded[1]);
@@ -923,8 +910,8 @@ impl Layer for CustomInstanceNormLayer {
       }
     }
     // concat_output
-    let concat_output = graph.addNode(concat, tmp_outputs); // [1, C, D1*D2*D3]
-    let div_output = graph.addNode(cc_back, vec![(concat_output, 0)]); // [1, D1*D2*D3, C]
+    let concat_output = graph.addNode(concat, tmp_outputs);
+    let div_output = graph.addNode(cc_back, vec![(concat_output, 0)]);
 
     // Step 5. scale * (X - mean) / sqrt(var + epsilon)
     let mul_output = graph.addNode(mul, vec![(div_output, 0), (-2, 0)]);

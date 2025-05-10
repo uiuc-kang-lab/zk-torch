@@ -6,9 +6,7 @@
 use ark_bn254::Fr;
 use ndarray::{ArrayD, Axis, Dimension, IxDyn, Slice, SliceInfo};
 
-// slice the arr with the given indices. But this function is not used in the codebase currently.
-#[allow(dead_code)]
-pub fn slice_nd_array(arr: ArrayD<Fr>, indices: &[usize]) -> ArrayD<Fr> {
+pub fn slice_nd_array<T>(arr: ArrayD<T>, indices: &[usize]) -> ArrayD<T> {
   // Create slices from the indices
   let slices: Vec<_> = indices.iter().map(|&i| (0..i).into()).collect();
 
