@@ -15,6 +15,95 @@ use rayon::prelude::*;
   from [1, H_in * W_in, C_out] to [1, H_out * W_out, C_out].
 */
 
+#[derive(Debug, Clone)]
+pub struct ConvShapeHelper {
+  pub d: Option<i32>,
+  pub h: i32,
+  pub w: i32,
+  pub k_d: Option<i32>,
+  pub k_h: i32,
+  pub k_w: i32,
+  pub s_d: Option<i32>,
+  pub s_h: i32,
+  pub s_w: i32,
+  pub p_d_front: Option<i32>,
+  pub p_h_top: i32,
+  pub p_w_left: i32,
+  pub p_d_back: Option<i32>,
+  pub p_h_bottom: i32,
+  pub p_w_right: i32,
+  pub out_channels: usize,
+}
+
+impl From<&Conv3DTransposeBasicBlock> for ConvShapeHelper {
+  fn from(conv: &Conv3DTransposeBasicBlock) -> Self {
+    Self {
+      d: Some(conv.input_shape[0]),
+      h: conv.input_shape[1],
+      w: conv.input_shape[2],
+      k_d: Some(conv.kernel_shape[0]),
+      k_h: conv.kernel_shape[1],
+      k_w: conv.kernel_shape[2],
+      s_d: Some(conv.stride[0]),
+      s_h: conv.stride[1],
+      s_w: conv.stride[2],
+      p_d_front: Some(conv.padding[0]),
+      p_h_top: conv.padding[1],
+      p_w_left: conv.padding[2],
+      p_d_back: Some(conv.padding[3]),
+      p_h_bottom: conv.padding[4],
+      p_w_right: conv.padding[5],
+      out_channels: conv.out_channels,
+    }
+  }
+}
+
+impl From<&Conv3DAddBasicBlock> for ConvShapeHelper {
+  fn from(conv: &Conv3DAddBasicBlock) -> Self {
+    Self {
+      d: Some(conv.input_shape[0]),
+      h: conv.input_shape[1],
+      w: conv.input_shape[2],
+      k_d: Some(conv.kernel_shape[0]),
+      k_h: conv.kernel_shape[1],
+      k_w: conv.kernel_shape[2],
+      s_d: Some(conv.stride[0]),
+      s_h: conv.stride[1],
+      s_w: conv.stride[2],
+      p_d_front: Some(conv.padding[0]),
+      p_h_top: conv.padding[1],
+      p_w_left: conv.padding[2],
+      p_d_back: Some(conv.padding[3]),
+      p_h_bottom: conv.padding[4],
+      p_w_right: conv.padding[5],
+      out_channels: conv.out_channels,
+    }
+  }
+}
+
+impl From<&Conv2DAddBasicBlock> for ConvShapeHelper {
+  fn from(conv: &Conv2DAddBasicBlock) -> Self {
+    Self {
+      d: None,
+      h: conv.input_shape[0],
+      w: conv.input_shape[1],
+      k_d: None,
+      k_h: conv.kernel_shape[0],
+      k_w: conv.kernel_shape[1],
+      s_d: None,
+      s_h: conv.stride[0],
+      s_w: conv.stride[1],
+      p_d_front: None,
+      p_h_top: conv.padding[0],
+      p_w_left: conv.padding[1],
+      p_d_back: None,
+      p_h_bottom: conv.padding[2],
+      p_w_right: conv.padding[3],
+      out_channels: conv.out_channels,
+    }
+  }
+}
+
 #[derive(Debug)]
 pub struct Conv3DTransposeBasicBlock {
   pub input_shape: Vec<i32>,  // [D, H, W]
@@ -29,43 +118,27 @@ pub struct Conv3DTransposeBasicBlock {
 // Outputs: 1 tensor with shape [1, D_o*H_o*W_o, C_o]
 impl BasicBlock for Conv3DTransposeBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
-    let C_o = self.out_channels;
-    let D = self.input_shape[0];
-    let H = self.input_shape[1];
-    let W = self.input_shape[2];
-
-    let k_d = self.kernel_shape[0];
-    let k_h = self.kernel_shape[1];
-    let k_w = self.kernel_shape[2];
-    let s_d = self.stride[0];
-    let s_h = self.stride[1];
-    let s_w = self.stride[2];
-    let p_d_front = self.padding[0];
-    let p_h_top = self.padding[1];
-    let p_w_left = self.padding[2];
-    let p_d_back = self.padding[3];
-    let p_h_bottom = self.padding[4];
-    let p_w_right = self.padding[5];
-    assert!(k_d == s_d && k_h == s_h && k_w == s_w); // The case where stride is equal to kernel size is not implemented for now.
-    assert!(p_d_front == 0 && p_h_top == 0 && p_w_left == 0); // The case where padding is not zero is not implemented for now.
-    assert!(p_d_back == 0 && p_h_bottom == 0 && p_w_right == 0); // The case where padding is not zero is not implemented for now.
-    let D_o = (D - 1) * s_d - p_d_front - p_d_back + (k_d - 1) + 1;
-    let H_o = (H - 1) * s_h - p_h_top - p_h_bottom + (k_h - 1) + 1;
-    let W_o = (W - 1) * s_w - p_w_left - p_w_right + (k_w - 1) + 1;
-    let mut r = ArrayD::zeros(IxDyn(&[1, (D_o * H_o * W_o) as usize, C_o]));
+    let shape = ConvShapeHelper::from(self);
+    assert!(shape.k_d == shape.s_d && shape.k_h == shape.s_h && shape.k_w == shape.s_w); // The case where stride is equal to kernel size is not implemented for now.
+    assert!(shape.p_d_front == Some(0) && shape.p_h_top == 0 && shape.p_w_left == 0); // The case where padding is not zero is not implemented for now.
+    assert!(shape.p_d_back == Some(0) && shape.p_h_bottom == 0 && shape.p_w_right == 0); // The case where padding is not zero is not implemented for now.
+    let D_o = (shape.d.unwrap() - 1) * shape.s_d.unwrap() - shape.p_d_front.unwrap() - shape.p_d_back.unwrap() + (shape.k_d.unwrap() - 1) + 1;
+    let H_o = (shape.h - 1) * shape.s_h - shape.p_h_top - shape.p_h_bottom + (shape.k_h - 1) + 1;
+    let W_o = (shape.w - 1) * shape.s_w - shape.p_w_left - shape.p_w_right + (shape.k_w - 1) + 1;
+    let mut r = ArrayD::zeros(IxDyn(&[1, (D_o * H_o * W_o) as usize, shape.out_channels]));
     r.axis_iter_mut(Axis(2)).enumerate().par_bridge().for_each(|(c, mut channel)| {
       for i in 0..D_o {
         for j in 0..H_o {
           for k in 0..W_o {
-            let x_in = i / s_d;
-            let y_in = j / s_h;
-            let z_in = k / s_w;
-            let x = i % s_d;
-            let y = j % s_h;
-            let z = k % s_w;
-            let input_idx = x * k_h * k_w + y * k_w + z;
+            let x_in = i / shape.s_d.unwrap();
+            let y_in = j / shape.s_h;
+            let z_in = k / shape.s_w;
+            let x = i % shape.s_d.unwrap();
+            let y = j % shape.s_h;
+            let z = k % shape.s_w;
+            let input_idx = x * shape.k_h * shape.k_w + y * shape.k_w + z;
             let input_idx = input_idx as usize;
-            if x_in >= 0 && x_in < D && y_in >= 0 && y_in < H && z_in >= 0 && z_in < W {
+            if x_in >= 0 && x_in < shape.d.unwrap() && y_in >= 0 && y_in < shape.h && z_in >= 0 && z_in < shape.w {
               let x_in = x_in as usize;
               let y_in = y_in as usize;
               let z_in = z_in as usize;
@@ -73,7 +146,7 @@ impl BasicBlock for Conv3DTransposeBasicBlock {
               let j = j as usize;
               let k = k as usize;
               channel[[0, i * (H_o as usize) * (W_o as usize) + j * (W_o as usize) + k]] =
-                inputs[input_idx][[0, x_in * (H as usize) * (W as usize) + y_in * (W as usize) + z_in, c]];
+                inputs[input_idx][[0, x_in * (shape.h as usize) * (shape.w as usize) + y_in * (shape.w as usize) + z_in, c]];
             }
           }
         }
@@ -84,29 +157,13 @@ impl BasicBlock for Conv3DTransposeBasicBlock {
   }
 
   fn encodeOutputs(&self, _srs: &SRS, _model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
-    let C_o = self.out_channels;
-    let D = self.input_shape[0];
-    let H = self.input_shape[1];
-    let W = self.input_shape[2];
-
-    let k_d = self.kernel_shape[0];
-    let k_h = self.kernel_shape[1];
-    let k_w = self.kernel_shape[2];
-    let s_d = self.stride[0];
-    let s_h = self.stride[1];
-    let s_w = self.stride[2];
-    let p_d_front = self.padding[0];
-    let p_h_top = self.padding[1];
-    let p_w_left = self.padding[2];
-    let p_d_back = self.padding[3];
-    let p_h_bottom = self.padding[4];
-    let p_w_right = self.padding[5];
-    assert!(k_d == s_d && k_h == s_h && k_w == s_w); // The case where stride is equal to kernel size is not implemented for now.
-    assert!(p_d_front == 0 && p_h_top == 0 && p_w_left == 0); // The case where padding is not zero is not implemented for now.
-    assert!(p_d_back == 0 && p_h_bottom == 0 && p_w_right == 0); // The case where padding is not zero is not implemented for now.
-    let D_o = (D - 1) * s_d - p_d_front - p_d_back + (k_d - 1) + 1;
-    let H_o = (H - 1) * s_h - p_h_top - p_h_bottom + (k_h - 1) + 1;
-    let W_o = (W - 1) * s_w - p_w_left - p_w_right + (k_w - 1) + 1;
+    let shape = ConvShapeHelper::from(self);
+    assert!(shape.k_d.unwrap() == shape.s_d.unwrap() && shape.k_h == shape.s_h && shape.k_w == shape.s_w); // The case where stride is equal to kernel size is not implemented for now.
+    assert!(shape.p_d_front == Some(0) && shape.p_h_top == 0 && shape.p_w_left == 0); // The case where padding is not zero is not implemented for now.
+    assert!(shape.p_d_back == Some(0) && shape.p_h_bottom == 0 && shape.p_w_right == 0); // The case where padding is not zero is not implemented for now.
+    let D_o = (shape.d.unwrap() - 1) * shape.s_d.unwrap() - shape.p_d_front.unwrap() - shape.p_d_back.unwrap() + (shape.k_d.unwrap() - 1) + 1;
+    let H_o = (shape.h - 1) * shape.s_h - shape.p_h_top - shape.p_h_bottom + (shape.k_h - 1) + 1;
+    let W_o = (shape.w - 1) * shape.s_w - shape.p_w_left - shape.p_w_right + (shape.k_w - 1) + 1;
     let data_list: Vec<Data> = (0..D_o)
       .into_par_iter()
       .flat_map(|i| {
@@ -122,18 +179,18 @@ impl BasicBlock for Conv3DTransposeBasicBlock {
               g1: G1Projective::zero(),
             };
 
-            let x_in = i / s_d;
-            let y_in = j / s_h;
-            let z_in = k / s_w;
+            let x_in = i / shape.s_d.unwrap();
+            let y_in = j / shape.s_h;
+            let z_in = k / shape.s_w;
             let x_in = x_in as usize;
             let y_in = y_in as usize;
             let z_in = z_in as usize;
-            let x = i % s_d;
-            let y = j % s_h;
-            let z = k % s_w;
-            let input_idx = x * k_h * k_w + y * k_w + z;
+            let x = i % shape.s_d.unwrap();
+            let y = j % shape.s_h;
+            let z = k % shape.s_w;
+            let input_idx = x * shape.k_h * shape.k_w + y * shape.k_w + z;
             let input_idx = input_idx as usize;
-            let input = &inputs[input_idx][[0, x_in * (H as usize) * (W as usize) + y_in * (W as usize) + z_in]];
+            let input = &inputs[input_idx][[0, x_in * (shape.h as usize) * (shape.w as usize) + y_in * (shape.w as usize) + z_in]];
             data.poly += &input.poly;
             data.g1 += input.g1;
             data.r += input.r;
@@ -150,7 +207,7 @@ impl BasicBlock for Conv3DTransposeBasicBlock {
     let output = util::pad_to_pow_of_two(
       &output,
       &Data {
-        raw: vec![Fr::zero(); C_o],
+        raw: vec![Fr::zero(); shape.out_channels],
         poly: ark_poly::polynomial::univariate::DensePolynomial::zero(),
         r: Fr::zero(),
         g1: G1Projective::zero(),
@@ -169,28 +226,13 @@ impl BasicBlock for Conv3DTransposeBasicBlock {
     _rng: &mut StdRng,
     _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
-    let D = self.input_shape[0];
-    let H = self.input_shape[1];
-    let W = self.input_shape[2];
-
-    let k_d = self.kernel_shape[0];
-    let k_h = self.kernel_shape[1];
-    let k_w = self.kernel_shape[2];
-    let s_d = self.stride[0];
-    let s_h = self.stride[1];
-    let s_w = self.stride[2];
-    let p_d_front = self.padding[0];
-    let p_h_top = self.padding[1];
-    let p_w_left = self.padding[2];
-    let p_d_back = self.padding[3];
-    let p_h_bottom = self.padding[4];
-    let p_w_right = self.padding[5];
-    assert!(k_d == s_d && k_h == s_h && k_w == s_w); // The case where stride is equal to kernel size is not implemented for now.
-    assert!(p_d_front == 0 && p_h_top == 0 && p_w_left == 0); // The case where padding is not zero is not implemented for now.
-    assert!(p_d_back == 0 && p_h_bottom == 0 && p_w_right == 0); // The case where padding is not zero is not implemented for now.
-    let D_o = (D - 1) * s_d - p_d_front - p_d_back + (k_d - 1) + 1;
-    let H_o = (H - 1) * s_h - p_h_top - p_h_bottom + (k_h - 1) + 1;
-    let W_o = (W - 1) * s_w - p_w_left - p_w_right + (k_w - 1) + 1;
+    let shape = ConvShapeHelper::from(self);
+    assert!(shape.k_d.unwrap() == shape.s_d.unwrap() && shape.k_h == shape.s_h && shape.k_w == shape.s_w); // The case where stride is equal to kernel size is not implemented for now.
+    assert!(shape.p_d_front == Some(0) && shape.p_h_top == 0 && shape.p_w_left == 0); // The case where padding is not zero is not implemented for now.
+    assert!(shape.p_d_back == Some(0) && shape.p_h_bottom == 0 && shape.p_w_right == 0); // The case where padding is not zero is not implemented for now.
+    let D_o = (shape.d.unwrap() - 1) * shape.s_d.unwrap() - shape.p_d_front.unwrap() - shape.p_d_back.unwrap() + (shape.k_d.unwrap() - 1) + 1;
+    let H_o = (shape.h - 1) * shape.s_h - shape.p_h_top - shape.p_h_bottom + (shape.k_h - 1) + 1;
+    let W_o = (shape.w - 1) * shape.s_w - shape.p_w_left - shape.p_w_right + (shape.k_w - 1) + 1;
     (0..D_o)
       .into_par_iter()
       .flat_map(|i| {
@@ -199,18 +241,18 @@ impl BasicBlock for Conv3DTransposeBasicBlock {
             let j = ind / W_o;
             let k = ind % W_o;
 
-            let x_in = i / s_d;
-            let y_in = j / s_h;
-            let z_in = k / s_w;
+            let x_in = i / shape.s_d.unwrap();
+            let y_in = j / shape.s_h;
+            let z_in = k / shape.s_w;
             let x_in = x_in as usize;
             let y_in = y_in as usize;
             let z_in = z_in as usize;
-            let x = i % s_d;
-            let y = j % s_h;
-            let z = k % s_w;
-            let input_idx = x * k_h * k_w + y * k_w + z;
+            let x = i % shape.s_d.unwrap();
+            let y = j % shape.s_h;
+            let z = k % shape.s_w;
+            let input_idx = x * shape.k_h * shape.k_w + y * shape.k_w + z;
             let input_idx = input_idx as usize;
-            let input = &inputs[input_idx][[0, x_in * (H as usize) * (W as usize) + y_in * (W as usize) + z_in]];
+            let input = &inputs[input_idx][[0, x_in * (shape.h as usize) * (shape.w as usize) + y_in * (shape.w as usize) + z_in]];
             let i = i as usize;
             let j = j as usize;
             let k = k as usize;
@@ -237,45 +279,29 @@ pub struct Conv3DAddBasicBlock {
 // Outputs: 1 tensor with shape [1, D_o*H_o*W_o, C_o]
 impl BasicBlock for Conv3DAddBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
-    let C_o = self.out_channels;
-    let D = self.input_shape[0];
-    let H = self.input_shape[1];
-    let W = self.input_shape[2];
-
-    let k_d = self.kernel_shape[0];
-    let k_h = self.kernel_shape[1];
-    let k_w = self.kernel_shape[2];
-    let s_d = self.stride[0];
-    let s_h = self.stride[1];
-    let s_w = self.stride[2];
-    let p_d_front = self.padding[0];
-    let p_h_top = self.padding[1];
-    let p_w_left = self.padding[2];
-    let p_d_back = self.padding[3];
-    let p_h_bottom = self.padding[4];
-    let p_w_right = self.padding[5];
-    let D_o = (D - k_d + p_d_front + p_d_back) / s_d + 1;
-    let H_o = (H - k_h + p_h_top + p_h_bottom) / s_h + 1;
-    let W_o = (W - k_w + p_w_left + p_w_right) / s_w + 1;
-    let mut r = ArrayD::zeros(IxDyn(&[1, (D_o * H_o * W_o) as usize, C_o]));
+    let shape = ConvShapeHelper::from(self);
+    let D_o = (shape.d.unwrap() - shape.k_d.unwrap() + shape.p_d_front.unwrap() + shape.p_d_back.unwrap()) / shape.s_d.unwrap() + 1;
+    let H_o = (shape.h - shape.k_h + shape.p_h_top + shape.p_h_bottom) / shape.s_h + 1;
+    let W_o = (shape.w - shape.k_w + shape.p_w_left + shape.p_w_right) / shape.s_w + 1;
+    let mut r = ArrayD::zeros(IxDyn(&[1, (D_o * H_o * W_o) as usize, shape.out_channels]));
     r.axis_iter_mut(Axis(2)).enumerate().par_bridge().for_each(|(c, mut channel)| {
       for i in 0..D_o {
         for j in 0..H_o {
           for k in 0..W_o {
             let mut sum = Fr::zero();
-            for x in 0..k_d {
-              for y in 0..k_h {
-                for z in 0..k_w {
-                  let x_in = i * s_d + x - p_d_front;
-                  let y_in = j * s_h + y - p_h_top;
-                  let z_in = k * s_w + z - p_w_left;
-                  let input_idx = x * k_h * k_w + y * k_w + z;
+            for x in 0..shape.k_d.unwrap() {
+              for y in 0..shape.k_h {
+                for z in 0..shape.k_w {
+                  let x_in = i * shape.s_d.unwrap() + x - shape.p_d_front.unwrap();
+                  let y_in = j * shape.s_h + y - shape.p_h_top;
+                  let z_in = k * shape.s_w + z - shape.p_w_left;
+                  let input_idx = x * shape.k_h * shape.k_w + y * shape.k_w + z;
                   let input_idx = input_idx as usize;
-                  if x_in >= 0 && x_in < D && y_in >= 0 && y_in < H && z_in >= 0 && z_in < W {
+                  if x_in >= 0 && x_in < shape.d.unwrap() && y_in >= 0 && y_in < shape.h && z_in >= 0 && z_in < shape.w {
                     let x_in = x_in as usize;
                     let y_in = y_in as usize;
                     let z_in = z_in as usize;
-                    sum += inputs[input_idx][[0, x_in * (H as usize) * (W as usize) + y_in * (W as usize) + z_in, c]];
+                    sum += inputs[input_idx][[0, x_in * (shape.h as usize) * (shape.w as usize) + y_in * (shape.w as usize) + z_in, c]];
                   }
                 }
               }
@@ -293,26 +319,10 @@ impl BasicBlock for Conv3DAddBasicBlock {
   }
 
   fn encodeOutputs(&self, _srs: &SRS, _model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
-    let C_o = self.out_channels;
-    let D = self.input_shape[0];
-    let H = self.input_shape[1];
-    let W = self.input_shape[2];
-
-    let k_d = self.kernel_shape[0];
-    let k_h = self.kernel_shape[1];
-    let k_w = self.kernel_shape[2];
-    let s_d = self.stride[0];
-    let s_h = self.stride[1];
-    let s_w = self.stride[2];
-    let p_d_front = self.padding[0];
-    let p_h_top = self.padding[1];
-    let p_w_left = self.padding[2];
-    let p_d_back = self.padding[3];
-    let p_h_bottom = self.padding[4];
-    let p_w_right = self.padding[5];
-    let D_o = (D - k_d + p_d_front + p_d_back) / s_d + 1;
-    let H_o = (H - k_h + p_h_top + p_h_bottom) / s_h + 1;
-    let W_o = (W - k_w + p_w_left + p_w_right) / s_w + 1;
+    let shape = ConvShapeHelper::from(self);
+    let D_o = (shape.d.unwrap() - shape.k_d.unwrap() + shape.p_d_front.unwrap() + shape.p_d_back.unwrap()) / shape.s_d.unwrap() + 1;
+    let H_o = (shape.h - shape.k_h + shape.p_h_top + shape.p_h_bottom) / shape.s_h + 1;
+    let W_o = (shape.w - shape.k_w + shape.p_w_left + shape.p_w_right) / shape.s_w + 1;
     let data_list: Vec<Data> = (0..D_o)
       .into_par_iter()
       .flat_map(|i| {
@@ -328,19 +338,19 @@ impl BasicBlock for Conv3DAddBasicBlock {
               g1: G1Projective::zero(),
             };
 
-            for x in 0..k_d {
-              for y in 0..k_h {
-                for z in 0..k_w {
-                  let x_in = i * s_d + x - p_d_front;
-                  let y_in = j * s_h + y - p_h_top;
-                  let z_in = k * s_w + z - p_w_left;
-                  let input_idx = x * k_h * k_w + y * k_w + z;
+            for x in 0..shape.k_d.unwrap() {
+              for y in 0..shape.k_h {
+                for z in 0..shape.k_w {
+                  let x_in = i * shape.s_d.unwrap() + x - shape.p_d_front.unwrap();
+                  let y_in = j * shape.s_h + y - shape.p_h_top;
+                  let z_in = k * shape.s_w + z - shape.p_w_left;
+                  let input_idx = x * shape.k_h * shape.k_w + y * shape.k_w + z;
                   let input_idx = input_idx as usize;
-                  if x_in >= 0 && x_in < D && y_in >= 0 && y_in < H && z_in >= 0 && z_in < W {
+                  if x_in >= 0 && x_in < shape.d.unwrap() && y_in >= 0 && y_in < shape.h && z_in >= 0 && z_in < shape.w {
                     let x_in = x_in as usize;
                     let y_in = y_in as usize;
                     let z_in = z_in as usize;
-                    let input = &inputs[input_idx][[0, x_in * (H as usize) * (W as usize) + y_in * (W as usize) + z_in]];
+                    let input = &inputs[input_idx][[0, x_in * (shape.h as usize) * (shape.w as usize) + y_in * (shape.w as usize) + z_in]];
                     data.poly += &input.poly;
                     data.g1 += input.g1;
                     data.r += input.r;
@@ -360,7 +370,7 @@ impl BasicBlock for Conv3DAddBasicBlock {
     let output = util::pad_to_pow_of_two(
       &output,
       &Data {
-        raw: vec![Fr::zero(); C_o],
+        raw: vec![Fr::zero(); shape.out_channels],
         poly: ark_poly::polynomial::univariate::DensePolynomial::zero(),
         r: Fr::zero(),
         g1: G1Projective::zero(),
@@ -379,25 +389,11 @@ impl BasicBlock for Conv3DAddBasicBlock {
     _rng: &mut StdRng,
     _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
-    let D = self.input_shape[0];
-    let H = self.input_shape[1];
-    let W = self.input_shape[2];
+    let shape = ConvShapeHelper::from(self);
+    let D_o = (shape.d.unwrap() - shape.k_d.unwrap() + shape.p_d_front.unwrap() + shape.p_d_back.unwrap()) / shape.s_d.unwrap() + 1;
+    let H_o = (shape.h - shape.k_h + shape.p_h_top + shape.p_h_bottom) / shape.s_h + 1;
+    let W_o = (shape.w - shape.k_w + shape.p_w_left + shape.p_w_right) / shape.s_w + 1;
 
-    let k_d = self.kernel_shape[0];
-    let k_h = self.kernel_shape[1];
-    let k_w = self.kernel_shape[2];
-    let s_d = self.stride[0];
-    let s_h = self.stride[1];
-    let s_w = self.stride[2];
-    let p_d_front = self.padding[0];
-    let p_h_top = self.padding[1];
-    let p_w_left = self.padding[2];
-    let p_d_back = self.padding[3];
-    let p_h_bottom = self.padding[4];
-    let p_w_right = self.padding[5];
-    let D_o = (D - k_d + p_d_front + p_d_back) / s_d + 1;
-    let H_o = (H - k_h + p_h_top + p_h_bottom) / s_h + 1;
-    let W_o = (W - k_w + p_w_left + p_w_right) / s_w + 1;
     (0..D_o)
       .into_par_iter()
       .flat_map(|i| {
@@ -407,18 +403,18 @@ impl BasicBlock for Conv3DAddBasicBlock {
             let k = ind % W_o;
 
             let mut sum = G1Projective::zero();
-            for x in 0..k_d {
-              for y in 0..k_h {
-                for z in 0..k_w {
-                  let x_in = i * s_d + x - p_d_front;
-                  let y_in = j * s_h + y - p_h_top;
-                  let z_in = k * s_w + z - p_w_left;
-                  let input_idx = (x * k_h * k_w + y * k_w + z) as usize;
-                  if x_in >= 0 && x_in < D && y_in >= 0 && y_in < H && z_in >= 0 && z_in < W {
+            for x in 0..shape.k_d.unwrap() {
+              for y in 0..shape.k_h {
+                for z in 0..shape.k_w {
+                  let x_in = i * shape.s_d.unwrap() + x - shape.p_d_front.unwrap();
+                  let y_in = j * shape.s_h + y - shape.p_h_top;
+                  let z_in = k * shape.s_w + z - shape.p_w_left;
+                  let input_idx = (x * shape.k_h * shape.k_w + y * shape.k_w + z) as usize;
+                  if x_in >= 0 && x_in < shape.d.unwrap() && y_in >= 0 && y_in < shape.h && z_in >= 0 && z_in < shape.w {
                     let x_in = x_in as usize;
                     let y_in = y_in as usize;
                     let z_in = z_in as usize;
-                    sum += &inputs[input_idx][[0, x_in * (H as usize) * (W as usize) + y_in * (W as usize) + z_in]].g1;
+                    sum += &inputs[input_idx][[0, x_in * (shape.h as usize) * (shape.w as usize) + y_in * (shape.w as usize) + z_in]].g1;
                   }
                 }
               }
@@ -449,34 +445,24 @@ pub struct Conv2DAddBasicBlock {
 // Outputs: 1 tensor with shape [1, H_o*W_o, C_o]
 impl BasicBlock for Conv2DAddBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
-    let H = self.input_shape[0];
-    let W = self.input_shape[1];
-    let C_o = self.out_channels;
-    let k_h = self.kernel_shape[0];
-    let k_w = self.kernel_shape[1];
-    let s_h = self.stride[0];
-    let s_w = self.stride[1];
-    let p_h_top = self.padding[0];
-    let p_w_left = self.padding[1];
-    let p_h_bottom = self.padding[2];
-    let p_w_right = self.padding[3];
-    let H_o = (H - k_h + p_h_top + p_h_bottom) / s_h + 1;
-    let W_o = (W - k_w + p_w_left + p_w_right) / s_w + 1;
-    let mut r = ArrayD::zeros(IxDyn(&[1, (H_o * W_o) as usize, C_o]));
+    let shape = ConvShapeHelper::from(self);
+    let H_o = (shape.h - shape.k_h + shape.p_h_top + shape.p_h_bottom) / shape.s_h + 1;
+    let W_o = (shape.w - shape.k_w + shape.p_w_left + shape.p_w_right) / shape.s_w + 1;
+    let mut r = ArrayD::zeros(IxDyn(&[1, (H_o * W_o) as usize, shape.out_channels]));
     r.axis_iter_mut(Axis(2)).enumerate().par_bridge().for_each(|(c, mut channel)| {
       for i in 0..H_o {
         for j in 0..W_o {
           let mut sum = Fr::zero();
-          for x in 0..k_h {
-            for y in 0..k_w {
-              let x_in = i * s_h + x - p_h_top;
-              let y_in = j * s_w + y - p_w_left;
-              let input_idx = x * k_w + y;
+          for x in 0..shape.k_h {
+            for y in 0..shape.k_w {
+              let x_in = i * shape.s_h + x - shape.p_h_top;
+              let y_in = j * shape.s_w + y - shape.p_w_left;
+              let input_idx = x * shape.k_w + y;
               let input_idx = input_idx as usize;
-              if x_in >= 0 && x_in < H && y_in >= 0 && y_in < W {
+              if x_in >= 0 && x_in < shape.h && y_in >= 0 && y_in < shape.w {
                 let x_in = x_in as usize;
                 let y_in = y_in as usize;
-                sum += inputs[input_idx][[0, x_in * (W as usize) + y_in, c]];
+                sum += inputs[input_idx][[0, x_in * (shape.w as usize) + y_in, c]];
               }
             }
           }
@@ -491,19 +477,9 @@ impl BasicBlock for Conv2DAddBasicBlock {
   }
 
   fn encodeOutputs(&self, _srs: &SRS, _model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
-    let H = self.input_shape[0];
-    let W = self.input_shape[1];
-    let C_o = self.out_channels;
-    let k_h = self.kernel_shape[0];
-    let k_w = self.kernel_shape[1];
-    let s_h = self.stride[0];
-    let s_w = self.stride[1];
-    let p_h_top = self.padding[0];
-    let p_w_left = self.padding[1];
-    let p_h_bottom = self.padding[2];
-    let p_w_right = self.padding[3];
-    let H_o = (H - k_h + p_h_top + p_h_bottom) / s_h + 1;
-    let W_o = (W - k_w + p_w_left + p_w_right) / s_w + 1;
+    let shape = ConvShapeHelper::from(self);
+    let H_o = (shape.h - shape.k_h + shape.p_h_top + shape.p_h_bottom) / shape.s_h + 1;
+    let W_o = (shape.w - shape.k_w + shape.p_w_left + shape.p_w_right) / shape.s_w + 1;
     let data_list: Vec<Data> = (0..H_o)
       .into_par_iter()
       .flat_map(|i| {
@@ -516,18 +492,18 @@ impl BasicBlock for Conv2DAddBasicBlock {
               g1: G1Projective::zero(),
             };
 
-            for x in 0..k_h {
-              for y in 0..k_w {
-                let x_in = i * s_h + x - p_h_top;
-                let y_in = j * s_w + y - p_w_left;
-                let input_idx = x * k_w + y;
+            for x in 0..shape.k_h {
+              for y in 0..shape.k_w {
+                let x_in = i * shape.s_h + x - shape.p_h_top;
+                let y_in = j * shape.s_w + y - shape.p_w_left;
+                let input_idx = x * shape.k_w + y;
 
                 let input_idx = input_idx as usize;
 
-                if x_in >= 0 && x_in < H && y_in >= 0 && y_in < W {
+                if x_in >= 0 && x_in < shape.h && y_in >= 0 && y_in < shape.w {
                   let x_in = x_in as usize;
                   let y_in = y_in as usize;
-                  let input = &inputs[input_idx][[0, x_in * (W as usize) + y_in]];
+                  let input = &inputs[input_idx][[0, x_in * (shape.w as usize) + y_in]];
                   data.poly += &input.poly;
                   data.g1 += input.g1;
                   data.r += input.r;
@@ -545,7 +521,7 @@ impl BasicBlock for Conv2DAddBasicBlock {
     let output = util::pad_to_pow_of_two(
       &output,
       &Data {
-        raw: vec![Fr::zero(); C_o],
+        raw: vec![Fr::zero(); shape.out_channels],
         poly: ark_poly::polynomial::univariate::DensePolynomial::zero(),
         r: Fr::zero(),
         g1: G1Projective::zero(),
@@ -564,33 +540,24 @@ impl BasicBlock for Conv2DAddBasicBlock {
     _rng: &mut StdRng,
     _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
-    let H = self.input_shape[0];
-    let W = self.input_shape[1];
-    let k_h = self.kernel_shape[0];
-    let k_w = self.kernel_shape[1];
-    let s_h = self.stride[0];
-    let s_w = self.stride[1];
-    let p_h_top = self.padding[0];
-    let p_w_left = self.padding[1];
-    let p_h_bottom = self.padding[2];
-    let p_w_right = self.padding[3];
-    let H_o = (H - k_h + p_h_top + p_h_bottom) / s_h + 1;
-    let W_o = (W - k_w + p_w_left + p_w_right) / s_w + 1;
+    let shape = ConvShapeHelper::from(self);
+    let H_o = (shape.h - shape.k_h + shape.p_h_top + shape.p_h_bottom) / shape.s_h + 1;
+    let W_o = (shape.w - shape.k_w + shape.p_w_left + shape.p_w_right) / shape.s_w + 1;
     (0..H_o)
       .into_par_iter()
       .flat_map(|i| {
         (0..W_o)
           .map(move |j| {
             let mut sum = G1Projective::zero();
-            for x in 0..k_h {
-              for y in 0..k_w {
-                let x_in = i * s_h + x - p_h_top;
-                let y_in = j * s_w + y - p_w_left;
-                let input_idx = (x * k_w + y) as usize;
-                if x_in >= 0 && x_in < H && y_in >= 0 && y_in < W {
+            for x in 0..shape.k_h {
+              for y in 0..shape.k_w {
+                let x_in = i * shape.s_h + x - shape.p_h_top;
+                let y_in = j * shape.s_w + y - shape.p_w_left;
+                let input_idx = (x * shape.k_w + y) as usize;
+                if x_in >= 0 && x_in < shape.h && y_in >= 0 && y_in < shape.w {
                   let x_in = x_in as usize;
                   let y_in = y_in as usize;
-                  sum += &inputs[input_idx][[0, x_in * (W as usize) + y_in]].g1;
+                  sum += &inputs[input_idx][[0, x_in * (shape.w as usize) + y_in]].g1;
                 }
               }
             }
@@ -601,6 +568,67 @@ impl BasicBlock for Conv2DAddBasicBlock {
           .collect::<Vec<_>>()
       })
       .collect::<Vec<_>>();
+    vec![]
+  }
+}
+
+// This basic block is only used in RetinaNet where we need to concatenate the outputs of multiple conv heads along axis 1.
+#[derive(Debug)]
+pub struct MultiHeadConv2dAggBasicBlock {
+  pub input_shape: Vec<usize>, // [1, H_out * W_out, head_dim]
+}
+impl BasicBlock for MultiHeadConv2dAggBasicBlock {
+  fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
+    let head_num = inputs.len();
+    let mut final_output_shape = self.input_shape.clone();
+    final_output_shape[1] *= head_num;
+
+    let mut result = ArrayD::<Fr>::zeros(IxDyn(&final_output_shape));
+    for head in 0..head_num {
+      let input_slice = util::slice_nd_array(inputs[head].clone(), &self.input_shape);
+      result.slice_axis_mut(Axis(1), (head * self.input_shape[1]..(head + 1) * self.input_shape[1]).into()).assign(&input_slice);
+    }
+    result = util::pad_to_pow_of_two(&result, &Fr::zero());
+
+    Ok(vec![result])
+  }
+
+  fn encodeOutputs(&self, _srs: &SRS, _model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, _outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
+    let head_num = inputs.len();
+    let mut final_output_shape = vec![self.input_shape[0], self.input_shape[1]];
+    final_output_shape[1] *= head_num;
+    let data_zero = Data {
+      raw: vec![Fr::zero(); self.input_shape[2]],
+      poly: ark_poly::polynomial::univariate::DensePolynomial::zero(),
+      r: Fr::zero(),
+      g1: G1Projective::zero(),
+    };
+    let mut result = ArrayD::from_shape_fn(IxDyn(&final_output_shape), |_| data_zero.clone());
+    for head in 0..head_num {
+      let input_slice = util::slice_nd_array(inputs[head].clone(), &[self.input_shape[0], self.input_shape[1]]);
+      result.slice_axis_mut(Axis(1), (head * self.input_shape[1]..(head + 1) * self.input_shape[1]).into()).assign(&input_slice);
+    }
+    result = util::pad_to_pow_of_two(&result, &data_zero);
+    vec![result]
+  }
+
+  fn verify(
+    &self,
+    _srs: &SRS,
+    _model: &ArrayD<DataEnc>,
+    inputs: &Vec<&ArrayD<DataEnc>>,
+    outputs: &Vec<&ArrayD<DataEnc>>,
+    _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
+    _rng: &mut StdRng,
+    _cache: ProveVerifyCache,
+  ) -> Vec<PairingCheck> {
+    let head_num = inputs.len();
+    let output = outputs[0];
+    for head in 0..head_num {
+      for i in 0..self.input_shape[1] {
+        assert!(output[[0, head * self.input_shape[1] + i]].g1 == inputs[head][[0, i]].g1);
+      }
+    }
     vec![]
   }
 }
