@@ -94,10 +94,16 @@ impl Layer for Conv2dLayer {
 
     // Conv Add
     let conv_add = graph.addBB(Box::new(Conv2DAddBasicBlock {
-      input_shape: vec![H as i32, W as i32],
-      kernel_shape: vec![weight_shape[2] as i32, weight_shape[3] as i32],
-      stride: strides.clone().into_iter().map(|x| x as i32).collect(),
-      padding: pads.clone().into_iter().map(|x| x as i32).collect(),
+      h: H as i32,
+      w: W as i32,
+      k_h: weight_shape[2] as i32,
+      k_w: weight_shape[3] as i32,
+      s_h: strides[0] as i32,
+      s_w: strides[1] as i32,
+      p_h_top: pads[0] as i32,
+      p_w_left: pads[1] as i32,
+      p_h_bottom: pads[2] as i32,
+      p_w_right: pads[3] as i32,
       out_channels: util::next_pow(weight_shape[0] as u32) as usize,
     }));
 
@@ -273,10 +279,16 @@ impl Layer for MultiHeadConv2dLayer {
 
     // Conv Add
     let conv_add = graph.addBB(Box::new(Conv2DAddBasicBlock {
-      input_shape: vec![H as i32, W as i32],
-      kernel_shape: vec![weight_shape[2] as i32, weight_shape[3] as i32],
-      stride: strides.clone().into_iter().map(|x| x as i32).collect(),
-      padding: pads.clone().into_iter().map(|x| x as i32).collect(),
+      h: H as i32,
+      w: W as i32,
+      k_h: weight_shape[2] as i32,
+      k_w: weight_shape[3] as i32,
+      s_h: strides[0] as i32,
+      s_w: strides[1] as i32,
+      p_h_top: pads[0] as i32,
+      p_w_left: pads[1] as i32,
+      p_h_bottom: pads[2] as i32,
+      p_w_right: pads[3] as i32,
       out_channels: util::next_pow(head_dim as u32) as usize,
     }));
 
@@ -397,10 +409,21 @@ impl Layer for Conv3dLayer {
 
     // Conv Add
     let conv_add = graph.addBB(Box::new(Conv3DAddBasicBlock {
-      input_shape: vec![D as i32, D as i32, D as i32],
-      kernel_shape: vec![weight_shape[2] as i32, weight_shape[3] as i32, weight_shape[4] as i32],
-      stride: strides.clone().into_iter().map(|x| x as i32).collect(),
-      padding: pads.clone().into_iter().map(|x| x as i32).collect(),
+      d: D as i32,
+      h: D as i32,
+      w: D as i32,
+      k_d: weight_shape[2] as i32,
+      k_h: weight_shape[3] as i32,
+      k_w: weight_shape[4] as i32,
+      s_d: strides[0] as i32,
+      s_h: strides[1] as i32,
+      s_w: strides[2] as i32,
+      p_d_front: pads[0] as i32,
+      p_h_top: pads[1] as i32,
+      p_w_left: pads[2] as i32,
+      p_d_back: pads[3] as i32,
+      p_h_bottom: pads[4] as i32,
+      p_w_right: pads[5] as i32,
       out_channels: util::next_pow(weight_shape[0] as u32) as usize,
     }));
 
@@ -512,10 +535,21 @@ impl Layer for ConcatConv3dLayer {
 
     // Conv Add
     let conv_add = graph.addBB(Box::new(Conv3DAddBasicBlock {
-      input_shape: vec![D as i32, D as i32, D as i32],
-      kernel_shape: vec![weight_shape[2] as i32, weight_shape[3] as i32, weight_shape[4] as i32],
-      stride: strides.clone().into_iter().map(|x| x as i32).collect(),
-      padding: pads.clone().into_iter().map(|x| x as i32).collect(),
+      d: D as i32,
+      h: D as i32,
+      w: D as i32,
+      k_d: weight_shape[2] as i32,
+      k_h: weight_shape[3] as i32,
+      k_w: weight_shape[4] as i32,
+      s_d: strides[0] as i32,
+      s_h: strides[1] as i32,
+      s_w: strides[2] as i32,
+      p_d_front: pads[0] as i32,
+      p_h_top: pads[1] as i32,
+      p_w_left: pads[2] as i32,
+      p_d_back: pads[3] as i32,
+      p_h_bottom: pads[4] as i32,
+      p_w_right: pads[5] as i32,
       out_channels: util::next_pow(weight_shape[0] as u32) as usize,
     }));
 
@@ -625,10 +659,21 @@ impl Layer for Conv3dTransposeLayer {
 
     // Conv Add
     let conv_trans = graph.addBB(Box::new(Conv3DTransposeBasicBlock {
-      input_shape: vec![D as i32, D as i32, D as i32],
-      kernel_shape: vec![weight_shape[2] as i32, weight_shape[3] as i32, weight_shape[4] as i32],
-      stride: strides.clone().into_iter().map(|x| x as i32).collect(),
-      padding: pads.clone().into_iter().map(|x| x as i32).collect(),
+      d: D as i32,
+      h: D as i32,
+      w: D as i32,
+      k_d: weight_shape[2] as i32,
+      k_h: weight_shape[3] as i32,
+      k_w: weight_shape[4] as i32,
+      s_d: strides[0] as i32,
+      s_h: strides[1] as i32,
+      s_w: strides[2] as i32,
+      p_d_front: pads[0] as i32,
+      p_h_top: pads[1] as i32,
+      p_w_left: pads[2] as i32,
+      p_d_back: pads[3] as i32,
+      p_h_bottom: pads[4] as i32,
+      p_w_right: pads[5] as i32,
       out_channels: util::next_pow(weight_shape[1] as u32) as usize,
     }));
 
