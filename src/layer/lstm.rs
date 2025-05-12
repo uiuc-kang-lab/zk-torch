@@ -308,17 +308,7 @@ impl Layer for LSTMLayer {
       H_list.push(H_t);
     }
 
-    for _t in 0..util::next_pow(seq_length as u32) as usize - seq_length {
-      // sublayer 21: Pad H_t with zeros
-      let constantOfShape = graph.addBB(Box::new(ConstOfShapeBasicBlock {
-        c: Fr::zero(),
-        shape: vec![1, num_directions, batch_size, hidden_size].iter().map(|&x| util::next_pow(x as u32) as usize).collect(),
-      }));
-      let H_t_pad = graph.addNode(constantOfShape, vec![]);
-      H_list.push(H_t_pad);
-    }
-
-    // sublayer 22: Concat H_list
+    // sublayer 21: Concat H_list
     let shape = vec![1, num_directions, batch_size, hidden_size].iter().map(|&x| util::next_pow(x as u32) as usize).collect();
     let concat = graph.addBB(Box::new(ConcatBasicBlock {
       axis: 0,
