@@ -163,10 +163,6 @@ impl BasicBlock for CustomResizeBasicBlock {
     _rng: &mut StdRng,
     _cache: ProveVerifyCache,
   ) -> Vec<PairingCheck> {
-    //let inputs_g1 = inputs.iter().fold(G1Projective::zero(), |acc, x| acc + x.first().unwrap().g1);
-    //let c_g1 = outputs[0].first().unwrap().g1;
-    //// Verify f1(x)+f2(x)+...+fn(x)=h(x)
-    //assert!(inputs_g1 == c_g1);
     let input = inputs[0];
     let output = outputs[0];
     let D = (self.input_shape[1] as f64).sqrt() as usize;
