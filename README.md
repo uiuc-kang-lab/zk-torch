@@ -1,30 +1,75 @@
-# Zk-Torch
+﻿# Zk-Torch
+
+  
 
 ## Overview
-Zk-Torch is a library for generating ZK circuits from ONNX models with the feature of Mira-style folding. We support all edge models in MLPerf Inference.
+
+Zero-knowledge (ZK) proofs of ML model inference help provide transparency to users without requiring model owners to share model weights. Past work on these provers can be placed into two categories. The first method compiles the ML model into a low-level circuit, and the second method uses custom cryptographic protocols designed only for a specific class of models. Unfortunately, the first method is highly inefficient, and the second method does not generalize well.
+
+Zk-Torch is an end-to-end proving system for compiling ML model inference computation into ZK circuits from ONNX models by compiling layers into a set of specialized cryptographic operations, which we call basic blocks. It is built on top of a parallel extension to the Mira accumulation scheme, enabling succinct proofs with minimal accumulation overhead. We support all edge models in the [MLPerf Edge Inference Suite v4.1](https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc#benchmarks-1), covering convolutional neural networks (CNNs), recurrent neural networks (RNNs), and large language models (LLMs). Overall, Zk-Torch supports 61 layers with a total of 20 basic blocks. With the Mira accumulator extension, we condense proofs of the same basic block type.
 
 ## Prerequisites
+
 ### Install Rust
 ```
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
+
 ### Install nightly Rust
 ```
 rustup override set nightly
 ```
 
 ## Run the example
+
+  
+
+The example runs zk-Torch with Mira-style folding enabled on the ONNX file and configurations specified in `config.yaml`.
+
 ```
 cargo run --release --bin zk_torch --features fold -- config.yaml
 ```
 
 ## How to run custom experiments
-- Replace the model and input in `config.yaml`
-    ```
-    model_path: <path_to_your_model>
-    input_path: <path_to_your_input>
-    ```
-- Use customized scale factor
-    ```
-    scale_factor_log: <log2 of the scale factor>
-    ```
+
+  
+
+### Update the ptau file
+Most models will require a larger powers of tau (ptau) file than the provided `challenge` file. The size of the ptau file needed (`pow_len_log` in `config.yaml`) depends on the magnitude of the quantized values to support in the inference computation (`cq_range_log` in `config.yaml`) as well as the sizes of the inputs to certain layers. In most cases, the former will be the deciding factor, with the constraint `cq_range_log` < `pow_len_log`.
+
+Zk-Torch supports reading of the ptau files here:
+https://github.com/privacy-scaling-explorations/perpetualpowersoftau?tab=readme-ov-file#prepared-and-truncated-files.
+Then, update `config.yaml` based on the chosen ptau file.
+```
+ptau_path: <path_to_ptau_file>
+pow_len_log: <log of largest supported power: x in ppot_0080_<x>.ptau>
+loaded_pow_len_log: <log of largest power you want to load>
+cq_range_log: <can be up to pow_len_log - 1>
+cq_range_lower_log: <can be up to cq_range_log - 1>
+```
+
+### Replace the model and input in `config.yaml`
+`model_path` should contain the path to the ONNX file to compile. `input_path` can be left blank or contain a JSON file similar to the example below, replacing the value with a tensor value.
+
+`{"input_data":  [[0.09,  0.13,  0.24,  0.05]]}`
+
+If it is left blank or the provided path does not exist, Zk-Torch will generate a random input tensor based on the input shape specified in the ONNX file, or otherwise throw an error.
+
+Update the `config.yaml`:
+```
+model_path: <path_to_your_onnx_file>
+input_path: <path_to_your_input>
+```
+
+### Use customized scale factor
+Update `config.yaml` based on the desired quantization scale factor.
+```
+scale_factor_log: <log2 of the scale factor>
+```
+### Run experiment
+```
+cargo run --release --bin zk_torch --features fold -- <your config file>
+```
+To just run proving (e.g., for testing purposes), you can additionally add the `mock_prove` feature (`--features mock_prove,fold`).
+
+The outputs consist of input, model (including weights and lookup tables), output, and setup encodings, as well as the proof before accumulation, accumulation-specific proofs, and the final proof after accumulation for the prover and verifier. The output paths are specified in `config.yaml`.
