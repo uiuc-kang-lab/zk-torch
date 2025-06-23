@@ -22,9 +22,7 @@ rustup override set nightly
 
 ## Run the example
 
-  
-
-The example runs zk-Torch with Mira-style folding enabled on the ONNX file and configurations specified in `config.yaml`.
+The example runs zk-Torch with Mira-style folding enabled on the ONNX file and configurations specified in `config.yaml`. The ONNX file contains a small model with two fully-connected layers and two ReLU layers.
 
 ```
 cargo run --release --bin zk_torch --features fold -- config.yaml
