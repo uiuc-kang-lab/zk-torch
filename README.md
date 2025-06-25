@@ -8,6 +8,8 @@ Zero-knowledge (ZK) proofs of ML model inference help provide transparency to us
 
 Zk-Torch is an end-to-end proving system for compiling ML model inference computation into ZK circuits from ONNX models by compiling layers into a set of specialized cryptographic operations, which we call basic blocks. It is built on top of a parallel extension to the Mira accumulation scheme, enabling succinct proofs with minimal accumulation overhead. We support all edge models in the [MLPerf Edge Inference Suite v4.1](https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc#benchmarks-1), covering convolutional neural networks (CNNs), recurrent neural networks (RNNs), and large language models (LLMs). Overall, Zk-Torch supports 61 layers with a total of 20 basic blocks. With the Mira accumulator extension, we condense proofs of the same basic block type.
 
+![zk_torch_readme](https://github.com/user-attachments/assets/6715728d-1818-4ee2-9732-35fafc53976c)
+
 ## Prerequisites
 
 ### Install Rust
