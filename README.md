@@ -39,7 +39,7 @@ cargo run --release --bin zk_torch --features fold -- config.yaml
 Most models will require a larger powers of tau (ptau) file than the provided `challenge` file which has `pow_len_log=7`. The size of the ptau file needed (`pow_len_log` in `config.yaml`) depends on the magnitude of the quantized values to support in the inference computation (`cq_range_log` in `config.yaml`) as well as the sizes of the inputs to certain layers. In most cases, the former will be the deciding factor, with the constraint `cq_range_log` < `pow_len_log`.
 
 To produce a larger file, please refer to the following instructions to generate one by the `snarkjs` tool:
-https://github.com/iden3/snarkjs?tab=readme-ov-file#1-start-a-new-powers-of-tau-ceremony. For step 1, you can replace `14` with the desired value for the `pow_len_log` and directly follow the remaining instructions through step 8.
+https://github.com/iden3/snarkjs?tab=readme-ov-file#1-start-a-new-powers-of-tau-ceremony. For step 1, you can replace `14` with the desired value for the `pow_len_log` and directly follow the remaining instructions through step 4 which produces the file with the `snarkjs powersoftau export challenge` command.
 
 Then, update `config.yaml` based on the produced ptau file.
    
