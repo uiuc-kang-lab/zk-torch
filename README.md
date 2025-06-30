@@ -1,4 +1,4 @@
-﻿# Zk-Torch
+﻿# ZKTorch
 
   
 
@@ -6,7 +6,7 @@
 
 Zero-knowledge (ZK) proofs of ML model inference help provide transparency to users without requiring model owners to share model weights. Past work on these provers can be placed into two categories. The first method compiles the ML model into a low-level circuit, and the second method uses custom cryptographic protocols designed only for a specific class of models. Unfortunately, the first method is highly inefficient, and the second method does not generalize well.
 
-Zk-Torch is an end-to-end proving system for compiling ML model inference computation into ZK circuits from ONNX models by compiling layers into a set of specialized cryptographic operations, which we call basic blocks. It is built on top of a parallel extension to the Mira accumulation scheme, enabling succinct proofs with minimal accumulation overhead. We support all edge models in the [MLPerf Edge Inference Suite v4.1](https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc#benchmarks-1), covering convolutional neural networks (CNNs), recurrent neural networks (RNNs), and large language models (LLMs). Overall, Zk-Torch supports 61 layers with a total of 20 basic blocks. With the Mira accumulator extension, we condense proofs of the same basic block type.
+ZKTorch is an end-to-end proving system for compiling ML model inference computation into ZK circuits from ONNX models by compiling layers into a set of specialized cryptographic operations, which we call basic blocks. It is built on top of a parallel extension to the Mira accumulation scheme, enabling succinct proofs with minimal accumulation overhead. We support all edge models in the [MLPerf Edge Inference Suite v4.1](https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc#benchmarks-1), covering convolutional neural networks (CNNs), recurrent neural networks (RNNs), and large language models (LLMs). Overall, ZKTorch supports 61 layers with a total of 20 basic blocks. With the Mira accumulator extension, we condense proofs of the same basic block type.
 
 ![zk_torch_readme](https://github.com/user-attachments/assets/6715728d-1818-4ee2-9732-35fafc53976c)
 
@@ -24,7 +24,7 @@ rustup override set nightly
 
 ## Run the example
 
-The example runs zk-Torch with Mira-style folding enabled on the ONNX file and configurations specified in `config.yaml`. The ONNX file contains a small model with two fully-connected layers and two ReLU layers.
+The example runs ZKTorch with Mira-style folding enabled on the ONNX file and configurations specified in `config.yaml`. The ONNX file contains a small model with two fully-connected layers and two ReLU layers.
 
 ```
 cargo run --release --bin zk_torch --features fold -- config.yaml
