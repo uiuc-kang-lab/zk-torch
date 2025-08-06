@@ -28,6 +28,7 @@ pub static CONFIG_FILE: Lazy<String> = Lazy::new(|| {
         args[1].clone()
     }
 });
+
 // Define a static CONFIG that holds the loaded configuration
 pub static CONFIG: Lazy<util::Config> = Lazy::new(|| {
   let mut file = File::open(&*CONFIG_FILE).expect("Could not open config");
