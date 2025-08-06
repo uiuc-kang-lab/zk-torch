@@ -43,34 +43,44 @@ impl Layer for MatMulLayer {
       }),
       N: 1,
     }));
-    let small_matmul = (a * b) < 1 << CONFIG.ptau.loaded_pow_len_log;
-    let use_cqlin = constants.len() > 1 && constants[1].is_some() && small_matmul;
-    let matmul_output = if use_cqlin {
-      let b = constants[1].unwrap().0;
-      let cqlin = if input_shapes[0].len() > 1 {
-        graph.addBB(Box::new(RepeaterBasicBlock {
-          basic_block: Box::new(CQLinBasicBlock { setup: b.to_owned() }),
-          N: 2,
-        }))
-      } else {
-        graph.addBB(Box::new(CQLinBasicBlock { setup: b.to_owned() }))
-      };
-      graph.addNode(cqlin, vec![(-1, 0)])
+    let has_fixed_matrix = constants.len() > 1 && constants[1].is_some();
+    let srs_big_enough = (a * b) < (1 << CONFIG.ptau.loaded_pow_len_log);
+
+    let matmul_output = if has_fixed_matrix && srs_big_enough {
+        // Use CQLinBB for fixed matrix if SRS is big enough
+        let b = constants[1].unwrap().0;
+        let cqlin = if input_shapes[0].len() > 1 {
+            graph.addBB(Box::new(RepeaterBasicBlock {
+                basic_block: Box::new(CQLinBasicBlock { setup: b.to_owned() }),
+                N: 2,
+            }))
+        } else {
+            graph.addBB(Box::new(CQLinBasicBlock { setup: b.to_owned() }))
+        };
+        graph.addNode(cqlin, vec![(-1, 0)])
     } else {
-      let transpose = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(PermuteBasicBlock {
-          permutation: permutation,
-          n: a,
-          m: b,
-        }),
-        N: 2,
-      }));
-      let matmul = graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(MatMulBasicBlock { m: a, n: b }),
-        N: 2,
-      }));
-      let transpose_output = graph.addNode(transpose, vec![(-2, 0)]);
-      graph.addNode(matmul, vec![(-1, 0), (transpose_output, 0)])
+        // Use MatMulBB for fixed matrix if SRS is NOT big enough, or for non-fixed matrix
+        if has_fixed_matrix {
+            eprintln!(
+                "Warning: MatMul is using MatMulBB because SRS is not big enough for CQLinBB. Matrix size: {}x{}, SRS threshold: {}",
+                a, b, 1 << CONFIG.ptau.loaded_pow_len_log
+            );
+        }
+        let transpose = graph.addBB(Box::new(RepeaterBasicBlock {
+            basic_block: Box::new(PermuteBasicBlock {
+                permutation: permutation,
+                n: a,
+                m: b,
+            }),
+            N: 2,
+        }));
+        
+        let matmul = graph.addBB(Box::new(RepeaterBasicBlock {
+            basic_block: Box::new(MatMulBasicBlock { m: a, n: b }),
+            N: 2,
+        }));
+        let transpose_output = graph.addNode(transpose, vec![(-2, 0)]);
+        graph.addNode(matmul, vec![(-1, 0), (transpose_output, 0)])
     };
     let change_SF_output = graph.addNode(change_SF, vec![(matmul_output, 0)]);
     let _ = graph.addNode(change_SF_check, vec![(matmul_output, 0), (change_SF_output, 0)]);

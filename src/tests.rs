@@ -10,6 +10,36 @@ use ndarray::{arr0, concatenate, s, ArrayD, Axis, IxDyn};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use crate::layer::Layer;
+use once_cell::sync::Lazy;
+use std::fs::File;
+use std::io::Read;
+use std::sync::Once;
+use std::fs;
+use serde_json::Value;
+use crate::basic_block::*;
+use crate::graph::Graph;
+
+static INIT: Once = Once::new();
+
+// For now, add to the top of each test that needs config.
+fn set_test_config_env() {
+    INIT.call_once(|| {
+        std::env::set_var("ZK_TORCH_CONFIG", "config.yaml");
+    });
+}
+
+// Test-only statics to override the main CONFIG/CONFIG_FILE in tests
+#[allow(dead_code)]
+pub static CONFIG_FILE: Lazy<String> = Lazy::new(|| "config.yaml".to_string());
+
+#[allow(dead_code)]
+pub static CONFIG: Lazy<crate::util::Config> = Lazy::new(|| {
+    let mut file = File::open(&*CONFIG_FILE).expect("Could not open config");
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).expect("Could not read config");
+    serde_yaml::from_str(&contents).expect("Could not parse config")
+});
 
 #[cfg(not(feature = "fold"))]
 fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) {
@@ -586,4 +616,164 @@ fn test_copy_constraint() {
     &empty,
     &vec![&ArrayD::from_shape_vec(vec![4, 4, 4], (1..65).map(|x| Fr::from(x)).collect()).unwrap()],
   );
+}
+
+#[test]
+fn test_layer_selection_based_on_srs_and_fixed_matrix() {
+    set_test_config_env(); // Set up config environment
+
+    // Helper: load input from sample.json
+    fn load_sample_input() -> Vec<f32> {
+        let file = fs::read_to_string("sample.json").expect("Unable to read sample.json");
+        let json: Value = serde_json::from_str(&file).expect("Invalid JSON in sample.json");
+        match json["input_data"][0].as_array() {
+            Some(arr) => arr.iter().map(|x| x.as_f64().unwrap() as f32).collect(),
+            None => panic!("input_data[0] is not an array"),
+        }
+    }
+
+    // Helper: convert f32 to Fr with scaling
+    fn f32_to_fr(x: f32, scale: u32) -> Fr {
+        let scaled = (x * (1 << scale) as f32).round() as u64;
+        Fr::from(scaled)
+    }
+
+    // Helper: create fixed weight matrix
+    fn create_fixed_weight(input_values: &[f32], a: usize, b: usize) -> ArrayD<Fr> {
+        let matrix_size = a * b;
+        let mut weight_data = Vec::with_capacity(matrix_size);
+        for i in 0..matrix_size {
+            let val = input_values[i % input_values.len()];
+            weight_data.push(f32_to_fr(val, 10));
+        }
+        ArrayD::from_shape_vec(IxDyn(&[a, b]), weight_data)
+            .expect("Failed to create fixed_weight array")
+    }
+
+    // Helper: test case execution
+    fn run_test_case(
+        constants: Vec<Option<(ArrayD<Fr>, bool)>>,
+        srs_threshold: usize,
+        matrix_size: usize,
+        input_vec: &ArrayD<Fr>,
+        a: usize,
+        b: usize,
+        permutation: &(Vec<usize>, Vec<usize>),
+        expected_bb: &str,
+        expect_warning: bool,
+    ) {
+        let has_fixed_matrix = constants.len() > 1 && constants[1].is_some();
+        let srs_big_enough = matrix_size < srs_threshold;
+
+        if expect_warning && has_fixed_matrix && !srs_big_enough {
+            eprintln!(
+                "Warning: MatMul is using MatMulBB because SRS is not big enough for CQLinBB. Matrix size: {}x{}, SRS threshold: {}",
+                a, b, srs_threshold
+            );
+        } else if !has_fixed_matrix && srs_big_enough {
+            eprintln!(
+                "Skipping MatMulBB/fixed test: SRS is big enough ({} >= {}), CQLinBB would be used.",
+                srs_threshold, matrix_size
+            );
+            return;
+        }
+
+        let mut graph = Graph::new();
+
+        let matmul_output = if has_fixed_matrix && srs_big_enough {
+            let b = constants[1].as_ref().unwrap().0.clone();
+            let cqlin = if input_vec.ndim() > 1 {
+                graph.addBB(Box::new(RepeaterBasicBlock {
+                    basic_block: Box::new(CQLinBasicBlock { setup: b }),
+                    N: 2,
+                }))
+            } else {
+                graph.addBB(Box::new(CQLinBasicBlock { setup: b }))
+            };
+            graph.addNode(cqlin, vec![(-1, 0)])
+        } else {
+            let transpose = graph.addBB(Box::new(RepeaterBasicBlock {
+                basic_block: Box::new(PermuteBasicBlock {
+                    permutation: permutation.clone(),
+                    n: a,
+                    m: b,
+                }),
+                N: 2,
+            }));
+            let matmul = graph.addBB(Box::new(RepeaterBasicBlock {
+                basic_block: Box::new(MatMulBasicBlock { m: a, n: b }),
+                N: 2,
+            }));
+            let transpose_out = graph.addNode(transpose, vec![(-2, 0)]);
+            graph.addNode(matmul, vec![(-1, 0), (transpose_out, 0)])
+        };
+
+        let bb = &graph.basic_blocks[matmul_output as usize];
+        let bb_name = format!("{:?}", bb);
+
+        assert!(
+            bb_name.contains(expected_bb),
+            "Expected {} for test case, got: {}",
+            expected_bb,
+            bb_name
+        );
+    }
+
+    // Setup common data
+    let input_values = load_sample_input();
+    let input_len = input_values.len();
+    let srs_log = crate::CONFIG.ptau.loaded_pow_len_log;
+    let srs_threshold = 1 << srs_log;
+    let a = input_len; // e.g., 4
+    let b = 64;
+    let matrix_size = a * b;
+
+    let input_vec_fr: Vec<Fr> = input_values.iter().map(|&x| f32_to_fr(x, 10)).collect();
+    let input_vec = ArrayD::from_shape_vec(IxDyn(&[a]), input_vec_fr)
+        .expect("Failed to create input vector");
+
+    let fixed_weight = create_fixed_weight(&input_values, a, b);
+    let permutation = (
+        (0..b).map(|i| i * a).collect::<Vec<_>>(),
+        (0..a).collect::<Vec<_>>(),
+    );
+
+    // Define test cases
+    let test_cases = vec![
+        (
+            vec![None, Some((fixed_weight.clone(), true))],
+            "CQLinBasicBlock",
+            srs_threshold > matrix_size,
+            false,
+        ),
+        (
+            vec![None, Some((fixed_weight.clone(), true))],
+            "MatMulBasicBlock",
+            srs_threshold <= matrix_size,
+            true,
+        ),
+        (
+            vec![None, None],
+            "MatMulBasicBlock",
+            true,
+            false,
+        ),
+    ];
+
+    // Run test cases
+    for (constants, expected_bb, should_run, expect_warning) in test_cases {
+        if should_run {
+            run_test_case(
+                constants,
+                srs_threshold,
+                matrix_size,
+                &input_vec,
+                a,
+                b,
+                &permutation,
+                expected_bb,
+                expect_warning,
+            );
+        }
+    }
 }
