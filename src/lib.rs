@@ -17,13 +17,17 @@ use std::io::Read;
 use std::path::Path;
 
 pub static CONFIG_FILE: Lazy<String> = Lazy::new(|| {
-  let args: Vec<String> = env::args().collect();
-  if args.len() != 2 {
-    panic!("Usage: cargo run -- <config file>");
-  }
-  args[1].clone()
+    if let Ok(path) = std::env::var("ZK_TORCH_CONFIG") {
+        // For testing purposes
+        path
+    } else {
+        let args: Vec<String> = std::env::args().collect();
+        if args.len() != 2 {
+            panic!("Usage: cargo run -- <config file>");
+        }
+        args[1].clone()
+    }
 });
-
 // Define a static CONFIG that holds the loaded configuration
 pub static CONFIG: Lazy<util::Config> = Lazy::new(|| {
   let mut file = File::open(&*CONFIG_FILE).expect("Could not open config");
