@@ -206,7 +206,6 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
 
 #[test]
 fn testBasicBlocks() {
-  set_test_config_env();
   let srs = &ptau::load_file("challenge", 7, 7);
   let mut rng = StdRng::from_entropy();
   let N: usize = 1 << 6;
@@ -388,7 +387,6 @@ fn testBasicBlocks() {
 
 #[test]
 fn test_max() {
-  set_test_config_env();
   let CQ_RANGE_LOWER: i128 = -(1 << 5);
   let srs = &ptau::load_file("challenge", 7, 7);
   let empty = ArrayD::zeros(IxDyn(&[0]));
@@ -423,7 +421,6 @@ fn test_max() {
 
 #[test]
 fn test_copy_constraint() {
-  set_test_config_env();
   let srs = &ptau::load_file("challenge", 7, 7);
   let empty = ArrayD::zeros(IxDyn(&[0]));
   let permutation = ArrayD::from_shape_vec(vec![4], vec![Some(IxDyn(&[3])), Some(IxDyn(&[2])), Some(IxDyn(&[1])), Some(IxDyn(&[0]))]).unwrap();
