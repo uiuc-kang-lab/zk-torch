@@ -5,14 +5,14 @@
  */
 #![allow(dead_code)]
 #![allow(unused_imports)]
-use ark_bn254::Fr;
+use ark_bls12_381::Fr;
 use ark_ec::ScalarMul;
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use rayon::prelude::*;
 #[cfg(feature = "gpu")]
 use {
   crate::util::{gpu_set_random_device, gpu_ssm_g1, gpu_ssm_g2},
-  ark_bn254::{G1Projective, G2Projective},
+  ark_bls12_381::{G1Projective, G2Projective},
   ark_ec::short_weierstrass::Projective,
   icicle_bn254::curve::{G1Projective as IG1P, G2Projective as IG2P, ScalarField},
   icicle_core::gfft,
@@ -141,7 +141,7 @@ pub trait GpuFft {
 }
 
 #[cfg(feature = "gpu")]
-impl GpuFft for Projective<ark_bn254::g1::Config> {
+impl GpuFft for Projective<ark_bls12_381::g1::Config> {
   fn gpu_fft(domain: GeneralEvaluationDomain<Fr>, a: &Vec<Self>) -> Vec<Self> {
     gpu_fft_g1(domain, a)
   }
@@ -152,7 +152,7 @@ impl GpuFft for Projective<ark_bn254::g1::Config> {
 }
 
 #[cfg(feature = "gpu")]
-impl GpuFft for Projective<ark_bn254::g2::Config> {
+impl GpuFft for Projective<ark_bls12_381::g2::Config> {
   fn gpu_fft(domain: GeneralEvaluationDomain<Fr>, a: &Vec<Self>) -> Vec<Self> {
     gpu_fft_g2(domain, a)
   }

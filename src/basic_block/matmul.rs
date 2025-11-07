@@ -1,12 +1,8 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-use super::{
-  AccProofAffine, AccProofAffineRef, AccProofProj, AccProofProjRef, BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS,
-};
-use crate::util::{self, acc_proof_to_holder, calc_pow, holder_to_acc_proof, AccHolder, AccProofLayout};
-use crate::{define_acc_err_terms, define_acc_terms};
-use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use super::{BasicBlock, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, calc_pow, AccHolder, AccProofLayout};
+use ark_bls12_381::{Bls12_381, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_ec::AffineRepr;
@@ -18,70 +14,36 @@ use ndarray::{arr1, arr2, ArrayD, Ix1, Ix2, IxDyn};
 use rand::{rngs::StdRng, SeedableRng};
 use rayon::iter::ParallelIterator;
 
-define_acc_terms!(
-  MatMulG1Terms,
-  [
-    Left_x,
-    Left_Q_x,
-    Left_zero,
-    Left_zero_div,
-    Right_x,
-    Right_Q_x,
-    Right_zero_div,
-    Corr1,
-    Corr2,
-    Corr3,
-    Corr4,
-    Flat_A,
-    Flat_B,
-    Flat_C
-  ],
-  [Part_corr1, Flat_A_no_blind, Flat_B_no_blind]
-);
-define_acc_terms!(MatMulG2Terms, [Flat_B_g2, Beta_pow_g2], []);
-define_acc_terms!(MatMulFrTerms, [], [Flat_A_r, Flat_B_r]);
-define_acc_err_terms!(MatMulErrG1Terms, [Err_Q, Err_l, Err_C]);
-define_acc_err_terms!(MatMulErrG2Terms, []);
-define_acc_err_terms!(MatMulErrFrTerms, []);
-define_acc_err_terms!(MatMulErrGtTerms, [Err_Gt]);
-
 impl AccProofLayout for MatMulBasicBlock {
   fn acc_g1_num(&self, is_prover: bool) -> usize {
     if is_prover {
-      MatMulG1Terms::<G1Projective>::COUNT
+      17
     } else {
-      MatMulG1Terms::<G1Projective>::PUBLIC_COUNT
+      14
     }
   }
-
   fn acc_g2_num(&self, _is_prover: bool) -> usize {
-    MatMulG2Terms::<G2Projective>::COUNT
+    2
   }
-
   fn acc_fr_num(&self, is_prover: bool) -> usize {
     if is_prover {
-      MatMulFrTerms::<Fr>::COUNT
+      2
     } else {
-      MatMulFrTerms::<Fr>::PUBLIC_COUNT
+      0
     }
   }
-
   fn err_g1_nums(&self) -> Vec<usize> {
-    MatMulErrG1Terms::COUNTS.to_vec()
+    vec![3]
   }
-
   fn err_g2_nums(&self) -> Vec<usize> {
-    MatMulErrG2Terms::COUNTS.to_vec()
+    vec![0]
   }
-
   fn err_fr_nums(&self) -> Vec<usize> {
-    MatMulErrFrTerms::COUNTS.to_vec()
+    vec![0]
   }
-
   fn err_gt_nums(&self) -> Vec<usize> {
-    MatMulErrGtTerms::COUNTS.to_vec()
+    vec![1]
   }
-
   fn prover_proof_to_acc(&self, proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective> {
     AccHolder {
       acc_g1: proof.0.clone(),
@@ -89,20 +51,19 @@ impl AccProofLayout for MatMulBasicBlock {
       acc_fr: proof.2.clone(),
       mu: Fr::one(),
       errs: vec![(
-        vec![G1Projective::zero(); MatMulErrG1Terms::COUNTS[0]],
+        vec![G1Projective::zero(); 3],
         vec![],
         vec![],
-        vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
+        vec![PairingOutput::<Bls12_381>::zero()],
       )],
       acc_errs: vec![(
-        vec![G1Projective::zero(); MatMulErrG1Terms::COUNTS[0]],
+        vec![G1Projective::zero(); 3],
         vec![],
         vec![],
-        vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
+        vec![PairingOutput::<Bls12_381>::zero()],
       )],
     }
   }
-
   fn verifier_proof_to_acc(&self, proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> AccHolder<G1Affine, G2Affine> {
     AccHolder {
       acc_g1: proof.0.clone(),
@@ -110,20 +71,19 @@ impl AccProofLayout for MatMulBasicBlock {
       acc_fr: proof.2.clone(),
       mu: Fr::one(),
       errs: vec![(
-        vec![G1Affine::zero(); MatMulErrG1Terms::COUNTS[0]],
+        vec![G1Affine::zero(); 3],
         vec![],
         vec![],
-        vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
+        vec![PairingOutput::<Bls12_381>::zero()],
       )],
       acc_errs: vec![(
-        vec![G1Affine::zero(); MatMulErrG1Terms::COUNTS[0]],
+        vec![G1Affine::zero(); 3],
         vec![],
         vec![],
-        vec![PairingOutput::<Bn<ark_bn254::Config>>::zero()],
+        vec![PairingOutput::<Bls12_381>::zero()],
       )],
     }
   }
-
   fn mira_prove(
     &self,
     srs: &SRS,
@@ -131,35 +91,18 @@ impl AccProofLayout for MatMulBasicBlock {
     acc_2: AccHolder<G1Projective, G2Projective>,
     rng: &mut StdRng,
   ) -> AccHolder<G1Projective, G2Projective> {
-    let acc_1_g1 = MatMulG1Terms::<G1Projective>::from_vec(&acc_1.acc_g1);
-    let acc_1_g2 = MatMulG2Terms::<G2Projective>::from_vec(&acc_1.acc_g2);
-    let acc_1_fr = MatMulFrTerms::<Fr>::from_vec(&acc_1.acc_fr);
+    let [left_x, left_Q_x, _left_zero, _left_zero_div, _right_x, _right_Q_x, _right_zero_div, _corr1, _corr2, _corr3, _corr4, flat_A, _flat_B, _flat_C, part_corr1, flat_A_no_blind, flat_B_no_blind] =
+      acc_2.acc_g1[..]
+    else {
+      panic!("Wrong proof format")
+    };
 
-    let acc_2_g1 = MatMulG1Terms::<G1Projective>::from_vec(&acc_2.acc_g1);
-    let acc_2_g2 = MatMulG2Terms::<G2Projective>::from_vec(&acc_2.acc_g2);
-    let acc_2_fr = MatMulFrTerms::<Fr>::from_vec(&acc_2.acc_fr);
-
-    // Compute the error
-    let err: (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) = (
-      vec![
-        acc_1_g1.Left_Q_x * acc_2.mu + acc_2_g1.Left_Q_x * acc_1.mu,
-        acc_1_g1.Left_x * acc_2.mu + acc_2_g1.Left_x * acc_1.mu,
-        acc_1_g1.Part_corr1.unwrap() * acc_2.mu
-          + acc_2_g1.Part_corr1.unwrap() * acc_1.mu
-          + acc_1_g1.Flat_A_no_blind.unwrap() * acc_2_fr.Flat_B_r.unwrap()
-          + acc_2_g1.Flat_A_no_blind.unwrap() * acc_1_fr.Flat_B_r.unwrap()
-          + acc_1_g1.Flat_B_no_blind.unwrap() * acc_2_fr.Flat_A_r.unwrap()
-          + acc_2_g1.Flat_B_no_blind.unwrap() * acc_1_fr.Flat_A_r.unwrap()
-          + srs.Y1P * (acc_2_fr.Flat_A_r.unwrap() * acc_1_fr.Flat_B_r.unwrap() + acc_1_fr.Flat_A_r.unwrap() * acc_2_fr.Flat_B_r.unwrap()),
-      ],
-      vec![],
-      vec![],
-      vec![Bn254::multi_pairing(
-        vec![acc_2_g1.Flat_A, acc_1_g1.Flat_A],
-        vec![acc_1_g2.Flat_B_g2, acc_2_g2.Flat_B_g2],
-      )],
-    );
-    let errs = vec![err];
+    let [flat_B_g2, beta_pow_g2] = acc_2.acc_g2[..] else {
+      panic!("Wrong proof format")
+    };
+    let [flat_A_r, flat_B_r] = acc_2.acc_fr[..] else {
+      panic!("Wrong proof format")
+    };
 
     let mut new_acc_holder = AccHolder {
       acc_g1: Vec::new(),
@@ -170,36 +113,45 @@ impl AccProofLayout for MatMulBasicBlock {
       acc_errs: Vec::new(),
     };
 
+    let [acc_left_x, acc_left_Q_x, _acc_left_zero, _acc_left_zero_div, _acc_right_x, _acc_right_Q_x, _acc_right_zero_div, _acc_corr1, _acc_corr2, _acc_corr3, _acc_corr4, acc_flat_A, _acc_flat_B, _acc_flat_C, acc_part_corr1, acc_flat_A_no_blind, acc_flat_B_no_blind] =
+      acc_1.acc_g1[..]
+    else {
+      panic!("Wrong acc proof format")
+    };
+    let [acc_flat_B_g2, acc_beta_pow_g2] = acc_1.acc_g2[..] else {
+      panic!("Wrong acc proof format")
+    };
+    let acc_mu = acc_1.mu;
+    let [acc_flat_A_r, acc_flat_B_r] = acc_1.acc_fr[..] else {
+      panic!("Wrong acc proof format")
+    };
+
+    // Compute the error
+    let err: (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>) = (
+      vec![
+        acc_left_Q_x * acc_2.mu + left_Q_x * acc_mu,
+        acc_left_x * acc_2.mu + left_x * acc_mu,
+        acc_part_corr1 * acc_2.mu
+          + part_corr1 * acc_mu
+          + acc_flat_A_no_blind * flat_B_r
+          + flat_A_no_blind * acc_flat_B_r
+          + acc_flat_B_no_blind * flat_A_r
+          + flat_B_no_blind * acc_flat_A_r
+          + srs.Y1P * (flat_A_r * acc_flat_B_r + flat_B_r * acc_flat_A_r),
+      ],
+      vec![],
+      vec![],
+      vec![Bls12_381::multi_pairing(vec![flat_A, acc_flat_A], vec![acc_flat_B_g2, flat_B_g2])],
+    );
+    let errs = vec![err];
+
     // Fiat-Shamir
     let mut bytes = Vec::new();
-    let acc_1_g1_fiat_shamir = vec![
-      acc_1_g1.Left_x,
-      acc_1_g1.Left_Q_x,
-      acc_1_g1.Left_zero,
-      acc_1_g1.Left_zero_div,
-      acc_1_g1.Right_x,
-      acc_1_g1.Right_Q_x,
-      acc_1_g1.Right_zero_div,
-      acc_1_g1.Flat_A,
-      acc_1_g1.Flat_B,
-      acc_1_g1.Flat_C,
-    ];
-    acc_1_g1_fiat_shamir.serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[11..14].serialize_uncompressed(&mut bytes).unwrap();
     acc_1.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
-
-    let acc_2_g1_fiat_shamir = vec![
-      acc_2_g1.Left_x,
-      acc_2_g1.Left_Q_x,
-      acc_2_g1.Left_zero,
-      acc_2_g1.Left_zero_div,
-      acc_2_g1.Right_x,
-      acc_2_g1.Right_Q_x,
-      acc_2_g1.Right_zero_div,
-      acc_2_g1.Flat_A,
-      acc_2_g1.Flat_B,
-      acc_2_g1.Flat_C,
-    ];
-    acc_2_g1_fiat_shamir.serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[11..14].serialize_uncompressed(&mut bytes).unwrap();
     acc_2.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     errs.iter().for_each(|(g1, g2, f, gt)| {
       g1.serialize_uncompressed(&mut bytes).unwrap();
@@ -212,29 +164,20 @@ impl AccProofLayout for MatMulBasicBlock {
     let acc_gamma_sq = acc_gamma * acc_gamma;
 
     new_acc_holder.acc_g1 = acc_2.acc_g1.iter().zip(acc_1.acc_g1.iter()).map(|(x, y)| *x * acc_gamma + y).collect();
-    new_acc_holder.acc_g2 = vec![acc_2_g2.Flat_B_g2 * acc_gamma + acc_1_g2.Flat_B_g2, acc_1_g2.Beta_pow_g2];
+    new_acc_holder.acc_g2 = vec![flat_B_g2 * acc_gamma + acc_flat_B_g2, acc_beta_pow_g2];
     new_acc_holder.acc_fr = acc_2.acc_fr.iter().zip(acc_1.acc_fr.iter()).map(|(x, y)| *x * acc_gamma + y).collect();
-    new_acc_holder.mu = acc_1.mu + acc_gamma * acc_2.mu;
+    new_acc_holder.mu = acc_mu + acc_gamma * acc_2.mu;
     new_acc_holder.errs = errs;
 
     // Append error terms
-    let (q_group, q_idx) = MatMulErrG1Terms::idx(MatMulErrG1Terms::Err_Q);
-    let (l_group, l_idx) = MatMulErrG1Terms::idx(MatMulErrG1Terms::Err_l);
-    let (c_group, c_idx) = MatMulErrG1Terms::idx(MatMulErrG1Terms::Err_C);
-    let (gt_group, gt_idx) = MatMulErrGtTerms::idx(MatMulErrGtTerms::Err_Gt);
-    let q_term_g1 =
-      acc_1.acc_errs[q_group].0[q_idx] + new_acc_holder.errs[q_group].0[q_idx] * acc_gamma + acc_2.acc_errs[q_group].0[q_idx] * acc_gamma_sq;
-    let l_term_g1 =
-      acc_1.acc_errs[l_group].0[l_idx] + new_acc_holder.errs[l_group].0[l_idx] * acc_gamma + acc_2.acc_errs[l_group].0[l_idx] * acc_gamma_sq;
-    let c_term_g1 =
-      acc_1.acc_errs[c_group].0[c_idx] + new_acc_holder.errs[c_group].0[c_idx] * acc_gamma + acc_2.acc_errs[c_group].0[c_idx] * acc_gamma_sq;
-    let term_gt =
-      acc_1.acc_errs[gt_group].3[gt_idx] + new_acc_holder.errs[gt_group].3[gt_idx] * acc_gamma + acc_2.acc_errs[gt_group].3[gt_idx] * acc_gamma_sq;
+    let q_term_g1 = acc_1.acc_errs[0].0[0] + new_acc_holder.errs[0].0[0] * acc_gamma + acc_2.acc_errs[0].0[0] * acc_gamma_sq;
+    let l_term_g1 = acc_1.acc_errs[0].0[1] + new_acc_holder.errs[0].0[1] * acc_gamma + acc_2.acc_errs[0].0[1] * acc_gamma_sq;
+    let c_term_g1 = acc_1.acc_errs[0].0[2] + new_acc_holder.errs[0].0[2] * acc_gamma + acc_2.acc_errs[0].0[2] * acc_gamma_sq;
+    let term_gt = acc_1.acc_errs[0].3[0] + new_acc_holder.errs[0].3[0] * acc_gamma + acc_2.acc_errs[0].3[0] * acc_gamma_sq;
     new_acc_holder.acc_errs = vec![(vec![q_term_g1, l_term_g1, c_term_g1], vec![], vec![], vec![term_gt])];
 
     new_acc_holder
   }
-
   fn mira_verify(
     &self,
     acc_1: AccHolder<G1Affine, G2Affine>,
@@ -243,39 +186,14 @@ impl AccProofLayout for MatMulBasicBlock {
     rng: &mut StdRng,
   ) -> Option<bool> {
     let mut result = true;
-    let acc_1_g1 = MatMulG1Terms::<G1Affine>::from_vec(&acc_1.acc_g1);
-    let acc_2_g1 = MatMulG1Terms::<G1Affine>::from_vec(&acc_2.acc_g1);
+
     // Fiat-Shamir
     let mut bytes = Vec::new();
-
-    let acc_1_g1_fiat_shamir = vec![
-      acc_1_g1.Left_x,
-      acc_1_g1.Left_Q_x,
-      acc_1_g1.Left_zero,
-      acc_1_g1.Left_zero_div,
-      acc_1_g1.Right_x,
-      acc_1_g1.Right_Q_x,
-      acc_1_g1.Right_zero_div,
-      acc_1_g1.Flat_A,
-      acc_1_g1.Flat_B,
-      acc_1_g1.Flat_C,
-    ];
-    acc_1_g1_fiat_shamir.serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
+    acc_1.acc_g1[11..14].serialize_uncompressed(&mut bytes).unwrap();
     acc_1.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
-
-    let acc_2_g1_fiat_shamir = vec![
-      acc_2_g1.Left_x,
-      acc_2_g1.Left_Q_x,
-      acc_2_g1.Left_zero,
-      acc_2_g1.Left_zero_div,
-      acc_2_g1.Right_x,
-      acc_2_g1.Right_Q_x,
-      acc_2_g1.Right_zero_div,
-      acc_2_g1.Flat_A,
-      acc_2_g1.Flat_B,
-      acc_2_g1.Flat_C,
-    ];
-    acc_2_g1_fiat_shamir.serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[..7].serialize_uncompressed(&mut bytes).unwrap();
+    acc_2.acc_g1[11..14].serialize_uncompressed(&mut bytes).unwrap();
     acc_2.acc_g2.serialize_uncompressed(&mut bytes).unwrap();
     new_acc.errs.iter().for_each(|(g1, g2, f, gt)| {
       g1.serialize_uncompressed(&mut bytes).unwrap();
@@ -287,12 +205,13 @@ impl AccProofLayout for MatMulBasicBlock {
     let acc_gamma = Fr::rand(rng);
     let acc_gamma_sq = acc_gamma * acc_gamma;
 
-    acc_2.acc_g1.iter().enumerate().for_each(|(i, x)| {
-      if i < 7 || i >= 11 {
-        // Skip the blinding terms
-        let z = *x * acc_gamma + acc_1.acc_g1[i];
-        result &= new_acc.acc_g1[i] == z;
-      }
+    acc_2.acc_g1[..7].iter().enumerate().for_each(|(i, x)| {
+      let z = *x * acc_gamma + acc_1.acc_g1[i];
+      result &= new_acc.acc_g1[i] == z;
+    });
+    acc_2.acc_g1[11..14].iter().enumerate().for_each(|(i, x)| {
+      let z = *x * acc_gamma + acc_1.acc_g1[i + 11];
+      result &= new_acc.acc_g1[i + 11] == z;
     });
     result &= new_acc.acc_g2[0] == acc_1.acc_g2[0] + acc_2.acc_g2[0] * acc_gamma;
     result &= new_acc.acc_g2[1] == acc_1.acc_g2[1];
@@ -625,40 +544,51 @@ impl BasicBlock for MatMulBasicBlock {
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
-    acc_proof: AccProofProjRef,
+    acc_proof: (
+      &Vec<G1Projective>,
+      &Vec<G2Projective>,
+      &Vec<Fr>,
+      &Vec<PairingOutput<Bls12_381>>,
+    ),
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
-  ) -> AccProofProj {
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>) {
     let proof = self.prover_proof_to_acc(proof);
     if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
-      return holder_to_acc_proof(proof);
+      return acc_to_acc_proof(proof);
     }
-    let acc_proof = acc_proof_to_holder(self, acc_proof, true);
-    holder_to_acc_proof(self.mira_prove(srs, acc_proof, proof, rng))
+    let acc_proof = acc_proof_to_acc(self, acc_proof, true);
+    acc_to_acc_proof(self.mira_prove(srs, acc_proof, proof, rng))
   }
 
   fn acc_clean(
     &self,
     srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    acc_proof: AccProofProjRef,
-  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAffine) {
-    let mut acc_holder = acc_proof_to_holder(self, acc_proof, true);
-
-    let mut acc_g1 = MatMulG1Terms::<G1Projective>::from_vec(&acc_holder.acc_g1);
-    let acc_fr = MatMulFrTerms::<Fr>::from_vec(&acc_holder.acc_fr);
-    acc_g1.Corr1 = acc_g1.Part_corr1.unwrap() * acc_holder.mu
-      + acc_g1.Flat_A_no_blind.unwrap() * acc_fr.Flat_B_r.unwrap()
-      + acc_g1.Flat_B_no_blind.unwrap() * acc_fr.Flat_A_r.unwrap()
-      + srs.Y1P * acc_fr.Flat_A_r.unwrap() * acc_fr.Flat_B_r.unwrap();
+    acc_proof: (
+      &Vec<G1Projective>,
+      &Vec<G2Projective>,
+      &Vec<Fr>,
+      &Vec<PairingOutput<Bls12_381>>,
+    ),
+  ) -> (
+    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>),
+    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>),
+  ) {
+    let mut acc_holder = acc_proof_to_acc(self, acc_proof, true);
+    // acc_corr1 = acc_part_corr1 * mu + acc_flat_A_no_blind * acc_flat_B_r + acc_flat_B_no_blind * acc_flat_A_r + srs.Y1P * acc_flat_A_r * acc_flat_B_r
+    acc_holder.acc_g1[7] = acc_holder.acc_g1[14] * acc_holder.mu
+      + acc_holder.acc_g1[15] * acc_holder.acc_fr[1]
+      + acc_holder.acc_g1[16] * acc_holder.acc_fr[0]
+      + srs.Y1P * acc_holder.acc_fr[0] * acc_holder.acc_fr[1];
     // remove blinding terms from acc proof for the verifier
-    acc_holder.acc_g1 = acc_g1.to_vec()[..MatMulG1Terms::<G1Projective>::PUBLIC_COUNT].to_vec();
+    acc_holder.acc_g1 = acc_holder.acc_g1[..acc_holder.acc_g1.len() - 3].to_vec();
     acc_holder.acc_fr = vec![];
-    let acc_proof = holder_to_acc_proof(acc_holder);
+    let acc_proof = acc_to_acc_proof(acc_holder);
 
     // remove blinding terms from bb proof for the verifier
-    let cqlin_proof = (proof.0[..MatMulG1Terms::<G1Projective>::PUBLIC_COUNT].to_vec(), proof.1.to_vec(), vec![]);
+    let cqlin_proof = (proof.0[..proof.0.len() - 3].to_vec(), proof.1.to_vec(), vec![]);
 
     (
       (
@@ -681,8 +611,8 @@ impl BasicBlock for MatMulBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: AccProofAffineRef,
-    acc_proof: AccProofAffineRef,
+    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     cache: ProveVerifyCache,
@@ -732,82 +662,90 @@ impl BasicBlock for MatMulBasicBlock {
     let temp: Vec<_> = (0..l).map(|i| index(outputs[0], i).g1).collect();
     let flat_C = util::msm::<G1Projective>(&temp, &alpha_pow);
 
-    let proof_g1 = MatMulG1Terms::<G1Affine>::from_vec(&proof.0);
-    result &= flat_A == proof_g1.Flat_A && flat_B == proof_g1.Flat_B;
-    result &= flat_C == proof_g1.Flat_C;
+    result &= flat_A == proof.0[11] && flat_B == proof.0[12];
+    result &= flat_C == proof.0[13];
     if prev_acc_proof.2.len() == 0 && acc_proof.2[0].is_one() {
       return Some(result);
     }
     let proof = self.verifier_proof_to_acc(proof);
-    let prev_acc_holder = acc_proof_to_holder(self, prev_acc_proof, false);
-    let acc_holder = acc_proof_to_holder(self, acc_proof, false);
+    let prev_acc_holder = acc_proof_to_acc(self, prev_acc_proof, false);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
     result &= self.mira_verify(prev_acc_holder, proof, acc_holder, rng).unwrap();
     Some(result)
   }
 
-  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffineRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
-    let acc_holder = acc_proof_to_holder(self, acc_proof, false);
-    let acc_g1 = MatMulG1Terms::<G1Affine>::from_vec(&acc_holder.acc_g1);
-    let acc_g2 = MatMulG2Terms::<G2Affine>::from_vec(&acc_holder.acc_g2);
-
+  fn acc_decide(
+    &self,
+    srs: &SRS,
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
+  ) -> Vec<(PairingCheck, PairingOutput<Bls12_381>)> {
+    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
+    let [acc_left_x, acc_left_Q_x, acc_left_zero, acc_left_zero_div, acc_right_x, acc_right_Q_x, acc_right_zero_div, acc_corr1, acc_corr2, acc_corr3, acc_corr4, acc_flat_A, acc_flat_B, acc_flat_C] =
+      acc_holder.acc_g1[..]
+    else {
+      panic!("Wrong acc proof format")
+    };
+    let [acc_flat_B_g2, beta_pow_g2] = acc_holder.acc_g2[..] else {
+      panic!("Wrong acc proof format")
+    };
     let acc_mu = acc_holder.mu;
     let err_1 = &acc_holder.acc_errs[0];
 
     let mut temp: PairingCheck = vec![];
-    temp.push((
-      err_1.0[MatMulErrG1Terms::idx(MatMulErrG1Terms::Err_Q).1],
-      (srs.X2A[self.m] - srs.X2A[0]).into(),
-    ));
-    temp.push((err_1.0[MatMulErrG1Terms::idx(MatMulErrG1Terms::Err_l).1], srs.X2A[0]));
-    temp.push((err_1.0[MatMulErrG1Terms::idx(MatMulErrG1Terms::Err_C).1], srs.Y2A));
+    temp.push((err_1.0[0], (srs.X2A[self.m] - srs.X2A[0]).into()));
+    temp.push((err_1.0[1], srs.X2A[0]));
+    temp.push((err_1.0[2], srs.Y2A));
 
     let mut acc_1: PairingCheck = vec![
-      (acc_g1.Flat_A, acc_g2.Flat_B_g2),
-      ((-acc_g1.Left_x * acc_mu).into(), srs.X2A[0]),
-      ((-acc_g1.Left_Q_x * acc_mu).into(), (srs.X2A[self.m] - srs.X2A[0]).into()),
-      (-acc_g1.Corr1, srs.Y2A),
+      (acc_flat_A, acc_flat_B_g2),
+      ((-acc_left_x * acc_mu).into(), srs.X2A[0]),
+      ((-acc_left_Q_x * acc_mu).into(), (srs.X2A[self.m] - srs.X2A[0]).into()),
+      (-acc_corr1, srs.Y2A),
     ];
     acc_1.extend(temp);
 
-    let acc_2: PairingCheck = vec![(acc_g1.Flat_B, srs.X2A[0]), (srs.X1A[0], -acc_g2.Flat_B_g2)];
+    let acc_2: PairingCheck = vec![(acc_flat_B, srs.X2A[0]), (srs.X1A[0], -acc_flat_B_g2)];
 
     let acc_3: PairingCheck = vec![
-      ((acc_g1.Left_x - acc_g1.Left_zero).into(), srs.X2A[0]),
-      (-acc_g1.Left_zero_div, srs.X2A[1]),
-      (-acc_g1.Corr2, srs.Y2A),
+      ((acc_left_x - acc_left_zero).into(), srs.X2A[0]),
+      (-acc_left_zero_div, srs.X2A[1]),
+      (-acc_corr2, srs.Y2A),
     ];
 
     let acc_4: PairingCheck = vec![
-      (acc_g1.Flat_C, acc_g2.Beta_pow_g2),
-      (-acc_g1.Right_x, srs.X2A[0]),
-      (-acc_g1.Right_Q_x, (srs.X2A[self.n] - srs.X2A[0]).into()),
-      (-acc_g1.Corr3, srs.Y2A),
+      (acc_flat_C, beta_pow_g2),
+      (-acc_right_x, srs.X2A[0]),
+      (-acc_right_Q_x, (srs.X2A[self.n] - srs.X2A[0]).into()),
+      (-acc_corr3, srs.Y2A),
     ];
 
-    let acc_right_zero: G1Projective = acc_g1.Left_zero * (Fr::from(self.m as u32) * Fr::from(self.n as u32).inverse().unwrap());
+    let acc_right_zero: G1Projective = acc_left_zero * (Fr::from(self.m as u32) * Fr::from(self.n as u32).inverse().unwrap());
     let acc_5 = vec![
-      ((-acc_right_zero + acc_g1.Right_x).into(), srs.X2A[0]),
-      (-acc_g1.Right_zero_div, srs.X2A[1]),
-      (-acc_g1.Corr4, srs.Y2A),
+      ((-acc_right_zero + acc_right_x).into(), srs.X2A[0]),
+      (-acc_right_zero_div, srs.X2A[1]),
+      (-acc_corr4, srs.Y2A),
     ];
 
-    let pairing_zero = PairingOutput::<Bn<ark_bn254::Config>>::zero();
     vec![
-      (acc_1, err_1.3[MatMulErrGtTerms::idx(MatMulErrGtTerms::Err_Gt).1]),
-      (acc_2, pairing_zero),
-      (acc_3, pairing_zero),
-      (acc_4, pairing_zero),
-      (acc_5, pairing_zero),
+      (acc_1, err_1.3[0]),
+      (acc_2, PairingOutput::<Bls12_381>::zero()),
+      (acc_3, PairingOutput::<Bls12_381>::zero()),
+      (acc_4, PairingOutput::<Bls12_381>::zero()),
+      (acc_5, PairingOutput::<Bls12_381>::zero()),
     ]
   }
 
-  fn acc_finalize(&self, _srs: &SRS, acc_proof: AccProofAffineRef) -> AccProofAffine {
-    let mut acc_holder = acc_proof_to_holder(self, acc_proof, false);
+  fn acc_finalize(
+    &self,
+    _srs: &SRS,
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
+  ) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>) {
+    let mut acc_holder = acc_proof_to_acc(self, acc_proof, false);
     let err_1 = &acc_holder.acc_errs[0];
     let acc_err1 = err_1.3[0].clone();
     acc_holder.errs = vec![];
     acc_holder.acc_errs = vec![];
-    let acc_proof = holder_to_acc_proof(acc_holder);
+    let acc_proof = acc_to_acc_proof(acc_holder);
     (acc_proof.0, acc_proof.1, acc_proof.2, vec![acc_err1])
   }
 }

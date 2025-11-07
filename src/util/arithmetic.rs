@@ -3,7 +3,7 @@
  * The functions are used for converting between Fr and i32, for calculating powers of Fr,
  * and for pointwise operations on u32 or f32.
  */
-use ark_bn254::Fr;
+ use ark_bls12_381::Fr;
 use ark_ff::PrimeField;
 
 pub fn fr_to_int(x: Fr) -> i128 {

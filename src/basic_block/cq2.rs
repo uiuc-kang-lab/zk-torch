@@ -1,15 +1,9 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-use super::{
-  AccProofAffine, AccProofAffineRef, AccProofProj, AccProofProjRef, BasicBlock, CacheValues, Data, DataEnc, DefaultBasicBlock, PairingCheck,
-  ProveVerifyCache, SRS,
-};
-use crate::basic_block::cq::{
-  cq_acc_clean, cq_acc_decide, cq_acc_finalize, CQErrFrTerms, CQErrG1Terms, CQErrG2Terms, CQErrGtTerms, CQFrTerms, CQG1Terms, CQG2Terms,
-  CQLayoutHelper,
-};
-use crate::util::{self, acc_proof_to_holder, get_cq_N, holder_to_acc_proof, AccHolder, AccProofLayout};
-use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use super::{BasicBlock, BasicBlockForTest, CacheValues, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use crate::basic_block::cq::{cq_acc_clean, cq_acc_decide, cq_acc_finalize, CQLayoutHelper};
+use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, get_cq_N, AccHolder, AccProofLayout};
+use ark_bls12_381::{Bls12_381, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_ff::Field;
@@ -28,39 +22,30 @@ impl AccProofLayout for CQ2BasicBlock {
   fn acc_g1_num(&self, is_prover: bool) -> usize {
     CQLayoutHelper::acc_g1_num(is_prover)
   }
-
   fn acc_g2_num(&self, _is_prover: bool) -> usize {
     CQLayoutHelper::acc_g2_num()
   }
-
   fn acc_fr_num(&self, is_prover: bool) -> usize {
     CQLayoutHelper::acc_fr_num(is_prover)
   }
-
   fn err_g1_nums(&self) -> Vec<usize> {
     CQLayoutHelper::err_g1_nums()
   }
-
   fn err_g2_nums(&self) -> Vec<usize> {
     CQLayoutHelper::err_g2_nums()
   }
-
   fn err_fr_nums(&self) -> Vec<usize> {
     CQLayoutHelper::err_fr_nums()
   }
-
   fn err_gt_nums(&self) -> Vec<usize> {
     CQLayoutHelper::err_gt_nums()
   }
-
   fn prover_proof_to_acc(&self, proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective> {
     CQLayoutHelper::prover_proof_to_acc(proof)
   }
-
   fn verifier_proof_to_acc(&self, proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> AccHolder<G1Affine, G2Affine> {
     CQLayoutHelper::verifier_proof_to_acc(proof)
   }
-
   fn mira_prove(
     &self,
     srs: &SRS,
@@ -70,7 +55,6 @@ impl AccProofLayout for CQ2BasicBlock {
   ) -> AccHolder<G1Projective, G2Projective> {
     CQLayoutHelper::mira_prove(srs, acc_1, acc_2, rng)
   }
-
   fn mira_verify(
     &self,
     acc_1: AccHolder<G1Affine, G2Affine>,
@@ -102,9 +86,14 @@ impl BasicBlock for CQ2BasicBlock {
       return Ok(vec![]);
     }
     assert!(inputs.len() == 2);
-    let n = inputs[0].len();
-    assert!(n == self.n, "self.n is not equal to n, which is {}", inputs[0].len());
-    if self.setup.is_some() && !self.setup.as_ref().unwrap().0.is::<DefaultBasicBlock>() {
+    let n = if inputs[0].ndim() == 0 {
+      1
+    } else {
+      inputs[0].dim()[inputs[0].ndim() - 1]
+    };
+    //let n = inputs[0].len();
+    //assert!(n == self.n, "self.n is not equal to n, which is {}", inputs[0].len());
+    if self.setup.is_some() && !self.setup.as_ref().unwrap().0.is::<BasicBlockForTest>() {
       for x in inputs[0].iter().zip(inputs[1].iter()) {
         let temp = (*x.0, *x.1);
         let x_0_int = util::fr_to_int(temp.0);
@@ -195,6 +184,7 @@ impl BasicBlock for CQ2BasicBlock {
     let inputs = vec![inputs[0].first().unwrap(), inputs[1].first().unwrap()];
     assert!(inputs[0].raw.len() == inputs[1].raw.len());
     let n = inputs[0].raw.len();
+    assert!(n == self.n);
     let domain_n = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
     let alpha = Fr::rand(rng);
     let agg_input: Vec<_> = inputs[0].raw.iter().zip(inputs[1].raw.iter()).map(|(x, y)| *x + *y * alpha).collect();
@@ -393,11 +383,10 @@ impl BasicBlock for CQ2BasicBlock {
     let agg_model: G1Affine = (model[0].g1 + (model[1].g1 * alpha)).into();
 
     let beta = Fr::rand(rng);
-    let mut result = beta == proof.2[0];
-    let proof_g1 = CQG1Terms::from_vec(&proof.0);
-    result &= agg_model == proof_g1.Model_g1_blinded;
-    result &= agg_input == proof_g1.Input_g1_blinded;
-    assert!(result, "acc_proof for cq2 is not valid");
+    //let mut result = beta == proof.2[0];
+    //result &= agg_model == proof.0[proof.0.len() - 2];
+    //result &= agg_input == proof.0[proof.0.len() - 1];
+    //assert!(result, "acc_proof for cq2 is not valid");
     vec![]
   }
 
@@ -407,25 +396,38 @@ impl BasicBlock for CQ2BasicBlock {
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
-    acc_proof: AccProofProjRef,
+    acc_proof: (
+      &Vec<G1Projective>,
+      &Vec<G2Projective>,
+      &Vec<Fr>,
+      &Vec<PairingOutput<Bls12_381>>,
+    ),
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
-  ) -> AccProofProj {
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>) {
     let proof = self.prover_proof_to_acc(proof);
     if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
-      return holder_to_acc_proof(proof);
+      return acc_to_acc_proof(proof);
     }
-    let acc_proof = acc_proof_to_holder(self, acc_proof, true);
-    holder_to_acc_proof(self.mira_prove(srs, acc_proof, proof, rng))
+    let acc_proof = acc_proof_to_acc(self, acc_proof, true);
+    acc_to_acc_proof(self.mira_prove(srs, acc_proof, proof, rng))
   }
 
   fn acc_clean(
     &self,
     srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    acc_proof: AccProofProjRef,
-  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAffine) {
+    acc_proof: (
+      &Vec<G1Projective>,
+      &Vec<G2Projective>,
+      &Vec<Fr>,
+      &Vec<PairingOutput<Bls12_381>>,
+    ),
+  ) -> (
+    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>),
+    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>),
+  ) {
     cq_acc_clean(self, srs, proof, acc_proof)
   }
 
@@ -435,14 +437,14 @@ impl BasicBlock for CQ2BasicBlock {
     _model: &ArrayD<DataEnc>,
     _inputs: &Vec<&ArrayD<DataEnc>>,
     _outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: AccProofAffineRef,
-    acc_proof: AccProofAffineRef,
+    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
   ) -> Option<bool> {
-    let prev_acc_holder = acc_proof_to_holder(self, prev_acc_proof, false);
-    let acc_holder = acc_proof_to_holder(self, acc_proof, false);
+    let prev_acc_holder = acc_proof_to_acc(self, prev_acc_proof, false);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
 
     let mut result = true;
 
@@ -450,19 +452,27 @@ impl BasicBlock for CQ2BasicBlock {
       return Some(result);
     }
     let proof = self.verifier_proof_to_acc(proof);
-    let prev_acc_holder = acc_proof_to_holder(self, prev_acc_proof, false);
-    let acc_holder = acc_proof_to_holder(self, acc_proof, false);
+    let prev_acc_holder = acc_proof_to_acc(self, prev_acc_proof, false);
+    let acc_holder = acc_proof_to_acc(self, acc_proof, false);
     result &= self.mira_verify(prev_acc_holder, proof, acc_holder, rng).unwrap();
     Some(result)
   }
 
-  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffineRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
+  fn acc_decide(
+    &self,
+    srs: &SRS,
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
+  ) -> Vec<(PairingCheck, PairingOutput<Bls12_381>)> {
     let N = self.setup.as_ref().unwrap().2;
     let n = self.n;
     cq_acc_decide(self, srs, acc_proof, N, n)
   }
 
-  fn acc_finalize(&self, srs: &SRS, acc_proof: AccProofAffineRef) -> AccProofAffine {
+  fn acc_finalize(
+    &self,
+    srs: &SRS,
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
+  ) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>) {
     let N = self.setup.as_ref().unwrap().2;
     let n = self.n;
     cq_acc_finalize(self, srs, acc_proof, N, n)

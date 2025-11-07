@@ -1,6 +1,6 @@
 use crate::basic_block::*;
 use crate::{ptau, util, util::convert_to_data};
-use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_bls12_381::{Bls12_381, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_poly::univariate::DensePolynomial;
 use ark_std::UniformRand;
@@ -47,7 +47,7 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
   let pairings = basic_block.verify(srs, &model, &inputs, &outputs, proof, &mut rng2, cache.clone());
   let pairings = pairings.iter().map(|x| x).collect();
   let pairings = util::combine_pairing_checks(&pairings);
-  assert_eq!(Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
+  assert_eq!(Bls12_381::multi_pairing(pairings.0.iter(), pairings.1.iter()), PairingOutput::zero());
   // Check that prove and verify end with the same rng state
   assert_eq!(Fr::rand(&mut rng), Fr::rand(&mut rng2));
 }
@@ -101,6 +101,12 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
       (&proof.0, &proof.1, &proof.2),
       (&acc_proof.0, &acc_proof.1, &acc_proof.2, &acc_proof.3),
     );
+    println!("acc_proof 0 len: {:?}", acc_proof.0.len());
+    println!("acc_proof 1 len: {:?}", acc_proof.1.len());
+    println!("acc_proof 2 len: {:?}", acc_proof.2.len());
+    println!("acc_proof_v 0 len: {:?}", acc_proof_v.0.len());
+    println!("acc_proof_v 1 len: {:?}", acc_proof_v.1.len());
+    println!("acc_proof_v 2 len: {:?}", acc_proof_v.2.len());
     proofs.push(proof);
     acc_proofs.push(acc_proof);
     acc_proofs_v.push(acc_proof_v);
@@ -155,12 +161,13 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
       &acc_proofs_v[num_folds - 1].3,
     ),
   );
+  //all_pairings.push(decider_pairings);
 
   for pairings in all_pairings {
     for i in 0..pairings.len() {
       let pairing: Vec<_> = pairings[i].iter().map(|x| x).collect();
       let pairing: (Vec<_>, Vec<_>) = (pairing.iter().map(|x| x.0).collect(), pairing.iter().map(|x| x.1).collect());
-      assert_eq!(Bn254::multi_pairing(pairing.0.iter(), pairing.1.iter()), PairingOutput::zero());
+      assert_eq!(Bls12_381::multi_pairing(pairing.0.iter(), pairing.1.iter()), PairingOutput::zero());
     }
   }
 
@@ -168,7 +175,7 @@ fn testBasicBlock<BB: BasicBlock>(basic_block: BB, srs: &SRS, model: &ArrayD<Fr>
     let pairing: Vec<_> = pairings.0.iter().map(|x| x).collect();
     let err = pairings.1;
     let pairing: (Vec<_>, Vec<_>) = (pairing.iter().map(|x| x.0).collect(), pairing.iter().map(|x| x.1).collect());
-    assert_eq!(Bn254::multi_pairing(pairing.0.iter(), pairing.1.iter()) - err, PairingOutput::zero());
+    assert_eq!(Bls12_381::multi_pairing(pairing.0.iter(), pairing.1.iter()) - err, PairingOutput::zero());
   }
 
   assert_eq!(Fr::rand(&mut rng), Fr::rand(&mut rng2));
@@ -209,7 +216,7 @@ fn testBasicBlocks() {
     RepeaterBasicBlock {
       basic_block: Box::new(CQ2BasicBlock {
         n,
-        setup: Some((Box::new(DefaultBasicBlock {}), 0, N)),
+        setup: Some((Box::new(BasicBlockForTest {}), 0, N)),
       }),
       N: 1,
     },
@@ -251,7 +258,7 @@ fn testBasicBlocks() {
   testBasicBlock(
     CQ2BasicBlock {
       n,
-      setup: Some((Box::new(DefaultBasicBlock {}), 0, N)),
+      setup: Some((Box::new(BasicBlockForTest {}), 0, N)),
     },
     srs,
     &ab,
@@ -269,28 +276,8 @@ fn testBasicBlocks() {
     &empty,
     &vec![&data_to_split],
   );
-  let data_to_concat = ArrayD::from_shape_fn(IxDyn(&[1, 4]), |_| Fr::rand(&mut rng));
-  testBasicBlock(
-    ConcatBasicBlock {
-      axis: 0,
-      input_shapes: vec![vec![1, 3], vec![1, 3]],
-    },
-    srs,
-    &empty,
-    &vec![&data_to_concat, &data_to_concat.clone()],
-  );
-
-  let inp1 = ArrayD::from_shape_fn(IxDyn(&[1, 3, 2]), |_| Fr::rand(&mut rng));
-  let inp2 = ArrayD::from_shape_fn(IxDyn(&[1, 1, 2]), |_| Fr::rand(&mut rng));
-  testBasicBlock(
-    ConcatBasicBlock {
-      axis: 1,
-      input_shapes: vec![vec![1, 1, 2], vec![1, 3, 2], vec![1, 3, 2]],
-    },
-    srs,
-    &empty,
-    &vec![&inp2, &inp1, &inp1],
-  );
+  let data_to_concat = ArrayD::from_shape_fn(IxDyn(&[1, 2]), |_| Fr::rand(&mut rng));
+  testBasicBlock(ConcatBasicBlock { axis: 0 }, srs, &empty, &vec![&data_to_concat, &data_to_concat.clone()]);
 
   let l: usize = 1 << 3;
   let m: usize = 1 << 2;

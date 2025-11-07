@@ -1,10 +1,8 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-use super::{AccProofAffineRef, AccProofProj, AccProofProjRef, BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
-use crate::util::{self, acc_proof_to_holder, holder_to_acc_proof, AccHolder, AccProofLayout};
-use crate::{define_acc_err_terms, define_acc_terms};
-use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use crate::util::{self, acc_proof_to_acc, acc_to_acc_proof, AccHolder, AccProofLayout};
+use ark_bls12_381::{Bls12_381, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_ff::Field;
@@ -14,27 +12,16 @@ use ark_std::{One, UniformRand, Zero};
 use ndarray::{arr1, ArrayD};
 use rand::{rngs::StdRng, SeedableRng};
 
-define_acc_terms!(SumG1Terms, [Zero_div, C, Inp, Out], []);
-define_acc_terms!(SumG2Terms, [], []);
-define_acc_terms!(SumFrTerms, [], []);
-define_acc_err_terms!(SumErrG1Terms);
-define_acc_err_terms!(SumErrG2Terms);
-define_acc_err_terms!(SumErrFrTerms);
-define_acc_err_terms!(SumErrGtTerms);
-
 impl AccProofLayout for SumBasicBlock {
   fn acc_g1_num(&self, _is_prover: bool) -> usize {
-    SumG1Terms::<G1Projective>::COUNT
+    4
   }
-
   fn acc_g2_num(&self, _is_prover: bool) -> usize {
-    SumG2Terms::<G2Projective>::COUNT
+    0
   }
-
   fn acc_fr_num(&self, _is_prover: bool) -> usize {
-    SumFrTerms::<Fr>::COUNT
+    0
   }
-
   fn prover_proof_to_acc(&self, proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective> {
     AccHolder {
       acc_g1: proof.0.clone(),
@@ -45,7 +32,6 @@ impl AccProofLayout for SumBasicBlock {
       acc_errs: Vec::new(),
     }
   }
-
   fn verifier_proof_to_acc(&self, proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> AccHolder<G1Affine, G2Affine> {
     AccHolder {
       acc_g1: proof.0.clone(),
@@ -56,7 +42,6 @@ impl AccProofLayout for SumBasicBlock {
       acc_errs: Vec::new(),
     }
   }
-
   fn mira_prove(
     &self,
     _srs: &SRS,
@@ -79,7 +64,6 @@ impl AccProofLayout for SumBasicBlock {
       acc_errs: Vec::new(),
     }
   }
-
   fn mira_verify(
     &self,
     acc_1: AccHolder<G1Affine, G2Affine>,
@@ -178,17 +162,22 @@ impl BasicBlock for SumBasicBlock {
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
-    acc_proof: AccProofProjRef,
+    acc_proof: (
+      &Vec<G1Projective>,
+      &Vec<G2Projective>,
+      &Vec<Fr>,
+      &Vec<PairingOutput<Bls12_381>>,
+    ),
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
-  ) -> AccProofProj {
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>) {
     let proof = self.prover_proof_to_acc(proof);
     if acc_proof.0.len() == 0 && acc_proof.1.len() == 0 && acc_proof.2.len() == 0 {
-      return holder_to_acc_proof(proof);
+      return acc_to_acc_proof(proof);
     }
-    let acc_proof = acc_proof_to_holder(self, acc_proof, true);
-    holder_to_acc_proof(self.mira_prove(srs, acc_proof, proof, rng))
+    let acc_proof = acc_proof_to_acc(self, acc_proof, true);
+    acc_to_acc_proof(self.mira_prove(srs, acc_proof, proof, rng))
   }
 
   fn acc_verify(
@@ -197,8 +186,8 @@ impl BasicBlock for SumBasicBlock {
     _model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: AccProofAffineRef,
-    acc_proof: AccProofAffineRef,
+    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
     _cache: ProveVerifyCache,
@@ -208,20 +197,24 @@ impl BasicBlock for SumBasicBlock {
       return Some(result);
     }
     let proof = self.verifier_proof_to_acc(proof);
-    let acc_proof = acc_proof_to_holder(self, acc_proof, false);
-    let prev_acc_proof = acc_proof_to_holder(self, prev_acc_proof, false);
+    let acc_proof = acc_proof_to_acc(self, acc_proof, false);
+    let prev_acc_proof = acc_proof_to_acc(self, prev_acc_proof, false);
     result &= self.mira_verify(prev_acc_proof, proof, acc_proof, rng).unwrap();
     Some(result)
   }
 
-  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffineRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
+  fn acc_decide(
+    &self,
+    srs: &SRS,
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
+  ) -> Vec<(PairingCheck, PairingOutput<Bls12_381>)> {
     let [zero_div, C, inp, out] = acc_proof.0[..] else {
       panic!("Wrong proof format")
     };
     let zero = out * Fr::from(self.len as u32).inverse().unwrap();
     vec![(
       vec![((-zero + inp).into(), srs.X2A[0]), (-zero_div, srs.X2A[1]), (-C, srs.Y2A)],
-      PairingOutput::<Bn<ark_bn254::Config>>::zero(),
+      PairingOutput::<Bls12_381>::zero(),
     )]
   }
 }

@@ -7,7 +7,7 @@ use crate::basic_block::{BasicBlock, Data, DataEnc, SRS};
 use crate::graph::Graph;
 use crate::util::{measure_file_size, verify};
 use crate::{onnx, ptau, util, CONFIG, LAYER_SETUP_DIR};
-use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_bls12_381::{Bls12_381, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::Zero;
@@ -30,7 +30,6 @@ pub enum CQArrayType {
   Custom(Vec<Fr>),
 }
 
-// Get the number of elements in the CQ array
 pub fn get_cq_N(cq_type: &CQArrayType) -> usize {
   match cq_type {
     CQArrayType::Negative => (-*onnx::CQ_RANGE_LOWER) as usize,
@@ -302,11 +301,11 @@ pub fn zktorch_kernel() {
 
   // Prove
   prove(&srs, &inputs, outputs.unwrap(), setups, models, &mut graph, &mut timing);
-
+  timing.print();
   // Verify
   verify(&srs, &graph, &mut timing);
 
-  // Measure proof size
+  // Measure proof size;
   measure_file_size(&CONFIG.prover.enc_model_path);
   measure_file_size(&CONFIG.prover.enc_input_path);
   measure_file_size(&CONFIG.prover.enc_output_path);

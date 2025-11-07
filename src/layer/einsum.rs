@@ -3,7 +3,7 @@ use crate::graph::*;
 use crate::layer::{squeeze::UnsqueezeBasicBlock, Layer};
 use crate::onnx;
 use crate::util;
-use ark_bn254::Fr;
+use ark_bls12_381::Fr;
 use ndarray::ArrayD;
 use std::collections::HashMap;
 use tract_onnx::pb::AttributeProto;
@@ -84,12 +84,7 @@ fn vector_outer_product(graph: &mut Graph, input_shapes: &Vec<&Vec<usize>>) -> V
     }),
     N: 1,
   }));
-  let mut split_shape = input_shapes[0].clone();
-  split_shape[0] = 1;
-  let concat = graph.addBB(Box::new(ConcatBasicBlock {
-    axis: 0,
-    input_shapes: vec![split_shape; util::next_pow(input_shapes[0][0] as u32) as usize],
-  }));
+  let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: 0 }));
   let mut b = input_shapes[0][0];
   b = util::next_pow(b as u32) as usize;
   let permutation = ((0..b).map(|x| x).collect(), vec![0]);

@@ -1,6 +1,6 @@
 use super::BasicBlock;
 use crate::util;
-use ark_bn254::Fr;
+use ark_bls12_381::{Bls12_381, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ndarray::{arr1, ArrayD};
 
 #[derive(Debug)]

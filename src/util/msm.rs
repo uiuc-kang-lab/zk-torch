@@ -5,7 +5,7 @@
  */
 #![allow(unused_imports)]
 use crate::util::{fft, ifft_in_place};
-use ark_bn254::{Fr, G1Projective};
+use ark_bls12_381::{Bls12_381, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::{ScalarMul, VariableBaseMSM};
 use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
 use ark_std::Zero;
@@ -13,7 +13,7 @@ use rayon::prelude::*;
 #[cfg(feature = "gpu")]
 use {
   crate::util::{gpu_fft_g1, gpu_ifft_g1, gpu_set_random_device},
-  ark_bn254::G2Projective,
+  ark_bls12_381::G2Projective,
   ark_ec::short_weierstrass::{Affine, Projective},
   icicle_bn254::curve::{G1Affine as IG1A, G1Projective as IG1P, G2Affine as IG2A, G2Projective as IG2P, ScalarField},
   icicle_core::gfft,
@@ -99,8 +99,8 @@ pub trait GpuMsmProjective {
 }
 
 #[cfg(feature = "gpu")]
-impl GpuMsmProjective for Projective<ark_bn254::g1::Config> {
-  type GpuMsmAffine = Affine<ark_bn254::g1::Config>;
+impl GpuMsmProjective for Projective<ark_bls12_381::g1::Config> {
+  type GpuMsmAffine = Affine<ark_bls12_381::g1::Config>;
   fn gpu_msm(a: &[Self::GpuMsmAffine], b: &[Fr]) -> Self {
     let a: Vec<_> = a.par_iter().map(|x| IG1A::from_ark(*x)).collect();
     let b: Vec<_> = b.par_iter().map(|x| *x).collect();
@@ -109,8 +109,8 @@ impl GpuMsmProjective for Projective<ark_bn254::g1::Config> {
 }
 
 #[cfg(feature = "gpu")]
-impl GpuMsmProjective for Projective<ark_bn254::g2::Config> {
-  type GpuMsmAffine = Affine<ark_bn254::g2::Config>;
+impl GpuMsmProjective for Projective<ark_bls12_381::g2::Config> {
+  type GpuMsmAffine = Affine<ark_bls12_381::g2::Config>;
   fn gpu_msm(a: &[Self::GpuMsmAffine], b: &[Fr]) -> Self {
     let a: Vec<_> = a.par_iter().map(|x| IG2A::from_ark(*x)).collect();
     let b: Vec<_> = b.par_iter().map(|x| *x).collect();

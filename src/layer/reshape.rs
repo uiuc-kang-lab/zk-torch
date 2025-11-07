@@ -2,7 +2,7 @@ use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::{squeeze::UnsqueezeBasicBlock, Layer};
 use crate::util::{self, get_reshape_indices, get_reshape_transpose_indices};
-use ark_bn254::Fr;
+use ark_bls12_381::Fr;
 use ark_std::Zero;
 use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
@@ -16,6 +16,7 @@ impl Layer for ReshapeLayer {
     constants: &Vec<Option<(&ArrayD<Fr>, DatumType)>>,
     _attributes: &Vec<&AttributeProto>,
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
+    println!("reshape inp: {:?}", input_shapes);
     let mut graph = Graph::new();
 
     let startShape = input_shapes[0];

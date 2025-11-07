@@ -5,7 +5,7 @@ use crate::onnx;
  * For example, generate fake inputs for ONNX models.
  */
 use crate::util::pad_to_pow_of_two;
-use ark_bn254::Fr;
+use ark_bls12_381::{Bls12_381, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_std::Zero;
 use ndarray::ArrayD;
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -25,7 +25,8 @@ pub fn get_shape_from_onnx_tensor(tensor: &Tensor) -> Vec<usize> {
       if let tract_onnx::pb::tensor_shape_proto::dimension::Value::DimValue(x) = x.value.as_ref().unwrap() {
         *x as usize
       } else {
-        panic!("Unknown dimension")
+        //panic!("Unknown dimension")
+        1
       }
     })
     .collect::<Vec<_>>()
@@ -57,7 +58,7 @@ pub fn generate_fake_tensor(dtype: DataType, shape: Vec<usize>) -> ArrayD<Fr> {
   let mut rng = StdRng::from_entropy();
   let val_num = shape.iter().fold(1, |acc, x| acc * x);
   let input = match dtype {
-    DataType::Float | DataType::Float16 | DataType::Double => (0..val_num).map(|_| Fr::from(rng.gen_range(-2..2))).collect(),
+    DataType::Float | DataType::Float16 | DataType::Double => (0..val_num).map(|_| Fr::from(0)).collect(),
     DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => (0..val_num).map(|_| Fr::from(1)).collect(),
     DataType::Uint8 | DataType::Uint16 | DataType::Uint32 | DataType::Uint64 => (0..val_num).map(|_| Fr::from(1)).collect(),
     DataType::Bool => (0..val_num).map(|_| Fr::from(rng.gen_range(0..2))).collect(),

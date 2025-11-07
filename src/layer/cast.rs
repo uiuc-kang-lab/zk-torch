@@ -4,7 +4,7 @@ use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
 use crate::util::datumtype_to_sf;
-use ark_bn254::Fr;
+use ark_bls12_381::{Bls12_381, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;

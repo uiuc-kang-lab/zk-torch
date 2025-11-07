@@ -19,7 +19,7 @@ prover:
   proof_path: proofs
   acc_proof_path: acc_proofs
   final_proof_path: final_proofs
-  enable_layer_setup: true
+  enable_layer_setup: false
 verifier:
   enc_model_path: modelsEnc
   enc_input_path: inputsEnc

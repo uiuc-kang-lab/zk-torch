@@ -2,7 +2,7 @@ use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
 use crate::util;
-use ark_bn254::Fr;
+use ark_bls12_381::Fr;
 use ndarray::{ArrayD, Axis};
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
@@ -33,11 +33,12 @@ impl Layer for GatherLayer {
   ) -> (Graph, Vec<Vec<usize>>, Vec<DatumType>) {
     let mut graph = Graph::new();
     let mut indices_output = -2;
-    // Handle the case where indices are not an input
-    if input_shapes[1].len() == 0 || constants.len() > 1 && constants[1].is_some() {
+    // Avoid unwrapping a None value
+    if input_shapes[1].len() == 0 {
       let indices = constants[1].unwrap().0.mapv(|x| {
-        if x > Fr::from(input_shapes[0][0] as i128) {
-          Fr::from(input_shapes[0][0] as i128 + util::fr_to_int(x))
+        // util::fr_to_int(x)
+        if x > Fr::from(input_shapes[0][0] as i64) {
+          Fr::from(input_shapes[0][0] as i64) + x
         } else {
           x
         }

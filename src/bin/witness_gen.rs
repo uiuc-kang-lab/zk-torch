@@ -1,4 +1,4 @@
-use ark_bn254::Fr;
+use ark_bls12_381::{Bls12_381, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ndarray::ArrayD;
 use plonky2::{timed, util::timing::TimingTree};
 use zk_torch::graph::Graph;

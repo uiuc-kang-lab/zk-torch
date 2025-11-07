@@ -2,7 +2,7 @@ use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
 use crate::util::{self, get_reshape_indices};
-use ark_bn254::Fr;
+use ark_bls12_381::Fr;
 use ndarray::{ArrayD, Axis, IxDyn};
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
@@ -37,6 +37,8 @@ impl Layer for SqueezeLayer {
     // map negative axes to positive
     axes = axes.iter().map(|&x| if x < 0 { input_shapes[0].len() as i64 + x } else { x }).collect();
 
+    println!("startShape: {:?}", input_shapes[0]);
+    println!("axes: {:?}", axes);
     let startShape = input_shapes[0];
     assert!(axes.iter().all(|&x| startShape[x as usize] == 1));
     let endShape: Vec<_> = startShape.iter().enumerate().filter(|(i, _)| !axes.contains(&(*i as i64))).map(|(_, x)| *x).collect();

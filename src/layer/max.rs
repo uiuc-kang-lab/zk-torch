@@ -3,7 +3,7 @@ use crate::graph::*;
 use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
-use ark_bn254::Fr;
+use ark_bls12_381::Fr;
 use ndarray::{concatenate, indices, ArrayD, Axis, Dim, Dimension, IxDyn};
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
@@ -90,10 +90,7 @@ impl Layer for MinLayer {
         padding_partition: copy_constraint::PaddingEnum::Zero,
       }));
 
-      let concat_inputs = graph.addBB(Box::new(ConcatBasicBlock {
-        axis: 0,
-        input_shapes: vec![input_shape_padded.clone(); 2],
-      }));
+      let concat_inputs = graph.addBB(Box::new(ConcatBasicBlock { axis: 0 }));
 
       let mut concat_shape = input_shape_padded.clone();
       concat_shape[0] = 2 * concat_shape[0];

@@ -1,8 +1,7 @@
 #![allow(unused_imports)]
 use crate::util::{self, ark_de, ark_se, AccHolder, AccProofLayout};
-use crate::{define_acc_err_terms, define_acc_terms};
-pub use add::{AddBasicBlock, BatchAddBasicBlock};
-use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+pub use add::{AddAlongAxisBasicBlock, AddBasicBlock, MultipleAddBasicBlock};
+use ark_bls12_381::{Bls12_381, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain};
@@ -10,8 +9,9 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{UniformRand, Zero};
 pub use bool_check::BooleanCheckBasicBlock;
 pub use clip::ClipBasicBlock;
-pub use concat::ConcatBasicBlock;
+pub use concat::{ConcatBasicBlock, ConcatLastDimBasicBlock};
 pub use constant::{Const2BasicBlock, ConstBasicBlock, ConstOfShapeBasicBlock};
+pub use conv::{Conv2DAddBasicBlock, Conv3DAddBasicBlock, Conv3DTransposeBasicBlock};
 pub use copy_constraint::CopyConstraintBasicBlock;
 pub use cq::CQBasicBlock;
 pub use cq2::CQ2BasicBlock;
@@ -20,12 +20,11 @@ pub use div::{DivConstBasicBlock, DivConstProofBasicBlock, DivScalarBasicBlock, 
 use downcast_rs::impl_downcast;
 pub use eq::{ElementwiseEqBasicBlock, EqBasicBlock};
 pub use id::IdBasicBlock;
-pub use less::LessBasicBlock;
+pub use less::{GreaterBasicBlock, LessBasicBlock};
 pub use matmul::MatMulBasicBlock;
 pub use max::{MaxBasicBlock, MaxProofBasicBlock};
 pub use mul::{MulBasicBlock, MulConstBasicBlock, MulScalarBasicBlock};
 use ndarray::{ArrayD, IxDyn};
-pub use new_conv::{Conv2DAddBasicBlock, Conv3DAddBasicBlock, Conv3DTransposeBasicBlock};
 pub use one_to_one::OneToOneBasicBlock;
 pub use ops::*;
 pub use ordered::OrderedBasicBlock;
@@ -50,6 +49,7 @@ pub mod bool_check;
 pub mod clip;
 pub mod concat;
 pub mod constant;
+pub mod conv;
 pub mod copy_constraint;
 pub mod cq;
 pub mod cq2;
@@ -61,7 +61,6 @@ pub mod less;
 pub mod matmul;
 pub mod max;
 pub mod mul;
-pub mod new_conv;
 pub mod one_to_one;
 pub mod ops;
 pub mod ordered;
@@ -153,28 +152,6 @@ impl DataEnc {
   }
 }
 
-// AccProofProj is the accumulator proof for the prover, where the G1 and G2 elements are in projective coordinates.
-pub type AccProofProj = (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>);
-
-// AccProofProjRef is the accumulator proof for the prover. It is a tuple of references to the elements of the AccProofProj.
-pub type AccProofProjRef<'a> = (
-  &'a Vec<G1Projective>,
-  &'a Vec<G2Projective>,
-  &'a Vec<Fr>,
-  &'a Vec<PairingOutput<Bn<ark_bn254::Config>>>,
-);
-
-// AccProofAffine is the accumulator proof for the verifier, where the G1 and G2 elements are in affine coordinates.
-pub type AccProofAffine = (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>);
-
-// AccProofAffineRef is the accumulator proof for the verifier. It is a tuple of references to the elements of the AccProofAffine.
-pub type AccProofAffineRef<'a> = (
-  &'a Vec<G1Affine>,
-  &'a Vec<G2Affine>,
-  &'a Vec<Fr>,
-  &'a Vec<PairingOutput<Bn<ark_bn254::Config>>>,
-);
-
 pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
   fn genModel(&self) -> ArrayD<Fr> {
     ArrayD::zeros(IxDyn(&[0]))
@@ -232,11 +209,16 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     _model: &ArrayD<Data>,
     _inputs: &Vec<&ArrayD<Data>>,
     _outputs: &Vec<&ArrayD<Data>>,
-    _acc_proof: AccProofProjRef,
+    _acc_proof: (
+      &Vec<G1Projective>,
+      &Vec<G2Projective>,
+      &Vec<Fr>,
+      &Vec<PairingOutput<Bls12_381>>,
+    ),
     _proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     _rng: &mut StdRng,
     _cache: ProveVerifyCache,
-  ) -> AccProofProj {
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>) {
     (Vec::new(), Vec::new(), Vec::new(), Vec::new())
   }
 
@@ -245,8 +227,16 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     &self,
     _srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    acc_proof: AccProofProjRef,
-  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAffine) {
+    acc_proof: (
+      &Vec<G1Projective>,
+      &Vec<G2Projective>,
+      &Vec<Fr>,
+      &Vec<PairingOutput<Bls12_381>>,
+    ),
+  ) -> (
+    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>),
+    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>),
+  ) {
     (
       (
         proof.0.iter().map(|x| (*x).into()).collect(),
@@ -268,8 +258,8 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     _model: &ArrayD<DataEnc>,
     _inputs: &Vec<&ArrayD<DataEnc>>,
     _outputs: &Vec<&ArrayD<DataEnc>>,
-    _prev_acc_proof: AccProofAffineRef,
-    _acc_proof: AccProofAffineRef,
+    _prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
+    _acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
     _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     _rng: &mut StdRng,
     _cache: ProveVerifyCache,
@@ -278,7 +268,11 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
   }
 
   // This function is used to clean the errs in the final accumulator proof to calculate the proof size correctly.
-  fn acc_finalize(&self, _srs: &SRS, acc_proof: AccProofAffineRef) -> AccProofAffine {
+  fn acc_finalize(
+    &self,
+    _srs: &SRS,
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
+  ) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>) {
     (
       acc_proof.0.iter().map(|x| *x).collect(),
       acc_proof.1.iter().map(|x| *x).collect(),
@@ -287,26 +281,28 @@ pub trait BasicBlock: std::fmt::Debug + Send + Sync + downcast_rs::Downcast {
     )
   }
 
-  fn acc_decide(&self, _srs: &SRS, _acc_proof: AccProofAffineRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
+  fn acc_decide(
+    &self,
+    _srs: &SRS,
+    _acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
+  ) -> Vec<(PairingCheck, PairingOutput<Bls12_381>)> {
     vec![]
   }
 }
 
-define_acc_terms!(TestG1Terms, [], []);
-define_acc_terms!(TestG2Terms, [], []);
-define_acc_terms!(TestFrTerms, [], []);
-define_acc_err_terms!(TestErrG1Terms);
-define_acc_err_terms!(TestErrG2Terms);
-define_acc_err_terms!(TestErrFrTerms);
-define_acc_err_terms!(TestErrGtTerms);
-
-// This is a default basic block
-// It does nothing and is used as a placeholder for the repeater
-// It's also used as a default basic block for the cq2 basic block when testing
 #[derive(Debug)]
-pub struct DefaultBasicBlock;
-impl BasicBlock for DefaultBasicBlock {}
-impl AccProofLayout for DefaultBasicBlock {
+pub struct BasicBlockForTest;
+impl BasicBlock for BasicBlockForTest {}
+impl AccProofLayout for BasicBlockForTest {
+  fn acc_g1_num(&self, _is_prover: bool) -> usize {
+    0
+  }
+  fn acc_g2_num(&self, _is_prover: bool) -> usize {
+    0
+  }
+  fn acc_fr_num(&self, _is_prover: bool) -> usize {
+    0
+  }
   fn prover_proof_to_acc(&self, _proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>)) -> AccHolder<G1Projective, G2Projective> {
     AccHolder {
       acc_g1: vec![],
@@ -317,7 +313,6 @@ impl AccProofLayout for DefaultBasicBlock {
       acc_errs: vec![],
     }
   }
-
   fn verifier_proof_to_acc(&self, _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)) -> AccHolder<G1Affine, G2Affine> {
     AccHolder {
       acc_g1: vec![],
@@ -328,7 +323,6 @@ impl AccProofLayout for DefaultBasicBlock {
       acc_errs: vec![],
     }
   }
-
   fn mira_prove(
     &self,
     _srs: &SRS,

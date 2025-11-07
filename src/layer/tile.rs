@@ -2,7 +2,7 @@ use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::{squeeze::UnsqueezeBasicBlock, Layer};
 use crate::util;
-use ark_bn254::Fr;
+use ark_bls12_381::Fr;
 use ndarray::{concatenate, ArrayD, Axis, IxDyn};
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;

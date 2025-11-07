@@ -1,25 +1,20 @@
-use super::{AccProofAffine, AccProofAffineRef, AccProofProj, AccProofProjRef, BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
+use super::{BasicBlock, Data, DataEnc, PairingCheck, ProveVerifyCache, SRS};
 use crate::basic_block::*;
 use crate::{
   ndarr_azip,
-  util::{self, acc_proof_to_holder, holder_to_acc_proof, AccHolder, AccProofLayout},
+  util::{self, acc_proof_to_acc, acc_to_acc_proof, AccHolder, AccProofLayout},
 };
-use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_bls12_381::{Bls12_381, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_poly::univariate::DensePolynomial;
 use itertools::multiunzip;
 use ndarray::{arr1, azip, par_azip, s, ArrayD, Axis, Dimension, IxDyn, SliceInfo, SliceInfoElem};
 use rand::rngs::StdRng;
-use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
+use rayon::prelude::*;
 
-// Calculate the Merkle tree level sizes given the number of nodes.
-// We use this helper function for the following purpose:
-//   The repeater prover uses Merkle reduction to prove the accumulation, where the root is the final accumulator instance.
-//   In the Merkle tree, all the intermediate nodes are the accumulator instances to be verified, which are stored in a vector.
-//   The repeater verifier needs to know how many nodes to process at each level to transform the vector into a Merkle tree for verification.
-fn calculate_merkle_level_sizes(mut n: usize) -> Vec<usize> {
+fn build_proven_level_sizes(mut n: usize) -> Vec<usize> {
   let mut sizes = vec![n];
   while n > 1 {
     let pairs = n / 2; // only paired nodes produce new results
@@ -29,17 +24,6 @@ fn calculate_merkle_level_sizes(mut n: usize) -> Vec<usize> {
   sizes
 }
 
-// Downcast the basic block to the corresponding acc proof layout.
-// We use this macro for the following purpose:
-//   The basic block in a repeater is a Box<dyn BasicBlock> (dynamic dispatch)
-//   and we need to transform it to the AccProofLayout defined in the basic block to access the acc proof methods
-//   including mira_prove, prover_proof_to_acc, etc. (they are not defined in dyn BasicBlock)
-//
-//   To access the methods defined in AccProofLayout of XXXBasicBlock, this macro can:
-//   1. check if the basic block is a XXXBasicBlock
-//   2. downcast the basic block to the XXXBasicBlock
-//   3a. return the AccProofLayout of the XXXBasicBlock if we support acc proof for the XXXBasicBlock
-//   3b. return the default AccProofLayout as a placeholder for other basic blocks that do not have an acc proof layout
 macro_rules! downcast_to_layout {
   ($bb:expr, $( $ty:ty ),+ ) => {
     {
@@ -50,18 +34,22 @@ macro_rules! downcast_to_layout {
           } else
         )+
       {
-        // Use the default basic block as a placeholder for the repeater
-        // when the basic block doesn't have an acc proof layout
-        &DefaultBasicBlock {} as &dyn AccProofLayout
+        &BasicBlockForTest {} as &dyn AccProofLayout
       };
       bb_ref
     }
   };
 }
 
-// Get the base number of elements in the accumulator proof.
-// (an accumulator proof in a repeater is the concatenation of all the accumulator proofs in the basic block of the repeater)
-fn get_acc_proof_bases(bb: &dyn BasicBlock, is_prover: bool) -> (usize, usize, usize, usize) {
+fn get_local_acc_proof_indices(
+  bb: &dyn BasicBlock,
+  acc_g1_len: usize,
+  acc_fr_len: usize,
+  is_prover: bool,
+) -> (Vec<usize>, Vec<usize>, Vec<usize>, Vec<usize>) {
+  if acc_fr_len == 0 {
+    return (vec![0, 0], vec![0, 0], vec![0, 0], vec![0, 0]);
+  }
   let bb: &dyn AccProofLayout = downcast_to_layout!(
     bb,
     MulBasicBlock,
@@ -74,13 +62,24 @@ fn get_acc_proof_bases(bb: &dyn BasicBlock, is_prover: bool) -> (usize, usize, u
     CQBasicBlock,
     CQ2BasicBlock
   );
+  let local_bb_num = acc_fr_len / (bb.acc_fr_num(is_prover) + 2 * bb.err_fr_nums().iter().sum::<usize>() + 1);
+  let mut acc_g1_indices = vec![0];
+  let mut acc_g2_indices = vec![0];
+  let mut acc_fr_indices = vec![0];
+  let mut acc_gt_indices = vec![0];
 
   let base_g1 = bb.acc_g1_num(is_prover) + 2 * (bb.err_g1_nums().iter().sum::<usize>());
   let base_g2 = bb.acc_g2_num(is_prover) + 2 * (bb.err_g2_nums().iter().sum::<usize>());
   let base_fr = bb.acc_fr_num(is_prover) + 2 * bb.err_fr_nums().iter().sum::<usize>() + 1;
   let base_gt = 2 * bb.err_gt_nums().iter().sum::<usize>();
 
-  (base_g1, base_g2, base_fr, base_gt)
+  for i in 0..local_bb_num {
+    acc_g1_indices.push(acc_g1_indices.last().unwrap() + base_g1);
+    acc_g2_indices.push(acc_g2_indices.last().unwrap() + base_g2);
+    acc_fr_indices.push(acc_fr_indices.last().unwrap() + base_fr);
+    acc_gt_indices.push(acc_gt_indices.last().unwrap() + base_gt);
+  }
+  (acc_g1_indices, acc_g2_indices, acc_fr_indices, acc_gt_indices)
 }
 
 #[derive(Debug)]
@@ -283,15 +282,20 @@ impl BasicBlock for RepeaterBasicBlock {
   fn acc_prove(
     &self,
     srs: &SRS,
-    _model: &ArrayD<Data>,
+    model: &ArrayD<Data>,
     inputs: &Vec<&ArrayD<Data>>,
     outputs: &Vec<&ArrayD<Data>>,
-    acc_proof: AccProofProjRef,
+    acc_proof: (
+      &Vec<G1Projective>,
+      &Vec<G2Projective>,
+      &Vec<Fr>,
+      &Vec<PairingOutput<Bls12_381>>,
+    ),
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
     rng: &mut StdRng,
-    _cache: ProveVerifyCache,
-  ) -> AccProofProj {
-    let temp = broadcastN(inputs, Some(outputs), self.N - 1);
+    cache: ProveVerifyCache,
+  ) -> (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>) {
+    let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
     let l = temp.len();
 
     let divA = proof.0.len() / l;
@@ -324,25 +328,23 @@ impl BasicBlock for RepeaterBasicBlock {
     let mut current_level: Vec<AccHolder<G1Projective, G2Projective>> =
       combined.into_par_iter().map(|x| bb.prover_proof_to_acc((&x.0, &x.1, &x.2))).collect();
 
-    let (base_g1, base_g2, base_fr, base_gt) = get_acc_proof_bases(self.basic_block.as_ref(), true);
+    let (acc_divA, acc_divB, acc_divC, acc_divD) = get_local_acc_proof_indices(self.basic_block.as_ref(), acc_proof.0.len(), acc_proof.2.len(), true);
+    let len_acc_div = acc_divA.len() - 1;
+    let mut acc_proof = (
+      acc_proof.0[acc_divA[len_acc_div - 1]..acc_divA[len_acc_div]].to_vec(),
+      acc_proof.1[acc_divB[len_acc_div - 1]..acc_divB[len_acc_div]].to_vec(),
+      acc_proof.2[acc_divC[len_acc_div - 1]..acc_divC[len_acc_div]].to_vec(),
+      acc_proof.3[acc_divD[len_acc_div - 1]..acc_divD[len_acc_div]].to_vec(),
+    );
     if acc_proof.2.len() > 0 {
-      current_level.push(acc_proof_to_holder(
-        bb,
-        (
-          &acc_proof.0[acc_proof.0.len() - base_g1..].to_vec(),
-          &acc_proof.1[acc_proof.1.len() - base_g2..].to_vec(),
-          &acc_proof.2[acc_proof.2.len() - base_fr..].to_vec(),
-          &acc_proof.3[acc_proof.3.len() - base_gt..].to_vec(),
-        ),
-        true,
-      ));
+      current_level.push(acc_proof_to_acc(bb, (&acc_proof.0, &acc_proof.1, &acc_proof.2, &acc_proof.3), true));
     } else {
       current_level.push(bb.prover_dummy_holder());
     }
 
     // Step 2: Merkle reduction
     let mut all_levels = vec![];
-    let mut buffer: Vec<_>;
+    let mut buffer = Vec::with_capacity(current_level.len());
 
     while current_level.len() > 1 {
       buffer = current_level
@@ -357,18 +359,20 @@ impl BasicBlock for RepeaterBasicBlock {
         })
         .collect();
       let proven_count = current_level.len() / 2;
-      // Collect the proven nodes
       all_levels.extend_from_slice(&buffer[..proven_count]);
-
+        
       std::mem::swap(&mut current_level, &mut buffer);
       buffer.clear();
     }
     assert!(all_levels.len() == l, "acc_prove: all_levels.len() != l");
 
     // Step 3: postprocess all_levels
-    let acc_proof = all_levels.into_par_iter().map(|x| holder_to_acc_proof(x)).collect::<Vec<_>>();
+    let mut acc_proof = all_levels
+      .into_par_iter()
+      .map(|x| acc_to_acc_proof(x))
+      .collect::<Vec<_>>();
 
-    let acc_proof: (Vec<_>, Vec<_>, Vec<_>, Vec<_>) = multiunzip(acc_proof.into_iter());
+    let acc_proof: (Vec<_>, Vec<_>, Vec<_>, Vec<_>) = multiunzip(acc_proof.into_iter());    
     (
       acc_proof.0.into_iter().flatten().collect(),
       acc_proof.1.into_iter().flatten().collect(),
@@ -382,8 +386,16 @@ impl BasicBlock for RepeaterBasicBlock {
     &self,
     srs: &SRS,
     proof: (&Vec<G1Projective>, &Vec<G2Projective>, &Vec<Fr>),
-    acc_proof: AccProofProjRef,
-  ) -> ((Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>), AccProofAffine) {
+    acc_proof: (
+      &Vec<G1Projective>,
+      &Vec<G2Projective>,
+      &Vec<Fr>,
+      &Vec<PairingOutput<Bls12_381>>,
+    ),
+  ) -> (
+    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>),
+    (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>),
+  ) {
     if acc_proof.2.len() == 0 {
       return (
         (
@@ -400,8 +412,8 @@ impl BasicBlock for RepeaterBasicBlock {
       );
     }
 
-    let (base_g1, base_g2, base_fr, base_gt) = get_acc_proof_bases(self.basic_block.as_ref(), true);
-    let l = if acc_proof.2.len() > 0 { acc_proof.0.len() / base_g1 } else { 1 };
+    let (acc_divA, acc_divB, acc_divC, acc_divD) = get_local_acc_proof_indices(self.basic_block.as_ref(), acc_proof.0.len(), acc_proof.2.len(), true);
+    let l = acc_divA.len() - 1;
 
     let divA = proof.0.len() / l;
     let divB = proof.1.len() / l;
@@ -415,10 +427,10 @@ impl BasicBlock for RepeaterBasicBlock {
         proof.2[i * divC..i * divC + divC].to_vec(),
       );
       let localAccProof = (
-        acc_proof.0[i * base_g1..i * base_g1 + base_g1].to_vec(),
-        acc_proof.1[i * base_g2..i * base_g2 + base_g2].to_vec(),
-        acc_proof.2[i * base_fr..i * base_fr + base_fr].to_vec(),
-        acc_proof.3[i * base_gt..i * base_gt + base_gt].to_vec(),
+        acc_proof.0[acc_divA[i]..acc_divA[i + 1]].to_vec(),
+        acc_proof.1[acc_divB[i]..acc_divB[i + 1]].to_vec(),
+        acc_proof.2[acc_divC[i]..acc_divC[i + 1]].to_vec(),
+        acc_proof.3[acc_divD[i]..acc_divD[i + 1]].to_vec(),
       );
       let (p, acc_p) = self.basic_block.acc_clean(
         srs,
@@ -435,7 +447,7 @@ impl BasicBlock for RepeaterBasicBlock {
       combined.1.into_iter().flatten().collect(),
       combined.2.into_iter().flatten().collect(),
     );
-    let acc_proof: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>) = (
+    let acc_proof: (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>) = (
       acc_combined.0.into_iter().flatten().collect(),
       acc_combined.1.into_iter().flatten().collect(),
       acc_combined.2.into_iter().flatten().collect(),
@@ -446,22 +458,23 @@ impl BasicBlock for RepeaterBasicBlock {
 
   fn acc_verify(
     &self,
-    _srs: &SRS,
-    _model: &ArrayD<DataEnc>,
+    srs: &SRS,
+    model: &ArrayD<DataEnc>,
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&ArrayD<DataEnc>>,
-    prev_acc_proof: AccProofAffineRef,
-    acc_proof: AccProofAffineRef,
+    prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
     proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
     rng: &mut StdRng,
-    _cache: ProveVerifyCache,
+    cache: ProveVerifyCache,
   ) -> Option<bool> {
     let mut result = true;
     if acc_proof.2.len() == 0 && prev_acc_proof.2.len() == 0 {
       return None;
     }
 
-    let temp = broadcastN(inputs, Some(outputs), self.N - 1);
+    let mut temp = broadcastN(inputs, Some(outputs), self.N - 1);
+    let (acc_divA, acc_divB, acc_divC, acc_divD) = get_local_acc_proof_indices(self.basic_block.as_ref(), acc_proof.0.len(), acc_proof.2.len(), false);
     let l = temp.len();
 
     let divA = proof.0.len() / l;
@@ -477,7 +490,7 @@ impl BasicBlock for RepeaterBasicBlock {
         )
       })
       .collect();
-
+    
     let bb: &dyn AccProofLayout = downcast_to_layout!(
       self.basic_block.as_ref(),
       MulBasicBlock,
@@ -491,109 +504,111 @@ impl BasicBlock for RepeaterBasicBlock {
       CQ2BasicBlock
     );
 
-    let (base_g1, base_g2, base_fr, base_gt) = get_acc_proof_bases(self.basic_block.as_ref(), false);
-
     // Step 1: preprocess leaves in parallel
-    let mut all_levels: Vec<AccHolder<G1Affine, G2Affine>> = combined.into_par_iter().map(|x| bb.verifier_proof_to_acc((&x.0, &x.1, &x.2))).collect();
-    if prev_acc_proof.2.len() > 0 {
-      all_levels.push(acc_proof_to_holder(
-        bb,
-        (
-          &prev_acc_proof.0[prev_acc_proof.0.len() - base_g1..].to_vec(),
-          &prev_acc_proof.1[prev_acc_proof.1.len() - base_g2..].to_vec(),
-          &prev_acc_proof.2[prev_acc_proof.2.len() - base_fr..].to_vec(),
-          &prev_acc_proof.3[prev_acc_proof.3.len() - base_gt..].to_vec(),
-        ),
-        false,
-      ));
+    let mut all_levels: Vec<AccHolder<G1Affine, G2Affine>> =
+      combined.into_par_iter().map(|x| bb.verifier_proof_to_acc((&x.0, &x.1, &x.2))).collect();
+
+    let (prev_acc_divA, prev_acc_divB, prev_acc_divC, prev_acc_divD) =
+      get_local_acc_proof_indices(self.basic_block.as_ref(), prev_acc_proof.0.len(), prev_acc_proof.2.len(), false);
+    let prev_l = prev_acc_divA.len() - 1;
+    let mut localPrevAccProof = (
+      prev_acc_proof.0[prev_acc_divA[prev_l - 1]..prev_acc_divA[prev_l]].to_vec(),
+      prev_acc_proof.1[prev_acc_divB[prev_l - 1]..prev_acc_divB[prev_l]].to_vec(),
+      prev_acc_proof.2[prev_acc_divC[prev_l - 1]..prev_acc_divC[prev_l]].to_vec(),
+      prev_acc_proof.3[prev_acc_divD[prev_l - 1]..prev_acc_divD[prev_l]].to_vec(),
+    );
+    if localPrevAccProof.2.len() > 0 {
+      all_levels.push(acc_proof_to_acc(bb, (&localPrevAccProof.0, &localPrevAccProof.1, &localPrevAccProof.2, &localPrevAccProof.3), false));
     } else {
+      println!("push verifier dummy holder");
       all_levels.push(bb.verifier_dummy_holder());
     }
-    let level_sizes = calculate_merkle_level_sizes(all_levels.len());
+    let level_sizes = build_proven_level_sizes(all_levels.len());
 
     let mut combined: Vec<_> = (0..l)
       .map(|i| {
-        acc_proof_to_holder(
-          bb,
-          (
-            &acc_proof.0[i * base_g1..i * base_g1 + base_g1].to_vec(),
-            &acc_proof.1[i * base_g2..i * base_g2 + base_g2].to_vec(),
-            &acc_proof.2[i * base_fr..i * base_fr + base_fr].to_vec(),
-            &acc_proof.3[i * base_gt..i * base_gt + base_gt].to_vec(),
-          ),
-          false,
-        )
+        acc_proof_to_acc(bb, 
+          (&acc_proof.0[acc_divA[i]..acc_divA[i + 1]].to_vec(),
+          &acc_proof.1[acc_divB[i]..acc_divB[i + 1]].to_vec(),
+          &acc_proof.2[acc_divC[i]..acc_divC[i + 1]].to_vec(),
+          &acc_proof.3[acc_divD[i]..acc_divD[i + 1]].to_vec()), false)
       })
       .collect();
     all_levels.append(&mut combined);
 
-    // Step 2: Merkle reduction level by level to perform the verification
     let mut level_start = 0;
     let lonely_child = Arc::new(Mutex::new(None));
+
     for i in 1..level_sizes.len() {
-      let parent_level_size = level_sizes[i];
-      let child_level_size = level_sizes[i - 1];
+        let parent_level_size = level_sizes[i];
+        let child_level_size = level_sizes[i - 1];
 
-      let parents = &all_levels[level_start + child_level_size..level_start + child_level_size + parent_level_size];
-      let children = &all_levels[level_start..level_start + child_level_size];
+        let parents = &all_levels[level_start + child_level_size .. level_start + child_level_size + parent_level_size];
+        let children = &all_levels[level_start .. level_start + child_level_size];
 
-      // Check each parent node against its two children
-      let valid = (0..parent_level_size).into_par_iter().all(|j| {
-        let mut rng = rng.clone();
-        let left = &children[2 * j];
-        let r = if 2 * j + 1 < child_level_size {
-          let right = &children[2 * j + 1];
-          bb.mira_verify(left.clone(), right.clone(), parents[j].clone(), &mut rng).unwrap()
-        } else {
+        // Check each parent node against its two children
+        let valid = (0..parent_level_size)
+            .into_par_iter()
+            .all(|j| {
+                let mut rng = rng.clone();
+                let left = &children[2 * j];
+                let r = if 2 * j + 1 < child_level_size {
+                  let right = &children[2 * j + 1];
+                  bb.mira_verify(left.clone(), right.clone(), parents[j].clone(), &mut rng).unwrap()
+                } else {
+                  let mut l_child = lonely_child.lock().unwrap();
+                  let right: AccHolder<G1Affine, G2Affine> = l_child.clone().unwrap();
+                  *l_child = None;
+                  bb.mira_verify(left.clone(), right, parents[j].clone(), &mut rng).unwrap()
+                };
+                r
+            });
+        
+        if 2 * parent_level_size == child_level_size - 1 {
           let mut l_child = lonely_child.lock().unwrap();
-          let right: AccHolder<G1Affine, G2Affine> = l_child.clone().unwrap();
-          *l_child = None;
-          bb.mira_verify(left.clone(), right, parents[j].clone(), &mut rng).unwrap()
-        };
-        r
-      });
+          *l_child = Some(children[2 * parent_level_size].clone());
+        }
 
-      if 2 * parent_level_size == child_level_size - 1 {
-        let mut l_child = lonely_child.lock().unwrap();
-        *l_child = Some(children[2 * parent_level_size].clone());
-      }
+        result &= valid;
 
-      result &= valid;
-
-      level_start += child_level_size;
+        level_start += child_level_size;
     }
 
     Some(result)
   }
 
   // This function is used to clean the errs in the final accumulator proof to calculate the proof size correctly.
-  fn acc_finalize(&self, srs: &SRS, acc_proof: AccProofAffineRef) -> AccProofAffine {
-    let (base_g1, base_g2, base_fr, base_gt) = get_acc_proof_bases(self.basic_block.as_ref(), false);
-    let acc_proof = if acc_proof.2.len() > 0 {
-      (
-        acc_proof.0[acc_proof.0.len() - base_g1..].to_vec(),
-        acc_proof.1[acc_proof.1.len() - base_g2..].to_vec(),
-        acc_proof.2[acc_proof.2.len() - base_fr..].to_vec(),
-        acc_proof.3[acc_proof.3.len() - base_gt..].to_vec(),
-      )
-    } else {
-      (vec![], vec![], vec![], vec![])
-    };
-    self.basic_block.acc_finalize(srs, (&acc_proof.0, &acc_proof.1, &acc_proof.2, &acc_proof.3))
+  fn acc_finalize(
+    &self,
+    srs: &SRS,
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
+  ) -> (Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>) {
+    let (acc_divA, acc_divB, acc_divC, acc_divD) =
+      get_local_acc_proof_indices(self.basic_block.as_ref(), acc_proof.0.len(), acc_proof.2.len(), false);
+    let l = acc_divA.len() - 1;
+    let localAccProof = (
+      acc_proof.0[acc_divA[l - 1]..acc_divA[l]].to_vec(),
+      acc_proof.1[acc_divB[l - 1]..acc_divB[l]].to_vec(),
+      acc_proof.2[acc_divC[l - 1]..acc_divC[l]].to_vec(),
+      acc_proof.3[acc_divD[l - 1]..acc_divD[l]].to_vec(),
+    );
+    self.basic_block.acc_finalize(srs, (&localAccProof.0, &localAccProof.1, &localAccProof.2, &localAccProof.3))
   }
 
-  fn acc_decide(&self, srs: &SRS, acc_proof: AccProofAffineRef) -> Vec<(PairingCheck, PairingOutput<Bn<ark_bn254::Config>>)> {
-    let (base_g1, base_g2, base_fr, base_gt) = get_acc_proof_bases(self.basic_block.as_ref(), false);
-    let acc_proof = if acc_proof.2.len() > 0 {
-      (
-        acc_proof.0[acc_proof.0.len() - base_g1..].to_vec(),
-        acc_proof.1[acc_proof.1.len() - base_g2..].to_vec(),
-        acc_proof.2[acc_proof.2.len() - base_fr..].to_vec(),
-        acc_proof.3[acc_proof.3.len() - base_gt..].to_vec(),
-      )
-    } else {
-      (vec![], vec![], vec![], vec![])
-    };
+  fn acc_decide(
+    &self,
+    srs: &SRS,
+    acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>),
+  ) -> Vec<(PairingCheck, PairingOutput<Bls12_381>)> {
+    let (acc_divA, acc_divB, acc_divC, acc_divD) =
+      get_local_acc_proof_indices(self.basic_block.as_ref(), acc_proof.0.len(), acc_proof.2.len(), false);
+    let len_acc_div = acc_divA.len() - 1;
+    let acc_proof = (
+      acc_proof.0[acc_divA[len_acc_div - 1]..acc_divA[len_acc_div]].to_vec(),
+      acc_proof.1[acc_divB[len_acc_div - 1]..acc_divB[len_acc_div]].to_vec(),
+      acc_proof.2[acc_divC[len_acc_div - 1]..acc_divC[len_acc_div]].to_vec(),
+      acc_proof.3[acc_divD[len_acc_div - 1]..acc_divD[len_acc_div]].to_vec(),
+    );
     self.basic_block.acc_decide(srs, (&acc_proof.0, &acc_proof.1, &acc_proof.2, &acc_proof.3))
   }
 }

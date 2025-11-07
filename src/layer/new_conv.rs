@@ -1,7 +1,3 @@
-/*
-  All layers in this file are used to perform the customized convolutional layers,
-  (where we put the channel dimension in the last dimension to avoid using copy constraints).
-*/
 use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
@@ -9,15 +5,13 @@ use crate::onnx;
 use crate::util;
 use crate::util::pad_to_pow_of_two;
 use crate::CONFIG;
-use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ec::AffineRepr;
+use ark_bls12_381::{Bls12_381, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_std::{One, Zero};
 use ndarray::indices;
 use ndarray::Dim;
 use ndarray::Dimension;
 use ndarray::IxDyn;
 use ndarray::{concatenate, s, Array1, Array4, ArrayD, Axis, SliceInfo};
-use rand::rngs::StdRng;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -25,8 +19,17 @@ use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
 use tract_onnx::prelude::Outlet; // Import Rayon traits
 
-// update kernel from [C_in / group, C_out] to [C_in, C_out]
-// For more details, please refer to https://onnx.ai/onnx/operators/onnx__Conv.html
+pub fn slice_nd_array_data(arr: ArrayD<Data>, indices: &[usize]) -> ArrayD<Data> {
+  // Create slices from the indices
+  let slices: Vec<_> = indices.iter().map(|&i| (0..i).into()).collect();
+
+  // Convert slices into a SliceInfo instance
+  let slice_info = unsafe { SliceInfo::<_, IxDyn, IxDyn>::new(slices).unwrap() };
+
+  // Slice the array
+  arr.slice_move(slice_info)
+}
+
 fn update_kernel(arr: &ArrayD<Fr>, group: usize) -> ArrayD<Fr> {
   let c_in = arr.shape()[0] * group;
   let c_out = arr.shape()[1];
@@ -94,16 +97,10 @@ impl Layer for Conv2dLayer {
 
     // Conv Add
     let conv_add = graph.addBB(Box::new(Conv2DAddBasicBlock {
-      h: H as i32,
-      w: W as i32,
-      k_h: weight_shape[2] as i32,
-      k_w: weight_shape[3] as i32,
-      s_h: strides[0] as i32,
-      s_w: strides[1] as i32,
-      p_h_top: pads[0] as i32,
-      p_w_left: pads[1] as i32,
-      p_h_bottom: pads[2] as i32,
-      p_w_right: pads[3] as i32,
+      input_shape: vec![H as i32, W as i32],
+      kernel_shape: vec![weight_shape[2] as i32, weight_shape[3] as i32],
+      stride: strides.clone().into_iter().map(|x| x as i32).collect(),
+      padding: pads.clone().into_iter().map(|x| x as i32).collect(),
       out_channels: util::next_pow(weight_shape[0] as u32) as usize,
     }));
 
@@ -168,21 +165,20 @@ impl Layer for Conv2dLayer {
   }
 }
 
-// This basic block is only used in RetinaNet where we need to concatenate the outputs of multiple conv heads along axis 1.
 #[derive(Debug)]
 pub struct MultiHeadConv2dAggBasicBlock {
-  pub input_shape: Vec<usize>, // [1, H_out * W_out, head_dim]
+  pub output_shape: Vec<usize>, // [1, H_out * W_out, head_dim]
 }
 impl BasicBlock for MultiHeadConv2dAggBasicBlock {
   fn run(&self, _model: &ArrayD<Fr>, inputs: &Vec<&ArrayD<Fr>>) -> Result<Vec<ArrayD<Fr>>, util::CQOutOfRangeError> {
-    let head_num = inputs.len();
-    let mut final_output_shape = self.input_shape.clone();
-    final_output_shape[1] *= head_num;
+    assert!(inputs.len() == 9);
+    let mut final_output_shape = self.output_shape.clone();
+    final_output_shape[1] *= 9;
 
     let mut result = ArrayD::<Fr>::zeros(IxDyn(&final_output_shape));
-    for head in 0..head_num {
-      let input_slice = util::slice_nd_array(inputs[head].clone(), &self.input_shape);
-      result.slice_axis_mut(Axis(1), (head * self.input_shape[1]..(head + 1) * self.input_shape[1]).into()).assign(&input_slice);
+    for head in 0..9 {
+      let input_slice = util::slice_nd_array(inputs[head].clone(), &self.output_shape);
+      result.slice_axis_mut(Axis(1), (head * self.output_shape[1]..(head + 1) * self.output_shape[1]).into()).assign(&input_slice);
     }
     result = util::pad_to_pow_of_two(&result, &Fr::zero());
 
@@ -190,48 +186,24 @@ impl BasicBlock for MultiHeadConv2dAggBasicBlock {
   }
 
   fn encodeOutputs(&self, _srs: &SRS, _model: &ArrayD<Data>, inputs: &Vec<&ArrayD<Data>>, _outputs: &Vec<&ArrayD<Fr>>) -> Vec<ArrayD<Data>> {
-    let head_num = inputs.len();
-    let mut final_output_shape = vec![self.input_shape[0], self.input_shape[1]];
-    final_output_shape[1] *= head_num;
+    let mut final_output_shape = vec![self.output_shape[0], self.output_shape[1]];
+    final_output_shape[1] *= 9;
     let data_zero = Data {
-      raw: vec![Fr::zero(); self.input_shape[2]],
+      raw: vec![Fr::zero(); self.output_shape[2]],
       poly: ark_poly::polynomial::univariate::DensePolynomial::zero(),
       r: Fr::zero(),
       g1: G1Projective::zero(),
     };
     let mut result = ArrayD::from_shape_fn(IxDyn(&final_output_shape), |_| data_zero.clone());
-    for head in 0..head_num {
-      let input_slice = util::slice_nd_array(inputs[head].clone(), &[self.input_shape[0], self.input_shape[1]]);
-      result.slice_axis_mut(Axis(1), (head * self.input_shape[1]..(head + 1) * self.input_shape[1]).into()).assign(&input_slice);
+    for head in 0..9 {
+      let input_slice = slice_nd_array_data(inputs[head].clone(), &[self.output_shape[0], self.output_shape[1]]);
+      result.slice_axis_mut(Axis(1), (head * self.output_shape[1]..(head + 1) * self.output_shape[1]).into()).assign(&input_slice);
     }
     result = util::pad_to_pow_of_two(&result, &data_zero);
     vec![result]
   }
-
-  fn verify(
-    &self,
-    _srs: &SRS,
-    _model: &ArrayD<DataEnc>,
-    inputs: &Vec<&ArrayD<DataEnc>>,
-    outputs: &Vec<&ArrayD<DataEnc>>,
-    _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
-    _rng: &mut StdRng,
-    _cache: ProveVerifyCache,
-  ) -> Vec<PairingCheck> {
-    let head_num = inputs.len();
-    let output = outputs[0];
-    for head in 0..head_num {
-      for i in 0..self.input_shape[1] {
-        assert!(output[[0, head * self.input_shape[1] + i]].g1 == inputs[head][[0, i]].g1);
-      }
-    }
-    vec![]
-  }
 }
 
-// This layer is only used in RetinaNet
-// It fuses the Conv, Reshape, and Transpose layers together to perform the Multi-Head 2D convolution
-// This saves the copy constraints for the intermediate results
 pub struct MultiHeadConv2dLayer;
 
 impl Layer for MultiHeadConv2dLayer {
@@ -279,16 +251,10 @@ impl Layer for MultiHeadConv2dLayer {
 
     // Conv Add
     let conv_add = graph.addBB(Box::new(Conv2DAddBasicBlock {
-      h: H as i32,
-      w: W as i32,
-      k_h: weight_shape[2] as i32,
-      k_w: weight_shape[3] as i32,
-      s_h: strides[0] as i32,
-      s_w: strides[1] as i32,
-      p_h_top: pads[0] as i32,
-      p_w_left: pads[1] as i32,
-      p_h_bottom: pads[2] as i32,
-      p_w_right: pads[3] as i32,
+      input_shape: vec![H as i32, W as i32],
+      kernel_shape: vec![weight_shape[2] as i32, weight_shape[3] as i32],
+      stride: strides.clone().into_iter().map(|x| x as i32).collect(),
+      padding: pads.clone().into_iter().map(|x| x as i32).collect(),
       out_channels: util::next_pow(head_dim as u32) as usize,
     }));
 
@@ -357,10 +323,10 @@ impl Layer for MultiHeadConv2dLayer {
     let H_o = (H - weight_shape[2] + pads[0] + pads[2]) / strides[0] + 1;
     let W_o = (W - weight_shape[3] + pads[1] + pads[3]) / strides[1] + 1;
 
-    let agg = graph.addBB(Box::new(MultiHeadConv2dAggBasicBlock {
-      input_shape: vec![1, H_o * W_o, head_dim],
+    let output = graph.addBB(Box::new(MultiHeadConv2dAggBasicBlock {
+      output_shape: vec![1, H_o * W_o, head_dim],
     }));
-    let output = graph.addNode(agg, head_outputs);
+    let output = graph.addNode(output, head_outputs);
 
     let output_shape = vec![1, num_heads * H_o * W_o, head_dim];
     graph.outputs.push((output, 0));
@@ -368,7 +334,6 @@ impl Layer for MultiHeadConv2dLayer {
   }
 }
 
-// 3D Conv used in 3DUNet
 pub struct Conv3dLayer;
 
 impl Layer for Conv3dLayer {
@@ -409,21 +374,10 @@ impl Layer for Conv3dLayer {
 
     // Conv Add
     let conv_add = graph.addBB(Box::new(Conv3DAddBasicBlock {
-      d: D as i32,
-      h: D as i32,
-      w: D as i32,
-      k_d: weight_shape[2] as i32,
-      k_h: weight_shape[3] as i32,
-      k_w: weight_shape[4] as i32,
-      s_d: strides[0] as i32,
-      s_h: strides[1] as i32,
-      s_w: strides[2] as i32,
-      p_d_front: pads[0] as i32,
-      p_h_top: pads[1] as i32,
-      p_w_left: pads[2] as i32,
-      p_d_back: pads[3] as i32,
-      p_h_bottom: pads[4] as i32,
-      p_w_right: pads[5] as i32,
+      input_shape: vec![D as i32, D as i32, D as i32],
+      kernel_shape: vec![weight_shape[2] as i32, weight_shape[3] as i32, weight_shape[4] as i32],
+      stride: strides.clone().into_iter().map(|x| x as i32).collect(),
+      padding: pads.clone().into_iter().map(|x| x as i32).collect(),
       out_channels: util::next_pow(weight_shape[0] as u32) as usize,
     }));
 
@@ -489,9 +443,6 @@ impl Layer for Conv3dLayer {
   }
 }
 
-// Concat 3D Conv used in 3DUNet
-// This layer is for the case that the input is fed into Concat and then fed into Conv
-// We fuse the Concat and Conv into this custom layer to prevent using copy constraints
 pub struct ConcatConv3dLayer;
 
 impl Layer for ConcatConv3dLayer {
@@ -535,21 +486,10 @@ impl Layer for ConcatConv3dLayer {
 
     // Conv Add
     let conv_add = graph.addBB(Box::new(Conv3DAddBasicBlock {
-      d: D as i32,
-      h: D as i32,
-      w: D as i32,
-      k_d: weight_shape[2] as i32,
-      k_h: weight_shape[3] as i32,
-      k_w: weight_shape[4] as i32,
-      s_d: strides[0] as i32,
-      s_h: strides[1] as i32,
-      s_w: strides[2] as i32,
-      p_d_front: pads[0] as i32,
-      p_h_top: pads[1] as i32,
-      p_w_left: pads[2] as i32,
-      p_d_back: pads[3] as i32,
-      p_h_bottom: pads[4] as i32,
-      p_w_right: pads[5] as i32,
+      input_shape: vec![D as i32, D as i32, D as i32],
+      kernel_shape: vec![weight_shape[2] as i32, weight_shape[3] as i32, weight_shape[4] as i32],
+      stride: strides.clone().into_iter().map(|x| x as i32).collect(),
+      padding: pads.clone().into_iter().map(|x| x as i32).collect(),
       out_channels: util::next_pow(weight_shape[0] as u32) as usize,
     }));
 
@@ -619,7 +559,6 @@ impl Layer for ConcatConv3dLayer {
   }
 }
 
-// Custom 3D Transpose Conv used in 3DUNet
 pub struct Conv3dTransposeLayer;
 impl Layer for Conv3dTransposeLayer {
   fn graph(
@@ -659,21 +598,10 @@ impl Layer for Conv3dTransposeLayer {
 
     // Conv Add
     let conv_trans = graph.addBB(Box::new(Conv3DTransposeBasicBlock {
-      d: D as i32,
-      h: D as i32,
-      w: D as i32,
-      k_d: weight_shape[2] as i32,
-      k_h: weight_shape[3] as i32,
-      k_w: weight_shape[4] as i32,
-      s_d: strides[0] as i32,
-      s_h: strides[1] as i32,
-      s_w: strides[2] as i32,
-      p_d_front: pads[0] as i32,
-      p_h_top: pads[1] as i32,
-      p_w_left: pads[2] as i32,
-      p_d_back: pads[3] as i32,
-      p_h_bottom: pads[4] as i32,
-      p_w_right: pads[5] as i32,
+      input_shape: vec![D as i32, D as i32, D as i32],
+      kernel_shape: vec![weight_shape[2] as i32, weight_shape[3] as i32, weight_shape[4] as i32],
+      stride: strides.clone().into_iter().map(|x| x as i32).collect(),
+      padding: pads.clone().into_iter().map(|x| x as i32).collect(),
       out_channels: util::next_pow(weight_shape[1] as u32) as usize,
     }));
 

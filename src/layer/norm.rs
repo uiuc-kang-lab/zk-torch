@@ -5,7 +5,7 @@ use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
 use crate::util::CQArrayType;
-use ark_bn254::Fr;
+use ark_bls12_381::Fr;
 use ndarray::{arr1, Array1, ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
@@ -142,12 +142,7 @@ impl Layer for BatchNormLayer {
       split: split_ind.clone(),
     }));
     let split_x = graph.addBB(Box::new(SplitBasicBlock { axis: 1, split: split_ind }));
-    let mut split_shape = scale_shape.clone();
-    split_shape[0] = 1;
-    let concat = graph.addBB(Box::new(ConcatBasicBlock {
-      axis: 1,
-      input_shapes: vec![split_shape; util::next_pow(scale_shape[0] as u32) as usize],
-    }));
+    let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: 1 }));
     let sqrt = graph.addBB(Box::new(SqrtBasicBlock {
       input_SF: sf_log,
       output_SF: sf_log,
@@ -312,32 +307,14 @@ impl Layer for InstanceNormLayer {
 
     // X_shape_for_mean: [N, C, D1 * D2 * ... * DN]
     let len = X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y);
-    let x_shape_for_mean = vec![
-      X_shape[0].next_power_of_two(),
-      X_shape[1].next_power_of_two(),
-      X_shape.into_iter().skip(2).cloned().collect::<Vec<_>>().iter().fold(1, |x, &y| x * y).next_power_of_two(),
-    ];
-    let n = X_shape.len();
-    let mut perm = vec![n - 2];
-    perm.append(&mut (0..(n - 3)).collect());
-    perm.push(n - 1);
-    let transpose = graph.addBB(Box::new(TransposeBasicBlock { perm }));
-    let mut permutes = vec![];
-    let mut dim = X_shape[n - 1];
-    for i in 0..n - 3 {
-      dim *= X_shape[n - 2 - i].next_power_of_two();
-      let a = 1;
-      let permutation = ((0..a).map(|x| x * dim).collect(), (0..dim).collect());
-      permutes.push(graph.addBB(Box::new(RepeaterBasicBlock {
-        basic_block: Box::new(PermuteBasicBlock {
-          permutation: permutation,
-          n: dim,
-          m: 1,
-        }),
-        N: 2,
-      })));
-    }
-    let reshape = graph.addBB(Box::new(ReshapeBasicBlock { shape: x_shape_for_mean }));
+    let x_shape_for_mean = vec![X_shape[0], X_shape[1], len];
+    let permutation = get_reshape_indices(X_shape.to_vec(), x_shape_for_mean);
+    let padded_input_shape: Vec<_> = X_shape.iter().map(|x| util::next_pow(*x as u32) as usize).collect();
+    let cc = graph.addBB(Box::new(CopyConstraintBasicBlock {
+      permutation,
+      input_dim: IxDyn(&padded_input_shape),
+      padding_partition: copy_constraint::PaddingEnum::Zero,
+    }));
 
     let len = util::next_pow(len as u32) as usize;
     let sum = graph.addBB(Box::new(RepeaterBasicBlock {
@@ -500,12 +477,7 @@ impl Layer for InstanceNormLayer {
     let split = graph.addBB(Box::new(SplitBasicBlock { axis: 0, split: split_ind }));
     let split_x_ind = vec![1; util::next_pow(shape_for_split_x[0] as u32) as usize];
     let split_x = graph.addBB(Box::new(SplitBasicBlock { axis: 0, split: split_x_ind }));
-    let mut split_shape = shape_for_split_x.clone();
-    split_shape[0] = 1;
-    let concat = graph.addBB(Box::new(ConcatBasicBlock {
-      axis: 0,
-      input_shapes: vec![split_shape; util::next_pow(scale_shape[0] as u32) as usize],
-    }));
+    let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: 0 }));
     let reshape_concat = graph.addBB(Box::new(ReshapeBasicBlock {
       shape: X_shape.iter().map(|x| util::next_pow(*x as u32) as usize).collect(),
     }));
@@ -515,13 +487,8 @@ impl Layer for InstanceNormLayer {
     let epsilon_output = graph.addNode(epsilon, vec![]);
 
     // compute mean (shape: [N, C, 1, ..., 1])
-    let mut prev_permute = -1;
-    for i in 0..permutes.len() {
-      let transpose_output = graph.addNode(transpose, vec![(prev_permute, 0)]);
-      prev_permute = graph.addNode(permutes[i], vec![(transpose_output, 0)]);
-    }
-    let reshape_output = graph.addNode(reshape, vec![(prev_permute, 0)]);
-    let sum_output = graph.addNode(sum, vec![(reshape_output, 0)]);
+    let cc_output = graph.addNode(cc, vec![(-1, 0)]);
+    let sum_output = graph.addNode(sum, vec![(cc_output, 0)]);
     let mean_output = graph.addNode(div_const, vec![(sum_output, 0)]);
     let _ = graph.addNode(div_const_check, vec![(mean_output, 1)]);
     let _ = graph.addNode(div_const_check, vec![(mean_output, 2)]);
@@ -537,14 +504,9 @@ impl Layer for InstanceNormLayer {
     let _ = graph.addNode(div_SF_check, vec![(sub_output, 0), (div_SF_output, 0)]);
     // (X - m)^2 / s
     let mul_output = graph.addNode(mul, vec![(sub_output, 0), (sub_output, 0)]);
-    let mut prev_permute = mul_output;
-    for i in 0..permutes.len() {
-      let transpose_output = graph.addNode(transpose, vec![(prev_permute, 0)]);
-      prev_permute = graph.addNode(permutes[i], vec![(transpose_output, 0)]);
-    }
-    let reshape_output = graph.addNode(reshape, vec![(prev_permute, 0)]);
+    let cc_output = graph.addNode(cc, vec![(mul_output, 0)]);
     // SUM((X - m)^2) / s
-    let var_output = graph.addNode(sum, vec![(reshape_output, 0)]);
+    let var_output = graph.addNode(sum, vec![(cc_output, 0)]);
     let var_output = graph.addNode(reshape_0, vec![(var_output, 0)]);
 
     // reshape scale (shape: [C, 1, ..., 1])
@@ -636,8 +598,9 @@ impl Layer for InstanceNormLayer {
   }
 }
 
-// CustomInstanceNorm is similar to InstanceNorm,
-// the only difference is that it puts the channel dimension in the last dimension to avoid using copy constraints in CNNs.
+// InstanceNorm is a struct that represents an instance normalization layer, which computes
+// Y = (X - mean) * scale / sqrt(var + epsilon) + bias,
+// where mean and var are computed per instance per channel
 pub struct CustomInstanceNormLayer;
 impl Layer for CustomInstanceNormLayer {
   fn graph(
@@ -659,7 +622,15 @@ impl Layer for CustomInstanceNormLayer {
     assert!(X_shape[2] == scale_shape[0] && scale_shape[0] == bias_shape[0]);
     assert!(scale_shape.len() == 1 && bias_shape.len() == 1);
 
-    let mut epsilon = 1.0;
+    let epsilon_attr = attributes.iter().filter(|x| x.name == "epsilon").next();
+    let mut epsilon = if let Some(x) = epsilon_attr {
+      // epsilon is provided
+      x.f as f32
+    } else {
+      // epsilon is not provided, use the default value
+      1e-5
+    };
+    epsilon = 1.0;
     epsilon *= onnx::SF_FLOAT.read().unwrap().to_owned();
 
     // X_shape_for_mean: [N, C, D1 * D2 * ... * DN]
@@ -683,7 +654,7 @@ impl Layer for CustomInstanceNormLayer {
     }));
 
     let sum = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(SumBasicBlock { len: b }),
+      basic_block: Box::new(SumBasicBlock { len: a }),
       N: 1,
     }));
     let div_const = graph.addBB(Box::new(DivConstProofBasicBlock { c: X_shape[1] as u32 }));
@@ -814,14 +785,14 @@ impl Layer for CustomInstanceNormLayer {
     }));
     let non_negative_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
-        n: util::next_pow(X_shape[1] as u32) as usize,
+        n: a,
         setup: util::CQArrayType::NonNegative,
       }),
       N: 1,
     }));
     let non_positive_check = graph.addBB(Box::new(RepeaterBasicBlock {
       basic_block: Box::new(CQBasicBlock {
-        n: util::next_pow(X_shape[1] as u32) as usize,
+        n: a,
         setup: util::CQArrayType::NonPositive,
       }),
       N: 1,
@@ -829,49 +800,50 @@ impl Layer for CustomInstanceNormLayer {
 
     let split_ind = vec![1; util::next_pow(scale_shape[0] as u32) as usize];
     let split_x = graph.addBB(Box::new(SplitBasicBlock { axis: 1, split: split_ind }));
-    let concat = graph.addBB(Box::new(ConcatBasicBlock {
-      axis: 1,
-      input_shapes: vec![vec![X_shape[0], 1, util::next_pow(X_shape[2] as u32) as usize]; util::next_pow(X_shape[1] as u32) as usize],
-    }));
+    let concat = graph.addBB(Box::new(ConcatBasicBlock { axis: 1 }));
     let unsqueeze = graph.addBB(Box::new(UnsqueezeBasicBlock {}));
 
     // Step 0. Compute epsilon, mean, var, scale, and bias
     // output epsilon
     let epsilon_output = graph.addNode(epsilon, vec![]);
 
-    // compute mean
-    let cc_output = graph.addNode(cc, vec![(-1, 0)]);
-    let sum_output = graph.addNode(sum, vec![(cc_output, 0)]);
-    let mean_output = graph.addNode(div_const, vec![(sum_output, 0)]);
+    // compute mean (shape: [N, C, 1, ..., 1])
+    let cc_output = graph.addNode(cc, vec![(-1, 0)]); // [1, C, D1*D2*D3]
+    let sum_output = graph.addNode(sum, vec![(cc_output, 0)]); // [1, C, 1]
+    let mean_output = graph.addNode(div_const, vec![(sum_output, 0)]); // [1, C, 1]
     let _ = graph.addNode(div_const_check, vec![(mean_output, 1)]);
     let _ = graph.addNode(div_const_check, vec![(mean_output, 2)]);
     let mean_output = graph.addNode(cc2, vec![(mean_output, 0)]);
-    let mean_output = graph.addNode(reshape_0, vec![(mean_output, 0)]);
+    let mean_output = graph.addNode(reshape_0, vec![(mean_output, 0)]); // [1, C]
 
-    // compute var
+    // compute var (shape: [N, C, 1, ..., 1])
     // m = mean(X)
     // s = size(X)
     // X - m
     let sub_output = graph.addNode(sub, vec![(-1, 0), (mean_output, 0)]); // [1, D1*D2*D3, C]
+                                                                          // (X - m) * SF / (sqrt(s) * SF)
     let div_SF_output = graph.addNode(div_SF, vec![(sub_output, 0)]);
     let _ = graph.addNode(div_SF_check, vec![(sub_output, 0), (div_SF_output, 0)]);
     // (X - m)^2 / s
     let mul_output = graph.addNode(mul, vec![(sub_output, 0), (sub_output, 0)]);
-    let cc_output = graph.addNode(cc, vec![(mul_output, 0)]);
-    let var_output = graph.addNode(sum, vec![(cc_output, 0)]);
+    let cc_output = graph.addNode(cc, vec![(mul_output, 0)]); // [1, C, D1*D2*D3]
+                                                              // SUM((X - m)^2) / s
+    let var_output = graph.addNode(sum, vec![(cc_output, 0)]); // [1, C, 1]
     let var_output = graph.addNode(cc2, vec![(var_output, 0)]);
     let var_output = graph.addNode(reshape_0, vec![(var_output, 0)]); // [1, C]
 
-    // Step 1. X - mean
+    // Step 1. X - mean (shape: [N * C, D1, D2, ..., DN])
     let x_minus_mean_output = graph.addNode(sub, vec![(-1, 0), (mean_output, 0)]); // [1, D1*D2*D3, C]
 
-    // Step 2. var + epsilon
+    // Step 2. var + epsilon (shape: [N * C, 1, ..., 1])
     let var_plus_eps_output = graph.addNode(add, vec![(var_output, 0), (epsilon_output, 0)]); // [1, C]
 
-    // Step 3. sqrt(var + epsilon)
+    // Step 3. sqrt(var + epsilon) (shape: [N * C, 1, ..., 1])
     // x = var + epsilon
     // SqrtBB(x) = sqrt(x/SF)*SF + eps (where -1 < eps < 1)
     let sqrt_output = graph.addNode(sqrt, vec![(var_plus_eps_output, 0)]); // [1, C]
+                                                                           // The following operations are to check if sqrt_output is correct
+                                                                           // square_sqrt = SqrtBB(x)^2 = x*SF + 2*sqrt(x/SF)*SF*eps + eps^2
     let square_sqrt = graph.addNode(mul, vec![(sqrt_output, 0), (sqrt_output, 0)]);
     // scale_input_by_sf = x*SF
     let sf_const_output = graph.addNode(sf_const, vec![]);
@@ -893,13 +865,13 @@ impl Layer for CustomInstanceNormLayer {
     let _ = graph.addNode(non_negative_check, vec![(d_plus_scale_output_by_2, 0)]);
     let _ = graph.addNode(non_positive_check, vec![(d_minus_scale_output_by_2, 0)]);
 
-    let sqrt_output = graph.addNode(cc2_back, vec![(sqrt_output, 0)]);
-    let sqrt_output = graph.addNode(unsqueeze, vec![(sqrt_output, 0)]);
+    let sqrt_output = graph.addNode(cc2_back, vec![(sqrt_output, 0)]); // [C, 1]
+    let sqrt_output = graph.addNode(unsqueeze, vec![(sqrt_output, 0)]); // [1, C, 1]
 
     // Step 4. (X - mean) / sqrt(var + epsilon)
-    let x_minus_mean_output = graph.addNode(cc, vec![(x_minus_mean_output, 0)]);
-    let split_sub_output = graph.addNode(split_x, vec![(x_minus_mean_output, 0)]); // C outputs
-    let split_sqrt_output = graph.addNode(split_x, vec![(sqrt_output, 0)]); // C outputs
+    let x_minus_mean_output = graph.addNode(cc, vec![(x_minus_mean_output, 0)]); // [1, C, D1*D2*D3]
+    let split_sub_output = graph.addNode(split_x, vec![(x_minus_mean_output, 0)]); // C outputs (shape: [1, 1, D1*D2*D3])
+    let split_sqrt_output = graph.addNode(split_x, vec![(sqrt_output, 0)]); // C outputs (shape: [1, 1, 1])
     let mut tmp_outputs = vec![];
     // here we perform the batch normalization for each channel
     let (N, C) = (mean_shape_padded[0], mean_shape_padded[1]);
@@ -923,8 +895,8 @@ impl Layer for CustomInstanceNormLayer {
       }
     }
     // concat_output
-    let concat_output = graph.addNode(concat, tmp_outputs);
-    let div_output = graph.addNode(cc_back, vec![(concat_output, 0)]);
+    let concat_output = graph.addNode(concat, tmp_outputs); // [1, C, D1*D2*D3]
+    let div_output = graph.addNode(cc_back, vec![(concat_output, 0)]); // [1, D1*D2*D3, C]
 
     // Step 5. scale * (X - mean) / sqrt(var + epsilon)
     let mul_output = graph.addNode(mul, vec![(div_output, 0), (-2, 0)]);

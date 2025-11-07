@@ -3,7 +3,7 @@ use crate::graph::*;
 use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
-use ark_bn254::Fr;
+use ark_bls12_381::Fr;
 use ark_std::One;
 use ndarray::ArrayD;
 use tract_onnx::pb::AttributeProto;
@@ -78,7 +78,7 @@ impl Layer for MulLayer {
       };
       let constantOfShape = graph.addBB(Box::new(ConstOfShapeBasicBlock {
         c: Fr::one(),
-        shape: input_shapes[broadcast_idx].iter().map(|x| x.next_power_of_two()).collect(),
+        shape: input_shapes[broadcast_idx].clone(),
       }));
       let mul_scalar = graph.addBB(Box::new(RepeaterBasicBlock {
         basic_block: Box::new(MulScalarBasicBlock {}),

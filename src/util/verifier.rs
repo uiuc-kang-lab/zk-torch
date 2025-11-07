@@ -7,7 +7,7 @@ use crate::basic_block::{BasicBlock, Data, DataEnc, PairingCheck, SRS};
 use crate::graph::Graph;
 use crate::util::msm;
 use crate::{onnx, util, CONFIG, LAYER_SETUP_DIR};
-use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_bls12_381::{Bls12_381, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::models::short_weierstrass::SWCurveConfig;
 use ark_ec::pairing::PairingOutput;
@@ -108,7 +108,7 @@ pub fn verify(srs: &SRS, graph: &Graph, timing: &mut TimingTree) {
     Vec::<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)>::deserialize_uncompressed_unchecked(File::open(&CONFIG.verifier.proof_path).unwrap()).unwrap();
   let proofs = proofs.iter().map(|x| (&x.0, &x.1, &x.2)).collect();
   #[cfg(feature = "fold")]
-  let acc_proofs = Vec::<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)>::deserialize_uncompressed_unchecked(
+  let acc_proofs = Vec::<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>)>::deserialize_uncompressed_unchecked(
     File::open(&CONFIG.prover.acc_proof_path).unwrap(),
   )
   .unwrap();

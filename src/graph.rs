@@ -2,7 +2,7 @@
 use crate::basic_block::*;
 use crate::util;
 use crate::{CONFIG, LAYER_SETUP_DIR};
-use ark_bn254::{Bn254, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use ark_bls12_381::{Bls12_381, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::bn::Bn;
 use ark_ec::pairing::{Pairing, PairingOutput};
 use ark_poly::univariate::DensePolynomial;
@@ -248,13 +248,13 @@ impl Graph {
     timing: &mut TimingTree,
   ) -> (
     Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>)>,
-    Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)>,
+    Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>)>,
   ) {
     assert!(self.nodes.len() == self.precomputable.prove_and_verify.len());
     let cache = Arc::new(Mutex::new(HashMap::new()));
     let mut proofs = vec![];
     let mut acc_proofs_for_verifier = vec![];
-    let mut prev_acc_map: HashMap<usize, (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)> = HashMap::new(); // (basicblock, acc_proof)
+    let mut prev_acc_map: HashMap<usize, (Vec<G1Projective>, Vec<G2Projective>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>)> = HashMap::new(); // (basicblock, acc_proof)
 
     self.nodes.iter().enumerate().for_each(|(i, n)| {
       let bb_index_for_folding = self.foldable_bb_map.get(&n.basic_block).unwrap();
@@ -298,13 +298,17 @@ impl Graph {
         )
       );
 
-      let empty_vecs = (vec![], vec![], vec![], vec![]);
-      let prev_acc_proof = prev_acc_map.get(bb_index_for_folding).map(|prev_acc| (&prev_acc.0, &prev_acc.1, &prev_acc.2, &prev_acc.3)).unwrap_or((
-        &empty_vecs.0,
-        &empty_vecs.1,
-        &empty_vecs.2,
-        &empty_vecs.3,
-      ));
+      let mut prev_acc_proof: (
+        &Vec<G1Projective>,
+        &Vec<G2Projective>,
+        &Vec<Fr>,
+        &Vec<PairingOutput<Bls12_381>>,
+      ) = (&vec![], &vec![], &vec![], &vec![]);
+
+      // check if basicblock is in prev_acc_map
+      if let Some(prev_acc) = prev_acc_map.get(bb_index_for_folding) {
+        prev_acc_proof = (&prev_acc.0, &prev_acc.1, &prev_acc.2, &prev_acc.3);
+      }
 
       let new_acc_proof = self.basic_blocks[n.basic_block].acc_prove(
         srs,
@@ -394,7 +398,7 @@ impl Graph {
       "combine pairings",
       util::combine_pairing_checks(&pairings.iter().flatten().collect())
     );
-    let pairing_check = timed!(timing, "pairings", Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()));
+    let pairing_check = timed!(timing, "pairings", Bls12_381::multi_pairing(pairings.0.iter(), pairings.1.iter()));
     assert_eq!(pairing_check, PairingOutput::zero());
   }
 
@@ -406,7 +410,7 @@ impl Graph {
     inputs: &Vec<&ArrayD<DataEnc>>,
     outputs: &Vec<&Vec<&ArrayD<DataEnc>>>,
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)>,
-    acc_proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>)>,
+    acc_proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>)>,
     rng: &mut StdRng,
     timing: &mut TimingTree,
   ) -> (Vec<usize>, Vec<usize>) {
@@ -446,18 +450,19 @@ impl Graph {
           .collect();
 
         let bb_index_for_folding = self.foldable_bb_map.get(&n.basic_block).unwrap();
-
-        let empty_vecs = (vec![], vec![], vec![], vec![]);
-        let prev_acc_proof = prev_acc_map
-          .get(bb_index_for_folding)
-          .map(|prev_acc| {
-            let acc = acc_proofs[*prev_acc];
-            (acc.0, acc.1, acc.2, acc.3)
-          })
-          .unwrap_or((&empty_vecs.0, &empty_vecs.1, &empty_vecs.2, &empty_vecs.3));
+        let mut prev_acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>) =
+          (&vec![], &vec![], &vec![], &vec![]);
+        if let Some(prev_acc) = prev_acc_map.get(bb_index_for_folding) {
+          prev_acc_proof = (
+            &acc_proofs[*prev_acc].0,
+            &acc_proofs[*prev_acc].1,
+            &acc_proofs[*prev_acc].2,
+            &acc_proofs[*prev_acc].3,
+          );
+        }
         prev_acc_map.insert(*bb_index_for_folding, i);
 
-        let acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>) =
+        let acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>) =
           (&acc_proofs[i].0, &acc_proofs[i].1, &acc_proofs[i].2, &acc_proofs[i].3);
         let pairings = timed!(
           timing,
@@ -502,14 +507,17 @@ impl Graph {
         if !final_proofs_idx.contains(v) {
           final_acc_proofs_idx.push(*v);
         }
-        let acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>) =
+        let acc_proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>) =
           (&acc_proofs[*v].0, &acc_proofs[*v].1, &acc_proofs[*v].2, &acc_proofs[*v].3);
         let decider_result = self.basic_blocks[*k].acc_decide(srs, acc_proof);
-        err_collector.push(decider_result.iter().map(|x| x.1).collect::<Vec<PairingOutput<Bn<ark_bn254::Config>>>>());
+        err_collector.push(decider_result.iter().map(|x| x.1).collect::<Vec<PairingOutput<Bls12_381>>>());
         decider_result.iter().map(|x| x.0.clone()).collect::<Vec<PairingCheck>>()
       })
       .collect();
-    let err_sum = err_collector.iter().flatten().fold(PairingOutput::<Bn254>::zero(), |acc, x| acc + x);
+    let err_sum = err_collector.iter().flatten().fold(
+      PairingOutput::<Bls12_381>::zero(), 
+      |acc, x| acc + x
+    );
     pairings.append(&mut decider_pairings);
 
     let pairings = timed!(
@@ -517,7 +525,8 @@ impl Graph {
       "combine pairings",
       util::combine_pairing_checks(&pairings.iter().flatten().collect())
     );
-    let pairing_check = timed!(timing, "pairings", Bn254::multi_pairing(pairings.0.iter(), pairings.1.iter()));
+    let pairing_check = timed!(timing, "pairings", Bls12_381::multi_pairing(pairings.0.iter(), pairings.1.iter()));
+    //assert_eq!(pairing_check, PairingOutput::zero());
     println!("Is verification successful? {}", pairing_check == err_sum);
     (final_proofs_idx, final_acc_proofs_idx)
   }
@@ -529,14 +538,21 @@ impl Graph {
     final_proofs_idx: Vec<usize>,
     final_acc_proofs_idx: Vec<usize>,
     proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>)>,
-    acc_proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bn<ark_bn254::Config>>>)>,
-  ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)> {
-    let mut final_proofs: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)> =
+    acc_proofs: &Vec<(&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>, &Vec<PairingOutput<Bls12_381>>)>,
+  ) -> Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>)> {
+    let mut final_proofs: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>)> =
       final_proofs_idx.iter().map(|i| (proofs[*i].0.clone(), proofs[*i].1.clone(), proofs[*i].2.clone(), vec![])).collect();
-    let mut final_acc_proofs: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bn<ark_bn254::Config>>>)> = final_acc_proofs_idx
+    let mut final_acc_proofs: Vec<(Vec<G1Affine>, Vec<G2Affine>, Vec<Fr>, Vec<PairingOutput<Bls12_381>>)> = final_acc_proofs_idx
       .iter()
       .map(|i| {
         let n = &self.nodes[*i];
+        //let basic_block_name = format!("{:?}", self.basic_blocks[n.basic_block]);
+        //// contains CopyConstraintBasicBlock
+        //if basic_block_name.contains("CopyConstraintBasicBlock") { 
+        //  return (vec![], vec![], vec![], vec![]);
+        //} else {
+        //  self.basic_blocks[n.basic_block].acc_finalize(srs, (&acc_proofs[*i].0, &acc_proofs[*i].1, &acc_proofs[*i].2, &acc_proofs[*i].3))
+        //}
         self.basic_blocks[n.basic_block].acc_finalize(srs, (&acc_proofs[*i].0, &acc_proofs[*i].1, &acc_proofs[*i].2, &acc_proofs[*i].3))
       })
       .collect();
@@ -590,8 +606,8 @@ impl Graph {
         pairings.iter().for_each(|p| {
           assert!(p
             .iter()
-            .fold(PairingOutput::<Bn<ark_bn254::Config>>::zero(), |acc, x| {
-              acc + Bn254::pairing(x.0, x.1)
+            .fold(PairingOutput::<Bls12_381>::zero(), |acc, x| {
+              acc + Bls12_381::pairing(x.0, x.1)
             })
             .is_zero());
         });

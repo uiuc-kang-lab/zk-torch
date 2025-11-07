@@ -4,25 +4,17 @@ use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
 use crate::util::pad_to_pow_of_two;
-use ark_bn254::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
-use ark_ec::AffineRepr;
+use ark_bls12_381::{Bls12_381, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_std::{One, Zero};
 use ndarray::indices;
 use ndarray::Dim;
 use ndarray::Dimension;
 use ndarray::IxDyn;
 use ndarray::{s, Array1, Array2, Array4, ArrayD};
-use rand::rngs::StdRng;
 use std::sync::Arc;
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
 
-// Given the kernel considers k_h * k_w candidates when performing maxpooling,
-// this basic block generates the candidates for the maxpooling.
-// The i-th result includes all the i-th candidates.
-// For example, if the kernel shape is [2, 2], then the 1st output can be viewed as the convolution
-// of the input with the kernel [[1, 0], [0, 0]].
-// Similarly, the 2nd output can be viewed as the convolution of the input with the kernel [[0, 1], [0, 0]].
 #[derive(Debug)]
 pub struct MaxPool2dCandidateBasicBlock {
   pub input_shape: Vec<usize>,  // [1, H_in, W_in, C_in]
@@ -92,43 +84,8 @@ impl BasicBlock for MaxPool2dCandidateBasicBlock {
     }
     candidates
   }
-
-  fn verify(
-    &self,
-    _srs: &SRS,
-    _model: &ArrayD<DataEnc>,
-    inputs: &Vec<&ArrayD<DataEnc>>,
-    outputs: &Vec<&ArrayD<DataEnc>>,
-    _proof: (&Vec<G1Affine>, &Vec<G2Affine>, &Vec<Fr>),
-    _rng: &mut StdRng,
-    _cache: ProveVerifyCache,
-  ) -> Vec<PairingCheck> {
-    let output_h = (self.input_shape[1] - self.kernel_shape[0] + self.pads[0] + self.pads[2]) / self.strides[0] + 1;
-    let output_w = (self.input_shape[2] - self.kernel_shape[1] + self.pads[1] + self.pads[3]) / self.strides[1] + 1;
-    let data_zero = G1Affine::zero();
-    for k in 0..self.kernel_shape[0] * self.kernel_shape[1] {
-      let candidate = outputs[k];
-      for i in 0..output_h {
-        for j in 0..output_w {
-          let k_i = k / self.kernel_shape[1];
-          let k_j = k % self.kernel_shape[1];
-          let input_i = i * self.strides[0];
-          let input_j = j * self.strides[1];
-          if (input_i + k_i) == 0 || (input_j + k_j) == 0 || (input_i + k_i) > self.input_shape[1] || (input_j + k_j) > self.input_shape[2] {
-            assert!(candidate[[0, i * output_w + j]].g1 == data_zero);
-          } else {
-            assert!(candidate[[0, i * output_w + j]].g1 == inputs[0][[0, (input_i + k_i - 1) * self.input_shape[2] + input_j + k_j - 1]].g1);
-          }
-        }
-      }
-    }
-    vec![]
-  }
 }
 
-// The selector consists of only boolean values.
-// The dot product of the selector and the candidates will be the output of the maxpooling.
-// It does not consist of prove and verify as we will use other basic blocks to do the verification.
 #[derive(Debug)]
 pub struct MaxPool2dSelectorBasicBlock {
   pub input_shape: Vec<usize>,  // [1, H_in, W_in, C_in]
@@ -254,7 +211,7 @@ impl Layer for MaxPool2dLayer {
 
     // Multiple add to sum the pointwise multiplications of the selector and the candidates
     let multi_add = graph.addBB(Box::new(RepeaterBasicBlock {
-      basic_block: Box::new(BatchAddBasicBlock {}),
+      basic_block: Box::new(MultipleAddBasicBlock {}),
       N: 1,
     }));
     let maxpool_output = graph.addNode(multi_add, mul_outputs);
@@ -278,6 +235,19 @@ impl Layer for MaxPool2dLayer {
       // Check if the remainder sub_output is non-negative
       let _ = graph.addNode(range_check, vec![(sub_output, 0)]);
     }
+
+    let eq = graph.addBB(Box::new(RepeaterBasicBlock {
+      basic_block: Box::new(EqBasicBlock {}),
+      N: 1,
+    }));
+    let mut ones = ArrayD::<Fr>::zeros(IxDyn(&[1, util::next_pow((C_in) as u32) as usize]));
+    for i in 0..C_in {
+      ones[[0, i]] = Fr::one();
+    }
+    let const_ones = graph.addBB(Box::new(Const2BasicBlock { c: ones }));
+    let const_ones_output = graph.addNode(const_ones, vec![]);
+    let add_output = graph.addNode(multi_add, (0..k).map(|x| (maxpool_selector_output, x)).collect());
+    //let _ = graph.addNode(eq, vec![(add_output, 0), (const_ones_output, 0)]);
 
     let output_h = (dims[0] - ch_dims[0] + pads[0] + pads[2]) / strides[0] + 1;
     let output_w = (dims[1] - ch_dims[1] + pads[1] + pads[3]) / strides[1] + 1;

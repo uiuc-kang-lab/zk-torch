@@ -3,7 +3,7 @@ use crate::graph::*;
 use crate::layer::Layer;
 use crate::onnx;
 use crate::util;
-use ark_bn254::Fr;
+use ark_bls12_381::Fr;
 use ark_std::One;
 use ndarray::ArrayD;
 use rayon::iter::ParallelIterator;

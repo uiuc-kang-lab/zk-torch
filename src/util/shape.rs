@@ -3,10 +3,12 @@
  * The functions are used for shape-related operations, such as
  * slicing and padding arrays.
  */
-use ark_bn254::Fr;
+use ark_bls12_381::Fr;
 use ndarray::{ArrayD, Axis, Dimension, IxDyn, Slice, SliceInfo};
 
-pub fn slice_nd_array<T>(arr: ArrayD<T>, indices: &[usize]) -> ArrayD<T> {
+// slice the arr with the given indices. But this function is not used in the codebase currently.
+#[allow(dead_code)]
+pub fn slice_nd_array(arr: ArrayD<Fr>, indices: &[usize]) -> ArrayD<Fr> {
   // Create slices from the indices
   let slices: Vec<_> = indices.iter().map(|&i| (0..i).into()).collect();
 

@@ -2,7 +2,7 @@ use crate::basic_block::*;
 use crate::graph::*;
 use crate::layer::Layer;
 use crate::util;
-use ark_bn254::Fr;
+use ark_bls12_381::Fr;
 use ndarray::{ArrayD, IxDyn};
 use tract_onnx::pb::AttributeProto;
 use tract_onnx::prelude::DatumType;
@@ -121,7 +121,7 @@ impl Layer for SliceLayer {
       .enumerate()
       .map(|(i, &x)| {
         if x < 0 {
-          (input_shapes[0][axes[i]] as i32 + x + 1) as usize
+          (input_shapes[0][axes[i]] as i32 + x) as usize
         } else {
           x as usize
         }

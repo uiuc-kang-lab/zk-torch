@@ -3,7 +3,7 @@ use crate::graph::*;
 use crate::layer::*;
 use crate::util::{self, get_foldable_bb_info};
 use crate::CONFIG;
-use ark_bn254::Fr;
+use ark_bls12_381::Fr;
 use ark_std::Zero;
 use ndarray::{arr1, ArrayD};
 use once_cell::sync::Lazy;
@@ -69,16 +69,31 @@ fn parse_onnx_constants<'a>(
       let tensor = match tensor.datum_type() {
         DatumType::F32 => {
           let tensor = tensor.into_array::<f32>().unwrap();
-          Ok(tensor.map(|x| {
-            // handle the case where the constant is very close to zero (i.e., epsilon to prevent division by zero)
-            if *x < 1e-10 && *x > 0.0 {
-              // the reason we use 1 here is because it is the smallest positive value that can be represented in the field
-              return Fr::from(1);
-            }
-            let mut y = (*x * SF_FLOAT.read().unwrap().to_owned()).round();
-            y = y.clamp(-(1 << 15) as f32, (1 << 15) as f32);
-            Fr::from(y as i32)
-          }))
+          if tensor.len() == 1 {
+            Ok(tensor.map(|x| {
+              // handle the case where the constant is very close to zero (i.e., epsilon to prevent division by zero)
+
+              if *x < 1e-3 && *x > 0.0 {
+                // the reason we use 1 here is because it is the smallest positive value that can be represented in the field
+
+                return Fr::from(SF.read().unwrap().to_owned() as i32);
+              }
+
+              let mut y = (*x * SF_FLOAT.read().unwrap().to_owned()).round();
+
+              y = y.clamp(-(1 << 15) as f32, (1 << 15) as f32);
+
+              Fr::from(y as i32)
+            }))
+          } else {
+            Ok(tensor.map(|x| {
+              let mut y = (*x * SF_FLOAT.read().unwrap().to_owned()).round();
+
+              y = y.clamp(-(1 << 15) as f32, (1 << 15) as f32);
+
+              Fr::from(y as i32)
+            }))
+          }
         }
         DatumType::I64 => {
           let tensor = tensor.into_array::<i64>().unwrap();
@@ -161,6 +176,7 @@ fn get_local_graph(
     "Sin" => Ok(SinLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Sub" => Ok(SubLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Einsum" => Ok(EinsumLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "Greater" => Ok(GreaterLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Less" => Ok(LessLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "LSTM" => Ok(LSTMLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "MatMul" => Ok(MatMulLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
@@ -173,6 +189,7 @@ fn get_local_graph(
     "Mod" => Ok(ModLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Neg" => Ok(NegLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Not" => Ok(NotLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
+    "NonZero" => Ok(NonzeroLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Relu" => Ok(ReLULayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Flatten" => Ok(FlattenLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
     "Gather" => Ok(GatherLayer::graph(&input_shapes, &input_types, &node_constants, &node_attributes)),
